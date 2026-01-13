@@ -11,7 +11,6 @@ import { errorHandler } from "./middlewares/errorHandler";
 dotenv.config();
 const app: Application = express();
 app.use(express.json());
-app.use(errorHandler);
 
 await initializeBusinessService();
 
@@ -78,6 +77,7 @@ app.get("/health-check", (req: Request, res: Response) => {
     .send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);
 });
 
+app.use(errorHandler);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 
 app.listen(PORT, () => {
