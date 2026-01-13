@@ -1,3 +1,4 @@
+import { AppError } from "../../helper-service/AppError";
 import { UserModel, type UserDetails } from "./schemas/modules.export";
 
 export const findByEmail = async (email: string): Promise<UserDetails> => {
@@ -5,9 +6,7 @@ export const findByEmail = async (email: string): Promise<UserDetails> => {
       where: { email },
     });
     if (!userDetails) {
-      const error = new Error("User not found") as any;
-      error.statusCode = 404;
-      throw error;
+      throw new AppError("User not found", 404);
     }
     return userDetails;
   }

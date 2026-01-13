@@ -27,9 +27,6 @@ const buildLoginResponse = (
 export const loginService = async (data: LoginUserRequestData): Promise<LoginResponse> => {
   const { email, password } = data;
   const user = await findByEmail(email);
-  if (!user) {
-    throw new AppError("User not found", 404);
-  }
   const passwordMatch = await bcrypt.compare(password, user.password_hash);
   if (!passwordMatch) {
     throw new AppError("Incorrect password", 401);
