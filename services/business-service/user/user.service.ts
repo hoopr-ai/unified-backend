@@ -12,7 +12,6 @@ const createLoginUserREsponse = (user: UserDetails, formattedCreatedAt: string, 
       lastName: user.lastName,
       created_at: formattedCreatedAt,
       updated_at: formattedCreatedAt,
-      role: user.role,
       expiresIn: 3 * 60 * 60,
     };
 
@@ -34,7 +33,6 @@ export const loginService = async (
     const token = createJWTToken({
         userId: user.id,
         email: user.email,
-        role: user.role,
       },"3h");
     const formattedCreatedAt = formatDate(user.created_at);
     const loginUserRequestData = createLoginUserREsponse(user, formattedCreatedAt, token);

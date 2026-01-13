@@ -6,10 +6,12 @@ import type { CorsOptions } from "cors";
 import type { Request, Response } from "express";
 import userRoutes from "./routes/user.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
+import { errorHandler } from "./middlewares/errorHandler";
 
 dotenv.config();
 const app: Application = express();
 app.use(express.json());
+app.use(errorHandler);
 
 await initializeBusinessService();
 

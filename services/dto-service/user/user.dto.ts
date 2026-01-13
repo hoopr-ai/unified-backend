@@ -25,7 +25,6 @@ export interface LoginResponse {
     lastName: string | undefined;
     created_at: string;
     updated_at: string;
-    role: string;
     expiresIn: number;
   };
 }
