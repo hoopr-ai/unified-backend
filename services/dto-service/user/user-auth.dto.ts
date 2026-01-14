@@ -31,3 +31,5 @@ export interface LoginResponse {
     expiresIn: number;
   };
 }
+
+export const AccessTokenExpiry = '3h';

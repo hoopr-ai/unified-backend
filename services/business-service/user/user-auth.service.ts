@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import type { LoginUserRequestData, LoginResponse, UserRow } from "../../dto-service/modules.export";
+import { type LoginUserRequestData, type LoginResponse, type UserRow, AccessTokenExpiry } from "../../dto-service/modules.export";
 import { formatDate } from "../../helper-service/date-formatting.service";
 import { findActiveUser, type UserDetails } from "../../persistence-service/exports";
 import { AppError, createJWTToken } from "../../helper-service/modules.export";
@@ -31,10 +31,7 @@ export const loginService = async (data: LoginUserRequestData): Promise<LoginRes
   if (!passwordMatch) {
     throw new AppError("Incorrect password", 401);
   }
-  const token = createJWTToken(
-    { userId: user.id, email: user.email },
-    "3h"
-  );
+  const token = createJWTToken( { userId: user.id, email: user.email, platform: user.platform  }, AccessTokenExpiry);
   const formattedCreatedAt = formatDate(user.createdAt);
   return buildLoginResponse(user, formattedCreatedAt, token);
 };
