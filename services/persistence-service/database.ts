@@ -1,6 +1,6 @@
 import { Sequelize } from "sequelize-typescript";
 import { config } from "dotenv";
-import { UserModel } from "./user/modules.export";
+import { UserModel, UserRoleModel } from "./user/modules.export";
 
 config();
 
@@ -48,7 +48,8 @@ export const sequelize = new Sequelize({
 
 // Auto-load models
 sequelize.addModels([
-  UserModel
+  UserModel,
+  UserRoleModel,
 ]);
 
 export async function connectDatabase() {

@@ -10,9 +10,9 @@ export interface UserRow {
   firstName: string;
   lastName: string;
   role: string;
-  created_at: string;
-  updated_at: string;
-  password_hash: string;
+  createdAt: string;
+  updatedAt: string;
+  password: string;
   welcome_email_sent?: boolean;
 }
 
@@ -23,8 +23,8 @@ export interface LoginResponse {
     email: string;
     firstName: string | undefined;
     lastName: string | undefined;
-    created_at: string;
-    updated_at: string;
+    createdAt: string;
+    updatedAt: string;
     expiresIn: number;
   };
 }

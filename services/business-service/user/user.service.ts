@@ -17,8 +17,8 @@ const buildLoginResponse = (
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      created_at: formattedCreatedAt,
-      updated_at: formattedCreatedAt,
+      createdAt: formattedCreatedAt,
+      updatedAt: formattedCreatedAt,
       expiresIn: 3 * 60 * 60
     }
   };
@@ -27,7 +27,7 @@ const buildLoginResponse = (
 export const loginService = async (data: LoginUserRequestData): Promise<LoginResponse> => {
   const { email, password } = data;
   const user = await findByEmail(email);
-  const passwordMatch = await bcrypt.compare(password, user.password_hash);
+  const passwordMatch = await bcrypt.compare(password, user.password);
   if (!passwordMatch) {
     throw new AppError("Incorrect password", 401);
   }
@@ -35,6 +35,6 @@ export const loginService = async (data: LoginUserRequestData): Promise<LoginRes
     { userId: user.id, email: user.email },
     "3h"
   );
-  const formattedCreatedAt = formatDate(user.created_at);
+  const formattedCreatedAt = formatDate(user.createdAt);
   return buildLoginResponse(user, formattedCreatedAt, token);
 };
