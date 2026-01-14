@@ -24,13 +24,17 @@ const buildLoginResponse = (
   };
 };
 
-export const loginService = async (data: LoginUserRequestData): Promise<LoginResponse> => {
-  const { email, password, platform } = data;
-  const user = await findActiveUser(email, platform);
-  const passwordMatch = await bcrypt.compare(password, user.password);
+const comparePasswords = async (password: string, encryptedPassword: string) => {
+  const passwordMatch = await bcrypt.compare(password, encryptedPassword);
   if (!passwordMatch) {
     throw new AppError("Incorrect password", 401);
   }
+}
+
+export const loginService = async (data: LoginUserRequestData): Promise<LoginResponse> => {
+  const { email, password, platform } = data;
+  const user = await findActiveUser(email, platform);
+  await comparePasswords(password, user.password)
   const token = createJWTToken( { userId: user.id, email: user.email, platform: user.platform  }, AccessTokenExpiry);
   const formattedCreatedAt = formatDate(user.createdAt);
   return buildLoginResponse(user, formattedCreatedAt, token);
