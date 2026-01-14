@@ -1,7 +1,7 @@
 import bcrypt from "bcrypt";
 import type { LoginUserRequestData, LoginResponse, UserRow } from "../../dto-service/modules.export";
 import { formatDate } from "../../helper-service/date-formatting.service";
-import { findByEmail, type UserDetails } from "../../persistence-service/exports";
+import { findActiveUser, type UserDetails } from "../../persistence-service/exports";
 import { AppError, createJWTToken } from "../../helper-service/modules.export";
 
 
@@ -25,8 +25,8 @@ const buildLoginResponse = (
 };
 
 export const loginService = async (data: LoginUserRequestData): Promise<LoginResponse> => {
-  const { email, password } = data;
-  const user = await findByEmail(email);
+  const { email, password, platform } = data;
+  const user = await findActiveUser(email, platform);
   const passwordMatch = await bcrypt.compare(password, user.password);
   if (!passwordMatch) {
     throw new AppError("Incorrect password", 401);

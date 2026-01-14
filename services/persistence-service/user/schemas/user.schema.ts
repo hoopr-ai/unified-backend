@@ -9,6 +9,7 @@ import {
   UpdatedAt,
   Index,
 } from "sequelize-typescript";
+import type { UserStatus } from "../../../dto-service/modules.export";
 
 export interface UserDetails {
   id: number;
@@ -16,7 +17,7 @@ export interface UserDetails {
   password: string;
   firstName?: string;
   lastName?: string;
-  status: string;
+  status: UserStatus;
   mobile?: string;
   platform: string;
   createdAt: Date;
@@ -79,7 +80,7 @@ export class UserModel extends Model<UserModel> {
     type: DataType.STRING(100),
     allowNull: false,
   })
-  status!: string;
+  status!: UserStatus;
 
   @CreatedAt
   @Column({

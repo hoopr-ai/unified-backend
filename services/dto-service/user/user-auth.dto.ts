@@ -1,6 +1,9 @@
+import type { Platform } from "../constants/modules.export";
+
 export interface LoginUserRequestData {
     email: string;
     password: string;
+    platform: Platform;
 }
 
 
