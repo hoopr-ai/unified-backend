@@ -3,6 +3,7 @@ import { type LoginUserRequestData, type LoginResponse, type UserRow, AccessToke
 import { formatDate } from "../../helper-service/date-formatting.service";
 import { findActiveUser, type UserDetails } from "../../persistence-service/exports";
 import { AppError, createJWTToken } from "../../helper-service/modules.export";
+import { ErrorMessages } from "../../dto-service/constants/modules.export";
 
 
 const buildLoginResponse = (
@@ -27,7 +28,7 @@ const buildLoginResponse = (
 const comparePasswords = async (password: string, encryptedPassword: string) => {
   const passwordMatch = await bcrypt.compare(password, encryptedPassword);
   if (!passwordMatch) {
-    throw new AppError("Incorrect password", 401);
+    throw new AppError(ErrorMessages.IncorrectPassword, 401);
   }
 }
 
@@ -35,7 +36,7 @@ export const loginService = async (data: LoginUserRequestData): Promise<LoginRes
   const { email, password, platform } = data;
   const user = await findActiveUser(email, platform);
   await comparePasswords(password, user.password)
-  const token = createJWTToken( { userId: user.id, email: user.email, platform: user.platform  }, AccessTokenExpiry);
+  const token = createJWTToken( { userId: user.id, email: user.email, platform: user.platform }, AccessTokenExpiry);
   const formattedCreatedAt = formatDate(user.createdAt);
   return buildLoginResponse(user, formattedCreatedAt, token);
 };

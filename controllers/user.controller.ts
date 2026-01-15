@@ -7,9 +7,6 @@ import { ResponseMessages } from "../services/dto-service/constants/response-mes
 
 export const login = catchAsync(async (req: Request, res: Response) => {
   const response = await loginService(req.body);
-  if (!response) {
-    throw new AppError("Invalid login details", 400);
-  }
   res.status(200).json({
     data: response,
     error: { code: 0, message: ResponseMessages.LoginSuccess },
