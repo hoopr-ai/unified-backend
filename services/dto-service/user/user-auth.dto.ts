@@ -6,6 +6,12 @@ export interface LoginUserRequestData {
     platform: Platform;
 }
 
+export interface LoginUserRequestData {
+    email: string;
+    password: string;
+    platform: Platform;
+}
+
 
 export interface UserRow {
   id: number;

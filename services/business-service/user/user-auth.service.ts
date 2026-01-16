@@ -32,7 +32,7 @@ const comparePasswords = async (password: string, encryptedPassword: string) => 
   }
 }
 
-export const loginService = async (data: LoginUserRequestData): Promise<LoginResponse> => {
+export const userLoginService = async (data: LoginUserRequestData): Promise<LoginResponse> => {
   const { email, password, platform } = data;
   const user = await findActiveUser(email, platform);
   await comparePasswords(password, user.password)
