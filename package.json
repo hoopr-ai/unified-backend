@@ -34,6 +34,7 @@
     "reflect-metadata": "^0.2.2",
     "sequelize": "^6.37.7",
     "sequelize-typescript": "^2.1.6",
+    "tsx": "^4.21.0",
     "typeorm": "^0.3.28"
   }
 }
