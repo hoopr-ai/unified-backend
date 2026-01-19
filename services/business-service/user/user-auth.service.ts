@@ -67,6 +67,9 @@ export const userResetPasswordService = async (
   const { email, newPassword, platform, oldPassword } = data;
   const user = await findActiveUser(email, platform);
   await comparePasswords(oldPassword, user.password);
+  if (oldPassword === newPassword) {
+    throw new AppError(ErrorMessages.SamePassword, 400);
+  }
   const hashedNewPassword = await bcrypt.hash(newPassword, 10);
   await updateUserPassword(email, platform, hashedNewPassword);
 };
