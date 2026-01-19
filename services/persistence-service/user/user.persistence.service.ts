@@ -12,3 +12,14 @@ export const findActiveUser = async (email: string, platform: Platform): Promise
     }
     return userDetails;
   }
+
+export const updateUserPassword = async (
+  email: string,
+  platform: Platform,
+  hashedPassword: string
+): Promise<void> => {
+  await UserModel.update(
+    { password: hashedPassword },
+    { where: { email, platform, status: UserStatus.ACTIVE } }
+  );
+}

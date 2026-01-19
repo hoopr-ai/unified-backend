@@ -1,17 +1,17 @@
 import type { Platform } from "../constants/modules.export";
 
 export interface LoginUserRequestData {
-    email: string;
-    password: string;
-    platform: Platform;
+  email: string;
+  password: string;
+  platform: Platform;
 }
 
-export interface LoginUserRequestData {
-    email: string;
-    password: string;
-    platform: Platform;
+export interface ResetPasswordRequestData {
+  email: string;
+  oldPassword: string;
+  newPassword: string;
+  platform: Platform;
 }
-
 
 export interface UserRow {
   id: number;
@@ -38,4 +38,4 @@ export interface LoginResponse {
   };
 }
 
-export const AccessTokenExpiry = '3h';
+export const AccessTokenExpiry = "3h";
