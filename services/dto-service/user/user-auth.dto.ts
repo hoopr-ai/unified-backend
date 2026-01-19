@@ -1,5 +1,13 @@
 import type { Platform } from "../constants/modules.export";
 
+export interface CreateAuthRequestData {
+    email: string;
+    firstName: string;
+    lastName: string;
+    password: string;
+    platform: Platform;
+}
+
 export interface LoginUserRequestData {
   email: string;
   password: string;
@@ -13,29 +21,14 @@ export interface ResetPasswordRequestData {
   platform: Platform;
 }
 
-export interface UserRow {
+export interface LoginResponse {
   id: number;
   email: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  createdAt: string;
-  updatedAt: string;
-  password: string;
-  welcome_email_sent?: boolean;
-}
-
-export interface LoginResponse {
+  role: string | null;
+  updatedAt: number | undefined;
+  expiresIn: number;
   token: string;
-  userData: {
-    id: number;
-    email: string;
-    firstName: string | undefined;
-    lastName: string | undefined;
-    createdAt: string;
-    updatedAt: string;
-    expiresIn: number;
-  };
 }
 
 export const AccessTokenExpiry = "3h";
+export const AccessTokenExpiryInSeconds = 3 * 60 * 60;

@@ -12,7 +12,7 @@ import {
 import type { UserStatus } from "../../../dto-service/modules.export";
 
 export interface UserDetails {
-  id: number;
+  id?: number;
   email: string;
   password: string;
   firstName?: string;
@@ -28,10 +28,10 @@ export interface UserDetails {
   tableName: "users",
   timestamps: true,
 })
-export class UserModel extends Model<UserModel> {
+export class UserModel extends Model<UserModel, UserDetails> {
   @PrimaryKey
   @AutoIncrement
-  @Column(DataType.INTEGER)
+  @Column(DataType.BIGINT)
   id!: number;
 
   // Composite unique key: email + platform
