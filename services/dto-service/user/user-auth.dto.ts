@@ -1,6 +1,15 @@
+import type { Platform } from "../constants/modules.export";
+
 export interface LoginUserRequestData {
     email: string;
     password: string;
+    platform: Platform;
+}
+
+export interface LoginUserRequestData {
+    email: string;
+    password: string;
+    platform: Platform;
 }
 
 
@@ -10,9 +19,9 @@ export interface UserRow {
   firstName: string;
   lastName: string;
   role: string;
-  created_at: string;
-  updated_at: string;
-  password_hash: string;
+  createdAt: string;
+  updatedAt: string;
+  password: string;
   welcome_email_sent?: boolean;
 }
 
@@ -23,9 +32,10 @@ export interface LoginResponse {
     email: string;
     firstName: string | undefined;
     lastName: string | undefined;
-    created_at: string;
-    updated_at: string;
-    role: string;
+    createdAt: string;
+    updatedAt: string;
     expiresIn: number;
   };
 }
+
+export const AccessTokenExpiry = '3h';

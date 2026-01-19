@@ -5,20 +5,23 @@ import {
   DataType,
   PrimaryKey,
   AutoIncrement,
-  Unique,
-  Default,
   CreatedAt,
   UpdatedAt,
+  Index,
 } from "sequelize-typescript";
+import type { UserStatus } from "../../../dto-service/modules.export";
 
 export interface UserDetails {
   id: number;
   email: string;
-  password_hash: string;
+  password: string;
   firstName?: string;
   lastName?: string;
-  created_at: Date;
-  updated_at: Date;
+  status: UserStatus;
+  mobile?: string;
+  platform: string;
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
 @Table({
@@ -31,18 +34,35 @@ export class UserModel extends Model<UserModel> {
   @Column(DataType.INTEGER)
   id!: number;
 
-  @Unique
+  // Composite unique key: email + platform
+  @Index({ name: "unique_email_platform", unique: true })
   @Column({
     type: DataType.STRING(255),
     allowNull: false,
   })
   email!: string;
 
+  // Composite unique key: mobile + platform
+  @Index({ name: "unique_mobile_platform", unique: true })
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  mobile?: string;
+
+  @Index({ name: "unique_email_platform", unique: true })
+  @Index({ name: "unique_mobile_platform", unique: true })
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  platform!: string;
+
   @Column({
     type: DataType.STRING(255),
     allowNull: false,
   })
-  password_hash!: string;
+  password!: string;
 
   @Column({
     type: DataType.STRING(255),
@@ -56,17 +76,22 @@ export class UserModel extends Model<UserModel> {
   })
   lastName?: string;
 
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  status!: UserStatus;
+
   @CreatedAt
   @Column({
-    field: "created_at",
     type: DataType.DATE,
   })
-  created_at!: Date;
+  createdAt!: Date;
 
   @UpdatedAt
   @Column({
-    field: "updated_at",
     type: DataType.DATE,
+    allowNull: true,
   })
-  updated_at!: Date;
+  updatedAt?: Date;
 }

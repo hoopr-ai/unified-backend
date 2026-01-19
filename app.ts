@@ -4,8 +4,9 @@ import type { Application } from "express";
 import cors from "cors";
 import type { CorsOptions } from "cors";
 import type { Request, Response } from "express";
-import userRoutes from "./routes/user.route";
+import authRoutes from "./routes/user-auth.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
+import { errorHandler } from "./middlewares/errorHandler";
 
 dotenv.config();
 const app: Application = express();
@@ -68,7 +69,7 @@ app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
 // User Routes
-app.use("/user", userRoutes);
+app.use("/auth", authRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res
@@ -76,6 +77,7 @@ app.get("/health-check", (req: Request, res: Response) => {
     .send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);
 });
 
+app.use(errorHandler);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 
 app.listen(PORT, () => {
