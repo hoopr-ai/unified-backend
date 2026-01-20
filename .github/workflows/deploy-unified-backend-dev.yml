@@ -1,0 +1,35 @@
+name: Deploy Unified Backend (Dev)
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo (for metadata only)
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH key
+        run: |
+          echo "${{ secrets.UNIFIED_GCP_SSH_KEY_DEV }}" > /tmp/unified-backend-key
+          chmod 600 /tmp/unified-backend-key
+
+      - name: Deploy on Server #2 via SSH
+        env:
+          SERVER_IP: ${{ secrets.UNIFIED_GCP_IP_DEV }}
+          SERVER_USER: ${{ secrets.UNIFIED_GCP_USER_DEV }}
+        run: |
+          ssh -i /tmp/unified-backend-key \
+              -o StrictHostKeyChecking=no \
+              "$SERVER_USER@$SERVER_IP" << 'EOF'
+          
+          echo "🚀 Starting Unified Backend deployment"
+          cd /var/www/html/unified-backend
+          ./deployment.sh
+          
+          echo "✅ Deployment finished"
+          EOF
