@@ -13,6 +13,13 @@ export const findActiveUser = async (email: string, platform: Platform): Promise
     return userDetails;
   }
 
+export const findActiveUserSilently = async (email: string, platform: Platform): Promise<UserDetails | null> => {
+  const userDetails =  await UserModel.findOne({
+    where: { email, platform, status: UserStatus.ACTIVE },
+  });
+  return userDetails;
+}
+
 export const updateUserPassword = async (
   email: string,
   platform: Platform,
