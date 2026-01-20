@@ -3,6 +3,7 @@ import {
   userLoginService,
   userResetPasswordService,
   createUserService,
+  inviteUserService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -30,5 +31,13 @@ export const create = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({
     data: response,
     error: { code: 0, message: ResponseMessages.USerCreatedSuccess },
+  });
+});
+
+export const inviteUser = catchAsync(async (req: Request, res: Response) => {
+  const response = await inviteUserService(req.body);
+  res.status(200).json({
+    data: response,
+    error: { code: 0, message: ResponseMessages.UserInvitedSuccess },
   });
 });

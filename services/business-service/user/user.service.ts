@@ -123,3 +123,19 @@ export const createUserService = async (
   await saveUserRole(userRoleDetails);
   return {};
 };
+
+export const inviteUserService = async (
+  data: CreateAuthRequestData //need to create a separate DTO for invite user which does not have password field
+): Promise<{}> => {
+  const { email, password, platform, firstName, lastName, mobile } = data;
+  const userDetails = await findActiveUserSilently(email, platform);
+  if (userDetails) {
+    throw new AppError(ErrorMessages.UserAlreadyExists, 400);
+  }
+  const hashedNewPassword = await bcrypt.hash(password, 10);
+  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile);
+  const savedUser = await saveUser(newUser);
+  const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
+  await saveUserRole(userRoleDetails);
+  return {};
+};
