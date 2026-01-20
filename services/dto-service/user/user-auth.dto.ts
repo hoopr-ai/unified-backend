@@ -4,6 +4,7 @@ export interface CreateAuthRequestData {
     email: string;
     firstName: string;
     lastName: string;
+    mobile: string;
     password: string;
     platform: Platform;
 }

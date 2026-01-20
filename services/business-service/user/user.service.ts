@@ -55,7 +55,8 @@ const createUserDetails = (
   firstName: string,
   lastName: string,
   platform: string,
-  password: string
+  password: string,
+  mobile: string,
 ): UserDetails => {
   const newUser: UserDetails = {
     email,
@@ -63,6 +64,7 @@ const createUserDetails = (
     lastName,
     platform,
     password,
+    mobile,
     status: UserStatus.ACTIVE,
     createdAt: new Date(),
   };
@@ -109,13 +111,13 @@ const createUserRoleDetails = (userId: number, role: UserRoles) => {
 export const createUserService = async (
   data: CreateAuthRequestData
 ): Promise<{}> => {
-  const { email, password, platform, firstName, lastName } = data;
+  const { email, password, platform, firstName, lastName, mobile } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword);
+  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.ADMIN);
   await saveUserRole(userRoleDetails);

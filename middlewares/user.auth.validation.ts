@@ -10,6 +10,7 @@ export const createAuthRequestSchema = Joi.object<CreateAuthRequestData>({
     email: Joi.string().email().required(),
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
+    mobile: Joi.string().min(8).max(15).required(),
     password: Joi.string().min(6).required(),
     platform: Joi.string().valid(...platformValues).required(),
 });
