@@ -15,6 +15,7 @@ import {
   saveUser,
   saveUserRole,
   updateUserPassword,
+  UserRoleDetails,
   type UserDetails,
 } from "../../persistence-service/exports";
 import { AppError, createJWTToken } from "../../helper-service/modules.export";
@@ -94,17 +95,25 @@ export const userResetPasswordService = async (
   await updateUserPassword(email, platform, hashedNewPassword);
 };
 
+const createUserRoleDetails = (userId: number, role: UserRoles) => {
+  const userRoleDetails: UserRoleDetails = {
+    userId,
+    role,
+    status: UserStatus.ACTIVE,
+    createdAt: new Date(),
+  };
+  return userRoleDetails;
+}
+
 export const createUserService = async (
   data: CreateAuthRequestData
 ): Promise<{}> => {
   const { email, password, platform, firstName, lastName } = data;
-  const user = await findActiveUser(email, platform);
-  if (user) {
-    throw new AppError(ErrorMessages.UserAlreadyExists, 400);
-  }
+  await findActiveUser(email, platform);
   const hashedNewPassword = await bcrypt.hash(password, 10);
   const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword);
   const savedUser = await saveUser(newUser);
-  await saveUserRole(savedUser.id!, UserRoles.ADMIN);
+  const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.ADMIN);
+  await saveUserRole(userRoleDetails);
   return {};
 };

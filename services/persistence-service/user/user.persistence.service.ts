@@ -1,7 +1,7 @@
 import { ErrorMessages, type Platform } from "../../dto-service/constants/modules.export";
 import { UserStatus, type UserRoles } from "../../dto-service/modules.export";
 import { AppError } from "../../helper-service/AppError";
-import { UserModel, UserRoleModel, type UserDetails } from "./schemas/modules.export";
+import { UserModel, UserRoleDetails, UserRoleModel, type UserDetails } from "./schemas/modules.export";
 
 export const findActiveUser = async (email: string, platform: Platform): Promise<UserDetails> => {
     const userDetails =  await UserModel.findOne({
@@ -32,14 +32,9 @@ export const saveUser = async (
 }
 
 export const saveUserRole = async (
-  userId: number,
-  role: UserRoles
-): Promise<void> => {
-  await UserRoleModel.create({
-    userId,
-    role,
-    status: UserStatus.ACTIVE,
-  } as any);
+  userRoleDetails: UserRoleDetails
+): Promise<UserRoleDetails> => {
+  return await UserRoleModel.create(userRoleDetails);
 }
 
 export const findUserRole = async (

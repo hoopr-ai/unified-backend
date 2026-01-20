@@ -14,7 +14,7 @@ import { UserModel } from "./modules.export";
 import type { UserRoles } from "../../../dto-service/modules.export";
 
 export interface UserRoleDetails {
-  id: number;
+  id?: number;
   userId: number;
   role: UserRoles;
   status: string;
@@ -26,7 +26,7 @@ export interface UserRoleDetails {
   tableName: "user_roles",
   timestamps: true,
 })
-export class UserRoleModel extends Model<UserRoleModel> {
+export class UserRoleModel extends Model<UserRoleModel, UserRoleDetails> {
   @PrimaryKey
   @AutoIncrement
   @Column(DataType.BIGINT)
