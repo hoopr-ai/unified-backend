@@ -11,6 +11,7 @@ import {
 } from "../../dto-service/modules.export";
 import {
   findActiveUser,
+  findActiveUserSilently,
   findUserRole,
   saveUser,
   saveUserRole,
@@ -109,7 +110,7 @@ export const createUserService = async (
   data: CreateAuthRequestData
 ): Promise<{}> => {
   const { email, password, platform, firstName, lastName } = data;
-  const userDetails = await findActiveUser(email, platform);
+  const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
