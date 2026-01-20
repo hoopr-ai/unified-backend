@@ -20,7 +20,7 @@ jobs:
           echo "${{ secrets.UNIFIED_GCP_SSH_KEY_DEV }}" > /tmp/unified-backend-key
           chmod 600 /tmp/unified-backend-key
 
-      - name: Deploy on Server #2 via SSH
+      - name: Deploy on Server #2 via SSH (diagnostic mode)
         shell: bash
         env:
           SERVER_IP: ${{ secrets.UNIFIED_GCP_IP_DEV }}
@@ -31,19 +31,59 @@ jobs:
           ssh -i /tmp/unified-backend-key \
               -o StrictHostKeyChecking=no \
               "$SERVER_USER@$SERVER_IP" << 'EOF'
-          
+
           set -euo pipefail
-          trap 'echo "❌ Deployment failed at command: $BASH_COMMAND"; exit 1' ERR
+          trap 'echo "❌ FAILED at: $BASH_COMMAND"; exit 1' ERR
 
-          echo "🚀 Starting Unified Backend deployment"
+          echo "================================================="
+          echo "👤 User:"
+          whoami
 
-          echo "📂 Changing directory"
-          cd
-          cd ..
-          cd /var/www/html/unified-backend
+          echo "================================================="
+          echo "📂 Initial working directory:"
+          pwd
 
-          echo "▶️ Running deployment script"
+          echo "================================================="
+          echo "📁 Checking base path"
+          BASE_DIR="/var/www/html/unified-backend"
+
+          if [ ! -d "$BASE_DIR" ]; then
+            echo "❌ Directory does NOT exist: $BASE_DIR"
+            ls -la /var/www/html || true
+            exit 1
+          fi
+
+          cd "$BASE_DIR"
+
+          echo "================================================="
+          echo "📁 Directory contents:"
+          ls -la
+
+          echo "================================================="
+          echo "🔍 Looking for deployment.sh"
+
+          if [ ! -f "deployment.sh" ]; then
+            echo "❌ deployment.sh NOT FOUND"
+            echo "📄 Files in directory:"
+            ls -la
+            exit 1
+          fi
+
+          echo "✅ deployment.sh EXISTS"
+
+          echo "================================================="
+          echo "📄 File details:"
+          ls -l deployment.sh
+          file deployment.sh || true
+
+          echo "================================================="
+          echo "🔧 Ensuring executable"
+          chmod +x deployment.sh
+
+          echo "================================================="
+          echo "▶️ Running deployment.sh"
           ./deployment.sh
 
+          echo "================================================="
           echo "✅ Deployment finished successfully"
           EOF
