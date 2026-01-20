@@ -7,7 +7,6 @@ import {
   createAuthRequestSchema,
 } from "../middlewares/user.auth.validation";
 
-
 const router = Router();
 router.post("/create", validateRequest(createAuthRequestSchema), create);
 router.post("/login", validateRequest(loginRequestSchema), login);
