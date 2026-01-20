@@ -22,7 +22,7 @@ const corsOptions: CorsOptions = {
     }
 
     const allowedOrigins: string[] = [
-        process.env.FRONTEND_URL || 
+        process.env.FRONTEND_URL,
         "http://localhost:5173",
         "http://localhost:5173/",
         "http://localhost:3002",
@@ -33,7 +33,7 @@ const corsOptions: CorsOptions = {
         "https://dev-sage.hoopr.ai",
         "https://dev-sage-api.hoopr.ai",
         "https://sage-api.hoopr.ai",
-    ];
+    ].filter((origin): origin is string => Boolean(origin));
 
     // Allow localhost with any port for development
     if (
