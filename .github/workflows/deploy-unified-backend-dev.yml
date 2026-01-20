@@ -14,22 +14,34 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Prepare SSH key
+        shell: bash
         run: |
+          set -euo pipefail
           echo "${{ secrets.UNIFIED_GCP_SSH_KEY_DEV }}" > /tmp/unified-backend-key
           chmod 600 /tmp/unified-backend-key
 
       - name: Deploy on Server #2 via SSH
+        shell: bash
         env:
           SERVER_IP: ${{ secrets.UNIFIED_GCP_IP_DEV }}
           SERVER_USER: ${{ secrets.UNIFIED_GCP_USER_DEV }}
         run: |
+          set -euo pipefail
+
           ssh -i /tmp/unified-backend-key \
               -o StrictHostKeyChecking=no \
               "$SERVER_USER@$SERVER_IP" << 'EOF'
           
+          set -euo pipefail
+          trap 'echo "❌ Deployment failed at command: $BASH_COMMAND"; exit 1' ERR
+
           echo "🚀 Starting Unified Backend deployment"
+
+          echo "📂 Changing directory"
           cd /var/www/html/unified-backend
+
+          echo "▶️ Running deployment script"
           ./deployment.sh
-          
-          echo "✅ Deployment finished"
+
+          echo "✅ Deployment finished successfully"
           EOF
