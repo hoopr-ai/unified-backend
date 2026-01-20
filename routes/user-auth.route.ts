@@ -15,4 +15,5 @@ router.post(
   validateRequest(resetPasswordRequestSchema),
   resetPassword
 );
+
 export default router;
