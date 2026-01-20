@@ -38,6 +38,8 @@ jobs:
           echo "🚀 Starting Unified Backend deployment"
 
           echo "📂 Changing directory"
+          cd
+          cd ..
           cd /var/www/html/unified-backend
 
           echo "▶️ Running deployment script"
