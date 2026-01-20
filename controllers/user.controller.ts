@@ -29,6 +29,6 @@ export const create = catchAsync(async (req: Request, res: Response) => {
   const response = await createUserService(req.body);
   res.status(200).json({
     data: response,
-    error: { code: 0, message: ResponseMessages.ResetPasswordSuccess },
+    error: { code: 0, message: ResponseMessages.USerCreatedSuccess },
   });
 });
