@@ -1,6 +1,7 @@
 import { Sequelize } from "sequelize-typescript";
 import { config } from "dotenv";
 import { UserModel, UserRoleModel } from "./user/modules.export";
+import { TrackModel } from "./track/modules.export";
 
 config();
 
@@ -50,6 +51,7 @@ export const sequelize = new Sequelize({
 sequelize.addModels([
   UserModel,
   UserRoleModel,
+  TrackModel,
 ]);
 
 export async function connectDatabase() {
