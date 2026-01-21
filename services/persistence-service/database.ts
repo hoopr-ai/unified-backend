@@ -2,6 +2,7 @@ import { Sequelize } from "sequelize-typescript";
 import { config } from "dotenv";
 import { UserModel, UserRoleModel } from "./user/modules.export";
 import { TrackModel } from "./track/modules.export";
+import { AlbumModel } from "./albums/modules.export";
 
 config();
 
@@ -52,6 +53,7 @@ sequelize.addModels([
   UserModel,
   UserRoleModel,
   TrackModel,
+  AlbumModel,
 ]);
 
 export async function connectDatabase() {
