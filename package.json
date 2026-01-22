@@ -30,6 +30,7 @@
     "express": "^5.2.1",
     "joi": "^18.0.2",
     "jsonwebtoken": "^9.0.3",
+    "pg": "^8.17.2",
     "pg-hstore": "^2.3.4",
     "reflect-metadata": "^0.2.2",
     "sequelize": "^6.37.7",
