@@ -4,6 +4,11 @@ import { UserModel, UserRoleModel } from "./user/modules.export";
 import { TrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
+import { ArtistModel, TrackArtistMappingModel } from "./artists/modules.export";
+import {
+  PlaylistModel,
+  TrackPlaylistMappingModel,
+} from "./playlists/modules.export";
 
 config();
 
@@ -57,6 +62,10 @@ sequelize.addModels([
   AlbumModel,
   FilterModel,
   TrackFilterMappingModel,
+  ArtistModel,
+  TrackArtistMappingModel,
+  PlaylistModel,
+  TrackPlaylistMappingModel,
 ]);
 
 export async function connectDatabase() {
