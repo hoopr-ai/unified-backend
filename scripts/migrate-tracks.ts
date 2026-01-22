@@ -1,4 +1,6 @@
 import { Client } from "pg";
+import { Sequelize } from "sequelize-typescript";
+import { TrackModel } from "../services/persistence-service/track/modules.export";
 
 function toStringArray(value: string | null): string[] | null {
   if (!value) return null;
@@ -6,19 +8,17 @@ function toStringArray(value: string | null): string[] | null {
   return value
     .split(",")
     .map((v) => v.trim())
-    .filter(Boolean); // removes empty strings
+    .filter(Boolean);
 }
 
 function toJsonbStrict(value: any): object | null {
   if (value === null || value === undefined) return null;
 
-  // Already safe
   if (typeof value === "object") return value;
 
   if (typeof value === "string") {
     const trimmed = value.trim();
 
-    // Empty or obviously broken JSON
     if (
       trimmed === "" ||
       trimmed === "{" ||
@@ -32,7 +32,6 @@ function toJsonbStrict(value: any): object | null {
     try {
       return JSON.parse(trimmed);
     } catch {
-      // DO NOT pass string to JSONB
       return { raw: trimmed };
     }
   }
@@ -53,20 +52,112 @@ const SOURCE_DB_CONFIG = {
 const TARGET_DB_CONFIG = {
   host: "34.47.200.207",
   port: 5432,
-  user: "select-server-dev",
+  username: "select-server-dev",
   password: "hO82GcLotttB5bLyoeG1",
   database: "sage_staging",
 };
 
+// Fields that exist in TrackModel (from track.schema.ts)
+const TRACK_MODEL_FIELDS = [
+  "id",
+  "trackCode",
+  "type",
+  "name",
+  "description",
+  "duration",
+  "size",
+  "bpm",
+  "songKey",
+  "timeSignature",
+  "region",
+  "releaseRegion",
+  "releaseDate",
+  "ownerId",
+  "hasVocals",
+  "isPRO",
+  "displayTags",
+  "sourceLink",
+  "name_slug",
+  "waveformLink",
+  "mp3Link",
+  "ISRC",
+  "lyrics",
+  "tier",
+  "energy",
+  "industry",
+  "status",
+  "createdAt",
+  "updatedAt",
+  "publisherId",
+  "trending",
+  "premium",
+  "reelCount",
+  "partnerId",
+  "bollywood",
+] as const;
+
+// Fields that need array conversion (comma-separated string -> string[])
+const ARRAY_FIELDS = ["songKey", "displayTags", "ownerId", "publisherId"];
+
+// Fields that need JSONB conversion
+const JSONB_FIELDS = ["industry"];
+
+function mapSourceTrackToModel(sourceTrack: any): Partial<TrackModel> {
+  const mappedTrack: Record<string, any> = {};
+
+  for (const field of TRACK_MODEL_FIELDS) {
+    const sourceValue = sourceTrack[field];
+
+    // Skip if field doesn't exist in source
+    if (sourceValue === undefined) {
+      continue;
+    }
+
+    // Handle array fields
+    if (ARRAY_FIELDS.includes(field)) {
+      mappedTrack[field] = toStringArray(sourceValue);
+      continue;
+    }
+
+    // Handle JSONB fields
+    if (JSONB_FIELDS.includes(field)) {
+      mappedTrack[field] = toJsonbStrict(sourceValue);
+      continue;
+    }
+
+    // Pass through other fields
+    mappedTrack[field] = sourceValue;
+  }
+
+  return mappedTrack as Partial<TrackModel>;
+}
+
 async function migrateTracks() {
   const sourceClient = new Client(SOURCE_DB_CONFIG);
-  const targetClient = new Client(TARGET_DB_CONFIG);
+
+  // Create Sequelize instance for target database
+  const targetSequelize = new Sequelize({
+    dialect: "postgres",
+    host: TARGET_DB_CONFIG.host,
+    port: TARGET_DB_CONFIG.port,
+    username: TARGET_DB_CONFIG.username,
+    password: TARGET_DB_CONFIG.password,
+    database: TARGET_DB_CONFIG.database,
+    logging: false,
+    define: {
+      freezeTableName: true,
+      timestamps: true,
+    },
+  });
+
+  // Register TrackModel with this Sequelize instance
+  targetSequelize.addModels([TrackModel]);
 
   try {
     await sourceClient.connect();
     console.log("✅ Connected to source database (select_staging)");
 
-    await targetClient.connect();
+    await targetSequelize.authenticate();
     console.log("✅ Connected to target database (unified_staging)");
 
     // Fetch all tracks from source
@@ -78,128 +169,35 @@ async function migrateTracks() {
       return;
     }
 
+    // Log fields that will be skipped
+    if (tracks.length > 0) {
+      const sourceFields = Object.keys(tracks[0]);
+      const skippedFields = sourceFields.filter(
+        (f) => !TRACK_MODEL_FIELDS.includes(f as any)
+      );
+      if (skippedFields.length > 0) {
+        console.log(`⚠️  Skipping fields not in TrackModel: ${skippedFields.join(", ")}`);
+      }
+    }
+
     let successCount = 0;
     let errorCount = 0;
 
     for (const track of tracks) {
       try {
-        // Convert single values to arrays for the modified columns
-        const songKey = toStringArray(track.songKey);
-        const displayTags = toStringArray(track.displayTags);
-        const ownerId = toStringArray(track.ownerId);
-        const publisherId = toStringArray(track.publisherId);
+        const mappedTrack = mapSourceTrackToModel(track);
 
-        await targetClient.query(
-          `INSERT INTO tracks (
-            id, "trackCode", type, name, description, duration, size, bpm,
-            "songKey", "timeSignature", region, "releaseRegion", "releaseDate",
-            "releaseYear", "albumId", "ownerId", "imageId", "hasVocals", "isPRO",
-            name_slug, payload, "isExplicit", "displayTags", error, "sourceLink",
-            "artLink", "imageUrl", "waveformLink", "mp3Link", "isProcessed",
-            "ISRC", lyrics, tier, energy, industry, active, deleted,
-            "createdAt", "updatedAt", released, "publisherId", trending, premium,
-            "reelCount", "partnerId", bollywood
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-            $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-            $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
-            $41, $42, $43, $44, $45, $46
-          )
-          ON CONFLICT (id) DO UPDATE SET
-            "trackCode" = EXCLUDED."trackCode",
-            type = EXCLUDED.type,
-            name = EXCLUDED.name,
-            description = EXCLUDED.description,
-            duration = EXCLUDED.duration,
-            size = EXCLUDED.size,
-            bpm = EXCLUDED.bpm,
-            "songKey" = EXCLUDED."songKey",
-            "timeSignature" = EXCLUDED."timeSignature",
-            region = EXCLUDED.region,
-            "releaseRegion" = EXCLUDED."releaseRegion",
-            "releaseDate" = EXCLUDED."releaseDate",
-            "releaseYear" = EXCLUDED."releaseYear",
-            "albumId" = EXCLUDED."albumId",
-            "ownerId" = EXCLUDED."ownerId",
-            "imageId" = EXCLUDED."imageId",
-            "hasVocals" = EXCLUDED."hasVocals",
-            "isPRO" = EXCLUDED."isPRO",
-            name_slug = EXCLUDED.name_slug,
-            payload = EXCLUDED.payload,
-            "isExplicit" = EXCLUDED."isExplicit",
-            "displayTags" = EXCLUDED."displayTags",
-            error = EXCLUDED.error,
-            "sourceLink" = EXCLUDED."sourceLink",
-            "artLink" = EXCLUDED."artLink",
-            "imageUrl" = EXCLUDED."imageUrl",
-            "waveformLink" = EXCLUDED."waveformLink",
-            "mp3Link" = EXCLUDED."mp3Link",
-            "isProcessed" = EXCLUDED."isProcessed",
-            "ISRC" = EXCLUDED."ISRC",
-            lyrics = EXCLUDED.lyrics,
-            tier = EXCLUDED.tier,
-            energy = EXCLUDED.energy,
-            industry = EXCLUDED.industry,
-            active = EXCLUDED.active,
-            deleted = EXCLUDED.deleted,
-            "updatedAt" = EXCLUDED."updatedAt",
-            released = EXCLUDED.released,
-            "publisherId" = EXCLUDED."publisherId",
-            trending = EXCLUDED.trending,
-            premium = EXCLUDED.premium,
-            "reelCount" = EXCLUDED."reelCount",
-            "partnerId" = EXCLUDED."partnerId",
-            bollywood = EXCLUDED.bollywood`,
-          [
-            track.id,
-            track.trackCode,
-            track.type,
-            track.name,
-            track.description,
-            track.duration,
-            track.size,
-            track.bpm,
-            songKey,
-            track.timeSignature,
-            track.region,
-            track.releaseRegion,
-            track.releaseDate,
-            track.releaseYear,
-            track.albumId,
-            ownerId,
-            track.imageId,
-            track.hasVocals,
-            track.isPRO,
-            track.name_slug,
-            track.payload,
-            track.isExplicit,
-            displayTags,
-            track.error,
-            track.sourceLink,
-            track.artLink,
-            track.imageUrl,
-            track.waveformLink,
-            track.mp3Link,
-            track.isProcessed,
-            track.ISRC,
-            track.lyrics,
-            track.tier,
-            track.energy,
-            toJsonbStrict(track.industry),
-            track.active,
-            track.deleted,
-            track.createdAt,
-            track.updatedAt,
-            track.released,
-            publisherId,
-            track.trending,
-            track.premium,
-            track.reelCount,
-            track.partnerId,
-            track.bollywood,
-          ],
-        );
+        // Ensure id is present for upsert
+        if (!mappedTrack.id) {
+          console.warn(`⚠️  Skipping track with missing id`);
+          continue;
+        }
+
+        // Use upsert to handle conflicts on id
+        await TrackModel.upsert(mappedTrack as any, {
+          conflictFields: ["id"],
+        });
+
         successCount++;
 
         if (successCount % 100 === 0) {
@@ -207,18 +205,18 @@ async function migrateTracks() {
         }
       } catch (err: any) {
         errorCount++;
-        console.error(`❌ Error migrating track ${track.id}:`, err);
+        console.error(`❌ Error migrating track ${track.id}:`, err.message);
       }
     }
 
     console.log(
-      `\n✅ Migration complete: ${successCount} succeeded, ${errorCount} failed`,
+      `\n✅ Migration complete: ${successCount} succeeded, ${errorCount} failed`
     );
   } catch (err) {
     console.error("❌ Migration failed:", err);
   } finally {
     await sourceClient.end();
-    await targetClient.end();
+    await targetSequelize.close();
   }
 }
 

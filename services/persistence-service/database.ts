@@ -3,6 +3,7 @@ import { config } from "dotenv";
 import { UserModel, UserRoleModel } from "./user/modules.export";
 import { TrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
+import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
 
 config();
 
@@ -54,6 +55,8 @@ sequelize.addModels([
   UserRoleModel,
   TrackModel,
   AlbumModel,
+  FilterModel,
+  TrackFilterMappingModel,
 ]);
 
 export async function connectDatabase() {
