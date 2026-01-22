@@ -59,15 +59,19 @@ export const findAllTracks = async (
     order: [["createdAt", "DESC"]],
     limit,
     offset,
+    distinct: true,
+    col: "id",
     include: [
       {
         model: TrackArtistMappingModel,
         as: "trackArtistMappings",
+        required: false,
         include: [
           {
             model: ArtistModel,
             as: "artist",
             attributes: ["id", "name", "type"],
+            required: false,
           },
         ],
       },
@@ -153,15 +157,19 @@ export const findTracksByTrackCodes = async (
     order: [["createdAt", "DESC"]],
     limit,
     offset,
+    distinct: true,
+    col: "id",
     include: [
       {
         model: TrackArtistMappingModel,
         as: "trackArtistMappings",
+        required: false,
         include: [
           {
             model: ArtistModel,
             as: "artist",
             attributes: ["id", "name", "type"],
+            required: false,
           },
         ],
       },
