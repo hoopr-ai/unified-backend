@@ -5,6 +5,7 @@ import cors from "cors";
 import type { CorsOptions } from "cors";
 import type { Request, Response } from "express";
 import userRoutes from "./routes/user.route";
+import filterRoutes from "./routes/filter.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 
@@ -71,6 +72,9 @@ app.options(/.*/, cors(corsOptions));
 
 // User Routes
 app.use("/user", userRoutes);
+
+// Filter Routes
+app.use("/filters", filterRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res

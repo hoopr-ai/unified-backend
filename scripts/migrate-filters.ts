@@ -30,12 +30,17 @@ const FILTER_MODEL_FIELDS = [
   "name",
   "status",
   "type",
+  "name_slug",
   "createdAt",
   "updatedAt",
 ] as const;
 
 // Fields that exist in TrackFilterMappingModel (from track-filter-mapping.schema.ts)
-const TRACK_FILTER_MAPPING_MODEL_FIELDS = ["id", "filterId", "trackId"] as const;
+const TRACK_FILTER_MAPPING_MODEL_FIELDS = [
+  "id",
+  "filterId",
+  "trackId",
+] as const;
 
 function mapSourceFilterToModel(sourceFilter: any): Partial<FilterModel> {
   const mappedFilter: Record<string, any> = {};
@@ -56,7 +61,7 @@ function mapSourceFilterToModel(sourceFilter: any): Partial<FilterModel> {
 }
 
 function mapSourceTrackFilterMappingToModel(
-  sourceMapping: any
+  sourceMapping: any,
 ): Partial<TrackFilterMappingModel> {
   const mappedMapping: Record<string, any> = {};
 
@@ -113,11 +118,11 @@ async function migrateFilters() {
       // Log fields that will be skipped
       const sourceFields = Object.keys(filters[0]);
       const skippedFields = sourceFields.filter(
-        (f) => !FILTER_MODEL_FIELDS.includes(f as any)
+        (f) => !FILTER_MODEL_FIELDS.includes(f as any),
       );
       if (skippedFields.length > 0) {
         console.log(
-          `⚠️  Skipping fields not in FilterModel: ${skippedFields.join(", ")}`
+          `⚠️  Skipping fields not in FilterModel: ${skippedFields.join(", ")}`,
         );
       }
 
@@ -151,7 +156,7 @@ async function migrateFilters() {
       }
 
       console.log(
-        `✅ Filters migration complete: ${filterSuccessCount} succeeded, ${filterErrorCount} failed`
+        `✅ Filters migration complete: ${filterSuccessCount} succeeded, ${filterErrorCount} failed`,
       );
     }
 
@@ -159,7 +164,7 @@ async function migrateFilters() {
     console.log("\n📦 Starting track_filter_mappings migration...");
 
     const { rows: mappings } = await sourceClient.query(
-      `SELECT * FROM track_filter_mappings`
+      `SELECT * FROM track_filter_mappings`,
     );
     console.log(`📦 Found ${mappings.length} track_filter_mappings to migrate`);
 
@@ -167,11 +172,11 @@ async function migrateFilters() {
       // Log fields that will be skipped
       const sourceFields = Object.keys(mappings[0]);
       const skippedFields = sourceFields.filter(
-        (f) => !TRACK_FILTER_MAPPING_MODEL_FIELDS.includes(f as any)
+        (f) => !TRACK_FILTER_MAPPING_MODEL_FIELDS.includes(f as any),
       );
       if (skippedFields.length > 0) {
         console.log(
-          `⚠️  Skipping fields not in TrackFilterMappingModel: ${skippedFields.join(", ")}`
+          `⚠️  Skipping fields not in TrackFilterMappingModel: ${skippedFields.join(", ")}`,
         );
       }
 
@@ -197,20 +202,20 @@ async function migrateFilters() {
 
           if (mappingSuccessCount % 100 === 0) {
             console.log(
-              `⏳ Migrated ${mappingSuccessCount} track_filter_mappings...`
+              `⏳ Migrated ${mappingSuccessCount} track_filter_mappings...`,
             );
           }
         } catch (err: any) {
           mappingErrorCount++;
           console.error(
             `❌ Error migrating track_filter_mapping ${mapping.id}:`,
-            err.message
+            err.message,
           );
         }
       }
 
       console.log(
-        `✅ Track filter mappings migration complete: ${mappingSuccessCount} succeeded, ${mappingErrorCount} failed`
+        `✅ Track filter mappings migration complete: ${mappingSuccessCount} succeeded, ${mappingErrorCount} failed`,
       );
     }
 
