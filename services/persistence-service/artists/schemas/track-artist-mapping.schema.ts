@@ -6,6 +6,7 @@ import {
   PrimaryKey,
   ForeignKey,
   Default,
+  BelongsTo,
 } from "sequelize-typescript";
 import { ArtistModel } from "./artist.schema";
 import { TrackModel } from "../../track/schemas/track.schema";
@@ -63,4 +64,7 @@ export class TrackArtistMappingModel extends Model<
     allowNull: true,
   })
   isPrimary?: boolean;
+
+  @BelongsTo(() => ArtistModel, "artistId")
+  artist?: ArtistModel;
 }

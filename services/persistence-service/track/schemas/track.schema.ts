@@ -8,7 +8,9 @@ import {
   UpdatedAt,
   Index,
   Default,
+  HasMany,
 } from "sequelize-typescript";
+import { TrackArtistMappingModel } from "../../artists/schemas/track-artist-mapping.schema";
 
 export enum TrackType {
   // Add your enum values based on public."enum_tracks_type"
@@ -45,7 +47,7 @@ export interface TrackDetails {
   createdAt: Date;
   updatedAt: Date;
   publisherId?: string[];
-  trending?: string;
+  trending?: boolean;
   reelCount?: string;
   partnerId?: string;
   bollywood?: string;
@@ -239,10 +241,10 @@ export class TrackModel extends Model<TrackModel> {
   publisherId?: string[];
 
   @Column({
-    type: DataType.STRING(2),
+    type: DataType.BOOLEAN,
     allowNull: true,
   })
-  trending?: string;
+  trending?: boolean;
 
   @Column({
     type: DataType.STRING(2),
@@ -267,4 +269,7 @@ export class TrackModel extends Model<TrackModel> {
     allowNull: true,
   })
   bollywood?: string;
+
+  @HasMany(() => TrackArtistMappingModel, "trackId")
+  trackArtistMappings?: TrackArtistMappingModel[];
 }

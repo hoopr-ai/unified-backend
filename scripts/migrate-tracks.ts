@@ -11,6 +11,13 @@ function toStringArray(value: string | null): string[] | null {
     .filter(Boolean);
 }
 
+function toBoolean(value: string | null): boolean | null {
+  if (value === null || value === undefined) return null;
+  if (value === "Y" || value === "y") return true;
+  if (value === "N" || value === "n") return false;
+  return null;
+}
+
 function toJsonbStrict(value: any): object | null {
   if (value === null || value === undefined) return null;
 
@@ -102,6 +109,9 @@ const ARRAY_FIELDS = ["songKey", "displayTags", "ownerId", "publisherId"];
 // Fields that need JSONB conversion
 const JSONB_FIELDS = ["industry"];
 
+// Fields that need boolean conversion (Y/N -> true/false)
+const BOOLEAN_FIELDS = ["trending"];
+
 function mapSourceTrackToModel(sourceTrack: any): Partial<TrackModel> {
   const mappedTrack: Record<string, any> = {};
 
@@ -122,6 +132,12 @@ function mapSourceTrackToModel(sourceTrack: any): Partial<TrackModel> {
     // Handle JSONB fields
     if (JSONB_FIELDS.includes(field)) {
       mappedTrack[field] = toJsonbStrict(sourceValue);
+      continue;
+    }
+
+    // Handle boolean fields (Y/N -> true/false)
+    if (BOOLEAN_FIELDS.includes(field)) {
+      mappedTrack[field] = toBoolean(sourceValue);
       continue;
     }
 
