@@ -1,5 +1,5 @@
 import { PlaylistModel } from "./schemas/playlist.schema";
-import { TrackPlaylistMappingModel } from "./schemas/track-playlist-mapping.schema";
+import { TrackPlaylistMappingDetails, TrackPlaylistMappingModel } from "./schemas/track-playlist-mapping.schema";
 import { TrackModel } from "../track/schemas/track.schema";
 import { TrackArtistMappingModel, ArtistModel } from "../artists/modules.export";
 import { PlaylistStatus, ArtistType, ArtistInfoTrack, PaginatedPlaylists, GetAllPlaylistsParams, PlaylistInfo } from "../../dto-service/modules.export";
@@ -52,26 +52,13 @@ export const findAllPlaylists = async (
   };
 };
 
-export interface TrackInfo {
-  id: string;
-  trackCode: string;
-  name: string;
-  name_slug: string | null;
-  sourceLink: string | null;
-  waveformLink: string | null;
-  mp3Link: string | null;
-  hasVocals: boolean | null;
-  trending: boolean | null;
-  primaryArtists: ArtistInfoTrack[];
-}
-
 export interface PlaylistDetail {
   id: string;
   playlistCode: string | null;
   name: string;
   name_slug: string | null;
   description: string | null;
-  tracks: TrackInfo[];
+  tracks: TrackPlaylistMappingDetails[];
 }
 
 export interface GetPlaylistDetailParams {
@@ -132,7 +119,7 @@ export const findPlaylistByCode = async (
     ],
   });
 
-  const tracks: TrackInfo[] = mappings
+  const tracks: TrackPlaylistMappingDetails[] = mappings
     .filter((mapping) => {
       if (!mapping.track) {
         console.log(`⚠️ Skipped track with ID: ${mapping.trackId} - not found in tracks table`);
