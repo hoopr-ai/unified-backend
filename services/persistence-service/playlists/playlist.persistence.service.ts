@@ -2,33 +2,7 @@ import { PlaylistModel } from "./schemas/playlist.schema";
 import { TrackPlaylistMappingModel } from "./schemas/track-playlist-mapping.schema";
 import { TrackModel } from "../track/schemas/track.schema";
 import { TrackArtistMappingModel, ArtistModel } from "../artists/modules.export";
-import { ArtistInfo } from "../track/track.persistence.service";
-import { PlaylistStatus, ArtistType } from "../../dto-service/modules.export";
-
-export interface PlaylistInfo {
-  id: string;
-  playlistCode: string | null;
-  name: string;
-  name_slug: string | null;
-}
-
-export interface PaginatedPlaylists {
-  playlists: PlaylistInfo[];
-  pagination: {
-    page: number;
-    limit: number;
-    totalItems: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
-}
-
-export interface GetAllPlaylistsParams {
-  page: number;
-  limit: number;
-  status?: PlaylistStatus;
-}
+import { PlaylistStatus, ArtistType, ArtistInfoTrack, PaginatedPlaylists, GetAllPlaylistsParams, PlaylistInfo } from "../../dto-service/modules.export";
 
 export const findAllPlaylists = async (
   params: GetAllPlaylistsParams,
@@ -88,7 +62,7 @@ export interface TrackInfo {
   mp3Link: string | null;
   hasVocals: boolean | null;
   trending: boolean | null;
-  primaryArtists: ArtistInfo[];
+  primaryArtists: ArtistInfoTrack[];
 }
 
 export interface PlaylistDetail {
@@ -174,7 +148,7 @@ export const findPlaylistByCode = async (
         }>;
       };
 
-      const primaryArtists: ArtistInfo[] = [];
+      const primaryArtists: ArtistInfoTrack[] = [];
 
       if (trackData.trackArtistMappings) {
         for (const artistMapping of trackData.trackArtistMappings) {

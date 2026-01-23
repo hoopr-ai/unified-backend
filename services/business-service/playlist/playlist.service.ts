@@ -1,17 +1,15 @@
 import {
   findAllPlaylists,
   findPlaylistByCode,
-  PaginatedPlaylists,
   PlaylistDetail,
-  GetAllPlaylistsParams,
 } from "../../persistence-service/exports";
-import { PlaylistStatus } from "../../dto-service/modules.export";
-
-export interface GetAllPlaylistsQuery {
-  page?: string;
-  limit?: string;
-  status?: string;
-}
+import { 
+  GetAllPlaylistsParams,
+  GetAllPlaylistsQuery,
+  GetPlaylistDetailQuery,
+  PaginatedPlaylists,
+  PlaylistStatus 
+} from "../../dto-service/modules.export";
 
 export const getAllPlaylistsService = async (
   query: GetAllPlaylistsQuery,
@@ -31,10 +29,6 @@ export const getAllPlaylistsService = async (
 
   return await findAllPlaylists(params);
 };
-
-export interface GetPlaylistDetailQuery {
-  playlistCode: string;
-}
 
 export const getPlaylistDetailService = async (
   query: GetPlaylistDetailQuery,
