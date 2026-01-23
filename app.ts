@@ -7,6 +7,7 @@ import type { Request, Response } from "express";
 import userRoutes from "./routes/user.route";
 import filterRoutes from "./routes/filter.route";
 import trackRoutes from "./routes/track.route";
+import playlistRoutes from "./routes/playlist.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 
@@ -79,6 +80,9 @@ app.use("/filters", filterRoutes);
 
 // Track Routes
 app.use("/tracks", trackRoutes);
+
+// Playlist Routes
+app.use("/playlists", playlistRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res
