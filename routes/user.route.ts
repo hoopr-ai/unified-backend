@@ -5,10 +5,11 @@ import {
   loginRequestSchema,
   resetPasswordRequestSchema,
   createAuthRequestSchema,
-} from "../middlewares/user.auth.validation";
+} from "../middlewares/user.validation";
 import { authenticate } from "../middlewares/authenticate";
 
 const router = Router();
+
 router.post("/create", authenticate, validateRequest(createAuthRequestSchema), create);
 router.post("/login", validateRequest(loginRequestSchema), login);
 router.post(
@@ -17,4 +18,5 @@ router.post(
   resetPassword
 );
 router.post("/invite", authenticate, validateRequest(createAuthRequestSchema), inviteUser);
+
 export default router;

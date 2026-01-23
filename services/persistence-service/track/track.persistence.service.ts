@@ -3,44 +3,7 @@ import {
   TrackArtistMappingModel,
   ArtistModel,
 } from "../artists/modules.export";
-import { ArtistType } from "../../dto-service/modules.export";
-
-export interface ArtistInfo {
-  id: string;
-  name: string;
-  type: ArtistType[];
-}
-
-export interface TrackWithArtists {
-  id: string;
-  trackCode: string;
-  name: string;
-  name_slug: string;
-  sourceLink: string | null;
-  waveformLink: string | null;
-  mp3Link: string | null;
-  hasVocals: boolean | null;
-  trending: boolean | null;
-  primaryArtists: ArtistInfo[];
-}
-
-export interface PaginatedTracks {
-  tracks: TrackWithArtists[];
-  pagination: {
-    page: number;
-    limit: number;
-    totalItems: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPrevPage: boolean;
-  };
-}
-
-export interface GetAllTracksParams {
-  page: number;
-  limit: number;
-  trending?: boolean;
-}
+import { ArtistInfoTrack, ArtistType, GetAllTracksParams, PaginatedTracks, TrackWithArtists } from "../../dto-service/modules.export";
 
 export const findAllTracks = async (
   params: GetAllTracksParams,
@@ -88,7 +51,7 @@ export const findAllTracks = async (
       }>;
     };
 
-    const primaryArtists: ArtistInfo[] = [];
+    const primaryArtists: ArtistInfoTrack[] = [];
 
     if (trackData.trackArtistMappings) {
       for (const mapping of trackData.trackArtistMappings) {
@@ -186,7 +149,7 @@ export const findTracksByTrackCodes = async (
       }>;
     };
 
-    const primaryArtists: ArtistInfo[] = [];
+    const primaryArtists: ArtistInfoTrack[] = [];
 
     if (trackData.trackArtistMappings) {
       for (const mapping of trackData.trackArtistMappings) {

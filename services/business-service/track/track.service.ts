@@ -1,9 +1,7 @@
+import { GetAllTracksParams, PaginatedTracks } from "../../dto-service/modules.export";
 import {
   findAllTracks,
   findTracksByTrackCodes,
-  PaginatedTracks,
-  TrackWithArtists,
-  GetAllTracksParams,
 } from "../../persistence-service/exports";
 
 export interface GetAllTracksQuery {
