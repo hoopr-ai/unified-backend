@@ -2,12 +2,12 @@ import {
   PaginatedTracks,
   TrackWithArtists,
   ArtistInfoTrack,
+  RawTrackWithMappings,
+  PaginatedRawTracks,
 } from "../../dto-service/modules.export";
 import {
   findAllTracks,
   findTracksByTrackCodes,
-  RawTrackWithMappings,
-  PaginatedRawTracks,
 } from "../../persistence-service/exports";
 
 export interface GetAllTracksQuery {

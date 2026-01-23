@@ -36,3 +36,26 @@ export interface GetAllTracksParams {
   limit: number;
   trending?: boolean;
 }
+
+export interface RawTrackWithMappings {
+  id: string;
+  trackCode: string;
+  name: string | null;
+  name_slug: string | null;
+  sourceLink: string | null;
+  waveformLink: string | null;
+  mp3Link: string | null;
+  hasVocals: boolean | null;
+  trending: boolean | null;
+  trackArtistMappings?: Array<{
+    isPrimary?: boolean;
+    artist?: { id: string; name: string; type: ArtistType[] };
+  }>;
+}
+
+export interface PaginatedRawTracks {
+  rows: RawTrackWithMappings[];
+  count: number;
+  page: number;
+  limit: number;
+}

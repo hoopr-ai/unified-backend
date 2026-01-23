@@ -3,31 +3,7 @@ import {
   TrackArtistMappingModel,
   ArtistModel,
 } from "../artists/modules.export";
-import { ArtistType } from "../../dto-service/modules.export";
-
-// Raw track data type from database
-export interface RawTrackWithMappings {
-  id: string;
-  trackCode: string;
-  name: string | null;
-  name_slug: string | null;
-  sourceLink: string | null;
-  waveformLink: string | null;
-  mp3Link: string | null;
-  hasVocals: boolean | null;
-  trending: boolean | null;
-  trackArtistMappings?: Array<{
-    isPrimary?: boolean;
-    artist?: { id: string; name: string; type: ArtistType[] };
-  }>;
-}
-
-export interface PaginatedRawTracks {
-  rows: RawTrackWithMappings[];
-  count: number;
-  page: number;
-  limit: number;
-}
+import { PaginatedRawTracks, RawTrackWithMappings } from "../../dto-service/modules.export";
 
 // Reusable include configuration for artist mappings
 const getArtistInclude = () => [
