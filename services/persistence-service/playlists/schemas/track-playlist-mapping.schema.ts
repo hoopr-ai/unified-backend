@@ -4,8 +4,8 @@ import {
   Model,
   DataType,
   PrimaryKey,
-  ForeignKey,
   Unique,
+  BelongsTo,
 } from "sequelize-typescript";
 import { PlaylistModel } from "./playlist.schema";
 import { TrackModel } from "../../track/schemas/track.schema";
@@ -33,7 +33,6 @@ export class TrackPlaylistMappingModel extends Model<
   id!: string;
 
   @Unique("track_playlist_mappings_playlistId_trackId_key")
-  @ForeignKey(() => PlaylistModel)
   @Column({
     type: DataType.UUID,
     allowNull: true,
@@ -41,7 +40,6 @@ export class TrackPlaylistMappingModel extends Model<
   playlistId?: string;
 
   @Unique("track_playlist_mappings_playlistId_trackId_key")
-  @ForeignKey(() => TrackModel)
   @Column({
     type: DataType.UUID,
     allowNull: true,
@@ -53,4 +51,10 @@ export class TrackPlaylistMappingModel extends Model<
     allowNull: true,
   })
   rank?: number;
+
+  @BelongsTo(() => PlaylistModel, { foreignKey: "playlistId", constraints: false })
+  playlist?: PlaylistModel;
+
+  @BelongsTo(() => TrackModel, { foreignKey: "trackId", constraints: false })
+  track?: TrackModel;
 }

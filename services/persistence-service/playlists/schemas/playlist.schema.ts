@@ -7,8 +7,10 @@ import {
   CreatedAt,
   UpdatedAt,
   Unique,
+  HasMany,
 } from "sequelize-typescript";
 import { PlaylistType } from "../../../dto-service/modules.export";
+import { TrackPlaylistMappingModel } from "./track-playlist-mapping.schema";
 
 export interface PlaylistDetails {
   id: string;
@@ -97,4 +99,7 @@ export class PlaylistModel extends Model<PlaylistModel, PlaylistDetails> {
     allowNull: true,
   })
   updatedAt?: Date;
+
+  @HasMany(() => TrackPlaylistMappingModel, { foreignKey: "playlistId", constraints: false })
+  trackPlaylistMappings?: TrackPlaylistMappingModel[];
 }
