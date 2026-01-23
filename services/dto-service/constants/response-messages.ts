@@ -5,4 +5,5 @@ export const enum ResponseMessages {
   UserInvitedSuccess = "User has been successfully invited",
   GetFiltersSuccess = "Success",
   GetTracksSuccess = "Tracks fetched successfully",
+  GetPlaylistsSuccess = "Playlists fetched successfully",
 }
