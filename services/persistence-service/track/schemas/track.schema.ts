@@ -7,7 +7,6 @@ import {
   CreatedAt,
   UpdatedAt,
   Index,
-  Default,
   HasMany,
 } from "sequelize-typescript";
 import { TrackArtistMappingModel } from "../../artists/schemas/track-artist-mapping.schema";
@@ -47,6 +46,7 @@ export interface TrackDetails {
   createdAt: Date;
   updatedAt: Date;
   publisherId?: string[];
+  pastIds?: string[];
   trending?: boolean;
   reelCount?: string;
   partnerId?: string;
@@ -239,6 +239,12 @@ export class TrackModel extends Model<TrackModel> {
     allowNull: true,
   })
   publisherId?: string[];
+
+  @Column({
+    type: DataType.ARRAY(DataType.STRING),
+    allowNull: true,
+  })
+  pastIds?: string[];
 
   @Column({
     type: DataType.BOOLEAN,
