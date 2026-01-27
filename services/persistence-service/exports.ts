@@ -4,3 +4,5 @@ export * from "./filter/modules.export";
 export * from "./playlists/modules.export";
 export * from "./track/modules.export";
 export * from "./artists/modules.export";
+export * from "./organization/modules.export";
+export * from "./brand/modules.export";

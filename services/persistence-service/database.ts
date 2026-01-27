@@ -9,6 +9,8 @@ import {
   PlaylistModel,
   TrackPlaylistMappingModel,
 } from "./playlists/modules.export";
+import { OrganizationModel } from "./organization/modules.export";
+import { BrandModel } from "./brand/modules.export";
 
 config();
 
@@ -56,6 +58,8 @@ export const sequelize = new Sequelize({
 
 // Auto-load models
 sequelize.addModels([
+  OrganizationModel,
+  BrandModel,
   UserModel,
   UserRoleModel,
   TrackModel,
