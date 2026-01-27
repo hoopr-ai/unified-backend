@@ -74,6 +74,7 @@ const createUserDetails = (
   platform: string,
   password: string,
   mobile: string,
+  brandId?: number,
 ): UserDetails => {
   const newUser: UserDetails = {
     email,
@@ -84,6 +85,7 @@ const createUserDetails = (
     mobile,
     status: UserStatus.ACTIVE,
     createdAt: new Date(),
+    brandId,
   };
   return newUser;
 };
@@ -183,13 +185,13 @@ const createUserRoleDetails = (userId: number, role: UserRoles) => {
 export const createUserService = async (
   data: CreateAuthRequestData
 ): Promise<{}> => {
-  const { email, password, platform, firstName, lastName, mobile } = data;
+  const { email, password, platform, firstName, lastName, mobile, brandId } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile);
+  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.ADMIN);
   await saveUserRole(userRoleDetails);
@@ -199,13 +201,13 @@ export const createUserService = async (
 export const inviteUserService = async (
   data: CreateAuthRequestData //need to create a separate DTO for invite user which does not have password field
 ): Promise<{}> => {
-  const { email, password, platform, firstName, lastName, mobile } = data;
+  const { email, password, platform, firstName, lastName, mobile, brandId } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile);
+  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);

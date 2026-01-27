@@ -13,6 +13,7 @@ export const createAuthRequestSchema = Joi.object<CreateAuthRequestData>({
     mobile: Joi.string().min(8).max(15).required(),
     password: Joi.string().min(6).required(),
     platform: Joi.string().valid(...platformValues).required(),
+    brandId: Joi.number().integer().positive().optional(),
 });
 
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({

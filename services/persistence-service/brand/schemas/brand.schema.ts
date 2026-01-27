@@ -9,7 +9,6 @@ import {
   UpdatedAt,
   ForeignKey,
   BelongsTo,
-  Index,
 } from "sequelize-typescript";
 import { OrganizationModel } from "../../organization/schemas/modules.export";
 import type { BrandStatus } from "../../../dto-service/modules.export";
