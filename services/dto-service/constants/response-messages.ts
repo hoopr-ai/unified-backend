@@ -8,4 +8,5 @@ export const enum ResponseMessages {
   GetPlaylistsSuccess = "Playlists fetched successfully",
   GetPlaylistDetailSuccess = "Playlist details fetched successfully",
   PlaylistNotFound = "Playlist not found",
+  GetTracksByFilterSuccess = "Tracks fetched successfully",
 }

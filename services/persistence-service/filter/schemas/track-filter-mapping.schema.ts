@@ -5,7 +5,7 @@ import {
   DataType,
   PrimaryKey,
   Index,
-  ForeignKey,
+  BelongsTo,
 } from "sequelize-typescript";
 import { FilterModel } from "./filter.schema";
 import { TrackModel } from "../../track/schemas/track.schema";
@@ -32,7 +32,6 @@ export class TrackFilterMappingModel extends Model<
   id!: string;
 
   @Index({ name: "track_filter_mappings_filterId_trackId_key", unique: true })
-  @ForeignKey(() => FilterModel)
   @Column({
     type: DataType.UUID,
     allowNull: true,
@@ -40,10 +39,15 @@ export class TrackFilterMappingModel extends Model<
   filterId?: string;
 
   @Index({ name: "track_filter_mappings_filterId_trackId_key", unique: true })
-  @ForeignKey(() => TrackModel)
   @Column({
     type: DataType.UUID,
     allowNull: true,
   })
   trackId?: string;
+
+  @BelongsTo(() => FilterModel, { foreignKey: "filterId", constraints: false })
+  filter?: FilterModel;
+
+  @BelongsTo(() => TrackModel, { foreignKey: "trackId", constraints: false })
+  track?: TrackModel;
 }

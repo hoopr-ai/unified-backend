@@ -8,6 +8,7 @@ import {
 import {
   findAllTracks,
   findTracksByTrackCodes,
+  findTracksByFilter,
 } from "../../persistence-service/exports";
 
 export interface GetAllTracksQuery {
@@ -122,4 +123,24 @@ export const getTracksByCodesService = async (
   }
   const rawData = await findTracksByTrackCodes(query.trackCodes, page, limit);
   return buildPaginatedResponse(rawData);
+};
+
+export interface GetTracksByFilterQuery {
+  filterName: string;
+  filterId: string;
+  page?: string;
+  limit?: string;
+}
+
+export const getTracksByFilterService = async (
+  query: GetTracksByFilterQuery,
+): Promise<PaginatedTracks> => {
+  const page = parseInt(query.page || "1", 10);
+  const limit = parseInt(query.limit || "10", 10);
+
+  return await findTracksByFilter({
+    filterId: query.filterId,
+    page: page > 0 ? page : 1,
+    limit: limit > 0 && limit <= 100 ? limit : 10,
+  });
 };
