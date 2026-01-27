@@ -3,15 +3,14 @@ import {
   getAllTracksService,
   getTracksByCodesService,
   getTracksByFilterService,
-  GetAllTracksQuery,
-  GetTracksByCodesQuery,
   GetTracksByFilterQuery,
 } from "../services/business-service/modules.export";
 import { catchAsync } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
+import { GetAllTracksRequestData, GetTracksByCodesQuery } from "../services/dto-service/modules.export";
 
 export const getAllTracks = catchAsync(async (req: Request, res: Response) => {
-  const query: GetAllTracksQuery = {
+  const query: GetAllTracksRequestData = {
     page: req.query.page as string,
     limit: req.query.limit as string,
     trending: req.query.trending as string,

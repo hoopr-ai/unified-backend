@@ -19,7 +19,7 @@ export interface TrackWithArtists {
   primaryArtists: ArtistInfoTrack[];
 }
 
-export interface PaginatedTracks {
+export interface PaginatedTracksResponseData {
   tracks: TrackWithArtists[];
   pagination: {
     page: number;
@@ -58,4 +58,16 @@ export interface PaginatedRawTracks {
   count: number;
   page: number;
   limit: number;
+}
+
+export interface GetAllTracksRequestData {
+  page?: string;
+  limit?: string;
+  trending?: string;
+}
+
+export interface GetTracksByCodesQuery {
+  trackCodes: string[];
+  page?: string;
+  limit?: string;
 }

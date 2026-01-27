@@ -1,27 +1,17 @@
 import {
-  PaginatedTracks,
+  PaginatedTracksResponseData,
   TrackWithArtists,
   ArtistInfoTrack,
   RawTrackWithMappings,
   PaginatedRawTracks,
+  GetAllTracksRequestData,
+  GetTracksByCodesQuery,
 } from "../../dto-service/modules.export";
 import {
   findAllTracks,
   findTracksByTrackCodes,
   findTracksByFilter,
 } from "../../persistence-service/exports";
-
-export interface GetAllTracksQuery {
-  page?: string;
-  limit?: string;
-  trending?: string;
-}
-
-export interface GetTracksByCodesQuery {
-  trackCodes: string[];
-  page?: string;
-  limit?: string;
-}
 
 // Parse and validate pagination params
 const parsePaginationParams = (
@@ -69,7 +59,7 @@ const transformTrackToDto = (track: RawTrackWithMappings): TrackWithArtists => {
 // Build paginated response from raw data
 const buildPaginatedResponse = (
   rawData: PaginatedRawTracks,
-): PaginatedTracks => {
+): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
 
@@ -87,7 +77,7 @@ const buildPaginatedResponse = (
 };
 
 // Empty pagination response helper
-const emptyPaginatedResponse = (page: number, limit: number): PaginatedTracks => ({
+const emptyPaginatedResponse = (page: number, limit: number): PaginatedTracksResponseData => ({
   tracks: [],
   pagination: {
     page,
@@ -100,8 +90,8 @@ const emptyPaginatedResponse = (page: number, limit: number): PaginatedTracks =>
 });
 
 export const getAllTracksService = async (
-  query: GetAllTracksQuery,
-): Promise<PaginatedTracks> => {
+  query: GetAllTracksRequestData,
+): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
   const whereClause: Record<string, unknown> = {};
@@ -115,7 +105,7 @@ export const getAllTracksService = async (
 
 export const getTracksByCodesService = async (
   query: GetTracksByCodesQuery,
-): Promise<PaginatedTracks> => {
+): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
   if (!query.trackCodes || !Array.isArray(query.trackCodes) || query.trackCodes.length === 0) {
@@ -134,7 +124,7 @@ export interface GetTracksByFilterQuery {
 
 export const getTracksByFilterService = async (
   query: GetTracksByFilterQuery,
-): Promise<PaginatedTracks> => {
+): Promise<PaginatedTracksResponseData> => {
   const page = parseInt(query.page || "1", 10);
   const limit = parseInt(query.limit || "10", 10);
 

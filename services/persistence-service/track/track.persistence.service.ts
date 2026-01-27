@@ -7,7 +7,7 @@ import {
   ArtistInfoTrack,
   ArtistType,
   PaginatedRawTracks,
-  PaginatedTracks,
+  PaginatedTracksResponseData,
   RawTrackWithMappings,
   TrackWithArtists,
 } from "../../dto-service/modules.export";
@@ -95,7 +95,7 @@ export interface GetTracksByFilterParams {
 
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
-): Promise<PaginatedTracks> => {
+): Promise<PaginatedTracksResponseData> => {
   const { filterId, page, limit } = params;
   const offset = (page - 1) * limit;
 
