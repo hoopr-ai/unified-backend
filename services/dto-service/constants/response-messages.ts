@@ -13,4 +13,9 @@ export const enum ResponseMessages {
   GetTracksByFilterSuccess = "Tracks fetched successfully",
   GetUserActivitiesSuccess = "User activities fetched successfully",
   GetUserSessionsSuccess = "User sessions fetched successfully",
+  OrganizationCreatedSuccess = "Organization created successfully",
+  BrandCreatedSuccess = "Brand created successfully",
+  OrganizationAlreadyExists = "Organization with this name already exists",
+  BrandAlreadyExists = "Brand with this name already exists in this organization",
+  OrganizationNotFound = "Organization not found",
 }

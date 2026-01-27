@@ -8,6 +8,7 @@ import userRoutes from "./routes/user.route";
 import filterRoutes from "./routes/filter.route";
 import trackRoutes from "./routes/track.route";
 import playlistRoutes from "./routes/playlist.route";
+import organizationRoutes from "./routes/organization.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -87,6 +88,9 @@ app.use("/tracks", trackRoutes);
 
 // Playlist Routes
 app.use("/playlists", playlistRoutes);
+
+// Organization Routes
+app.use("/organizations", organizationRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res

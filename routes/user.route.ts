@@ -15,7 +15,7 @@ import {
   resetPasswordRequestSchema,
   createAuthRequestSchema,
 } from "../middlewares/user.validation";
-import { authenticate, authenticateWithSession } from "../middlewares/authenticate";
+import { authenticateWithSession } from "../middlewares/authenticate";
 
 const router = Router();
 

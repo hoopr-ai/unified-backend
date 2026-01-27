@@ -7,15 +7,12 @@ import {
   AutoIncrement,
   CreatedAt,
   UpdatedAt,
-  HasMany,
-  Index,
 } from "sequelize-typescript";
 import type { OrganizationStatus } from "../../../dto-service/modules.export";
 
 export interface OrganizationDetails {
   id?: number;
   name: string;
-  slug: string;
   description?: string;
   status: OrganizationStatus;
   createdAt: Date;
@@ -37,13 +34,6 @@ export class OrganizationModel extends Model<OrganizationModel, OrganizationDeta
     allowNull: false,
   })
   name!: string;
-
-  @Index({ name: "unique_organization_slug", unique: true })
-  @Column({
-    type: DataType.STRING(255),
-    allowNull: false,
-  })
-  slug!: string;
 
   @Column({
     type: DataType.TEXT,

@@ -7,6 +7,8 @@ export interface CreateAuthRequestData {
     mobile: string;
     password: string;
     platform: Platform;
+    organizationId?: number;
+    brandId?: number;
 }
 
 export interface LoginUserRequestData {
