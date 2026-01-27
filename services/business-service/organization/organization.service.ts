@@ -49,7 +49,7 @@ export const createOrganizationService = async (
   });
 
   return {
-    id: organization.id,
+    id: organization.id!,
     name: organization.name,
     description: organization.description,
     status: organization.status,
@@ -81,7 +81,7 @@ export const createBrandService = async (
   });
 
   return {
-    id: brand.id,
+    id: brand.id!,
     organizationId: brand.organizationId,
     name: brand.name,
     description: brand.description,
