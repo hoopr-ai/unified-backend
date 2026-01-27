@@ -1,5 +1,7 @@
 export const enum ResponseMessages {
   LoginSuccess = "User has successfully logged in",
+  LogoutSuccess = "User has been successfully logged out",
+  LogoutAllSuccess = "All sessions have been successfully logged out",
   ResetPasswordSuccess = "Password has been successfully reset",
   USerCreatedSuccess = "User has been successfully created",
   UserInvitedSuccess = "User has been successfully invited",
@@ -9,4 +11,6 @@ export const enum ResponseMessages {
   GetPlaylistDetailSuccess = "Playlist details fetched successfully",
   PlaylistNotFound = "Playlist not found",
   GetTracksByFilterSuccess = "Tracks fetched successfully",
+  GetUserActivitiesSuccess = "User activities fetched successfully",
+  GetUserSessionsSuccess = "User sessions fetched successfully",
 }

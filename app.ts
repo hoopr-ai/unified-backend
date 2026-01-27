@@ -10,6 +10,7 @@ import trackRoutes from "./routes/track.route";
 import playlistRoutes from "./routes/playlist.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
+import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
 
 dotenv.config();
 const app: Application = express();
@@ -71,6 +72,9 @@ app.use(cors(corsOptions));
 
 // Enable preflight for all routes
 app.options(/.*/, cors(corsOptions));
+
+// Activity Logger Middleware - logs all user activities
+app.use(activityLoggerMiddleware());
 
 // User Routes
 app.use("/user", userRoutes);

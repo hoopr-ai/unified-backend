@@ -8,6 +8,9 @@ import {
   CreateAuthRequestData,
   UserStatus,
   UserRoles,
+  SessionStatus,
+  SESSION_TIMEOUT_MINUTES,
+  type SessionMetadata,
 } from "../../dto-service/modules.export";
 import {
   findActiveUser,
@@ -18,18 +21,31 @@ import {
   updateUserPassword,
   UserRoleDetails,
   type UserDetails,
+  createSession,
+  deactivateAllUserSessions,
+  findActiveSessionByToken,
+  updateSessionLastActivity,
+  deactivateSessionByToken,
+  deleteSessionByToken,
+  isSessionExpiredByInactivity,
+  type UserSessionDetails,
 } from "../../persistence-service/exports";
 import { AppError, createJWTToken } from "../../helper-service/modules.export";
 import {
   ErrorMessages,
 } from "../../dto-service/constants/modules.export";
 
+interface LoginResponseWithSession extends LoginResponse {
+  sessionId: number;
+}
+
 const buildLoginResponse = (
   user: UserDetails,
   role: string | null,
   updatedAt: Date | undefined,
-  token: string
-): LoginResponse => {
+  token: string,
+  sessionId: number
+): LoginResponseWithSession => {
   return {
     id: user.id!,
     email: user.email,
@@ -37,6 +53,7 @@ const buildLoginResponse = (
     updatedAt: updatedAt ? Number(updatedAt) : undefined,
     expiresIn: AccessTokenExpiryInSeconds,
     token,
+    sessionId,
   };
 };
 
@@ -72,8 +89,9 @@ const createUserDetails = (
 };
 
 export const userLoginService = async (
-  data: LoginUserRequestData
-): Promise<LoginResponse> => {
+  data: LoginUserRequestData,
+  metadata?: SessionMetadata
+): Promise<LoginResponseWithSession> => {
   const { email, password, platform } = data;
   const user = await findActiveUser(email, platform);
   await comparePasswordsEncrypted(password, user.password);
@@ -82,7 +100,61 @@ export const userLoginService = async (
     { userId: user.id, email: user.email, platform: user.platform, role },
     AccessTokenExpiry
   );
-  return buildLoginResponse(user, role, user.updatedAt, token);
+
+  // Create a new session for the user
+  const sessionData: UserSessionDetails = {
+    userId: user.id!,
+    sessionToken: token,
+    ipAddress: metadata?.ipAddress,
+    userAgent: metadata?.userAgent,
+    deviceType: metadata?.deviceType,
+    browser: metadata?.browser,
+    os: metadata?.os,
+    status: SessionStatus.ACTIVE,
+    lastActivityAt: new Date(),
+    expiresAt: new Date(Date.now() + AccessTokenExpiryInSeconds * 1000),
+    createdAt: new Date(),
+  };
+
+  const session = await createSession(sessionData);
+
+  return buildLoginResponse(user, role, user.updatedAt, token, session.id!);
+};
+
+export const validateAndRefreshSession = async (
+  sessionToken: string
+): Promise<{ isValid: boolean; session?: UserSessionDetails; needsNewSession: boolean }> => {
+  const session = await findActiveSessionByToken(sessionToken);
+
+  if (!session) {
+    return { isValid: false, needsNewSession: true };
+  }
+
+  // Check if session has expired due to inactivity
+  const isExpired = await isSessionExpiredByInactivity(session.id!);
+
+  if (isExpired) {
+    // Delete the expired session
+    await deleteSessionByToken(sessionToken);
+    return { isValid: false, needsNewSession: true };
+  }
+
+  // Update last activity time
+  await updateSessionLastActivity(session.id!);
+
+  return { isValid: true, session, needsNewSession: false };
+};
+
+export const logoutUserService = async (
+  sessionToken: string
+): Promise<void> => {
+  await deactivateSessionByToken(sessionToken);
+};
+
+export const logoutAllSessionsService = async (
+  userId: number
+): Promise<void> => {
+  await deactivateAllUserSessions(userId);
 };
 
 export const userResetPasswordService = async (

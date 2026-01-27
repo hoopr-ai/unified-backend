@@ -1,6 +1,6 @@
 import { Sequelize } from "sequelize-typescript";
 import { config } from "dotenv";
-import { UserModel, UserRoleModel } from "./user/modules.export";
+import { UserModel, UserRoleModel, UserSessionModel, UserActivityModel } from "./user/modules.export";
 import { TrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
@@ -62,6 +62,8 @@ sequelize.addModels([
   BrandModel,
   UserModel,
   UserRoleModel,
+  UserSessionModel,
+  UserActivityModel,
   TrackModel,
   AlbumModel,
   FilterModel,
