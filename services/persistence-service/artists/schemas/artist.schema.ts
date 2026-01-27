@@ -20,6 +20,7 @@ export interface ArtistDetails {
   instagramLink?: string;
   spotifyLink?: string;
   status?: string;
+  pastIds?: string[];
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -85,6 +86,12 @@ export class ArtistModel extends Model<ArtistModel, ArtistDetails> {
     allowNull: true,
   })
   status?: string;
+
+  @Column({
+    type: DataType.ARRAY(DataType.STRING),
+    allowNull: true,
+  })
+  pastIds?: string[];
 
   @CreatedAt
   @Column({
