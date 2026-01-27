@@ -4,6 +4,7 @@ export enum UserStatus {
 }
 
 export enum UserRoles {
+    MASTER = 'MASTER',
     ADMIN = 'ADMIN',
     USER = 'USER',
 }
