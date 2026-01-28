@@ -5,7 +5,7 @@ import {
   getTracksByFilterService,
   GetTracksByFilterQuery,
 } from "../services/business-service/modules.export";
-import { catchAsync } from "../services/helper-service/modules.export";
+import { catchAsync, sendSuccess } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import { GetAllTracksRequestData, GetTracksByCodesQuery } from "../services/dto-service/modules.export";
 
@@ -18,10 +18,7 @@ export const getAllTracks = catchAsync(async (req: Request, res: Response) => {
 
   const response = await getAllTracksService(query);
 
-  res.status(200).json({
-    data: response,
-    error: { code: 0, message: ResponseMessages.GetTracksSuccess },
-  });
+  sendSuccess(res, response, ResponseMessages.GetTracksSuccess);
 });
 
 export const getTracksByCodes = catchAsync(
@@ -34,10 +31,7 @@ export const getTracksByCodes = catchAsync(
 
     const response = await getTracksByCodesService(query);
 
-    res.status(200).json({
-      data: response,
-      error: { code: 0, message: ResponseMessages.GetTracksSuccess },
-    });
+    sendSuccess(res, response, ResponseMessages.GetTracksSuccess);
   },
 );
 
@@ -52,9 +46,6 @@ export const getTracksByFilter = catchAsync(
 
     const response = await getTracksByFilterService(query);
 
-    res.status(200).json({
-      data: response,
-      error: { code: 0, message: ResponseMessages.GetTracksByFilterSuccess },
-    });
+    sendSuccess(res, response, ResponseMessages.GetTracksByFilterSuccess);
   },
 );

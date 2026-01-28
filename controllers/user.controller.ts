@@ -10,6 +10,8 @@ import {
 import {
   catchAsync,
   extractSessionMetadata,
+  sendSuccess,
+  sendError,
 } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import type { SessionPayload } from "../middlewares/authenticate";
@@ -22,10 +24,7 @@ interface AuthRequest extends Request {
 export const login = catchAsync(async (req: Request, res: Response) => {
   const metadata = extractSessionMetadata(req);
   const response = await userLoginService(req.body, metadata);
-  res.status(200).json({
-    data: response,
-    error: { code: 0, message: ResponseMessages.LoginSuccess },
-  });
+  sendSuccess(res, response, ResponseMessages.LoginSuccess);
 });
 
 export const logout = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -33,10 +32,7 @@ export const logout = catchAsync(async (req: AuthRequest, res: Response) => {
   if (sessionToken) {
     await logoutUserService(sessionToken);
   }
-  res.status(200).json({
-    data: {},
-    error: { code: 0, message: ResponseMessages.LogoutSuccess },
-  });
+  sendSuccess(res, {}, ResponseMessages.LogoutSuccess);
 });
 
 export const logoutAllSessions = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -44,36 +40,24 @@ export const logoutAllSessions = catchAsync(async (req: AuthRequest, res: Respon
   if (userId) {
     await logoutAllSessionsService(userId);
   }
-  res.status(200).json({
-    data: {},
-    error: { code: 0, message: ResponseMessages.LogoutAllSuccess },
-  });
+  sendSuccess(res, {}, ResponseMessages.LogoutAllSuccess);
 });
 
 export const resetPassword = catchAsync(async (req: Request, res: Response) => {
   const response = await userResetPasswordService(req.body);
-  res.status(200).json({
-    data: response,
-    error: { code: 0, message: ResponseMessages.ResetPasswordSuccess },
-  });
+  sendSuccess(res, response, ResponseMessages.ResetPasswordSuccess);
 });
 
 export const create = catchAsync(async (req: AuthRequest, res: Response) => {
   const createdBy = req.session?.userId;
   const response = await createUserService(req.body, createdBy);
-  res.status(200).json({
-    data: response,
-    error: { code: 0, message: ResponseMessages.USerCreatedSuccess },
-  });
+  sendSuccess(res, response, ResponseMessages.USerCreatedSuccess);
 });
 
 export const inviteUser = catchAsync(async (req: AuthRequest, res: Response) => {
   const createdBy = req.session?.userId;
   const response = await inviteUserService(req.body, createdBy);
-  res.status(200).json({
-    data: response,
-    error: { code: 0, message: ResponseMessages.UserInvitedSuccess },
-  });
+  sendSuccess(res, response, ResponseMessages.UserInvitedSuccess);
 });
 
 export const getUserActivities = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -83,27 +67,20 @@ export const getUserActivities = catchAsync(async (req: AuthRequest, res: Respon
   const limit = parseInt(req.query.limit as string) || 50;
 
   if (!userId) {
-    res.status(401).json({
-      data: {},
-      error: { code: 1, message: "Unauthorized" },
-    });
-    return;
+    return sendError(res, 401, "Unauthorized", {});
   }
 
   const { rows, count } = await findActivitiesByUserId(userId, page, limit);
 
-  res.status(200).json({
-    data: {
-      activities: rows,
-      pagination: {
-        page,
-        limit,
-        totalItems: count,
-        totalPages: Math.ceil(count / limit),
-      },
+  sendSuccess(res, {
+    activities: rows,
+    pagination: {
+      page,
+      limit,
+      totalItems: count,
+      totalPages: Math.ceil(count / limit),
     },
-    error: { code: 0, message: ResponseMessages.GetUserActivitiesSuccess },
-  });
+  }, ResponseMessages.GetUserActivitiesSuccess);
 });
 
 export const getUserSessions = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -113,11 +90,7 @@ export const getUserSessions = catchAsync(async (req: AuthRequest, res: Response
   const status = req.query.status as string | undefined;
 
   if (!userId) {
-    res.status(401).json({
-      data: {},
-      error: { code: 1, message: "Unauthorized" },
-    });
-    return;
+    return sendError(res, 401, "Unauthorized", {});
   }
 
   const sessions = await fetchUserSessions(
@@ -125,8 +98,5 @@ export const getUserSessions = catchAsync(async (req: AuthRequest, res: Response
     status === "active" ? SessionStatus.ACTIVE : undefined
   );
 
-  res.status(200).json({
-    data: { sessions },
-    error: { code: 0, message: ResponseMessages.GetUserSessionsSuccess },
-  });
+  sendSuccess(res, { sessions }, ResponseMessages.GetUserSessionsSuccess);
 });

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { catchAsync } from "../services/helper-service/modules.export";
+import { catchAsync, sendResponse } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import {
   createOrganizationService,
@@ -14,17 +14,11 @@ interface AuthRequest extends Request {
 export const createOrganization = catchAsync(async (req: AuthRequest, res: Response) => {
   const createdBy = req.session?.userId;
   const response = await createOrganizationService(req.body, createdBy);
-  res.status(201).json({
-    data: response,
-    error: { code: 0, message: ResponseMessages.OrganizationCreatedSuccess },
-  });
+  sendResponse(res, { status: 201, data: response, message: ResponseMessages.OrganizationCreatedSuccess });
 });
 
 export const createBrand = catchAsync(async (req: AuthRequest, res: Response) => {
   const createdBy = req.session?.userId;
   const response = await createBrandService(req.body, createdBy);
-  res.status(201).json({
-    data: response,
-    error: { code: 0, message: ResponseMessages.BrandCreatedSuccess },
-  });
+  sendResponse(res, { status: 201, data: response, message: ResponseMessages.BrandCreatedSuccess });
 });
