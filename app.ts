@@ -4,9 +4,14 @@ import type { Application } from "express";
 import cors from "cors";
 import type { CorsOptions } from "cors";
 import type { Request, Response } from "express";
-import authRoutes from "./routes/user-auth.route";
+import userRoutes from "./routes/user.route";
+import filterRoutes from "./routes/filter.route";
+import trackRoutes from "./routes/track.route";
+import playlistRoutes from "./routes/playlist.route";
+import organizationRoutes from "./routes/organization.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
+import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
 
 dotenv.config();
 const app: Application = express();
@@ -22,10 +27,11 @@ const corsOptions: CorsOptions = {
     }
 
     const allowedOrigins: string[] = [
-        process.env.FRONTEND_URL || 
+        process.env.FRONTEND_URL,
         "http://localhost:5173",
         "http://localhost:5173/",
         "http://localhost:3002",
+        "http://localhost:3000",
         "http://localhost:5174",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3001",
@@ -33,7 +39,7 @@ const corsOptions: CorsOptions = {
         "https://dev-sage.hoopr.ai",
         "https://dev-sage-api.hoopr.ai",
         "https://sage-api.hoopr.ai",
-    ];
+    ].filter((origin): origin is string => Boolean(origin));
 
     // Allow localhost with any port for development
     if (
@@ -68,8 +74,23 @@ app.use(cors(corsOptions));
 // Enable preflight for all routes
 app.options(/.*/, cors(corsOptions));
 
+// Activity Logger Middleware - logs all user activities
+app.use(activityLoggerMiddleware());
+
 // User Routes
-app.use("/auth", authRoutes);
+app.use("/user", userRoutes);
+
+// Filter Routes
+app.use("/filters", filterRoutes);
+
+// Track Routes
+app.use("/tracks", trackRoutes);
+
+// Playlist Routes
+app.use("/playlists", playlistRoutes);
+
+// Organization Routes
+app.use("/organizations", organizationRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res

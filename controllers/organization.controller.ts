@@ -1,0 +1,25 @@
+import type { Request, Response } from "express";
+import { catchAsync, sendResponse } from "../services/helper-service/modules.export";
+import { ResponseMessages } from "../services/dto-service/constants/response-messages";
+import {
+  createOrganizationService,
+  createBrandService,
+} from "../services/business-service/modules.export";
+import { HttpStatusCode } from "../services/dto-service/modules.export";
+import type { SessionPayload } from "../middlewares/authenticate";
+
+interface AuthRequest extends Request {
+  session?: SessionPayload;
+}
+
+export const createOrganization = catchAsync(async (req: AuthRequest, res: Response) => {
+  const createdBy = req.session?.userId;
+  const response = await createOrganizationService(req.body, createdBy);
+  sendResponse(res, { status: HttpStatusCode.CREATED, data: response, message: ResponseMessages.OrganizationCreatedSuccess });
+});
+
+export const createBrand = catchAsync(async (req: AuthRequest, res: Response) => {
+  const createdBy = req.session?.userId;
+  const response = await createBrandService(req.body, createdBy);
+  sendResponse(res, { status: HttpStatusCode.CREATED, data: response, message: ResponseMessages.BrandCreatedSuccess });
+});

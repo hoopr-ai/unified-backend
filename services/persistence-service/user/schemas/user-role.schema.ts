@@ -11,11 +11,12 @@ import {
   BelongsTo,
 } from "sequelize-typescript";
 import { UserModel } from "./modules.export";
+import type { UserRoles } from "../../../dto-service/modules.export";
 
 export interface UserRoleDetails {
-  id: number;
+  id?: number;
   userId: number;
-  role: string;
+  role: UserRoles;
   status: string;
   createdAt: Date;
   updatedAt?: Date;
@@ -25,15 +26,15 @@ export interface UserRoleDetails {
   tableName: "user_roles",
   timestamps: true,
 })
-export class UserRoleModel extends Model<UserRoleModel> {
+export class UserRoleModel extends Model<UserRoleModel, UserRoleDetails> {
   @PrimaryKey
   @AutoIncrement
-  @Column(DataType.INTEGER)
+  @Column(DataType.BIGINT)
   id!: number;
 
   @ForeignKey(() => UserModel)
   @Column({
-    type: DataType.INTEGER,
+    type: DataType.BIGINT,
     allowNull: false,
   })
   userId!: number;
@@ -42,7 +43,7 @@ export class UserRoleModel extends Model<UserRoleModel> {
     type: DataType.STRING(100),
     allowNull: false,
   })
-  role!: string;
+  role!: UserRoles;
 
   @Column({
     type: DataType.STRING(100),

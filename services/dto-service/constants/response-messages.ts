@@ -1,4 +1,21 @@
-
 export const enum ResponseMessages {
-    LoginSuccess = "User has successfully logged in"
+  LoginSuccess = "User has successfully logged in",
+  LogoutSuccess = "User has been successfully logged out",
+  LogoutAllSuccess = "All sessions have been successfully logged out",
+  ResetPasswordSuccess = "Password has been successfully reset",
+  USerCreatedSuccess = "User has been successfully created",
+  UserInvitedSuccess = "User has been successfully invited",
+  GetFiltersSuccess = "Success",
+  GetTracksSuccess = "Tracks fetched successfully",
+  GetPlaylistsSuccess = "Playlists fetched successfully",
+  GetPlaylistDetailSuccess = "Playlist details fetched successfully",
+  PlaylistNotFound = "Playlist not found",
+  GetTracksByFilterSuccess = "Tracks fetched successfully",
+  GetUserActivitiesSuccess = "User activities fetched successfully",
+  GetUserSessionsSuccess = "User sessions fetched successfully",
+  OrganizationCreatedSuccess = "Organization created successfully",
+  BrandCreatedSuccess = "Brand created successfully",
+  OrganizationAlreadyExists = "Organization with this name already exists",
+  BrandAlreadyExists = "Brand with this name already exists in this organization",
+  OrganizationNotFound = "Organization not found",
 }

@@ -1,76 +1,148 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
+import { AppError } from "../services/helper-service/AppError";
+import { validateAndRefreshSession } from "../services/business-service/user/user.service";
+import { extractSessionMetadata } from "../services/helper-service/session.helper";
+
+export interface SessionPayload extends JwtPayload {
+  userId: number;
+  email: string;
+  platform: string;
+  role: string | null;
+  sessionId?: number;
+}
+
 interface AuthRequest extends Request {
-  session?: string | JwtPayload;
+  session?: SessionPayload;
+  sessionToken?: string;
 }
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.path === "/login") {
-      return next();
-    }
-
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(" ")[1];
-
     if (!token) {
-      return res.status(401).json({
-        data: {},
-        error: { code: 1, message: "Sign in required to access this resource." },
-      });
+      throw new AppError("The JWT token provided is invalid.", 401);
     }
-
     jwt.verify(
       token,
       process.env.JWT_SECRET_KEY as string,
       (err, decoded) => {
         if (err || !decoded) {
-          return res.status(401).json({
-            data: {},
-            error: { code: 1, message: "The JWT token provided is invalid." },
-          });
+          throw new AppError("The JWT token provided is invalid.", 401);
         }
-
-        req.session = decoded;
+        req.session = decoded as SessionPayload;
+        req.sessionToken = token;
         next();
       }
     );
   } catch (error) {
-    res.status(500).json({
-      data: {},
-      error: { code: 1, message: "Authentication error occurred." },
-    });
+    throw new AppError("The JWT token provided is invalid.", 401);
   }
 };
 
-export const optionalAuthenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.split(" ")[1];
+export interface AuthOptions {
+  platforms?: string[];
+  roles?: string[];
+}
 
-    if (!token) return next();
+type AuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => Promise<void>;
 
-    jwt.verify(
-      token,
-      process.env.JWT_SECRET_KEY as string,
-      (err, decoded) => {
-        if (err || !decoded) {
-          return res.status(401).json({
-            data: {},
-            error: { code: 1, message: "The JWT token provided is invalid." },
-          });
-        }
-
-        req.session = decoded;
-        next();
-      }
+/**
+ * Enhanced authenticate middleware that validates session and handles 30-min inactivity
+ * If session expired due to inactivity, it returns 401 with a specific message
+ *
+ * Can be used in two ways:
+ * 1. Without options: authenticateWithSession (backward compatible)
+ * 2. With options: authenticateWithSession({ platforms: ['web'], roles: ['admin'] })
+ */
+export function authenticateWithSession(options: AuthOptions): AuthMiddleware;
+export function authenticateWithSession(req: Request, res: Response, next: NextFunction): Promise<void>;
+export function authenticateWithSession(
+  optionsOrReq?: AuthOptions | Request,
+  resOrUndefined?: Response,
+  nextOrUndefined?: NextFunction
+): AuthMiddleware | Promise<void> {
+  // Check if called directly as middleware (backward compatible)
+  if (optionsOrReq && resOrUndefined && nextOrUndefined) {
+    return handleAuthentication()(
+      optionsOrReq as AuthRequest,
+      resOrUndefined,
+      nextOrUndefined
     );
-  } catch (error) {
-    res.status(500).json({
-      data: {},
-      error: { code: 1, message: "Authentication error occurred." },
-    });
   }
+
+  // Called with options - return middleware function
+  const options = (optionsOrReq as AuthOptions) || {};
+  return handleAuthentication(options);
+}
+
+const handleAuthentication = (options: AuthOptions = {}) => {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.split(" ")[1];
+
+      if (!token) {
+        throw new AppError("The JWT token provided is invalid.", 401);
+      }
+
+      // Verify JWT token first
+      let decoded: SessionPayload;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET_KEY as string) as SessionPayload;
+      } catch {
+        throw new AppError("The JWT token provided is invalid.", 401);
+      }
+
+      // Validate platform if specified
+      if (options.platforms && options.platforms.length > 0) {
+        if (!decoded.platform || !options.platforms.includes(decoded.platform)) {
+          throw new AppError(
+            `Access denied. This API is not available for platform: ${decoded.platform || 'unknown'}`,
+            403
+          );
+        }
+      }
+
+      // Validate role if specified
+      if (options.roles && options.roles.length > 0) {
+        if (!decoded.role || !options.roles.includes(decoded.role)) {
+          throw new AppError(
+            `Access denied. Required role: ${options.roles.join(' or ')}`,
+            403
+          );
+        }
+      }
+
+      // Validate session and check for inactivity
+      const { isValid, session, needsNewSession } = await validateAndRefreshSession(token);
+
+      if (!isValid) {
+        if (needsNewSession) {
+          throw new AppError(
+            "Session expired due to inactivity. Please login again.",
+            401
+          );
+        }
+        throw new AppError("Invalid session. Please login again.", 401);
+      }
+
+      // Attach session info to request
+      req.session = {
+        ...decoded,
+        sessionId: session?.id,
+      };
+      req.sessionToken = token;
+
+      next();
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError("Authentication failed.", 401);
+    }
+  };
 };
 

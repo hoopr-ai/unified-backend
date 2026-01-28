@@ -1,6 +1,16 @@
 import { Sequelize } from "sequelize-typescript";
 import { config } from "dotenv";
-import { UserModel, UserRoleModel } from "./user/modules.export";
+import { UserModel, UserRoleModel, UserSessionModel, UserActivityModel } from "./user/modules.export";
+import { TrackModel } from "./track/modules.export";
+import { AlbumModel } from "./albums/modules.export";
+import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
+import { ArtistModel, TrackArtistMappingModel } from "./artists/modules.export";
+import {
+  PlaylistModel,
+  TrackPlaylistMappingModel,
+} from "./playlists/modules.export";
+import { OrganizationModel } from "./organization/modules.export";
+import { BrandModel } from "./brand/modules.export";
 
 config();
 
@@ -48,8 +58,20 @@ export const sequelize = new Sequelize({
 
 // Auto-load models
 sequelize.addModels([
+  OrganizationModel,
+  BrandModel,
   UserModel,
   UserRoleModel,
+  UserSessionModel,
+  UserActivityModel,
+  TrackModel,
+  AlbumModel,
+  FilterModel,
+  TrackFilterMappingModel,
+  ArtistModel,
+  TrackArtistMappingModel,
+  PlaylistModel,
+  TrackPlaylistMappingModel,
 ]);
 
 export async function connectDatabase() {

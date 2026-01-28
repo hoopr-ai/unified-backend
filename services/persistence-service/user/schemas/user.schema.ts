@@ -8,11 +8,15 @@ import {
   CreatedAt,
   UpdatedAt,
   Index,
+  ForeignKey,
+  BelongsTo,
 } from "sequelize-typescript";
 import type { UserStatus } from "../../../dto-service/modules.export";
+import { BrandModel } from "../../brand/schemas/modules.export";
 
 export interface UserDetails {
-  id: number;
+  id?: number;
+  brandId?: number;
   email: string;
   password: string;
   firstName?: string;
@@ -20,6 +24,7 @@ export interface UserDetails {
   status: UserStatus;
   mobile?: string;
   platform: string;
+  createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -28,11 +33,18 @@ export interface UserDetails {
   tableName: "users",
   timestamps: true,
 })
-export class UserModel extends Model<UserModel> {
+export class UserModel extends Model<UserModel, UserDetails> {
   @PrimaryKey
   @AutoIncrement
-  @Column(DataType.INTEGER)
+  @Column(DataType.BIGINT)
   id!: number;
+
+  @ForeignKey(() => BrandModel)
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  brandId?: number;
 
   // Composite unique key: email + platform
   @Index({ name: "unique_email_platform", unique: true })
@@ -82,6 +94,12 @@ export class UserModel extends Model<UserModel> {
   })
   status!: UserStatus;
 
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  createdBy?: number;
+
   @CreatedAt
   @Column({
     type: DataType.DATE,
@@ -94,4 +112,7 @@ export class UserModel extends Model<UserModel> {
     allowNull: true,
   })
   updatedAt?: Date;
+
+  @BelongsTo(() => BrandModel)
+  brand?: BrandModel;
 }
