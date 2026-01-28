@@ -75,6 +75,7 @@ const createUserDetails = (
   password: string,
   mobile: string,
   brandId?: number,
+  createdBy?: number,
 ): UserDetails => {
   const newUser: UserDetails = {
     email,
@@ -84,6 +85,7 @@ const createUserDetails = (
     password,
     mobile,
     status: UserStatus.ACTIVE,
+    createdBy,
     createdAt: new Date(),
     brandId,
   };
@@ -183,7 +185,8 @@ const createUserRoleDetails = (userId: number, role: UserRoles) => {
 }
 
 export const createUserService = async (
-  data: CreateAuthRequestData
+  data: CreateAuthRequestData,
+  createdBy?: number
 ): Promise<{}> => {
   const { email, password, platform, firstName, lastName, mobile, brandId } = data;
   const userDetails = await findActiveUserSilently(email, platform);
@@ -191,7 +194,7 @@ export const createUserService = async (
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId);
+  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId, createdBy);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.ADMIN);
   await saveUserRole(userRoleDetails);
@@ -199,7 +202,8 @@ export const createUserService = async (
 };
 
 export const inviteUserService = async (
-  data: CreateAuthRequestData //need to create a separate DTO for invite user which does not have password field
+  data: CreateAuthRequestData, //need to create a separate DTO for invite user which does not have password field
+  createdBy?: number
 ): Promise<{}> => {
   const { email, password, platform, firstName, lastName, mobile, brandId } = data;
   const userDetails = await findActiveUserSilently(email, platform);
@@ -207,7 +211,7 @@ export const inviteUserService = async (
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId);
+  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId, createdBy);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);

@@ -20,6 +20,7 @@ export interface BrandDetails {
   description?: string;
   status: BrandStatus;
   tokens?: number;
+  createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -65,6 +66,12 @@ export class BrandModel extends Model<BrandModel, BrandDetails> {
     defaultValue: 0,
   })
   tokens!: number;
+
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  createdBy?: number;
 
   @CreatedAt
   @Column({

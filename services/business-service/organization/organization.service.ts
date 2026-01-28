@@ -32,7 +32,8 @@ export interface BrandResponse {
 }
 
 export const createOrganizationService = async (
-  data: CreateOrganizationRequestData
+  data: CreateOrganizationRequestData,
+  createdBy?: number
 ): Promise<OrganizationResponse> => {
   const { name, description, status } = data;
 
@@ -45,6 +46,7 @@ export const createOrganizationService = async (
     name,
     description,
     status: status || OrganizationStatus.ACTIVE,
+    createdBy,
     createdAt: new Date(),
   });
 
@@ -58,7 +60,8 @@ export const createOrganizationService = async (
 };
 
 export const createBrandService = async (
-  data: CreateBrandRequestData
+  data: CreateBrandRequestData,
+  createdBy?: number
 ): Promise<BrandResponse> => {
   const { organizationId, name, description, status } = data;
 
@@ -77,6 +80,7 @@ export const createBrandService = async (
     name,
     description,
     status: status || BrandStatus.ACTIVE,
+    createdBy,
     createdAt: new Date(),
   });
 

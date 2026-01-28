@@ -24,6 +24,7 @@ export interface UserDetails {
   status: UserStatus;
   mobile?: string;
   platform: string;
+  createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -92,6 +93,12 @@ export class UserModel extends Model<UserModel, UserDetails> {
     allowNull: false,
   })
   status!: UserStatus;
+
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  createdBy?: number;
 
   @CreatedAt
   @Column({

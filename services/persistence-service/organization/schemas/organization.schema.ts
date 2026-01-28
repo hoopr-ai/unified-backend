@@ -15,6 +15,7 @@ export interface OrganizationDetails {
   name: string;
   description?: string;
   status: OrganizationStatus;
+  createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -46,6 +47,12 @@ export class OrganizationModel extends Model<OrganizationModel, OrganizationDeta
     allowNull: false,
   })
   status!: OrganizationStatus;
+
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  createdBy?: number;
 
   @CreatedAt
   @Column({

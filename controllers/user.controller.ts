@@ -58,16 +58,18 @@ export const resetPassword = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const create = catchAsync(async (req: Request, res: Response) => {
-  const response = await createUserService(req.body);
+export const create = catchAsync(async (req: AuthRequest, res: Response) => {
+  const createdBy = req.session?.userId;
+  const response = await createUserService(req.body, createdBy);
   res.status(200).json({
     data: response,
     error: { code: 0, message: ResponseMessages.USerCreatedSuccess },
   });
 });
 
-export const inviteUser = catchAsync(async (req: Request, res: Response) => {
-  const response = await inviteUserService(req.body);
+export const inviteUser = catchAsync(async (req: AuthRequest, res: Response) => {
+  const createdBy = req.session?.userId;
+  const response = await inviteUserService(req.body, createdBy);
   res.status(200).json({
     data: response,
     error: { code: 0, message: ResponseMessages.UserInvitedSuccess },
