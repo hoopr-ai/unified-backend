@@ -5,6 +5,7 @@ import {
   createOrganizationService,
   createBrandService,
 } from "../services/business-service/modules.export";
+import { HttpStatusCode } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
@@ -14,11 +15,11 @@ interface AuthRequest extends Request {
 export const createOrganization = catchAsync(async (req: AuthRequest, res: Response) => {
   const createdBy = req.session?.userId;
   const response = await createOrganizationService(req.body, createdBy);
-  sendResponse(res, { status: 201, data: response, message: ResponseMessages.OrganizationCreatedSuccess });
+  sendResponse(res, { status: HttpStatusCode.CREATED, data: response, message: ResponseMessages.OrganizationCreatedSuccess });
 });
 
 export const createBrand = catchAsync(async (req: AuthRequest, res: Response) => {
   const createdBy = req.session?.userId;
   const response = await createBrandService(req.body, createdBy);
-  sendResponse(res, { status: 201, data: response, message: ResponseMessages.BrandCreatedSuccess });
+  sendResponse(res, { status: HttpStatusCode.CREATED, data: response, message: ResponseMessages.BrandCreatedSuccess });
 });

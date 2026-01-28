@@ -5,9 +5,9 @@ import {
   getTracksByFilterService,
   GetTracksByFilterQuery,
 } from "../services/business-service/modules.export";
-import { catchAsync, sendSuccess } from "../services/helper-service/modules.export";
+import { catchAsync, sendResponse } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
-import { GetAllTracksRequestData, GetTracksByCodesQuery } from "../services/dto-service/modules.export";
+import { GetAllTracksRequestData, GetTracksByCodesQuery, HttpStatusCode } from "../services/dto-service/modules.export";
 
 export const getAllTracks = catchAsync(async (req: Request, res: Response) => {
   const query: GetAllTracksRequestData = {
@@ -15,10 +15,8 @@ export const getAllTracks = catchAsync(async (req: Request, res: Response) => {
     limit: req.query.limit as string,
     trending: req.query.trending as string,
   };
-
   const response = await getAllTracksService(query);
-
-  sendSuccess(res, response, ResponseMessages.GetTracksSuccess);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
 });
 
 export const getTracksByCodes = catchAsync(
@@ -28,10 +26,8 @@ export const getTracksByCodes = catchAsync(
       page: req.query.page as string,
       limit: req.query.limit as string,
     };
-
     const response = await getTracksByCodesService(query);
-
-    sendSuccess(res, response, ResponseMessages.GetTracksSuccess);
+    sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
   },
 );
 
@@ -43,9 +39,7 @@ export const getTracksByFilter = catchAsync(
       page: req.query.page as string,
       limit: req.query.limit as string,
     };
-
     const response = await getTracksByFilterService(query);
-
-    sendSuccess(res, response, ResponseMessages.GetTracksByFilterSuccess);
+    sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksByFilterSuccess });
   },
 );
