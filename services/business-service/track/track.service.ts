@@ -11,6 +11,7 @@ import {
   findAllTracks,
   findTracksByTrackCodes,
   findTracksByFilter,
+  type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
 
 // Parse and validate pagination params
@@ -103,6 +104,16 @@ export const getAllTracksService = async (
   return buildPaginatedResponse(rawData);
 };
 
+// Sort tracks in the same order as the requested trackCodes
+const sortTracksByRequestedOrder = (
+  tracks: RawTrackWithMappings[],
+  trackCodes: string[],
+): RawTrackWithMappings[] => {
+  return trackCodes
+    .map((code) => tracks.find((track) => track.trackCode === code))
+    .filter((track): track is RawTrackWithMappings => track !== undefined);
+};
+
 export const getTracksByCodesService = async (
   query: GetTracksByCodesQuery,
 ): Promise<PaginatedTracksResponseData> => {
@@ -112,7 +123,14 @@ export const getTracksByCodesService = async (
     return emptyPaginatedResponse(page, limit);
   }
   const rawData = await findTracksByTrackCodes(query.trackCodes, page, limit);
-  return buildPaginatedResponse(rawData);
+
+  // Sort tracks in the order of requested trackCodes
+  const orderedTracks = sortTracksByRequestedOrder(rawData.rows, query.trackCodes);
+
+  return buildPaginatedResponse({
+    ...rawData,
+    rows: orderedTracks,
+  });
 };
 
 export interface GetTracksByFilterQuery {
@@ -122,15 +140,48 @@ export interface GetTracksByFilterQuery {
   limit?: string;
 }
 
+// Transform raw filter mapping data to paginated response
+const buildFilterPaginatedResponse = (
+  rawData: PaginatedRawFilterTracks,
+): PaginatedTracksResponseData => {
+  const { rows, count, page, limit } = rawData;
+  const totalPages = Math.ceil(count / limit);
+
+  const tracks: TrackWithArtists[] = rows
+    .filter((mapping) => {
+      if (!mapping.track) {
+        console.log(
+          `Warning: Skipped track with ID: ${mapping.trackId ?? 'unknown'} - not found in tracks table`,
+        );
+        return false;
+      }
+      return true;
+    })
+    .map((mapping) => transformTrackToDto(mapping.track!));
+
+  return {
+    tracks,
+    pagination: {
+      page,
+      limit,
+      totalItems: count,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
+};
+
 export const getTracksByFilterService = async (
   query: GetTracksByFilterQuery,
 ): Promise<PaginatedTracksResponseData> => {
-  const page = parseInt(query.page || "1", 10);
-  const limit = parseInt(query.limit || "10", 10);
+  const { page, limit } = parsePaginationParams(query.page, query.limit);
 
-  return await findTracksByFilter({
+  const rawData = await findTracksByFilter({
     filterId: query.filterId,
-    page: page > 0 ? page : 1,
-    limit: limit > 0 && limit <= 100 ? limit : 10,
+    page,
+    limit,
   });
+
+  return buildFilterPaginatedResponse(rawData);
 };
