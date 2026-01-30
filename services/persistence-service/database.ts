@@ -12,6 +12,7 @@ import {
 import { OrganizationModel } from "./organization/modules.export";
 import { BrandModel } from "./brand/modules.export";
 import { DownloadModel } from "./download/modules.export";
+import { LicenseTypeModel } from "./licenseType/modules.export";
 
 config();
 
@@ -73,6 +74,7 @@ sequelize.addModels([
   TrackArtistMappingModel,
   PlaylistModel,
   TrackPlaylistMappingModel,
+  LicenseTypeModel,
   DownloadModel,
 ]);
 
