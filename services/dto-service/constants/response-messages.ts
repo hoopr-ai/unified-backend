@@ -18,4 +18,9 @@ export const enum ResponseMessages {
   OrganizationAlreadyExists = "Organization with this name already exists",
   BrandAlreadyExists = "Brand with this name already exists in this organization",
   OrganizationNotFound = "Organization not found",
+  DownloadTrackSuccess = "Track download initiated successfully",
+  TokenBalanceSuccess = "Token balance retrieved successfully",
+  TokensAssignedSuccess = "Tokens assigned successfully",
+  DownloadHistorySuccess = "Download history retrieved successfully",
+  BrandDownloadHistorySuccess = "Brand download history retrieved successfully",
 }
