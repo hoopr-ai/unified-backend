@@ -53,3 +53,49 @@ export interface BrandLicenseHistoryResponse {
     totalPages: number;
   };
 }
+
+// License Type DTOs
+export enum LicenseTypeEnumDTO {
+  STANDARD = "standard",
+  PREMIUM = "premium",
+  ENTERPRISE = "enterprise",
+}
+
+export interface CreateLicenseTypeRequest {
+  name: string;
+  type: LicenseTypeEnumDTO;
+  template?: string;
+  template_buisness?: string;
+  price: number;
+}
+
+export interface UpdateLicenseTypeRequest {
+  name?: string;
+  type?: LicenseTypeEnumDTO;
+  template?: string;
+  template_buisness?: string;
+  price?: number;
+  discontinued?: boolean;
+}
+
+export interface LicenseTypeResponse {
+  id: string;
+  name?: string;
+  type?: LicenseTypeEnumDTO;
+  template?: string;
+  template_buisness?: string;
+  price?: number;
+  discontinued?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface LicenseTypeListResponse {
+  licenseTypes: LicenseTypeResponse[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+  };
+}
