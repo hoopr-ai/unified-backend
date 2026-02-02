@@ -23,8 +23,10 @@ export const licenseTrack = catchAsync(async (req: AuthRequest, res: Response) =
   if (!userId) {
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
   }
-
-  const response = await licenseTrackService(userId, req.body);
+  const trackId = req.params.trackId as string;
+  const response = await licenseTrackService(userId, {
+    trackId: trackId,
+  });
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,
