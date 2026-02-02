@@ -1,10 +1,10 @@
 import type { Request, Response } from "express";
 import {
-  downloadTrackService,
+  licenseTrackService,
   getTokenBalanceService,
   assignTokensService,
-  getDownloadHistoryService,
-  getBrandDownloadHistoryService,
+  getLicenseHistoryService,
+  getBrandLicenseHistoryService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -18,17 +18,17 @@ interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
-export const downloadTrack = catchAsync(async (req: AuthRequest, res: Response) => {
+export const licenseTrack = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
   if (!userId) {
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
   }
 
-  const response = await downloadTrackService(userId, req.body);
+  const response = await licenseTrackService(userId, req.body);
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,
-    message: "Track download initiated successfully",
+    message: "Track license initiated successfully",
   });
 });
 
@@ -61,7 +61,7 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
   });
 });
 
-export const getDownloadHistory = catchAsync(async (req: AuthRequest, res: Response) => {
+export const getLicenseHistory = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
   if (!userId) {
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
@@ -70,15 +70,15 @@ export const getDownloadHistory = catchAsync(async (req: AuthRequest, res: Respo
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 50;
 
-  const response = await getDownloadHistoryService(userId, page, limit);
+  const response = await getLicenseHistoryService(userId, page, limit);
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,
-    message: "Download history retrieved successfully",
+    message: "License history retrieved successfully",
   });
 });
 
-export const getBrandDownloadHistory = catchAsync(async (req: AuthRequest, res: Response) => {
+export const getBrandLicenseHistory = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
   if (!userId) {
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
@@ -87,10 +87,10 @@ export const getBrandDownloadHistory = catchAsync(async (req: AuthRequest, res: 
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 50;
 
-  const response = await getBrandDownloadHistoryService(userId, page, limit);
+  const response = await getBrandLicenseHistoryService(userId, page, limit);
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,
-    message: "Brand download history retrieved successfully",
+    message: "Brand license history retrieved successfully",
   });
 });

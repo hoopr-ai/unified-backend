@@ -11,7 +11,7 @@ import {
 } from "./playlists/modules.export";
 import { OrganizationModel } from "./organization/modules.export";
 import { BrandModel } from "./brand/modules.export";
-import { DownloadModel } from "./download/modules.export";
+import { LicenseModel } from "./licenses/modules.export";
 import { LicenseTypeModel } from "./licenseType/modules.export";
 
 config();
@@ -75,7 +75,7 @@ sequelize.addModels([
   PlaylistModel,
   TrackPlaylistMappingModel,
   LicenseTypeModel,
-  DownloadModel,
+  LicenseModel,
 ]);
 
 export async function connectDatabase() {

@@ -16,13 +16,13 @@ import { UserModel } from "../../user/schemas/modules.export";
 import { TrackModel } from "../../track/schemas/modules.export";
 import { LicenseTypeModel } from "../../licenseType/schemas/modules.export";
 
-export interface DownloadDetails {
+export interface LicenseDetails {
   id?: number;
   brandId: number;
   userId: number;
   trackId: string;
   tokenCost: number;
-  downloadedAt: Date;
+  licensedAt: Date;
   status?: string;
   licenseTypeId?: string;
   createdAt: Date;
@@ -33,7 +33,7 @@ export interface DownloadDetails {
   tableName: "licenses",
   timestamps: true,
 })
-export class DownloadModel extends Model<DownloadModel, DownloadDetails> {
+export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
   @PrimaryKey
   @AutoIncrement
   @Column(DataType.BIGINT)
@@ -74,7 +74,7 @@ export class DownloadModel extends Model<DownloadModel, DownloadDetails> {
     type: DataType.DATE,
     allowNull: false,
   })
-  downloadedAt!: Date;
+  licensedAt!: Date;
 
   @Column({
     type: DataType.STRING(50),

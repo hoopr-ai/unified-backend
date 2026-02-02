@@ -1,4 +1,4 @@
-export interface DownloadTrackRequest {
+export interface LicenseTrackRequest {
   trackId: string;
 }
 
@@ -7,7 +7,7 @@ export interface AssignTokensRequest {
   tokens: number;
 }
 
-export interface DownloadResponse {
+export interface LicenseResponse {
   downloadLink: string;
   remainingTokens: number;
   trackId: string;
@@ -19,17 +19,17 @@ export interface TokenBalanceResponse {
   tokens: number;
 }
 
-export interface DownloadHistoryItem {
+export interface LicenseHistoryItem {
   id: number;
   trackId: string;
   trackName?: string;
   trackCode?: string;
   tokenCost: number;
-  downloadedAt: Date;
+  licensedAt: Date;
 }
 
-export interface DownloadHistoryResponse {
-  downloads: DownloadHistoryItem[];
+export interface LicenseHistoryResponse {
+  licenses: LicenseHistoryItem[];
   pagination: {
     page: number;
     limit: number;
@@ -38,14 +38,14 @@ export interface DownloadHistoryResponse {
   };
 }
 
-export interface BrandDownloadHistoryItem extends DownloadHistoryItem {
+export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   userId: number;
   userEmail?: string;
 }
 
-export interface BrandDownloadHistoryResponse {
+export interface BrandLicenseHistoryResponse {
   brandId: number;
-  downloads: BrandDownloadHistoryItem[];
+  licenses: BrandLicenseHistoryItem[];
   pagination: {
     page: number;
     limit: number;

@@ -7,7 +7,7 @@ import filterRoutes from "./routes/filter.route";
 import trackRoutes from "./routes/track.route";
 import playlistRoutes from "./routes/playlist.route";
 import organizationRoutes from "./routes/organization.route";
-import downloadRoutes from "./routes/download.route";
+import licensesRoutes from "./routes/licenses.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware, getCorsOptions } from "./services/helper-service/modules.export";
@@ -30,7 +30,7 @@ app.use("/filters", filterRoutes);
 app.use("/tracks", trackRoutes);
 app.use("/playlists", playlistRoutes);
 app.use("/organizations", organizationRoutes);
-app.use("/download", downloadRoutes);
+app.use("/licenses", licensesRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);

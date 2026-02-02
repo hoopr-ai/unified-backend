@@ -1,9 +1,9 @@
 import {
-  createDownloadRecord,
-  getDownloadsByUserId,
-  getDownloadsByBrandId,
-  type DownloadDetails,
-} from "../../persistence-service/download/modules.export";
+  createLicenseRecord,
+  getLicensesByUserId,
+  getLicensesByBrandId,
+  type LicenseDetails,
+} from "../../persistence-service/licenses/modules.export";
 import {
   getTokenBalance,
   addTokens,
@@ -14,21 +14,21 @@ import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
 import { AppError } from "../../helper-service/modules.export";
 import type {
-  DownloadTrackRequest,
-  DownloadResponse,
+  LicenseTrackRequest,
+  LicenseResponse,
   TokenBalanceResponse,
-  DownloadHistoryResponse,
-  BrandDownloadHistoryResponse,
-  DownloadHistoryItem,
-  BrandDownloadHistoryItem,
-} from "../../dto-service/download/modules.export";
+  LicenseHistoryResponse,
+  BrandLicenseHistoryResponse,
+  LicenseHistoryItem,
+  BrandLicenseHistoryItem,
+} from "../../dto-service/licenses/modules.export";
 
-const TOKEN_COST_PER_DOWNLOAD = 1;
+const TOKEN_COST_PER_LICENSE = 1;
 
-export const downloadTrackService = async (
+export const licenseTrackService = async (
   userId: number,
-  data: DownloadTrackRequest
-): Promise<DownloadResponse> => {
+  data: LicenseTrackRequest
+): Promise<LicenseResponse> => {
   const { trackId } = data;
 
   // Get user's brand
@@ -48,7 +48,7 @@ export const downloadTrackService = async (
 
   // Check token balance
   const tokenBalance = await getTokenBalance(brandId);
-  if (tokenBalance < TOKEN_COST_PER_DOWNLOAD) {
+  if (tokenBalance < TOKEN_COST_PER_LICENSE) {
     throw new AppError("Insufficient tokens. Please contact your administrator to add more tokens.", 400);
   }
 
@@ -66,23 +66,23 @@ export const downloadTrackService = async (
   }
 
   // Deduct token
-  const { success, remainingTokens } = await deductToken(brandId, TOKEN_COST_PER_DOWNLOAD);
+  const { success, remainingTokens } = await deductToken(brandId, TOKEN_COST_PER_LICENSE);
 
   if (!success) {
     throw new AppError("Failed to process token deduction. Insufficient tokens.", 400);
   }
 
-  // Create download record
-  const downloadDetails: DownloadDetails = {
+  // Create license record
+  const licenseDetails: LicenseDetails = {
     brandId,
     userId,
     trackId,
-    tokenCost: TOKEN_COST_PER_DOWNLOAD,
-    downloadedAt: new Date(),
+    tokenCost: TOKEN_COST_PER_LICENSE,
+    licensedAt: new Date(),
     createdAt: new Date(),
   };
 
-  await createDownloadRecord(downloadDetails);
+  await createLicenseRecord(licenseDetails);
 
   return {
     downloadLink: track.sourceLink,
@@ -136,27 +136,27 @@ export const assignTokensService = async (
   };
 };
 
-export const getDownloadHistoryService = async (
+export const getLicenseHistoryService = async (
   userId: number,
   page: number = 1,
   limit: number = 50
-): Promise<DownloadHistoryResponse> => {
-  const { rows, count } = await getDownloadsByUserId(userId, page, limit);
+): Promise<LicenseHistoryResponse> => {
+  const { rows, count } = await getLicensesByUserId(userId, page, limit);
 
-  const downloads: DownloadHistoryItem[] = rows.map((download) => {
-    const track = download.track as TrackModel | undefined;
+  const licenses: LicenseHistoryItem[] = rows.map((license) => {
+    const track = license.track as TrackModel | undefined;
     return {
-      id: download.id,
-      trackId: download.trackId,
+      id: license.id,
+      trackId: license.trackId,
       trackName: track?.name,
       trackCode: track?.trackCode,
-      tokenCost: download.tokenCost,
-      downloadedAt: download.downloadedAt,
+      tokenCost: license.tokenCost,
+      licensedAt: license.licensedAt,
     };
   });
 
   return {
-    downloads,
+    licenses,
     pagination: {
       page,
       limit,
@@ -166,11 +166,11 @@ export const getDownloadHistoryService = async (
   };
 };
 
-export const getBrandDownloadHistoryService = async (
+export const getBrandLicenseHistoryService = async (
   userId: number,
   page: number = 1,
   limit: number = 50
-): Promise<BrandDownloadHistoryResponse> => {
+): Promise<BrandLicenseHistoryResponse> => {
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
     attributes: ["id", "brandId"],
@@ -186,26 +186,26 @@ export const getBrandDownloadHistoryService = async (
 
   const brandId = user.brandId;
 
-  const { rows, count } = await getDownloadsByBrandId(brandId, page, limit);
+  const { rows, count } = await getLicensesByBrandId(brandId, page, limit);
 
-  const downloads: BrandDownloadHistoryItem[] = rows.map((download) => {
-    const track = download.track as TrackModel | undefined;
-    const downloadUser = download.user as UserModel | undefined;
+  const licenses: BrandLicenseHistoryItem[] = rows.map((license) => {
+    const track = license.track as TrackModel | undefined;
+    const licenseUser = license.user as UserModel | undefined;
     return {
-      id: download.id,
-      trackId: download.trackId,
+      id: license.id,
+      trackId: license.trackId,
       trackName: track?.name,
       trackCode: track?.trackCode,
-      tokenCost: download.tokenCost,
-      downloadedAt: download.downloadedAt,
-      userId: download.userId,
-      userEmail: downloadUser?.email,
+      tokenCost: license.tokenCost,
+      licensedAt: license.licensedAt,
+      userId: license.userId,
+      userEmail: licenseUser?.email,
     };
   });
 
   return {
     brandId,
-    downloads,
+    licenses,
     pagination: {
       page,
       limit,

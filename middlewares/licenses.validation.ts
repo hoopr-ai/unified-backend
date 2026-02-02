@@ -1,10 +1,10 @@
 import Joi from "joi";
 import type {
-  DownloadTrackRequest,
+  LicenseTrackRequest,
   AssignTokensRequest,
 } from "../services/dto-service/modules.export";
 
-export const downloadTrackRequestSchema = Joi.object<DownloadTrackRequest>({
+export const licenseTrackRequestSchema = Joi.object<LicenseTrackRequest>({
   trackId: Joi.string().uuid().required(),
 });
 

@@ -1,27 +1,27 @@
 import { Router } from "express";
 import {
-  downloadTrack,
+  licenseTrack,
   getTokenBalance,
   assignTokens,
-  getDownloadHistory,
-  getBrandDownloadHistory,
-} from "../controllers/download.controller";
+  getLicenseHistory,
+  getBrandLicenseHistory,
+} from "../controllers/licenses.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
-  downloadTrackRequestSchema,
+  licenseTrackRequestSchema,
   assignTokensRequestSchema,
-} from "../middlewares/download.validation";
+} from "../middlewares/licenses.validation";
 import { UserRoles } from "../services/dto-service/modules.export";
 
 const router = Router();
 
-// Download a track - requires authenticated user (USER, ADMIN)
+// License a track - requires authenticated user (USER, ADMIN)
 router.post(
   "/track",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  validateRequest(downloadTrackRequestSchema),
-  downloadTrack
+  validateRequest(licenseTrackRequestSchema),
+  licenseTrack
 );
 
 // Get token balance - requires authenticated user
@@ -39,18 +39,18 @@ router.post(
   assignTokens
 );
 
-// Get user's download history
+// Get user's license history
 router.get(
   "/history",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  getDownloadHistory
+  getLicenseHistory
 );
 
-// Get brand's download history - requires ADMIN role
+// Get brand's license history - requires ADMIN role
 router.get(
   "/brand-history",
   authenticateWithSession({ roles: [UserRoles.ADMIN] }),
-  getBrandDownloadHistory
+  getBrandLicenseHistory
 );
 
 export default router;

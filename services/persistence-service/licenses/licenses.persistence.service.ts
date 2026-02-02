@@ -1,21 +1,21 @@
-import { DownloadModel, type DownloadDetails } from "./schemas/modules.export";
+import { LicenseModel, type LicenseDetails } from "./schemas/modules.export";
 import { TrackModel } from "../track/schemas/modules.export";
 import { UserModel } from "../user/schemas/modules.export";
 
-export const createDownloadRecord = async (
-  downloadDetails: DownloadDetails
-): Promise<DownloadDetails> => {
-  const download = await DownloadModel.create(downloadDetails);
-  return download;
+export const createLicenseRecord = async (
+  licenseDetails: LicenseDetails
+): Promise<LicenseDetails> => {
+  const license = await LicenseModel.create(licenseDetails);
+  return license;
 };
 
-export const getDownloadsByUserId = async (
+export const getLicensesByUserId = async (
   userId: number,
   page: number = 1,
   limit: number = 50
-): Promise<{ rows: DownloadModel[]; count: number }> => {
+): Promise<{ rows: LicenseModel[]; count: number }> => {
   const offset = (page - 1) * limit;
-  const { rows, count } = await DownloadModel.findAndCountAll({
+  const { rows, count } = await LicenseModel.findAndCountAll({
     where: { userId },
     include: [
       {
@@ -23,20 +23,20 @@ export const getDownloadsByUserId = async (
         attributes: ["id", "trackCode", "name", "sourceLink"],
       },
     ],
-    order: [["downloadedAt", "DESC"]],
+    order: [["licensedAt", "DESC"]],
     limit,
     offset,
   });
   return { rows, count };
 };
 
-export const getDownloadsByBrandId = async (
+export const getLicensesByBrandId = async (
   brandId: number,
   page: number = 1,
   limit: number = 50
-): Promise<{ rows: DownloadModel[]; count: number }> => {
+): Promise<{ rows: LicenseModel[]; count: number }> => {
   const offset = (page - 1) * limit;
-  const { rows, count } = await DownloadModel.findAndCountAll({
+  const { rows, count } = await LicenseModel.findAndCountAll({
     where: { brandId },
     include: [
       {
@@ -48,35 +48,35 @@ export const getDownloadsByBrandId = async (
         attributes: ["id", "email", "firstName", "lastName"],
       },
     ],
-    order: [["downloadedAt", "DESC"]],
+    order: [["licensedAt", "DESC"]],
     limit,
     offset,
   });
   return { rows, count };
 };
 
-export const getDownloadCountByTrackId = async (
+export const getLicenseCountByTrackId = async (
   trackId: string
 ): Promise<number> => {
-  const count = await DownloadModel.count({
+  const count = await LicenseModel.count({
     where: { trackId },
   });
   return count;
 };
 
-export const getTotalDownloadsByBrandId = async (
+export const getTotalLicensesByBrandId = async (
   brandId: number
 ): Promise<number> => {
-  const count = await DownloadModel.count({
+  const count = await LicenseModel.count({
     where: { brandId },
   });
   return count;
 };
 
-export const getTotalDownloadsByUserId = async (
+export const getTotalLicensesByUserId = async (
   userId: number
 ): Promise<number> => {
-  const count = await DownloadModel.count({
+  const count = await LicenseModel.count({
     where: { userId },
   });
   return count;
