@@ -69,15 +69,6 @@ export interface CreateLicenseTypeRequest {
   price: number;
 }
 
-export interface UpdateLicenseTypeRequest {
-  name?: string;
-  type?: LicenseTypeEnumDTO;
-  template?: string;
-  template_buisness?: string;
-  price?: number;
-  discontinued?: boolean;
-}
-
 export interface LicenseTypeResponse {
   id: string;
   name?: string;
@@ -90,12 +81,3 @@ export interface LicenseTypeResponse {
   updatedAt: Date;
 }
 
-export interface LicenseTypeListResponse {
-  licenseTypes: LicenseTypeResponse[];
-  pagination: {
-    page: number;
-    limit: number;
-    totalItems: number;
-    totalPages: number;
-  };
-}

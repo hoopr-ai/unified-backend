@@ -9,7 +9,6 @@ import {
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
-  licenseTrackRequestSchema,
   assignTokensRequestSchema,
 } from "../middlewares/licenses.validation";
 import { UserRoles } from "../services/dto-service/modules.export";
