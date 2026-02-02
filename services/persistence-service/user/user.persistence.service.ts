@@ -52,3 +52,24 @@ export const findUserRole = async (
   });
   return userRole?.role ?? null;
 }
+
+export const findUserById = async (
+  userId: number
+): Promise<UserDetails | null> => {
+  const userDetails = await UserModel.findOne({
+    where: { id: userId, status: UserStatus.ACTIVE },
+  });
+  return userDetails;
+}
+
+export const updateUserProfile = async (
+  userId: number,
+  firstName: string,
+  lastName: string,
+  mobile: string
+): Promise<void> => {
+  await UserModel.update(
+    { firstName, lastName, mobile, isProfileComplete: true },
+    { where: { id: userId, status: UserStatus.ACTIVE } }
+  );
+}

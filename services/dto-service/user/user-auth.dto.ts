@@ -2,9 +2,6 @@ import type { Platform } from "../constants/modules.export";
 
 export interface CreateAuthRequestData {
     email: string;
-    firstName: string;
-    lastName: string;
-    mobile: string;
     password: string;
     platform: Platform;
     brandId?: number;
@@ -12,11 +9,14 @@ export interface CreateAuthRequestData {
 
 export interface InviteUserAuthRequestData {
     email: string;
+    password: string;
+    platform: Platform;
+}
+
+export interface CompleteProfileRequestData {
     firstName: string;
     lastName: string;
     mobile: string;
-    password: string;
-    platform: Platform;
 }
 
 export interface LoginUserRequestData {
@@ -36,7 +36,7 @@ export interface LoginResponse {
   id: number;
   email: string;
   role: string | null;
-  updatedAt: number | undefined;
+  isProfileComplete: boolean;
   expiresIn: number;
   token: string;
 }

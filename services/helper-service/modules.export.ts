@@ -5,3 +5,4 @@ export * from './session.helper';
 export * from './activity.helper';
 export * from './response.helper';
 export * from './cors.config';
+export * from './email.service';

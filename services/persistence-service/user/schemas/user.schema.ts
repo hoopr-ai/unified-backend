@@ -24,6 +24,7 @@ export interface UserDetails {
   status: UserStatus;
   mobile?: string;
   platform: string;
+  isProfileComplete: boolean;
   createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
@@ -99,6 +100,13 @@ export class UserModel extends Model<UserModel, UserDetails> {
     allowNull: true,
   })
   createdBy?: number;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  isProfileComplete!: boolean;
 
   @CreatedAt
   @Column({

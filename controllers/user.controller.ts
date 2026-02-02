@@ -6,6 +6,7 @@ import {
   inviteUserService,
   logoutUserService,
   logoutAllSessionsService,
+  completeProfileService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -59,6 +60,15 @@ export const inviteUser = catchAsync(async (req: AuthRequest, res: Response) => 
   const createdBy = req.session?.userId;
   const response = await inviteUserService(req.body, createdBy);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserInvitedSuccess });
+});
+
+export const completeProfile = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const response = await completeProfileService(req.body, userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.ProfileCompletedSuccess });
 });
 
 export const getUserActivities = catchAsync(async (req: AuthRequest, res: Response) => {

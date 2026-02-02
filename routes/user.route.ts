@@ -6,6 +6,7 @@ import {
   resetPassword,
   create,
   inviteUser,
+  completeProfile,
   getUserActivities,
   getUserSessions,
 } from "../controllers/user.controller";
@@ -15,6 +16,7 @@ import {
   resetPasswordRequestSchema,
   createAuthRequestSchema,
   inviteUserAuthRequestSchema,
+  completeProfileRequestSchema,
 } from "../middlewares/user.validation";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { Platform, UserRoles } from "../services/dto-service/modules.export";
@@ -53,6 +55,13 @@ router.post(
   authenticateWithSession({ roles: [UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
   validateRequest(inviteUserAuthRequestSchema),
   inviteUser
+);
+
+router.post(
+  "/complete-profile",
+  authenticateWithSession({ platforms: [Platform.ENTERPRISE] }),
+  validateRequest(completeProfileRequestSchema),
+  completeProfile
 );
 
 // Activity and Session endpoints

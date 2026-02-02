@@ -1,16 +1,13 @@
 import Joi from "joi";
 import type {
   CreateAuthRequestData, InviteUserAuthRequestData, LoginUserRequestData,
-  ResetPasswordRequestData,
+  ResetPasswordRequestData, CompleteProfileRequestData,
 } from "../services/dto-service/modules.export";
 import { Platform } from "../services/dto-service/constants/modules.export";
 const platformValues = Object.values(Platform) as string[];
 
 export const createAuthRequestSchema = Joi.object<CreateAuthRequestData>({
     email: Joi.string().email().required(),
-    firstName: Joi.string().min(2).max(100).required(),
-    lastName: Joi.string().min(2).max(100).required(),
-    mobile: Joi.string().min(8).max(15).required(),
     password: Joi.string().min(6).required(),
     platform: Joi.string().valid(...platformValues).required(),
     brandId: Joi.number().integer().positive().optional(),
@@ -18,11 +15,14 @@ export const createAuthRequestSchema = Joi.object<CreateAuthRequestData>({
 
 export const inviteUserAuthRequestSchema = Joi.object<InviteUserAuthRequestData>({
     email: Joi.string().email().required(),
+    password: Joi.string().min(6).required(),
+    platform: Joi.string().valid(...platformValues).required(),
+});
+
+export const completeProfileRequestSchema = Joi.object<CompleteProfileRequestData>({
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     mobile: Joi.string().min(8).max(15).required(),
-    password: Joi.string().min(6).required(),
-    platform: Joi.string().valid(...platformValues).required(),
 });
 
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({

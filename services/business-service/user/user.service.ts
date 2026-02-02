@@ -11,6 +11,7 @@ import {
   SessionStatus,
   type SessionMetadata,
   InviteUserAuthRequestData,
+  CompleteProfileRequestData,
 } from "../../dto-service/modules.export";
 import {
   findActiveUser,
@@ -19,6 +20,8 @@ import {
   saveUser,
   saveUserRole,
   updateUserPassword,
+  updateUserProfile,
+  findUserById,
   UserRoleDetails,
   type UserDetails,
   createSession,
@@ -30,7 +33,7 @@ import {
   isSessionExpiredByInactivity,
   type UserSessionDetails,
 } from "../../persistence-service/exports";
-import { AppError, createJWTToken } from "../../helper-service/modules.export";
+import { AppError, createJWTToken, sendWelcomeEmail, sendInviteEmail } from "../../helper-service/modules.export";
 import {
   ErrorMessages,
   Platform,
@@ -43,7 +46,7 @@ interface LoginResponseWithSession extends LoginResponse {
 const buildLoginResponse = (
   user: UserDetails,
   role: string | null,
-  updatedAt: Date | undefined,
+  isProfileComplete: boolean,
   token: string,
   sessionId: number
 ): LoginResponseWithSession => {
@@ -51,7 +54,7 @@ const buildLoginResponse = (
     id: user.id!,
     email: user.email,
     role,
-    updatedAt: updatedAt ? Number(updatedAt) : undefined,
+    isProfileComplete,
     expiresIn: AccessTokenExpiryInSeconds,
     token,
     sessionId,
@@ -70,22 +73,17 @@ const comparePasswordsEncrypted = async (
 
 const createUserDetails = (
   email: string,
-  firstName: string,
-  lastName: string,
   platform: string,
   password: string,
-  mobile: string,
   brandId?: number,
   createdBy?: number,
 ): UserDetails => {
   const newUser: UserDetails = {
     email,
-    firstName,
-    lastName,
     platform,
     password,
-    mobile,
     status: UserStatus.ACTIVE,
+    isProfileComplete: false,
     createdBy,
     createdAt: new Date(),
     brandId,
@@ -123,7 +121,7 @@ export const userLoginService = async (
 
   const session = await createSession(sessionData);
 
-  return buildLoginResponse(user, role, user.updatedAt, token, session.id!);
+  return buildLoginResponse(user, role, user.isProfileComplete, token, session.id!);
 };
 
 export const validateAndRefreshSession = async (
@@ -189,7 +187,7 @@ export const createUserService = async (
   data: CreateAuthRequestData,
   createdBy?: number
 ): Promise<{}> => {
-  const { email, password, platform, firstName, lastName, mobile, brandId } = data;
+  const { email, password, platform, brandId } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
@@ -198,10 +196,15 @@ export const createUserService = async (
     throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId, createdBy);
+  const newUser = createUserDetails(email, platform, hashedNewPassword, brandId, createdBy);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.ADMIN);
   await saveUserRole(userRoleDetails);
+
+  // Send welcome email with credentials
+  const loginUrl = `${process.env.FRONTEND_URL}/login`;
+  await sendWelcomeEmail(email, password, loginUrl);
+
   return {};
 };
 
@@ -209,15 +212,48 @@ export const inviteUserService = async (
   data: InviteUserAuthRequestData,
   createdBy?: number
 ): Promise<{}> => {
-  const { email, password, platform, firstName, lastName, mobile } = data;
+  const { email, password, platform } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
+
+  // Get the brandId from the inviting user
+  let brandId: number | undefined;
+  if (createdBy) {
+    const invitingUser = await findUserById(createdBy);
+    brandId = invitingUser?.brandId;
+  }
+
+  if (platform === Platform.ENTERPRISE && !brandId) {
+    throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
+  }
+
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, userDetails!.brandId, createdBy);
+  const newUser = createUserDetails(email, platform, hashedNewPassword, brandId, createdBy);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);
+
+  // Send invite email with credentials
+  const loginUrl = `${process.env.FRONTEND_URL}/login`;
+  await sendInviteEmail(email, password, loginUrl);
+
+  return {};
+};
+
+export const completeProfileService = async (
+  data: CompleteProfileRequestData,
+  userId: number
+): Promise<{}> => {
+  const { firstName, lastName, mobile } = data;
+
+  const user = await findUserById(userId);
+  if (!user) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  await updateUserProfile(userId, firstName, lastName, mobile);
+
   return {};
 };
