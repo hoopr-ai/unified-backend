@@ -1,1 +1,0 @@
-export * from "./licenseType.schema";

@@ -14,7 +14,7 @@ import {
 import { BrandModel } from "../../brand/schemas/modules.export";
 import { UserModel } from "../../user/schemas/modules.export";
 import { TrackModel } from "../../track/schemas/modules.export";
-import { LicenseTypeModel } from "../../licenseType/schemas/modules.export";
+import { LicenseTypeModel } from "./licenseType.schema";
 
 export interface LicenseDetails {
   id?: number;

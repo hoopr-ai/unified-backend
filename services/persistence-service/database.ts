@@ -11,8 +11,7 @@ import {
 } from "./playlists/modules.export";
 import { OrganizationModel } from "./organization/modules.export";
 import { BrandModel } from "./brand/modules.export";
-import { LicenseModel } from "./licenses/modules.export";
-import { LicenseTypeModel } from "./licenseType/modules.export";
+import { LicenseModel, LicenseTypeModel } from "./licenses/modules.export";
 
 config();
 
