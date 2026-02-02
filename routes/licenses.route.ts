@@ -18,7 +18,7 @@ const router = Router();
 
 // License a track - requires authenticated user (USER, ADMIN)
 router.post(
-  "/track/:trackId",
+  "/track/:trackCode",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
   licenseTrack
 );

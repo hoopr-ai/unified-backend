@@ -1,5 +1,5 @@
 export interface LicenseTrackRequest {
-  trackId: string;
+  trackCode: string;
 }
 
 export interface AssignTokensRequest {

@@ -29,7 +29,7 @@ export const licenseTrackService = async (
   userId: number,
   data: LicenseTrackRequest
 ): Promise<LicenseResponse> => {
-  const { trackId } = data;
+  const { trackCode } = data;
 
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
@@ -53,10 +53,10 @@ export const licenseTrackService = async (
   }
 
   // Get track details
-  const track = await TrackModel.findByPk(trackId, {
+  const track = await TrackModel.findOne({
+    where: { trackCode },
     attributes: ["id", "trackCode", "name", "sourceLink"],
   });
-
   if (!track) {
     throw new AppError("Track not found", 404);
   }
@@ -76,7 +76,8 @@ export const licenseTrackService = async (
   const licenseDetails: LicenseDetails = {
     brandId,
     userId,
-    trackId,
+    trackId: track.id,
+    trackCode: track.trackCode,
     tokenCost: TOKEN_COST_PER_LICENSE,
     licensedAt: new Date(),
     createdAt: new Date(),

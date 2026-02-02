@@ -21,6 +21,7 @@ export interface LicenseDetails {
   brandId: number;
   userId: number;
   trackId: string;
+  trackCode: string;
   tokenCost: number;
   licensedAt: Date;
   status?: string;
@@ -62,6 +63,12 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     allowNull: false,
   })
   trackId!: string;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: false,
+  })
+  trackCode!: string;
 
   @Column({
     type: DataType.INTEGER,
