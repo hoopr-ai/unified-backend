@@ -7,8 +7,16 @@ export interface CreateAuthRequestData {
     mobile: string;
     password: string;
     platform: Platform;
-    organizationId?: number;
     brandId?: number;
+}
+
+export interface InviteUserAuthRequestData {
+    email: string;
+    firstName: string;
+    lastName: string;
+    mobile: string;
+    password: string;
+    platform: Platform;
 }
 
 export interface LoginUserRequestData {

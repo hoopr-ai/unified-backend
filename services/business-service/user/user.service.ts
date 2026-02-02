@@ -9,8 +9,8 @@ import {
   UserStatus,
   UserRoles,
   SessionStatus,
-  SESSION_TIMEOUT_MINUTES,
   type SessionMetadata,
+  InviteUserAuthRequestData,
 } from "../../dto-service/modules.export";
 import {
   findActiveUser,
@@ -33,6 +33,7 @@ import {
 import { AppError, createJWTToken } from "../../helper-service/modules.export";
 import {
   ErrorMessages,
+  Platform,
 } from "../../dto-service/constants/modules.export";
 
 interface LoginResponseWithSession extends LoginResponse {
@@ -193,6 +194,9 @@ export const createUserService = async (
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
+  if(platform === Platform.ENTERPRISE && !brandId) {
+    throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
+  }
   const hashedNewPassword = await bcrypt.hash(password, 10);
   const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId, createdBy);
   const savedUser = await saveUser(newUser);
@@ -202,16 +206,16 @@ export const createUserService = async (
 };
 
 export const inviteUserService = async (
-  data: CreateAuthRequestData, //need to create a separate DTO for invite user which does not have password field
+  data: InviteUserAuthRequestData,
   createdBy?: number
 ): Promise<{}> => {
-  const { email, password, platform, firstName, lastName, mobile, brandId } = data;
+  const { email, password, platform, firstName, lastName, mobile } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, brandId, createdBy);
+  const newUser = createUserDetails(email, firstName, lastName, platform, hashedNewPassword, mobile, userDetails!.brandId, createdBy);
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);
