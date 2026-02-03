@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import 'dotenv/config';
 import express from "express";
 import type { Application, Request, Response } from "express";
 import cors from "cors";
@@ -13,14 +13,13 @@ import { initializeBusinessService } from "./services/business-service/initializ
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware, getCorsOptions } from "./services/helper-service/modules.export";
 
-const result = dotenv.config();
 
 const app: Application = express();
 app.use(express.json());
 
 await initializeBusinessService();
-console.log('DOTENV FILE:', result?.parsed)
-console.log('DOTENV PATH:', result?.error ?? 'loaded successfully')
+// console.log('DOTENV FILE:', result?.parsed)
+// console.log('DOTENV PATH:', result?.error ?? 'loaded successfully')
 
 const corsOptions = getCorsOptions();
 app.use(cors(corsOptions));
