@@ -25,6 +25,7 @@ app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 
 app.use(activityLoggerMiddleware());
+console.log("PROJECT_ID at startup:", process.env.PROJECT_ID);
 
 app.use("/user", userRoutes);
 app.use("/filters", filterRoutes);
