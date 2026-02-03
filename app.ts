@@ -38,7 +38,6 @@ app.get("/health-check", (req: Request, res: Response) => {
 });
 
 app.use(errorHandler);
-
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 
 app.listen(PORT, () => {
