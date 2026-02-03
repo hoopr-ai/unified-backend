@@ -12,7 +12,6 @@ import { initializeBusinessService } from "./services/business-service/initializ
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware, getCorsOptions } from "./services/helper-service/modules.export";
 
-
 const app: Application = express();
 app.use(express.json());
 
