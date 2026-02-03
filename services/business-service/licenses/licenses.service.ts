@@ -12,7 +12,7 @@ import {
 } from "../../persistence-service/brand/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
-import { AppError } from "../../helper-service/modules.export";
+import { AppError, generateGCSSignedUrl } from "../../helper-service/modules.export";
 import type {
   LicenseTrackRequest,
   LicenseResponse,
@@ -55,15 +55,14 @@ export const licenseTrackService = async (
   // Get track details
   const track = await TrackModel.findOne({
     where: { trackCode },
-    attributes: ["id", "trackCode", "name", "sourceLink"],
+    attributes: ["id", "trackCode", "name"],
   });
   if (!track) {
     throw new AppError("Track not found", 404);
   }
 
-  if (!track.sourceLink) {
-    throw new AppError("Track download link not available", 400);
-  }
+  // Generate GCS signed URL for the track
+  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
   // Deduct token
   const { success, remainingTokens } = await deductToken(brandId, TOKEN_COST_PER_LICENSE);
@@ -86,7 +85,7 @@ export const licenseTrackService = async (
   await createLicenseRecord(licenseDetails);
 
   return {
-    downloadLink: track.sourceLink,
+    downloadLink: gcsResult.downloadLink,
     remainingTokens,
     trackId: track.id,
     trackName: track.name,
