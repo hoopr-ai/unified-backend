@@ -7,3 +7,5 @@ export * from './response.helper';
 export * from './cors.config';
 export * from './email.service';
 export * from './gcs.helper';
+export * from './newrelic.helper';
+export * from './logger';
