@@ -3,6 +3,7 @@ import {
   getAllTracksService,
   getTracksByCodesService,
   getTracksByFilterService,
+  getTrackDetailsByCodeService,
   GetTracksByFilterQuery,
 } from "../services/business-service/modules.export";
 import { catchAsync, sendResponse } from "../services/helper-service/modules.export";
@@ -41,5 +42,19 @@ export const getTracksByFilter = catchAsync(
     };
     const response = await getTracksByFilterService(query);
     sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksByFilterSuccess });
+  },
+);
+
+export const getTrackDetailsByCode = catchAsync(
+  async (req: Request, res: Response) => {
+    const trackCode = req.params.trackCode as string;
+    const response = await getTrackDetailsByCodeService(trackCode);
+
+    if (!response) {
+      sendResponse(res, { status: HttpStatusCode.NOT_FOUND, data: null, message: ResponseMessages.TrackNotFound });
+      return;
+    }
+
+    sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTrackDetailSuccess });
   },
 );

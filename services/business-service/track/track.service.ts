@@ -11,6 +11,7 @@ import {
   findAllTracks,
   findTracksByTrackCodes,
   findTracksByFilter,
+  findTrackByTrackCode,
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
 
@@ -184,4 +185,16 @@ export const getTracksByFilterService = async (
   });
 
   return buildFilterPaginatedResponse(rawData);
+};
+
+export const getTrackDetailsByCodeService = async (
+  trackCode: string,
+): Promise<TrackWithArtists | null> => {
+  const track = await findTrackByTrackCode(trackCode);
+
+  if (!track) {
+    return null;
+  }
+
+  return transformTrackToDto(track);
 };

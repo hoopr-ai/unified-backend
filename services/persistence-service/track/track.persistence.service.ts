@@ -94,6 +94,17 @@ export interface PaginatedRawFilterTracks {
   limit: number;
 }
 
+export const findTrackByTrackCode = async (
+  trackCode: string,
+): Promise<RawTrackWithMappings | null> => {
+  const track = await TrackModel.findOne({
+    where: { trackCode },
+    include: getArtistInclude(),
+  });
+
+  return track ? (track.toJSON() as RawTrackWithMappings) : null;
+};
+
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {

@@ -8,6 +8,8 @@ export const enum ResponseMessages {
   ProfileCompletedSuccess = "Profile has been successfully completed",
   GetFiltersSuccess = "Success",
   GetTracksSuccess = "Tracks fetched successfully",
+  GetTrackDetailSuccess = "Track details fetched successfully",
+  TrackNotFound = "Track not found",
   GetPlaylistsSuccess = "Playlists fetched successfully",
   GetPlaylistDetailSuccess = "Playlist details fetched successfully",
   PlaylistNotFound = "Playlist not found",
