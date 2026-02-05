@@ -11,4 +11,5 @@ export const enum ErrorMessages {
     UserNotAssociatedWithBrand = "User is not associated with any brand.",
     BrandNotFound = "Brand not found.",
     InvalidTokenAmount = "Token amount must be greater than 0.",
+    ProfileAlreadyComplete = "Profile is already complete.",
 }

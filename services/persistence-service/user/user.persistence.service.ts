@@ -1,5 +1,5 @@
 import { ErrorMessages, type Platform } from "../../dto-service/constants/modules.export";
-import { UserStatus, type UserRoles } from "../../dto-service/modules.export";
+import { UserStatus, type UserRoles, type ProfileRole } from "../../dto-service/modules.export";
 import { AppError } from "../../helper-service/AppError";
 import { UserModel, UserRoleDetails, UserRoleModel, type UserDetails } from "./schemas/modules.export";
 
@@ -66,10 +66,11 @@ export const updateUserProfile = async (
   userId: number,
   firstName: string,
   lastName: string,
-  mobile: string
+  mobile: string,
+  profileRole: ProfileRole
 ): Promise<void> => {
   await UserModel.update(
-    { firstName, lastName, mobile, isProfileComplete: true },
+    { firstName, lastName, mobile, profileRole },
     { where: { id: userId, status: UserStatus.ACTIVE } }
   );
 }

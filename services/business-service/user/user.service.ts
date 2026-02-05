@@ -83,7 +83,6 @@ const createUserDetails = (
     platform,
     password,
     status: UserStatus.ACTIVE,
-    isProfileComplete: false,
     createdBy,
     createdAt: new Date(),
     brandId,
@@ -121,7 +120,7 @@ export const userLoginService = async (
 
   const session = await createSession(sessionData);
 
-  return buildLoginResponse(user, role, user.isProfileComplete, token, session.id!);
+  return buildLoginResponse(user, role, user.isProfileComplete ?? false, token, session.id!);
 };
 
 export const validateAndRefreshSession = async (
@@ -246,14 +245,18 @@ export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number
 ): Promise<{}> => {
-  const { firstName, lastName, mobile } = data;
+  const { firstName, lastName, mobile, profileRole } = data;
 
   const user = await findUserById(userId);
   if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
 
-  await updateUserProfile(userId, firstName, lastName, mobile);
+  if (user.isProfileComplete) {
+    throw new AppError(ErrorMessages.ProfileAlreadyComplete, 400);
+  }
+
+  await updateUserProfile(userId, firstName, lastName, mobile, profileRole);
 
   return {};
 };

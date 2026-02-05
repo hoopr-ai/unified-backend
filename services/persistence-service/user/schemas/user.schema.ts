@@ -24,10 +24,11 @@ export interface UserDetails {
   status: UserStatus;
   mobile?: string;
   platform: string;
-  isProfileComplete: boolean;
+  profileRole?: string;
   createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
+  readonly isProfileComplete?: boolean;
 }
 
 @Table({
@@ -102,11 +103,14 @@ export class UserModel extends Model<UserModel, UserDetails> {
   createdBy?: number;
 
   @Column({
-    type: DataType.BOOLEAN,
-    allowNull: false,
-    defaultValue: false,
+    type: DataType.STRING(50),
+    allowNull: true,
   })
-  isProfileComplete!: boolean;
+  profileRole?: string;
+
+  get isProfileComplete(): boolean {
+    return !!(this.firstName && this.lastName && this.mobile && this.profileRole);
+  }
 
   @CreatedAt
   @Column({
