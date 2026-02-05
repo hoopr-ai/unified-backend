@@ -74,3 +74,18 @@ export const updateUserProfile = async (
     { where: { id: userId, status: UserStatus.ACTIVE } }
   );
 }
+
+export const updateUserProfilePartial = async (
+  userId: number,
+  updates: {
+    firstName?: string;
+    lastName?: string;
+    mobile?: string;
+    profileRole?: ProfileRole;
+  }
+): Promise<void> => {
+  await UserModel.update(
+    updates,
+    { where: { id: userId, status: UserStatus.ACTIVE } }
+  );
+}

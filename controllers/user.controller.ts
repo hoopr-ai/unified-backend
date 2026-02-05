@@ -7,6 +7,8 @@ import {
   logoutUserService,
   logoutAllSessionsService,
   completeProfileService,
+  getUserProfileService,
+  updateUserProfileService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -111,4 +113,22 @@ export const getUserSessions = catchAsync(async (req: AuthRequest, res: Response
     status === "active" ? SessionStatus.ACTIVE : undefined
   );
   sendResponse(res, { status: HttpStatusCode.OK, data: { sessions }, message: ResponseMessages.GetUserSessionsSuccess });
+});
+
+export const getProfile = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const response = await getUserProfileService(userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetProfileSuccess });
+});
+
+export const updateProfile = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const response = await updateUserProfileService(req.body, userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UpdateProfileSuccess });
 });

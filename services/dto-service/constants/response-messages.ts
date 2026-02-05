@@ -26,4 +26,6 @@ export const enum ResponseMessages {
   TokensAssignedSuccess = "Tokens assigned successfully",
   DownloadHistorySuccess = "Download history retrieved successfully",
   BrandDownloadHistorySuccess = "Brand download history retrieved successfully",
+  GetProfileSuccess = "User profile retrieved successfully",
+  UpdateProfileSuccess = "User profile updated successfully",
 }

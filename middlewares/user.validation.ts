@@ -44,3 +44,10 @@ export const resetPasswordRequestSchema = Joi.object<ResetPasswordRequestData>({
     .valid(...platformValues)
     .required(),
 });
+
+export const updateProfileRequestSchema = Joi.object({
+    firstName: Joi.string().min(2).max(100).optional(),
+    lastName: Joi.string().min(2).max(100).optional(),
+    mobile: Joi.string().min(8).max(15).optional(),
+    profileRole: Joi.string().valid(...profileRoleValues).optional(),
+}).min(1);

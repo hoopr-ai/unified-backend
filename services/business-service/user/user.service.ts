@@ -12,6 +12,8 @@ import {
   type SessionMetadata,
   InviteUserAuthRequestData,
   CompleteProfileRequestData,
+  UpdateProfileRequestData,
+  UserProfileResponse,
 } from "../../dto-service/modules.export";
 import {
   findActiveUser,
@@ -21,6 +23,7 @@ import {
   saveUserRole,
   updateUserPassword,
   updateUserProfile,
+  updateUserProfilePartial,
   findUserById,
   UserRoleDetails,
   type UserDetails,
@@ -259,4 +262,50 @@ export const completeProfileService = async (
   await updateUserProfile(userId, firstName, lastName, mobile, profileRole);
 
   return {};
+};
+
+export const getUserProfileService = async (
+  userId: number
+): Promise<UserProfileResponse> => {
+  const user = await findUserById(userId);
+  if (!user) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  return {
+    id: user.id!,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    mobile: user.mobile,
+    profileRole: user.profileRole,
+    isProfileComplete: user.isProfileComplete ?? false,
+  };
+};
+
+export const updateUserProfileService = async (
+  data: UpdateProfileRequestData,
+  userId: number
+): Promise<UserProfileResponse> => {
+  const user = await findUserById(userId);
+  if (!user) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  await updateUserProfilePartial(userId, data);
+
+  const updatedUser = await findUserById(userId);
+  if (!updatedUser) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  return {
+    id: updatedUser.id!,
+    email: updatedUser.email,
+    firstName: updatedUser.firstName,
+    lastName: updatedUser.lastName,
+    mobile: updatedUser.mobile,
+    profileRole: updatedUser.profileRole,
+    isProfileComplete: updatedUser.isProfileComplete ?? false,
+  };
 };

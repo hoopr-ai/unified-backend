@@ -9,6 +9,8 @@ import {
   completeProfile,
   getUserActivities,
   getUserSessions,
+  getProfile,
+  updateProfile,
 } from "../controllers/user.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
@@ -17,6 +19,7 @@ import {
   createAuthRequestSchema,
   inviteUserAuthRequestSchema,
   completeProfileRequestSchema,
+  updateProfileRequestSchema,
 } from "../middlewares/user.validation";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { Platform, UserRoles } from "../services/dto-service/modules.export";
@@ -74,6 +77,20 @@ router.get(
   "/sessions",
   authenticateWithSession({ roles: [UserRoles.MASTER], platforms: [Platform.ENTERPRISE] }),
   getUserSessions
+);
+
+// Profile endpoints
+router.get(
+  "/profile",
+  authenticateWithSession,
+  getProfile
+);
+
+router.put(
+  "/profile",
+  authenticateWithSession,
+  validateRequest(updateProfileRequestSchema),
+  updateProfile
 );
 
 export default router;

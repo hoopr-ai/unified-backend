@@ -21,6 +21,23 @@ export interface CompleteProfileRequestData {
     profileRole: ProfileRole;
 }
 
+export interface UpdateProfileRequestData {
+    firstName?: string;
+    lastName?: string;
+    mobile?: string;
+    profileRole?: ProfileRole;
+}
+
+export interface UserProfileResponse {
+    id: number;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    mobile?: string;
+    profileRole?: string;
+    isProfileComplete: boolean;
+}
+
 export interface LoginUserRequestData {
   email: string;
   password: string;
