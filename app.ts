@@ -1,3 +1,5 @@
+import 'dotenv/config';
+import 'newrelic';
 import express from "express";
 import type { Application, Request, Response } from "express";
 import cors from "cors";

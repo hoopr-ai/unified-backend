@@ -41,6 +41,7 @@ import {
   ErrorMessages,
   Platform,
 } from "../../dto-service/constants/modules.export";
+import { logger } from "../../helper-service/logger";
 
 interface LoginResponseWithSession extends LoginResponse {
   sessionId: number;
@@ -122,7 +123,10 @@ export const userLoginService = async (
   };
 
   const session = await createSession(sessionData);
-
+  logger.info("User logged in", {
+    userId: user.id,
+    route: "/login"
+  });
   return buildLoginResponse(user, role, user.isProfileComplete ?? false, token, session.id!);
 };
 
