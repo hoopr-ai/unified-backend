@@ -16,6 +16,7 @@ export interface SessionPayload extends JwtPayload {
 interface AuthRequest extends Request {
   session?: SessionPayload;
   sessionToken?: string;
+  sessionIdFromCookie?: number;
 }
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -129,12 +130,18 @@ const handleAuthentication = (options: AuthOptions = {}) => {
         throw new AppError("Invalid session. Please login again.", 401);
       }
 
+      // Get sessionId from cookie
+      const sessionIdFromCookie = req.cookies?.sessionId
+        ? parseInt(req.cookies.sessionId, 10)
+        : undefined;
+
       // Attach session info to request
       req.session = {
         ...decoded,
         sessionId: session?.id,
       };
       req.sessionToken = token;
+      req.sessionIdFromCookie = sessionIdFromCookie;
 
       next();
     } catch (error) {

@@ -23,11 +23,21 @@ import type { SessionPayload } from "../middlewares/authenticate";
 interface AuthRequest extends Request {
   session?: SessionPayload;
   sessionToken?: string;
+  sessionIdFromCookie?: number;
 }
 
 export const login = catchAsync(async (req: Request, res: Response) => {
   const metadata = extractSessionMetadata(req);
   const response = await userLoginService(req.body, metadata);
+
+  // Set sessionId in HTTP-only cookie
+  res.cookie("sessionId", response.sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: response.expiresIn * 1000, // Convert seconds to milliseconds
+  });
+
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.LoginSuccess });
 });
 
@@ -36,6 +46,8 @@ export const logout = catchAsync(async (req: AuthRequest, res: Response) => {
   if (sessionToken) {
     await logoutUserService(sessionToken);
   }
+  // Clear the sessionId cookie
+  res.clearCookie("sessionId");
   sendResponse(res, { status: HttpStatusCode.OK, data: {}, message: ResponseMessages.LogoutSuccess });
 });
 
@@ -44,6 +56,8 @@ export const logoutAllSessions = catchAsync(async (req: AuthRequest, res: Respon
   if (userId) {
     await logoutAllSessionsService(userId);
   }
+  // Clear the sessionId cookie
+  res.clearCookie("sessionId");
   sendResponse(res, { status: HttpStatusCode.OK, data: {}, message: ResponseMessages.LogoutAllSuccess });
 });
 

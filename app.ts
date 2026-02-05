@@ -3,6 +3,7 @@ import 'newrelic';
 import express from "express";
 import type { Application, Request, Response } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import userRoutes from "./routes/user.route";
 import filterRoutes from "./routes/filter.route";
 import trackRoutes from "./routes/track.route";
@@ -16,6 +17,7 @@ import { activityLoggerMiddleware, getCorsOptions } from "./services/helper-serv
 
 const app: Application = express();
 app.use(express.json());
+app.use(cookieParser());
 
 await initializeBusinessService();
 // console.log('DOTENV FILE:', result?.parsed)
