@@ -12,7 +12,7 @@ const router = Router();
 
 router.get("/", getAllTracks);
 router.post("/by-codes", validateRequest(getTracksByCodesRequestSchema), getTracksByCodes);
-router.get("/detail/:trackCode", getTrackDetailsByCode);
+router.get("/:trackCode", getTrackDetailsByCode);
 router.get("/:filterName/:filterId", getTracksByFilter);
 
 export default router;
