@@ -49,7 +49,6 @@ const transformTrackToDto = (track: RawTrackWithMappings): TrackWithArtists => {
     trackCode: track.trackCode,
     name: track.name || "",
     name_slug: track.name_slug || "",
-    sourceLink: track.sourceLink,
     waveformLink: track.waveformLink,
     mp3Link: track.mp3Link,
     hasVocals: track.hasVocals,

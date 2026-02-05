@@ -11,7 +11,6 @@ export interface TrackWithArtists {
   trackCode: string;
   name: string;
   name_slug: string;
-  sourceLink: string | null;
   waveformLink: string | null;
   mp3Link: string | null;
   hasVocals: boolean | null;
