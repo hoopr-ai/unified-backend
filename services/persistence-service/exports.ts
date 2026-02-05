@@ -7,3 +7,4 @@ export * from "./artists/modules.export";
 export * from "./organization/modules.export";
 export * from "./brand/modules.export";
 export * from "./licenses/modules.export";
+export * from "./sku/modules.export";

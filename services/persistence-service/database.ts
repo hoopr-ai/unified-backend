@@ -12,6 +12,7 @@ import {
 import { OrganizationModel } from "./organization/modules.export";
 import { BrandModel } from "./brand/modules.export";
 import { LicenseModel, LicenseTypeModel } from "./licenses/modules.export";
+import { SkuModel } from "./sku/modules.export";
 
 config();
 
@@ -75,6 +76,7 @@ sequelize.addModels([
   TrackPlaylistMappingModel,
   LicenseTypeModel,
   LicenseModel,
+  SkuModel,
 ]);
 
 export async function connectDatabase() {

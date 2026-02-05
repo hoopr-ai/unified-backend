@@ -8,6 +8,7 @@ import {
   RawTrackWithMappings,
 } from "../../dto-service/modules.export";
 import { TrackFilterMappingModel } from "../exports";
+import { SkuModel, SkuType } from "../sku/modules.export";
 
 // Reusable include configuration for artist mappings
 const getArtistInclude = () => [
@@ -26,6 +27,28 @@ const getArtistInclude = () => [
   },
 ];
 
+// Include standard SKU for listing APIs (only token needed)
+const getStandardSkuInclude = () => [
+  {
+    model: SkuModel,
+    as: "skus",
+    required: false,
+    where: { skuType: SkuType.STANDARD, active: "Y" },
+    attributes: ["token"],
+  },
+];
+
+// Include all SKUs for track details API
+const getAllSkusInclude = () => [
+  {
+    model: SkuModel,
+    as: "skus",
+    required: false,
+    where: { active: "Y" },
+    attributes: ["id", "name", "costPrice", "sellingPrice", "gstPercent", "maxUsage", "description", "token", "skuType"],
+  },
+];
+
 export const findAllTracks = async (
   page: number,
   limit: number,
@@ -40,7 +63,7 @@ export const findAllTracks = async (
     offset,
     distinct: true,
     col: "id",
-    include: getArtistInclude(),
+    include: [...getArtistInclude(), ...getStandardSkuInclude()],
   });
 
   return {
@@ -65,7 +88,7 @@ export const findTracksByTrackCodes = async (
     offset,
     distinct: true,
     col: "id",
-    include: getArtistInclude(),
+    include: [...getArtistInclude(), ...getStandardSkuInclude()],
   });
 
   return {
@@ -99,7 +122,7 @@ export const findTrackByTrackCode = async (
 ): Promise<RawTrackWithMappings | null> => {
   const track = await TrackModel.findOne({
     where: { trackCode },
-    include: getArtistInclude(),
+    include: [...getArtistInclude(), ...getAllSkusInclude()],
   });
 
   return track ? (track.toJSON() as RawTrackWithMappings) : null;
@@ -133,6 +156,13 @@ export const findTracksByFilter = async (
                   required: false,
                 },
               ],
+            },
+            {
+              model: SkuModel,
+              as: "skus",
+              required: false,
+              where: { skuType: SkuType.STANDARD, active: "Y" },
+              attributes: ["token"],
             },
           ],
         },

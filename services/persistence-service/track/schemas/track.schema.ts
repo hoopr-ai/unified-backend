@@ -10,6 +10,7 @@ import {
   HasMany,
 } from "sequelize-typescript";
 import { TrackArtistMappingModel } from "../../artists/schemas/track-artist-mapping.schema";
+import { SkuModel } from "../../sku/schemas/sku.schema";
 
 export enum TrackType {
   // Add your enum values based on public."enum_tracks_type"
@@ -278,4 +279,7 @@ export class TrackModel extends Model<TrackModel> {
 
   @HasMany(() => TrackArtistMappingModel, "trackId")
   trackArtistMappings?: TrackArtistMappingModel[];
+
+  @HasMany(() => SkuModel, { foreignKey: "trackCode", sourceKey: "trackCode", constraints: false })
+  skus?: SkuModel[];
 }

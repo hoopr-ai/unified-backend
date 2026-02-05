@@ -1,6 +1,8 @@
 import {
   PaginatedTracksResponseData,
   TrackWithArtists,
+  TrackDetailsWithSkus,
+  SkuInfo,
   ArtistInfoTrack,
   RawTrackWithMappings,
   PaginatedRawTracks,
@@ -26,6 +28,16 @@ const parsePaginationParams = (
     page: page > 0 ? page : 1,
     limit: limit > 0 && limit <= 100 ? limit : 10,
   };
+};
+
+// Get token from standard SKU, default to 1 if not found
+const getStandardToken = (track: RawTrackWithMappings): number => {
+  if (track.skus && track.skus.length > 0) {
+    // For listing APIs, we only get standard SKU (skuType = 'N')
+    const standardSku = track.skus.find((sku) => sku.skuType === "N") || track.skus[0];
+    return standardSku.token ?? 1;
+  }
+  return 1; // Default token if no SKU exists
 };
 
 // Transform raw track data to TrackWithArtists DTO
@@ -54,6 +66,7 @@ const transformTrackToDto = (track: RawTrackWithMappings): TrackWithArtists => {
     hasVocals: track.hasVocals,
     trending: track.trending,
     primaryArtists,
+    token: getStandardToken(track),
   };
 };
 
@@ -186,14 +199,50 @@ export const getTracksByFilterService = async (
   return buildFilterPaginatedResponse(rawData);
 };
 
+// Transform raw track data to TrackDetailsWithSkus DTO (includes both SKUs)
+const transformTrackToDetailsDto = (track: RawTrackWithMappings): TrackDetailsWithSkus => {
+  const baseDto = transformTrackToDto(track);
+
+  let standardSku: SkuInfo | undefined;
+  let premiumSku: SkuInfo | undefined;
+
+  if (track.skus && track.skus.length > 0) {
+    for (const sku of track.skus) {
+      const skuInfo: SkuInfo = {
+        id: sku.id || "",
+        name: sku.name,
+        costPrice: sku.costPrice,
+        sellingPrice: sku.sellingPrice,
+        gstPercent: sku.gstPercent,
+        maxUsage: sku.maxUsage,
+        description: sku.description,
+        token: sku.token ?? 1,
+        skuType: sku.skuType || "N",
+      };
+
+      if (sku.skuType === "N") {
+        standardSku = skuInfo;
+      } else if (sku.skuType === "P") {
+        premiumSku = skuInfo;
+      }
+    }
+  }
+
+  return {
+    ...baseDto,
+    standardSku,
+    premiumSku,
+  };
+};
+
 export const getTrackDetailsByCodeService = async (
   trackCode: string,
-): Promise<TrackWithArtists | null> => {
+): Promise<TrackDetailsWithSkus | null> => {
   const track = await findTrackByTrackCode(trackCode);
 
   if (!track) {
     return null;
   }
 
-  return transformTrackToDto(track);
+  return transformTrackToDetailsDto(track);
 };

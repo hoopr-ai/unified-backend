@@ -6,6 +6,19 @@ export interface ArtistInfoTrack {
   type: ArtistType[];
 }
 
+// SKU info for track details (both standard and premium)
+export interface SkuInfo {
+  id: string;
+  name?: string;
+  costPrice?: number;
+  sellingPrice?: number;
+  gstPercent?: number;
+  maxUsage?: number;
+  description?: string;
+  token: number;
+  skuType: string;
+}
+
 export interface TrackWithArtists {
   id: string;
   trackCode: string;
@@ -16,6 +29,13 @@ export interface TrackWithArtists {
   hasVocals: boolean | null;
   trending: boolean | null;
   primaryArtists: ArtistInfoTrack[];
+  token: number; // Token required for standard SKU (default: 1)
+}
+
+// Extended track details with both SKUs
+export interface TrackDetailsWithSkus extends TrackWithArtists {
+  standardSku?: SkuInfo;
+  premiumSku?: SkuInfo;
 }
 
 export interface PaginatedTracksResponseData {
@@ -36,6 +56,19 @@ export interface GetAllTracksParams {
   trending?: boolean;
 }
 
+// Raw SKU data from database
+export interface RawSkuData {
+  id?: string;
+  name?: string;
+  costPrice?: number;
+  sellingPrice?: number;
+  gstPercent?: number;
+  maxUsage?: number;
+  description?: string;
+  token?: number;
+  skuType?: string;
+}
+
 export interface RawTrackWithMappings {
   id: string;
   trackCode: string;
@@ -50,6 +83,7 @@ export interface RawTrackWithMappings {
     isPrimary?: boolean;
     artist?: { id: string; name: string; type: ArtistType[] };
   }>;
+  skus?: RawSkuData[];
 }
 
 export interface PaginatedRawTracks {
