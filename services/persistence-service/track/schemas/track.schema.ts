@@ -11,6 +11,7 @@ import {
 } from "sequelize-typescript";
 import { TrackArtistMappingModel } from "../../artists/schemas/track-artist-mapping.schema";
 import { SkuModel } from "../../sku/schemas/sku.schema";
+import { TrackFilterMappingModel } from "../../filter/schemas/track-filter-mapping.schema";
 
 export enum TrackType {
   // Add your enum values based on public."enum_tracks_type"
@@ -282,4 +283,7 @@ export class TrackModel extends Model<TrackModel> {
 
   @HasMany(() => SkuModel, { foreignKey: "trackCode", sourceKey: "trackCode", constraints: false })
   skus?: SkuModel[];
+
+  @HasMany(() => TrackFilterMappingModel, { foreignKey: "trackId", constraints: false })
+  trackFilterMappings?: TrackFilterMappingModel[];
 }

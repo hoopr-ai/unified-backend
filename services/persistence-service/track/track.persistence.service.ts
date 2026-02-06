@@ -7,7 +7,7 @@ import {
   PaginatedRawTracks,
   RawTrackWithMappings,
 } from "../../dto-service/modules.export";
-import { TrackFilterMappingModel } from "../exports";
+import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel, SkuType } from "../sku/modules.export";
 
 // Reusable include configuration for artist mappings
@@ -46,6 +46,23 @@ const getAllSkusInclude = () => [
     required: false,
     where: { active: "Y" },
     attributes: ["id", "name", "costPrice", "sellingPrice", "gstPercent", "maxUsage", "description", "token", "skuType"],
+  },
+];
+
+// Include filter mappings for track details API
+const getFilterMappingsInclude = () => [
+  {
+    model: TrackFilterMappingModel,
+    as: "trackFilterMappings",
+    required: false,
+    include: [
+      {
+        model: FilterModel,
+        as: "filter",
+        attributes: ["id", "name", "name_slug", "type"],
+        required: false,
+      },
+    ],
   },
 ];
 
@@ -122,7 +139,7 @@ export const findTrackByTrackCode = async (
 ): Promise<RawTrackWithMappings | null> => {
   const track = await TrackModel.findOne({
     where: { trackCode },
-    include: [...getArtistInclude(), ...getAllSkusInclude()],
+    include: [...getArtistInclude(), ...getAllSkusInclude(), ...getFilterMappingsInclude()],
   });
 
   return track ? (track.toJSON() as RawTrackWithMappings) : null;

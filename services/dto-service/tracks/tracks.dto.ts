@@ -6,6 +6,13 @@ export interface ArtistInfoTrack {
   type: ArtistType[];
 }
 
+// Filter info for track details
+export interface FilterInfo {
+  id: string;
+  name: string;
+  slug: string | null;
+}
+
 // SKU info for track details (both standard and premium)
 export interface SkuInfo {
   id: string;
@@ -32,10 +39,14 @@ export interface TrackWithArtists {
   token: number; // Token required for standard SKU (default: 1)
 }
 
-// Extended track details with both SKUs
+// Extended track details with both SKUs and filters
 export interface TrackDetailsWithSkus extends TrackWithArtists {
   standardSku?: SkuInfo;
   premiumSku?: SkuInfo;
+  languages: FilterInfo[];
+  genres: FilterInfo[];
+  categories: FilterInfo[];
+  occasions: FilterInfo[];
 }
 
 export interface PaginatedTracksResponseData {
@@ -69,6 +80,17 @@ export interface RawSkuData {
   skuType?: string;
 }
 
+// Raw filter mapping data from database
+export interface RawFilterMappingData {
+  filterId?: string;
+  filter?: {
+    id: string;
+    name: string;
+    name_slug?: string | null;
+    type?: string;
+  };
+}
+
 export interface RawTrackWithMappings {
   id: string;
   trackCode: string;
@@ -84,6 +106,7 @@ export interface RawTrackWithMappings {
     artist?: { id: string; name: string; type: ArtistType[] };
   }>;
   skus?: RawSkuData[];
+  trackFilterMappings?: RawFilterMappingData[];
 }
 
 export interface PaginatedRawTracks {

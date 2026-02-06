@@ -8,6 +8,7 @@ import {
   PaginatedRawTracks,
   GetAllTracksRequestData,
   GetTracksByCodesQuery,
+  FilterInfo,
 } from "../../dto-service/modules.export";
 import {
   findAllTracks,
@@ -28,6 +29,32 @@ const parsePaginationParams = (
     page: page > 0 ? page : 1,
     limit: limit > 0 && limit <= 100 ? limit : 10,
   };
+};
+
+// Filter type constants
+const FILTER_TYPES = {
+  LANGUAGE: "language",
+  GENRE: "genre",
+  CATEGORY: "usecase",
+  OCCASION: "occasion",
+} as const;
+
+// Extract filters by type from track filter mappings
+const extractFiltersByType = (
+  track: RawTrackWithMappings,
+  filterType: string,
+): FilterInfo[] => {
+  if (!track.trackFilterMappings) {
+    return [];
+  }
+
+  return track.trackFilterMappings
+    .filter((mapping) => mapping.filter?.type?.toLowerCase() === filterType)
+    .map((mapping) => ({
+      id: mapping.filter!.id,
+      name: mapping.filter!.name,
+      slug: mapping.filter!.name_slug ?? null,
+    }));
 };
 
 // Get token from standard SKU, default to 1 if not found
@@ -199,7 +226,7 @@ export const getTracksByFilterService = async (
   return buildFilterPaginatedResponse(rawData);
 };
 
-// Transform raw track data to TrackDetailsWithSkus DTO (includes both SKUs)
+// Transform raw track data to TrackDetailsWithSkus DTO (includes both SKUs and filters)
 const transformTrackToDetailsDto = (track: RawTrackWithMappings): TrackDetailsWithSkus => {
   const baseDto = transformTrackToDto(track);
 
@@ -228,10 +255,20 @@ const transformTrackToDetailsDto = (track: RawTrackWithMappings): TrackDetailsWi
     }
   }
 
+  // Extract filters by type
+  const languages = extractFiltersByType(track, FILTER_TYPES.LANGUAGE);
+  const genres = extractFiltersByType(track, FILTER_TYPES.GENRE);
+  const categories = extractFiltersByType(track, FILTER_TYPES.CATEGORY);
+  const occasions = extractFiltersByType(track, FILTER_TYPES.OCCASION);
+
   return {
     ...baseDto,
     standardSku,
     premiumSku,
+    languages,
+    genres,
+    categories,
+    occasions,
   };
 };
 
