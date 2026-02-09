@@ -117,7 +117,7 @@ export const findTracksByTrackCodes = async (
 };
 
 export interface GetTracksByFilterParams {
-  filterId: string;
+  filterIds: string[];
   page: number;
   limit: number;
 }
@@ -148,12 +148,12 @@ export const findTrackByTrackCode = async (
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {
-  const { filterId, page, limit } = params;
+  const { filterIds, page, limit } = params;
   const offset = (page - 1) * limit;
 
   const { count, rows: mappings } =
     await TrackFilterMappingModel.findAndCountAll({
-      where: { filterId },
+      where: { filterId: filterIds },
       limit,
       offset,
       include: [

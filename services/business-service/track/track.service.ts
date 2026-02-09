@@ -175,7 +175,7 @@ export const getTracksByCodesService = async (
 
 export interface GetTracksByFilterQuery {
   filterName: string;
-  filterId: string;
+  filterIds: string[];
   page?: string;
   limit?: string;
 }
@@ -216,9 +216,11 @@ export const getTracksByFilterService = async (
   query: GetTracksByFilterQuery,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
+  console.log("Query:", query);
+  
 
   const rawData = await findTracksByFilter({
-    filterId: query.filterId,
+    filterIds: query.filterIds,
     page,
     limit,
   });

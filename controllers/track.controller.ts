@@ -34,9 +34,30 @@ export const getTracksByCodes = catchAsync(
 
 export const getTracksByFilter = catchAsync(
   async (req: Request, res: Response) => {
+    const filterIdsParam = req.query.filterIds;
+    let filterIds: string[] = [];
+
+    if (Array.isArray(filterIdsParam)) {
+      filterIds = filterIdsParam.map((id) => String(id).trim()).filter((id) => id.length > 0);
+    } else if (typeof filterIdsParam === "string") {
+      const trimmed = filterIdsParam.trim();
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          filterIds = parsed.map((id: unknown) => String(id).trim()).filter((id) => id.length > 0);
+        } else {
+          // Parsed successfully but not an array, treat as comma-separated
+          filterIds = trimmed.split(",").map((id) => id.trim()).filter((id) => id.length > 0);
+        }
+      } catch {
+        // JSON parsing failed, treat as comma-separated values
+        filterIds = trimmed.split(",").map((id) => id.trim()).filter((id) => id.length > 0);
+      }
+    }
+
     const query: GetTracksByFilterQuery = {
       filterName: req.params.filterName as string,
-      filterId: req.params.filterId as string,
+      filterIds,
       page: req.query.page as string,
       limit: req.query.limit as string,
     };
