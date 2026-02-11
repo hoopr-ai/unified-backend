@@ -213,6 +213,7 @@ export const getBrandLicenseHistoryService = async (
       trackCode: track?.trackCode,
       tokenCost: license.tokenCost,
       licensedAt: license.licensedAt,
+      purchasedDate: license.createdAt,
       userId: license.userId,
       userEmail: licenseUser?.email,
       videoLinks: videoLinks?.map((vl) => ({

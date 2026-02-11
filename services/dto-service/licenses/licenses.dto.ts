@@ -28,6 +28,7 @@ export interface LicenseHistoryItem {
   trackCode?: string;
   tokenCost: number;
   licensedAt: Date;
+  purchasedDate: Date;
 }
 
 export interface LicenseHistoryResponse {
