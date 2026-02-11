@@ -5,6 +5,7 @@ import {
   assignTokensService,
   getLicenseHistoryService,
   getBrandLicenseHistoryService,
+  downloadTrackService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -94,5 +95,28 @@ export const getBrandLicenseHistory = catchAsync(async (req: AuthRequest, res: R
     status: HttpStatusCode.OK,
     data: response,
     message: "Brand license history retrieved successfully",
+  });
+});
+
+export const downloadTrack = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+
+  const { licenseId } = req.body;
+
+  if (!licenseId) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID is required", {});
+  }
+
+  const response = await downloadTrackService(userId, {
+    licenseId,
+  });
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: "Track download link generated successfully",
   });
 });

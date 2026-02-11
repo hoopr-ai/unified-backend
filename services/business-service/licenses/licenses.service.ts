@@ -2,6 +2,7 @@ import {
   createLicenseRecord,
   getLicensesByUserId,
   getLicensesByBrandId,
+  LicenseModel,
   type LicenseDetails,
 } from "../../persistence-service/licenses/modules.export";
 import {
@@ -21,6 +22,8 @@ import type {
   BrandLicenseHistoryResponse,
   LicenseHistoryItem,
   BrandLicenseHistoryItem,
+  DownloadTrackRequest,
+  DownloadTrackResponse,
 } from "../../dto-service/licenses/modules.export";
 
 const TOKEN_COST_PER_LICENSE = 1;
@@ -212,5 +215,48 @@ export const getBrandLicenseHistoryService = async (
       totalItems: count,
       totalPages: Math.ceil(count / limit),
     },
+  };
+};
+
+export const downloadTrackService = async (
+  userId: number,
+  data: DownloadTrackRequest
+): Promise<DownloadTrackResponse> => {
+  const { licenseId } = data;
+
+  // Get license details
+  const license = await LicenseModel.findByPk(licenseId, {
+    include: [TrackModel],
+  });
+
+  if (!license) {
+    throw new AppError("License not found", 404);
+  }
+
+  // Verify ownership
+  // Check if the user owns the license directly
+  if (license.userId !== userId) {
+    // Or check if the user belongs to the brand that owns the license
+    const user = await UserModel.findByPk(userId);
+    if (!user || !user.brandId || user.brandId !== license.brandId) {
+      throw new AppError("Unauthorized access to license", 403);
+    }
+  }
+
+  const track = license.track;
+  if (!track) {
+    throw new AppError("Track associated with license not found", 404);
+  }
+
+  // Generate GCS signed URL for the track
+  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
+
+  // Increment number of downloads
+  await license.increment("numberOfDownloads");
+
+  return {
+    downloadLink: gcsResult.downloadLink,
+    trackId: track.id,
+    trackName: track.name || "",
   };
 };

@@ -5,6 +5,7 @@ import {
   assignTokens,
   getLicenseHistory,
   getBrandLicenseHistory,
+  downloadTrack,
 } from "../controllers/licenses.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
@@ -49,6 +50,13 @@ router.get(
   "/brand-history",
   authenticateWithSession({ roles: [UserRoles.ADMIN] }),
   getBrandLicenseHistory
+);
+
+// Download track - requires authenticated user
+router.post(
+  "/download",
+  authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
+  downloadTrack
 );
 
 export default router;

@@ -81,3 +81,13 @@ export interface LicenseTypeResponse {
   updatedAt: Date;
 }
 
+export interface DownloadTrackRequest {
+  licenseId: number;
+}
+
+export interface DownloadTrackResponse {
+  downloadLink: string;
+  trackId: string;
+  trackName: string;
+}
+

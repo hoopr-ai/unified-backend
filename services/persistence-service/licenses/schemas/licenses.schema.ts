@@ -23,6 +23,7 @@ export interface LicenseDetails {
   trackId: string;
   trackCode: string;
   tokenCost: number;
+  numberOfDownloads?: number;
   licensedAt: Date;
   status?: string;
   licenseTypeId?: string;
@@ -76,6 +77,13 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     defaultValue: 1,
   })
   tokenCost!: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+  })
+  numberOfDownloads!: number;
 
   @Column({
     type: DataType.DATE,
