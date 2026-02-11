@@ -4,11 +4,12 @@ import type { JwtPayload } from "jsonwebtoken";
 import { AppError } from "../services/helper-service/AppError";
 import { validateAndRefreshSession } from "../services/business-service/user/user.service";
 import { extractSessionMetadata } from "../services/helper-service/session.helper";
+import { Platform } from "../services/dto-service/modules.export";
 
 export interface SessionPayload extends JwtPayload {
   userId: number;
   email: string;
-  platform: string;
+  platform: Platform;
   role: string | null;
   sessionId?: number;
 }

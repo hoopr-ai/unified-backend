@@ -40,7 +40,7 @@ router.post(
 // Get brand's license history - requires ADMIN role
 router.get(
   "/brand-history",
-  authenticateWithSession({ roles: [UserRoles.ADMIN] }),
+  authenticateWithSession({ roles: [UserRoles.ADMIN, UserRoles.USER] }),
   getBrandLicenseHistory,
 );
 

@@ -74,8 +74,7 @@ export const create = catchAsync(async (req: AuthRequest, res: Response) => {
 });
 
 export const inviteUser = catchAsync(async (req: AuthRequest, res: Response) => {
-  const createdBy = req.session?.userId;
-  const response = await inviteUserService(req.body, createdBy);
+  const response = await inviteUserService(req.body, req.session);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserInvitedSuccess });
 });
 

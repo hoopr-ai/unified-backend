@@ -43,6 +43,7 @@ import {
   Platform,
 } from "../../dto-service/constants/modules.export";
 import { logger } from "../../helper-service/logger";
+import { SessionPayload } from "../../../middlewares/authenticate";
 
 interface LoginResponseWithSession extends LoginResponse {
   sessionId: number;
@@ -240,9 +241,11 @@ const generateRandomPassword = (length: number = 12): string => {
 
 export const inviteUserService = async (
   data: InviteUserAuthRequestData,
-  createdBy?: number
+  sessionData?: SessionPayload,
 ): Promise<{}> => {
-  const { email, platform } = data;
+  const { email } = data;
+  const platform = sessionData?.platform!;
+  const createdBy = sessionData?.userId;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
