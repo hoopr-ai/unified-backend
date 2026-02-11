@@ -13,6 +13,7 @@ import { OrganizationModel } from "./organization/modules.export";
 import { BrandModel } from "./brand/modules.export";
 import { LicenseModel, LicenseTypeModel } from "./licenses/modules.export";
 import { SkuModel } from "./sku/modules.export";
+import { OwnerModel } from "./owner/modules.export";
 
 config();
 
@@ -77,6 +78,7 @@ sequelize.addModels([
   LicenseTypeModel,
   LicenseModel,
   SkuModel,
+  OwnerModel,
 ]);
 
 export async function connectDatabase() {
