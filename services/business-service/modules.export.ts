@@ -5,3 +5,4 @@ export * from "./playlist/playlist.service";
 export * from "./organization/organization.service";
 export * from "./licenses/licenses.service";
 export * from "./licenses/licenseType.service";
+export * from "./licenses/videoLinks.service";

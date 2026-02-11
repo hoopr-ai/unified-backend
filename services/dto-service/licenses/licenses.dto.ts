@@ -91,3 +91,26 @@ export interface DownloadTrackResponse {
   trackName: string;
 }
 
+// Video Links DTOs
+export interface AddVideoLinkRequest {
+  licenseId: number;
+  url: string;
+  trackCode?: string;
+}
+
+export interface VideoLinkResponse {
+  id: number;
+  url: string;
+  status: string;
+  trackCode?: string;
+  licenseId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface VideoLinksListResponse {
+  licenseId: number;
+  videoLinks: VideoLinkResponse[];
+}
+
+

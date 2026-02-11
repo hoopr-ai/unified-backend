@@ -1,0 +1,98 @@
+import {
+    createVideoLink,
+    getVideoLinksByLicenseId,
+    LicenseModel,
+    VideoLinkModel,
+    type VideoLinkDetails,
+} from "../../persistence-service/licenses/modules.export";
+import { UserModel } from "../../persistence-service/user/modules.export";
+import { AppError } from "../../helper-service/modules.export";
+import type {
+    AddVideoLinkRequest,
+    VideoLinkResponse,
+    VideoLinksListResponse,
+} from "../../dto-service/licenses/modules.export";
+
+export const addVideoLinkService = async (
+    userId: number,
+    data: AddVideoLinkRequest
+): Promise<VideoLinkResponse> => {
+    const { licenseId, url, trackCode } = data;
+
+    // Get license details
+    const license = await LicenseModel.findByPk(licenseId);
+
+    if (!license) {
+        throw new AppError("License not found", 404);
+    }
+
+    // Verify ownership
+    // Check if the user owns the license directly
+    if (license.userId !== userId) {
+        // Or check if the user belongs to the brand that owns the license
+        const user = await UserModel.findByPk(userId);
+        if (!user || !user.brandId || user.brandId !== license.brandId) {
+            throw new AppError("Unauthorized access to license", 403);
+        }
+    }
+
+    // Create video link
+    const videoLinkDetails: VideoLinkDetails = {
+        licenseId,
+        url,
+        trackCode,
+        status: "ACTIVE",
+    };
+
+    const videoLink = await createVideoLink(videoLinkDetails);
+
+    return {
+        id: videoLink.id,
+        url: videoLink.url,
+        status: videoLink.status,
+        trackCode: videoLink.trackCode,
+        licenseId: videoLink.licenseId,
+        createdAt: videoLink.createdAt,
+        updatedAt: videoLink.updatedAt,
+    };
+};
+
+export const getVideoLinksService = async (
+    userId: number,
+    licenseId: number
+): Promise<VideoLinksListResponse> => {
+    // Get license details
+    const license = await LicenseModel.findByPk(licenseId);
+
+    if (!license) {
+        throw new AppError("License not found", 404);
+    }
+
+    // Verify ownership
+    // Check if the user owns the license directly
+    if (license.userId !== userId) {
+        // Or check if the user belongs to the brand that owns the license
+        const user = await UserModel.findByPk(userId);
+        if (!user || !user.brandId || user.brandId !== license.brandId) {
+            throw new AppError("Unauthorized access to license", 403);
+        }
+    }
+
+    // Get video links
+    const videoLinks = await getVideoLinksByLicenseId(licenseId);
+
+    const videoLinksResponse: VideoLinkResponse[] = videoLinks.map((vl) => ({
+        id: vl.id,
+        url: vl.url,
+        status: vl.status,
+        trackCode: vl.trackCode,
+        licenseId: vl.licenseId,
+        createdAt: vl.createdAt,
+        updatedAt: vl.updatedAt,
+    }));
+
+    return {
+        licenseId,
+        videoLinks: videoLinksResponse,
+    };
+};
