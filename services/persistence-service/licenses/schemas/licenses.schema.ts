@@ -9,12 +9,14 @@ import {
   UpdatedAt,
   ForeignKey,
   BelongsTo,
+  HasMany,
   Index,
 } from "sequelize-typescript";
 import { BrandModel } from "../../brand/schemas/modules.export";
 import { UserModel } from "../../user/schemas/modules.export";
 import { TrackModel } from "../../track/schemas/modules.export";
 import { LicenseTypeModel } from "./licenseType.schema";
+import { VideoLinkModel } from "./videoLinks.schema";
 
 export interface LicenseDetails {
   id?: number;
@@ -129,4 +131,7 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
 
   @BelongsTo(() => LicenseTypeModel)
   licenseType?: LicenseTypeModel;
+
+  @HasMany(() => VideoLinkModel)
+  videoLinks!: VideoLinkModel[];
 }

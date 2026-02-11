@@ -38,9 +38,19 @@ export interface LicenseHistoryResponse {
   };
 }
 
+export interface BrandLicenseVideoLink {
+  id: number;
+  url: string;
+  status: string;
+  trackCode?: string;
+  createdAt: Date;
+}
+
 export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   userId: number;
   userEmail?: string;
+  videoLinks?: BrandLicenseVideoLink[];
+  ownerType?: string;
 }
 
 export interface BrandLicenseHistoryResponse {

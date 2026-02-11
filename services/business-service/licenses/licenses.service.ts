@@ -3,6 +3,7 @@ import {
   getLicensesByUserId,
   getLicensesByBrandId,
   LicenseModel,
+  VideoLinkModel,
   type LicenseDetails,
 } from "../../persistence-service/licenses/modules.export";
 import {
@@ -13,6 +14,8 @@ import {
 } from "../../persistence-service/brand/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
+import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { Op } from "sequelize";
 import { AppError, generateGCSSignedUrl } from "../../helper-service/modules.export";
 import type {
   LicenseTrackRequest,
@@ -161,9 +164,48 @@ export const getBrandLicenseHistoryService = async (
 
   const { rows, count } = await getLicensesByBrandId(brandId, page, limit);
 
+  // Collect all unique owner IDs from tracks
+  const allOwnerIds: string[] = [];
+  rows.forEach((license) => {
+    const track = license.track as TrackModel | undefined;
+    if (track?.ownerId && Array.isArray(track.ownerId)) {
+      allOwnerIds.push(...track.ownerId);
+    }
+  });
+  const uniqueOwnerIds = [...new Set(allOwnerIds)];
+
+  // Fetch all owners in one query
+  const owners = uniqueOwnerIds.length > 0
+    ? await OwnerModel.findAll({
+        where: { id: { [Op.in]: uniqueOwnerIds } },
+        attributes: ["id", "type"],
+      })
+    : [];
+
+  // Create a map of owner ID to owner type
+  const ownerTypeMap = new Map<string, string>();
+  owners.forEach((owner) => {
+    if (owner.type) {
+      ownerTypeMap.set(owner.id, owner.type);
+    }
+  });
+
   const licenses: BrandLicenseHistoryItem[] = rows.map((license) => {
     const track = license.track as TrackModel | undefined;
     const licenseUser = license.user as UserModel | undefined;
+    const videoLinks = license.videoLinks as VideoLinkModel[] | undefined;
+
+    // Get owner types for this track
+    const ownerTypes: string[] = [];
+    if (track?.ownerId && Array.isArray(track.ownerId)) {
+      track.ownerId.forEach((oid) => {
+        const ownerType = ownerTypeMap.get(oid);
+        if (ownerType && !ownerTypes.includes(ownerType)) {
+          ownerTypes.push(ownerType);
+        }
+      });
+    }
+
     return {
       id: license.id,
       trackId: license.trackId,
@@ -173,6 +215,14 @@ export const getBrandLicenseHistoryService = async (
       licensedAt: license.licensedAt,
       userId: license.userId,
       userEmail: licenseUser?.email,
+      videoLinks: videoLinks?.map((vl) => ({
+        id: vl.id,
+        url: vl.url,
+        status: vl.status,
+        trackCode: vl.trackCode,
+        createdAt: vl.createdAt,
+      })),
+      ownerType: ownerTypes.length > 0 ? ownerTypes[0] : undefined,
     };
   });
 

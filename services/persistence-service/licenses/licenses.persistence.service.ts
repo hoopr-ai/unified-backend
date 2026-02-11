@@ -1,4 +1,4 @@
-import { LicenseModel, type LicenseDetails } from "./schemas/modules.export";
+import { LicenseModel, type LicenseDetails, VideoLinkModel } from "./schemas/modules.export";
 import { TrackModel } from "../track/schemas/modules.export";
 import { UserModel } from "../user/schemas/modules.export";
 
@@ -41,11 +41,15 @@ export const getLicensesByBrandId = async (
     include: [
       {
         model: TrackModel,
-        attributes: ["id", "trackCode", "name", "sourceLink"],
+        attributes: ["id", "trackCode", "name", "sourceLink", "ownerId"],
       },
       {
         model: UserModel,
         attributes: ["id", "email", "firstName", "lastName"],
+      },
+      {
+        model: VideoLinkModel,
+        attributes: ["id", "url", "status", "trackCode", "createdAt"],
       },
     ],
     order: [["licensedAt", "DESC"]],
