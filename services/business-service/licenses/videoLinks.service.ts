@@ -1,6 +1,7 @@
 import {
     createVideoLink,
     getVideoLinksByLicenseId,
+    countVideoLinksByLicenseId,
     LicenseModel,
     VideoLinkModel,
     type VideoLinkDetails,
@@ -34,6 +35,24 @@ export const addVideoLinkService = async (
         if (!user || !user.brandId || user.brandId !== license.brandId) {
             throw new AppError("Unauthorized access to license", 403);
         }
+    }
+
+    // Security check: Ensure the track has been downloaded at least once
+    // Users should only be able to add video links to tracks they have actually downloaded
+    if (license.numberOfDownloads === 0) {
+        throw new AppError(
+            "You must download the track at least once before adding video links. Please use the track download API first.",
+            403
+        );
+    }
+
+    // Check video link limit: Maximum 3 links per license
+    const existingLinksCount = await countVideoLinksByLicenseId(licenseId);
+    if (existingLinksCount >= 3) {
+        throw new AppError(
+            `Maximum limit reached. You can only add up to 3 video links per downloaded track. Current count: ${existingLinksCount}`,
+            400
+        );
     }
 
     // Create video link
