@@ -9,6 +9,7 @@ import {
   completeProfileService,
   getUserProfileService,
   updateUserProfileService,
+  getUsersUnderAdminService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -145,4 +146,15 @@ export const updateProfile = catchAsync(async (req: AuthRequest, res: Response) 
   }
   const response = await updateUserProfileService(req.body, userId);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UpdateProfileSuccess });
+});
+
+export const getUsers = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const response = await getUsersUnderAdminService(userId, page, limit);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetUsersSuccess });
 });

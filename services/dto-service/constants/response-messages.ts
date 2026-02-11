@@ -28,4 +28,5 @@ export const enum ResponseMessages {
   BrandDownloadHistorySuccess = "Brand download history retrieved successfully",
   GetProfileSuccess = "User profile retrieved successfully",
   UpdateProfileSuccess = "User profile updated successfully",
+  GetUsersSuccess = "Users fetched successfully",
 }

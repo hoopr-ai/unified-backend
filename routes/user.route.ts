@@ -11,6 +11,7 @@ import {
   getUserSessions,
   getProfile,
   updateProfile,
+  getUsers,
 } from "../controllers/user.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
@@ -91,6 +92,13 @@ router.put(
   authenticateWithSession,
   validateRequest(updateProfileRequestSchema),
   updateProfile
+);
+
+// Get all users under admin
+router.get(
+  "/list",
+  authenticateWithSession({ roles: [UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
+  getUsers
 );
 
 export default router;

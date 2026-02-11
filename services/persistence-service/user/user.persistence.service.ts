@@ -89,3 +89,19 @@ export const updateUserProfilePartial = async (
     { where: { id: userId, status: UserStatus.ACTIVE } }
   );
 }
+
+export const findUsersByBrandId = async (
+  brandId: number,
+  page: number,
+  limit: number
+): Promise<{ rows: UserDetails[]; count: number }> => {
+  const offset = (page - 1) * limit;
+  const { rows, count } = await UserModel.findAndCountAll({
+    where: { brandId, status: UserStatus.ACTIVE },
+    limit,
+    offset,
+    order: [["createdAt", "DESC"]],
+    attributes: ["id", "email", "firstName", "lastName", "mobile", "profileRole", "createdAt"],
+  });
+  return { rows, count };
+}

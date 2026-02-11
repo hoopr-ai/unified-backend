@@ -25,6 +25,7 @@ import {
   updateUserProfile,
   updateUserProfilePartial,
   findUserById,
+  findUsersByBrandId,
   UserRoleDetails,
   type UserDetails,
   createSession,
@@ -311,5 +312,61 @@ export const updateUserProfileService = async (
     mobile: updatedUser.mobile,
     profileRole: updatedUser.profileRole,
     isProfileComplete: updatedUser.isProfileComplete ?? false,
+  };
+};
+
+export interface PaginatedUsersResponse {
+  users: UserProfileResponse[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+}
+
+export const getUsersUnderAdminService = async (
+  adminUserId: number,
+  page: number = 1,
+  limit: number = 10
+): Promise<PaginatedUsersResponse> => {
+  const admin = await findUserById(adminUserId);
+  if (!admin) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  if (!admin.brandId) {
+    throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
+  }
+
+  const validPage = page > 0 ? page : 1;
+  const validLimit = limit > 0 && limit <= 100 ? limit : 10;
+
+  const { rows, count } = await findUsersByBrandId(admin.brandId, validPage, validLimit);
+
+  const users: UserProfileResponse[] = rows.map((user) => ({
+    id: user.id!,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    mobile: user.mobile,
+    profileRole: user.profileRole,
+    isProfileComplete: user.isProfileComplete ?? false,
+  }));
+
+  const totalPages = Math.ceil(count / validLimit);
+
+  return {
+    users,
+    pagination: {
+      page: validPage,
+      limit: validLimit,
+      totalItems: count,
+      totalPages,
+      hasNextPage: validPage < totalPages,
+      hasPrevPage: validPage > 1,
+    },
   };
 };
