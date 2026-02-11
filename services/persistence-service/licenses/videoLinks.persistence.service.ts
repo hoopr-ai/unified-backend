@@ -16,3 +16,12 @@ export const getVideoLinksByLicenseId = async (
     });
     return videoLinks;
 };
+
+export const countVideoLinksByLicenseId = async (
+    licenseId: number
+): Promise<number> => {
+    const count = await VideoLinkModel.count({
+        where: { licenseId },
+    });
+    return count;
+};
