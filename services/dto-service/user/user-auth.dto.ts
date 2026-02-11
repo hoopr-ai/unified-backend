@@ -1,5 +1,5 @@
 import type { Platform } from "../constants/modules.export";
-import type { ProfileRole } from "./user.enum";
+import type { ProfileRole, UserStatus } from "./user.enum";
 
 export interface CreateAuthRequestData {
     email: string;
@@ -36,6 +36,7 @@ export interface UserProfileResponse {
     mobile?: string;
     profileRole?: string;
     isProfileComplete: boolean;
+    status: UserStatus;
 }
 
 export interface LoginUserRequestData {

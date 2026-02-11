@@ -282,6 +282,7 @@ export const getUserProfileService = async (
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    status: user.status,
     mobile: user.mobile,
     profileRole: user.profileRole,
     isProfileComplete: user.isProfileComplete ?? false,
@@ -308,6 +309,7 @@ export const updateUserProfileService = async (
     id: updatedUser.id!,
     email: updatedUser.email,
     firstName: updatedUser.firstName,
+    status: updatedUser.status,
     lastName: updatedUser.lastName,
     mobile: updatedUser.mobile,
     profileRole: updatedUser.profileRole,
@@ -352,6 +354,7 @@ export const getUsersUnderAdminService = async (
     firstName: user.firstName,
     lastName: user.lastName,
     mobile: user.mobile,
+    status: user.status,
     profileRole: user.profileRole,
     isProfileComplete: user.isProfileComplete ?? false,
   }));
