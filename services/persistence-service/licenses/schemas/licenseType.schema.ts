@@ -29,7 +29,7 @@ export interface LicenseTypeDetails {
 }
 
 @Table({
-  tableName: "licenseTypes",
+  tableName: "license_types",
   timestamps: true,
 })
 export class LicenseTypeModel extends Model<LicenseTypeModel, LicenseTypeDetails> {

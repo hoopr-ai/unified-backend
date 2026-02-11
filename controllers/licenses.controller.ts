@@ -6,6 +6,8 @@ import {
   getLicenseHistoryService,
   getBrandLicenseHistoryService,
   downloadTrackService,
+  addVideoLinkService,
+  getVideoLinksService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -118,5 +120,51 @@ export const downloadTrack = catchAsync(async (req: AuthRequest, res: Response) 
     status: HttpStatusCode.OK,
     data: response,
     message: "Track download link generated successfully",
+  });
+});
+
+export const addVideoLink = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+
+  const { licenseId, url, trackCode } = req.body;
+
+  if (!licenseId || !url) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID and URL are required", {});
+  }
+
+  const response = await addVideoLinkService(userId, {
+    licenseId,
+    url,
+    trackCode,
+  });
+
+  sendResponse(res, {
+    status: HttpStatusCode.CREATED,
+    data: response,
+    message: "Video link added successfully",
+  });
+});
+
+export const getVideoLinks = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+
+  const licenseId = parseInt(req.params.licenseId as string);
+
+  if (!licenseId || isNaN(licenseId)) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Valid License ID is required", {});
+  }
+
+  const response = await getVideoLinksService(userId, licenseId);
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: "Video links retrieved successfully",
   });
 });
