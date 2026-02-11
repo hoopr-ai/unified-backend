@@ -139,36 +139,6 @@ export const assignTokensService = async (
   };
 };
 
-export const getLicenseHistoryService = async (
-  userId: number,
-  page: number = 1,
-  limit: number = 50
-): Promise<LicenseHistoryResponse> => {
-  const { rows, count } = await getLicensesByUserId(userId, page, limit);
-
-  const licenses: LicenseHistoryItem[] = rows.map((license) => {
-    const track = license.track as TrackModel | undefined;
-    return {
-      id: license.id,
-      trackId: license.trackId,
-      trackName: track?.name,
-      trackCode: track?.trackCode,
-      tokenCost: license.tokenCost,
-      licensedAt: license.licensedAt,
-    };
-  });
-
-  return {
-    licenses,
-    pagination: {
-      page,
-      limit,
-      totalItems: count,
-      totalPages: Math.ceil(count / limit),
-    },
-  };
-};
-
 export const getBrandLicenseHistoryService = async (
   userId: number,
   page: number = 1,

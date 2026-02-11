@@ -3,7 +3,6 @@ import {
   licenseTrack,
   getTokenBalance,
   assignTokens,
-  getLicenseHistory,
   getBrandLicenseHistory,
   downloadTrack,
 } from "../controllers/licenses.controller";
@@ -34,13 +33,6 @@ router.post(
   authenticateWithSession({ roles: [UserRoles.MASTER] }),
   validateRequest(assignTokensRequestSchema),
   assignTokens,
-);
-
-// Get user's license history
-router.get(
-  "/history",
-  authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  getLicenseHistory,
 );
 
 // Get brand's license history - requires ADMIN role

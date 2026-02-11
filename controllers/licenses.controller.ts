@@ -3,7 +3,6 @@ import {
   licenseTrackService,
   getTokenBalanceService,
   assignTokensService,
-  getLicenseHistoryService,
   getBrandLicenseHistoryService,
   downloadTrackService,
 } from "../services/business-service/modules.export";
@@ -61,23 +60,6 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
     status: HttpStatusCode.OK,
     data: response,
     message: "Tokens assigned successfully",
-  });
-});
-
-export const getLicenseHistory = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
-  if (!userId) {
-    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
-  }
-
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 50;
-
-  const response = await getLicenseHistoryService(userId, page, limit);
-  sendResponse(res, {
-    status: HttpStatusCode.OK,
-    data: response,
-    message: "License history retrieved successfully",
   });
 });
 
