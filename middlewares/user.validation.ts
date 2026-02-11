@@ -17,7 +17,6 @@ export const createAuthRequestSchema = Joi.object<CreateAuthRequestData>({
 
 export const inviteUserAuthRequestSchema = Joi.object<InviteUserAuthRequestData>({
     email: Joi.string().email().required(),
-    password: Joi.string().min(6).required(),
     platform: Joi.string().valid(...platformValues).required(),
 });
 

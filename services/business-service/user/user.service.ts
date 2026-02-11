@@ -215,11 +215,34 @@ export const createUserService = async (
   return {};
 };
 
+const generateRandomPassword = (length: number = 12): string => {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const numbers = '0123456789';
+  const special = '!@#$%^&*';
+  const allChars = uppercase + lowercase + numbers + special;
+
+  // Ensure at least one of each type
+  let password = '';
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+
+  // Fill the rest randomly
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+
+  // Shuffle the password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+};
+
 export const inviteUserService = async (
   data: InviteUserAuthRequestData,
   createdBy?: number
 ): Promise<{}> => {
-  const { email, password, platform } = data;
+  const { email, platform } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
@@ -236,6 +259,8 @@ export const inviteUserService = async (
     throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
   }
 
+  // Generate a random password for the invited user
+  const password = generateRandomPassword();
   const hashedNewPassword = await bcrypt.hash(password, 10);
   const newUser = createUserDetails(email, platform, hashedNewPassword, brandId, createdBy);
   const savedUser = await saveUser(newUser);

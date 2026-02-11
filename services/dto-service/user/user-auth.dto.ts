@@ -10,7 +10,6 @@ export interface CreateAuthRequestData {
 
 export interface InviteUserAuthRequestData {
     email: string;
-    password: string;
     platform: Platform;
 }
 
