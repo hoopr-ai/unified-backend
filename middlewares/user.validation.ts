@@ -18,7 +18,7 @@ export const createAuthRequestSchema = Joi.object<CreateAuthRequestData>({
 export const inviteUserAuthRequestSchema = Joi.object<InviteUserAuthRequestData>({
     email: Joi.string().email().required(),
     platform: Joi.string().valid(...platformValues).required(),
-});
+}).unknown(false);
 
 export const completeProfileRequestSchema = Joi.object<CompleteProfileRequestData>({
     firstName: Joi.string().min(2).max(100).required(),
