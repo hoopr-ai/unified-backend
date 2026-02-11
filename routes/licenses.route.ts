@@ -5,8 +5,6 @@ import {
   assignTokens,
   getBrandLicenseHistory,
   downloadTrack,
-  addVideoLink,
-  getVideoLinks,
 } from "../controllers/licenses.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
@@ -49,20 +47,6 @@ router.post(
   "/track-download",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
   downloadTrack,
-);
-
-// Add video link - requires authenticated user
-router.post(
-  "/video-link",
-  authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  addVideoLink,
-);
-
-// Get video links by license ID - requires authenticated user
-router.get(
-  "/video-links/:licenseId",
-  authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  getVideoLinks,
 );
 
 export default router;

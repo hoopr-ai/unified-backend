@@ -218,6 +218,7 @@ export const getBrandLicenseHistoryService = async (
       videoLinks: videoLinks?.map((vl) => ({
         id: vl.id,
         url: vl.url,
+        type: vl.type,
         status: vl.status,
         trackCode: vl.trackCode,
         createdAt: vl.createdAt,

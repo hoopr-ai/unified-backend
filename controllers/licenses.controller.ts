@@ -15,6 +15,7 @@ import {
 } from "../services/helper-service/modules.export";
 import { HttpStatusCode } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
+import { VideoLinkType } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -111,15 +112,26 @@ export const addVideoLink = catchAsync(async (req: AuthRequest, res: Response) =
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
   }
 
-  const { licenseId, url, trackCode } = req.body;
+  const { licenseId, url, type, trackCode } = req.body;
 
-  if (!licenseId || !url) {
-    return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID and URL are required", {});
+  if (!licenseId || !url || !type) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID, URL, and type are required", {});
+  }
+
+  const validTypes = Object.values(VideoLinkType);
+  if (!validTypes.includes(type)) {
+    return sendError(
+      res,
+      HttpStatusCode.BAD_REQUEST,
+      `Invalid video link type. Must be one of: ${validTypes.join(", ")}`,
+      {}
+    );
   }
 
   const response = await addVideoLinkService(userId, {
     licenseId,
     url,
+    type,
     trackCode,
   });
 

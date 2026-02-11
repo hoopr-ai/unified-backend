@@ -13,9 +13,16 @@ import {
 } from "sequelize-typescript";
 import { LicenseModel } from "./licenses.schema";
 
+export enum VideoLinkType {
+    INSTAGRAM = "INSTAGRAM",
+    FACEBOOK = "FACEBOOK",
+    YOUTUBE = "YOUTUBE",
+}
+
 export interface VideoLinkDetails {
     id?: number;
     url: string;
+    type: VideoLinkType;
     status?: string;
     trackCode?: string;
     licenseId: number;
@@ -38,6 +45,12 @@ export class VideoLinkModel extends Model<VideoLinkModel, VideoLinkDetails> {
         allowNull: false,
     })
     url!: string;
+
+    @Column({
+        type: DataType.ENUM(...Object.values(VideoLinkType)),
+        allowNull: false,
+    })
+    type!: VideoLinkType;
 
     @Column({
         type: DataType.STRING(50),

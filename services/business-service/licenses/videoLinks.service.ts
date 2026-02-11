@@ -18,7 +18,7 @@ export const addVideoLinkService = async (
     userId: number,
     data: AddVideoLinkRequest
 ): Promise<VideoLinkResponse> => {
-    const { licenseId, url, trackCode } = data;
+    const { licenseId, url, type, trackCode } = data;
 
     // Get license details
     const license = await LicenseModel.findByPk(licenseId);
@@ -59,6 +59,7 @@ export const addVideoLinkService = async (
     const videoLinkDetails: VideoLinkDetails = {
         licenseId,
         url,
+        type,
         trackCode,
         status: "ACTIVE",
     };
@@ -68,6 +69,7 @@ export const addVideoLinkService = async (
     return {
         id: videoLink.id,
         url: videoLink.url,
+        type: videoLink.type,
         status: videoLink.status,
         trackCode: videoLink.trackCode,
         licenseId: videoLink.licenseId,
@@ -103,6 +105,7 @@ export const getVideoLinksService = async (
     const videoLinksResponse: VideoLinkResponse[] = videoLinks.map((vl) => ({
         id: vl.id,
         url: vl.url,
+        type: vl.type,
         status: vl.status,
         trackCode: vl.trackCode,
         licenseId: vl.licenseId,
