@@ -104,4 +104,10 @@ export class OwnerModel extends Model<OwnerModel> {
     allowNull: true,
   })
   category?: string;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  type?: string;
 }
