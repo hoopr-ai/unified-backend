@@ -9,9 +9,7 @@ import {
 } from "../controllers/licenses.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
-import {
-  assignTokensRequestSchema,
-} from "../middlewares/licenses.validation";
+import { assignTokensRequestSchema } from "../middlewares/licenses.validation";
 import { UserRoles } from "../services/dto-service/modules.export";
 
 const router = Router();
@@ -20,14 +18,14 @@ const router = Router();
 router.post(
   "/track/:trackCode",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  licenseTrack
+  licenseTrack,
 );
 
 // Get token balance - requires authenticated user
 router.get(
   "/token-balance",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  getTokenBalance
+  getTokenBalance,
 );
 
 // Assign tokens to brand - requires MASTER role (admin)
@@ -35,28 +33,28 @@ router.post(
   "/assign-tokens",
   authenticateWithSession({ roles: [UserRoles.MASTER] }),
   validateRequest(assignTokensRequestSchema),
-  assignTokens
+  assignTokens,
 );
 
 // Get user's license history
 router.get(
   "/history",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  getLicenseHistory
+  getLicenseHistory,
 );
 
 // Get brand's license history - requires ADMIN role
 router.get(
   "/brand-history",
   authenticateWithSession({ roles: [UserRoles.ADMIN] }),
-  getBrandLicenseHistory
+  getBrandLicenseHistory,
 );
 
 // Download track - requires authenticated user
 router.post(
-  "/download",
+  "/track-download",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
-  downloadTrack
+  downloadTrack,
 );
 
 export default router;
