@@ -37,6 +37,7 @@ export interface TrackWithArtists {
   trending: boolean | null;
   primaryArtists: ArtistInfoTrack[];
   token: number; // Token required for standard SKU (default: 1)
+  isLiked: boolean; // Whether the current user has liked this track
 }
 
 // Extended track details with both SKUs and filters

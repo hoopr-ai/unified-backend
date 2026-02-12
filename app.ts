@@ -12,6 +12,7 @@ import organizationRoutes from "./routes/organization.route";
 import licensesRoutes from "./routes/licenses.route";
 import licenseTypeRoutes from "./routes/licenseType.route";
 import tokenRoutes from "./routes/token.route";
+import likedTrackRoutes from "./routes/liked-track.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware, getCorsOptions } from "./services/helper-service/modules.export";
@@ -38,6 +39,7 @@ app.use("/organizations", organizationRoutes);
 app.use("/licenses", licensesRoutes);
 app.use("/license-types", licenseTypeRoutes);
 app.use("/tokens", tokenRoutes);
+app.use("/liked-tracks", likedTrackRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);

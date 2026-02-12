@@ -29,4 +29,7 @@ export const enum ResponseMessages {
   GetProfileSuccess = "User profile retrieved successfully",
   UpdateProfileSuccess = "User profile updated successfully",
   GetUsersSuccess = "Users fetched successfully",
+  TrackLikedSuccess = "Track liked successfully",
+  TrackUnlikedSuccess = "Track unliked successfully",
+  GetLikedTracksSuccess = "Liked tracks fetched successfully",
 }

@@ -17,6 +17,7 @@ import {
   findTrackByTrackCode,
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
+import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 
 // Parse and validate pagination params
 const parsePaginationParams = (
@@ -68,7 +69,10 @@ const getStandardToken = (track: RawTrackWithMappings): number => {
 };
 
 // Transform raw track data to TrackWithArtists DTO
-const transformTrackToDto = (track: RawTrackWithMappings): TrackWithArtists => {
+const transformTrackToDto = (
+  track: RawTrackWithMappings,
+  likedTrackCodes?: Set<string>,
+): TrackWithArtists => {
   const primaryArtists: ArtistInfoTrack[] = [];
 
   if (track.trackArtistMappings) {
@@ -94,18 +98,20 @@ const transformTrackToDto = (track: RawTrackWithMappings): TrackWithArtists => {
     trending: track.trending,
     primaryArtists,
     token: getStandardToken(track),
+    isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
   };
 };
 
 // Build paginated response from raw data
 const buildPaginatedResponse = (
   rawData: PaginatedRawTracks,
+  likedTrackCodes?: Set<string>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
 
   return {
-    tracks: rows.map(transformTrackToDto),
+    tracks: rows.map((track) => transformTrackToDto(track, likedTrackCodes)),
     pagination: {
       page,
       limit,
@@ -132,6 +138,7 @@ const emptyPaginatedResponse = (page: number, limit: number): PaginatedTracksRes
 
 export const getAllTracksService = async (
   query: GetAllTracksRequestData,
+  userId?: number,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
@@ -140,8 +147,15 @@ export const getAllTracksService = async (
     whereClause.trending = true;
   }
 
+  // Fetch user's liked track codes if authenticated
+  let likedTrackCodes: Set<string> | undefined;
+  if (userId) {
+    const likedCodes = await getUserLikedTrackCodes(userId);
+    likedTrackCodes = new Set(likedCodes);
+  }
+
   const rawData = await findAllTracks(page, limit, whereClause);
-  return buildPaginatedResponse(rawData);
+  return buildPaginatedResponse(rawData, likedTrackCodes);
 };
 
 // Sort tracks in the same order as the requested trackCodes
@@ -156,12 +170,21 @@ const sortTracksByRequestedOrder = (
 
 export const getTracksByCodesService = async (
   query: GetTracksByCodesQuery,
+  userId?: number,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
   if (!query.trackCodes || !Array.isArray(query.trackCodes) || query.trackCodes.length === 0) {
     return emptyPaginatedResponse(page, limit);
   }
+
+  // Fetch user's liked track codes if authenticated
+  let likedTrackCodes: Set<string> | undefined;
+  if (userId) {
+    const likedCodes = await getUserLikedTrackCodes(userId);
+    likedTrackCodes = new Set(likedCodes);
+  }
+
   const rawData = await findTracksByTrackCodes(query.trackCodes, page, limit);
 
   // Sort tracks in the order of requested trackCodes
@@ -170,7 +193,7 @@ export const getTracksByCodesService = async (
   return buildPaginatedResponse({
     ...rawData,
     rows: orderedTracks,
-  });
+  }, likedTrackCodes);
 };
 
 export interface GetTracksByFilterQuery {
@@ -183,6 +206,7 @@ export interface GetTracksByFilterQuery {
 // Transform raw filter mapping data to paginated response
 const buildFilterPaginatedResponse = (
   rawData: PaginatedRawFilterTracks,
+  likedTrackCodes?: Set<string>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
@@ -197,7 +221,7 @@ const buildFilterPaginatedResponse = (
       }
       return true;
     })
-    .map((mapping) => transformTrackToDto(mapping.track!));
+    .map((mapping) => transformTrackToDto(mapping.track!, likedTrackCodes));
 
   return {
     tracks,
@@ -214,10 +238,17 @@ const buildFilterPaginatedResponse = (
 
 export const getTracksByFilterService = async (
   query: GetTracksByFilterQuery,
+  userId?: number,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
   console.log("Query:", query);
-  
+
+  // Fetch user's liked track codes if authenticated
+  let likedTrackCodes: Set<string> | undefined;
+  if (userId) {
+    const likedCodes = await getUserLikedTrackCodes(userId);
+    likedTrackCodes = new Set(likedCodes);
+  }
 
   const rawData = await findTracksByFilter({
     filterIds: query.filterIds,
@@ -225,12 +256,15 @@ export const getTracksByFilterService = async (
     limit,
   });
 
-  return buildFilterPaginatedResponse(rawData);
+  return buildFilterPaginatedResponse(rawData, likedTrackCodes);
 };
 
 // Transform raw track data to TrackDetailsWithSkus DTO (includes both SKUs and filters)
-const transformTrackToDetailsDto = (track: RawTrackWithMappings): TrackDetailsWithSkus => {
-  const baseDto = transformTrackToDto(track);
+const transformTrackToDetailsDto = (
+  track: RawTrackWithMappings,
+  likedTrackCodes?: Set<string>,
+): TrackDetailsWithSkus => {
+  const baseDto = transformTrackToDto(track, likedTrackCodes);
 
   let standardSku: SkuInfo | undefined;
   let premiumSku: SkuInfo | undefined;
@@ -276,6 +310,7 @@ const transformTrackToDetailsDto = (track: RawTrackWithMappings): TrackDetailsWi
 
 export const getTrackDetailsByCodeService = async (
   trackCode: string,
+  userId?: number,
 ): Promise<TrackDetailsWithSkus | null> => {
   const track = await findTrackByTrackCode(trackCode);
 
@@ -283,5 +318,12 @@ export const getTrackDetailsByCodeService = async (
     return null;
   }
 
-  return transformTrackToDetailsDto(track);
+  // Fetch user's liked track codes if authenticated
+  let likedTrackCodes: Set<string> | undefined;
+  if (userId) {
+    const likedCodes = await getUserLikedTrackCodes(userId);
+    likedTrackCodes = new Set(likedCodes);
+  }
+
+  return transformTrackToDetailsDto(track, likedTrackCodes);
 };

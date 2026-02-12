@@ -9,31 +9,39 @@ import {
 import { catchAsync, sendResponse } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import { GetAllTracksRequestData, GetTracksByCodesQuery, HttpStatusCode } from "../services/dto-service/modules.export";
+import type { SessionPayload } from "../middlewares/authenticate";
 
-export const getAllTracks = catchAsync(async (req: Request, res: Response) => {
+interface AuthRequest extends Request {
+  session?: SessionPayload;
+}
+
+export const getAllTracks = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
   const query: GetAllTracksRequestData = {
     page: req.query.page as string,
     limit: req.query.limit as string,
     trending: req.query.trending as string,
   };
-  const response = await getAllTracksService(query);
+  const response = await getAllTracksService(query, userId);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
 });
 
 export const getTracksByCodes = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
     const query: GetTracksByCodesQuery = {
       trackCodes: req.body.trackCodes as string[],
       page: req.query.page as string,
       limit: req.query.limit as string,
     };
-    const response = await getTracksByCodesService(query);
+    const response = await getTracksByCodesService(query, userId);
     sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
   },
 );
 
 export const getTracksByFilter = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
     const filterIdsParam = req.query.filterIds;
     let filterIds: string[] = [];
 
@@ -61,15 +69,16 @@ export const getTracksByFilter = catchAsync(
       page: req.query.page as string,
       limit: req.query.limit as string,
     };
-    const response = await getTracksByFilterService(query);
+    const response = await getTracksByFilterService(query, userId);
     sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksByFilterSuccess });
   },
 );
 
 export const getTrackDetailsByCode = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
     const trackCode = req.params.trackCode as string;
-    const response = await getTrackDetailsByCodeService(trackCode);
+    const response = await getTrackDetailsByCodeService(trackCode, userId);
 
     if (!response) {
       sendResponse(res, { status: HttpStatusCode.NOT_FOUND, data: null, message: ResponseMessages.TrackNotFound });
