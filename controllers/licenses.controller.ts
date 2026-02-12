@@ -15,7 +15,7 @@ import {
 } from "../services/helper-service/modules.export";
 import { HttpStatusCode } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
-import { VideoLinkType } from "../services/persistence-service/exports";
+import { LicenseModel, VideoLinkType } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -112,7 +112,7 @@ export const addVideoLink = catchAsync(async (req: AuthRequest, res: Response) =
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
   }
 
-  const { licenseId, url, type, trackCode } = req.body;
+  const { licenseId, url, type } = req.body;
 
   if (!licenseId || !url || !type) {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID, URL, and type are required", {});
@@ -127,6 +127,12 @@ export const addVideoLink = catchAsync(async (req: AuthRequest, res: Response) =
       {}
     );
   }
+  // Get track code from license details
+  const licenseDetails = await LicenseModel.findByPk(licenseId);
+  if (!licenseDetails) {
+    return sendError(res, HttpStatusCode.NOT_FOUND, "License not found", {});
+  }
+  const trackCode = licenseDetails.trackCode;
 
   const response = await addVideoLinkService(userId, {
     licenseId,
