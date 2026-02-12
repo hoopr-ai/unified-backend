@@ -112,21 +112,47 @@ export const addVideoLink = catchAsync(async (req: AuthRequest, res: Response) =
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
   }
 
-  const { licenseId, url, type } = req.body;
+  const { licenseId, videoLinks } = req.body;
 
-  if (!licenseId || !url || !type) {
-    return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID, URL, and type are required", {});
+  if (!licenseId) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID is required", {});
+  }
+
+  if (!videoLinks || !Array.isArray(videoLinks) || videoLinks.length === 0) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "videoLinks array is required and must not be empty", {});
+  }
+
+  if (videoLinks.length > 3) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Maximum 3 video links can be added at a time", {});
   }
 
   const validTypes = Object.values(VideoLinkType);
-  if (!validTypes.includes(type)) {
+  for (const link of videoLinks) {
+    if (!link.url || !link.type) {
+      return sendError(res, HttpStatusCode.BAD_REQUEST, "Each video link must have url and type", {});
+    }
+    if (!validTypes.includes(link.type)) {
+      return sendError(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        `Invalid video link type: ${link.type}. Must be one of: ${validTypes.join(", ")}`,
+        {}
+      );
+    }
+  }
+
+  // Check for duplicate types in the request
+  const types = videoLinks.map((link: { type: string }) => link.type);
+  const uniqueTypes = new Set(types);
+  if (uniqueTypes.size !== types.length) {
     return sendError(
       res,
       HttpStatusCode.BAD_REQUEST,
-      `Invalid video link type. Must be one of: ${validTypes.join(", ")}`,
+      "Duplicate video link types are not allowed. Each type can only be added once.",
       {}
     );
   }
+
   // Get track code from license details
   const licenseDetails = await LicenseModel.findByPk(licenseId);
   if (!licenseDetails) {
@@ -136,15 +162,14 @@ export const addVideoLink = catchAsync(async (req: AuthRequest, res: Response) =
 
   const response = await addVideoLinkService(userId, {
     licenseId,
-    url,
-    type,
+    videoLinks,
     trackCode,
   });
 
   sendResponse(res, {
     status: HttpStatusCode.CREATED,
     data: response,
-    message: "Video link added successfully",
+    message: videoLinks.length === 1 ? "Video link added successfully" : "Video links added successfully",
   });
 });
 

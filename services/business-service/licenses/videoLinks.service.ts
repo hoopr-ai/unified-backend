@@ -9,16 +9,16 @@ import {
 import { UserModel } from "../../persistence-service/user/modules.export";
 import { AppError } from "../../helper-service/modules.export";
 import type {
-    AddVideoLinkRequest,
+    AddVideoLinksRequest,
     VideoLinkResponse,
     VideoLinksListResponse,
 } from "../../dto-service/licenses/modules.export";
 
 export const addVideoLinkService = async (
     userId: number,
-    data: AddVideoLinkRequest
-): Promise<VideoLinkResponse> => {
-    const { licenseId, url, type, trackCode } = data;
+    data: AddVideoLinksRequest
+): Promise<VideoLinkResponse[]> => {
+    const { licenseId, videoLinks, trackCode } = data;
 
     // Get license details
     const license = await LicenseModel.findByPk(licenseId);
@@ -46,36 +46,62 @@ export const addVideoLinkService = async (
         );
     }
 
-    // Check video link limit: Maximum 3 links per license
-    const existingLinksCount = await countVideoLinksByLicenseId(licenseId);
-    if (existingLinksCount >= 3) {
+    // Check for duplicate types in the request
+    const typesInRequest = videoLinks.map((vl) => vl.type);
+    const uniqueTypes = new Set(typesInRequest);
+    if (uniqueTypes.size !== typesInRequest.length) {
         throw new AppError(
-            `Maximum limit reached. You can only add up to 3 video links per downloaded track. Current count: ${existingLinksCount}`,
+            "Duplicate video link types are not allowed. Each type (INSTAGRAM, FACEBOOK, YOUTUBE) can only be added once.",
             400
         );
     }
 
-    // Create video link
-    const videoLinkDetails: VideoLinkDetails = {
-        licenseId,
-        url,
-        type,
-        trackCode,
-        status: "ACTIVE",
-    };
+    // Check video link limit: Maximum 3 links per license
+    const existingLinksCount = await countVideoLinksByLicenseId(licenseId);
+    const totalAfterAdd = existingLinksCount + videoLinks.length;
+    if (totalAfterAdd > 3) {
+        throw new AppError(
+            `Maximum limit exceeded. You can only add up to 3 video links per downloaded track. Current count: ${existingLinksCount}, attempting to add: ${videoLinks.length}`,
+            400
+        );
+    }
 
-    const videoLink = await createVideoLink(videoLinkDetails);
+    // Check if any of the requested types already exist for this license
+    const existingLinks = await getVideoLinksByLicenseId(licenseId);
+    const existingTypes = new Set(existingLinks.map((link) => link.type));
+    const conflictingTypes = typesInRequest.filter((type) => existingTypes.has(type));
+    if (conflictingTypes.length > 0) {
+        throw new AppError(
+            `Video links of type(s) ${conflictingTypes.join(", ")} already exist for this license. Only one link per type is allowed.`,
+            400
+        );
+    }
 
-    return {
-        id: videoLink.id,
-        url: videoLink.url,
-        type: videoLink.type,
-        status: videoLink.status,
-        trackCode: videoLink.trackCode,
-        licenseId: videoLink.licenseId,
-        createdAt: videoLink.createdAt,
-        updatedAt: videoLink.updatedAt,
-    };
+    // Create all video links
+    const createdLinks: VideoLinkResponse[] = [];
+    for (const videoLink of videoLinks) {
+        const videoLinkDetails: VideoLinkDetails = {
+            licenseId,
+            url: videoLink.url,
+            type: videoLink.type,
+            trackCode,
+            status: "ACTIVE",
+        };
+
+        const created = await createVideoLink(videoLinkDetails);
+        createdLinks.push({
+            id: created.id,
+            url: created.url,
+            type: created.type,
+            status: created.status,
+            trackCode: created.trackCode,
+            licenseId: created.licenseId,
+            createdAt: created.createdAt,
+            updatedAt: created.updatedAt,
+        });
+    }
+
+    return createdLinks;
 };
 
 export const getVideoLinksService = async (
