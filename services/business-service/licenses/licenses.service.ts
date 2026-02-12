@@ -362,13 +362,9 @@ export const downloadTrackService = async (
 export interface TokenDetailsResponse {
   brandId: number;
   tokens: {
-    id: number;
     totalAssignedToken: number;
     tokenBalance: number;
-    expiryDate?: Date;
     type: OwnerType;
-    createdAt?: Date;
-    updatedAt?: Date;
   }[];
 }
 
@@ -392,13 +388,9 @@ export const getTokenDetailsService = async (
   return {
     brandId: user.brandId,
     tokens: tokens.map((token) => ({
-      id: token.id!,
       totalAssignedToken: token.totalAssignedToken,
       tokenBalance: token.tokenBalance,
-      expiryDate: token.expiryDate,
       type: token.type,
-      createdAt: token.createdAt,
-      updatedAt: token.updatedAt,
     })),
   };
 };
