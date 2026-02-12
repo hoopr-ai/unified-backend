@@ -76,10 +76,11 @@ export const licenseTrackService = async (
     attributes: ["id", "type"],
   });
 
-  const trackOwnerTypes = [...new Set(owners.map((owner) => owner.type).filter(Boolean))] as OwnerType[];
+  let trackOwnerTypes = [...new Set(owners.map((owner) => owner.type).filter(Boolean))] as OwnerType[];
 
   if (trackOwnerTypes.length === 0) {
-    throw new AppError("Track owners do not have valid types", 400);
+    trackOwnerTypes = [OwnerType.Hoopr]; //need to update later
+    // throw new AppError("Track owners do not have valid types", 400);
   }
 
   // Get brand's token balances
