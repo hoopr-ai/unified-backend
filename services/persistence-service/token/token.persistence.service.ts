@@ -47,6 +47,25 @@ export const getAllTokenBalances = async (
   }));
 };
 
+export const getAllTokenDetails = async (
+  brandId: number
+): Promise<TokenDetails[]> => {
+  const tokens = await TokenModel.findAll({
+    where: { brandId },
+    order: [["createdAt", "DESC"]],
+  });
+  return tokens.map((token) => ({
+    id: token.id,
+    totalAssignedToken: token.totalAssignedToken,
+    tokenBalance: token.tokenBalance,
+    expiryDate: token.expiryDate,
+    brandId: token.brandId,
+    type: token.type,
+    createdAt: token.createdAt,
+    updatedAt: token.updatedAt,
+  }));
+};
+
 export const addTokensByType = async (
   brandId: number,
   type: OwnerType,

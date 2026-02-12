@@ -11,6 +11,7 @@ import {
 } from "../../persistence-service/brand/modules.export";
 import {
   getAllTokenBalances,
+  getAllTokenDetails,
   addTokensByType,
   deductTokenByType,
   findTokensByBrandId,
@@ -355,5 +356,49 @@ export const downloadTrackService = async (
     downloadLink: gcsResult.downloadLink,
     trackId: track.id,
     trackName: track.name || "",
+  };
+};
+
+export interface TokenDetailsResponse {
+  brandId: number;
+  tokens: {
+    id: number;
+    totalAssignedToken: number;
+    tokenBalance: number;
+    expiryDate?: Date;
+    type: OwnerType;
+    createdAt?: Date;
+    updatedAt?: Date;
+  }[];
+}
+
+export const getTokenDetailsService = async (
+  userId: number
+): Promise<TokenDetailsResponse> => {
+  const user = await UserModel.findByPk(userId, {
+    attributes: ["id", "brandId"],
+  });
+
+  if (!user) {
+    throw new AppError("User not found", 404);
+  }
+
+  if (!user.brandId) {
+    throw new AppError("User is not associated with any brand", 400);
+  }
+
+  const tokens = await getAllTokenDetails(user.brandId);
+
+  return {
+    brandId: user.brandId,
+    tokens: tokens.map((token) => ({
+      id: token.id!,
+      totalAssignedToken: token.totalAssignedToken,
+      tokenBalance: token.tokenBalance,
+      expiryDate: token.expiryDate,
+      type: token.type,
+      createdAt: token.createdAt,
+      updatedAt: token.updatedAt,
+    })),
   };
 };
