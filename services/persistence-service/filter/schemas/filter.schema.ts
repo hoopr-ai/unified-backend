@@ -7,8 +7,10 @@ import {
   CreatedAt,
   UpdatedAt,
   Default,
+  HasMany,
 } from "sequelize-typescript";
 import { FilterStatus } from "../../../dto-service/modules.export";
+import { TrackFilterMappingModel } from "./track-filter-mapping.schema";
 
 export interface FilterDetails {
   id: string;
@@ -50,7 +52,7 @@ export class FilterModel extends Model<FilterModel, FilterDetails> {
     allowNull: false,
   })
   status!: FilterStatus;
-  
+
   @Column({
     type: DataType.STRING(255),
     allowNull: true,
@@ -69,4 +71,7 @@ export class FilterModel extends Model<FilterModel, FilterDetails> {
     allowNull: true,
   })
   updatedAt?: Date;
+
+  @HasMany(() => TrackFilterMappingModel, { foreignKey: "filterId", as: "trackMappings", constraints: false })
+  trackMappings?: TrackFilterMappingModel[];
 }
