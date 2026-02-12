@@ -376,7 +376,7 @@ export const getUsersUnderAdminService = async (
 
   const { rows, count } = await findUsersByBrandId(admin.brandId, validPage, validLimit);
 
-  const users: UserProfileResponse[] = rows.map((user) => ({
+  const users: UserProfileResponse[] = rows.map((user: any) => ({
     id: user.id!,
     email: user.email,
     firstName: user.firstName,
@@ -384,6 +384,7 @@ export const getUsersUnderAdminService = async (
     mobile: user.mobile,
     status: user.status,
     profileRole: user.profileRole,
+    role: user.userRoles?.[0]?.role,
     isProfileComplete: user.isProfileComplete ?? false,
   }));
 

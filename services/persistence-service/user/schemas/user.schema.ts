@@ -10,9 +10,11 @@ import {
   Index,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from "sequelize-typescript";
 import type { UserStatus } from "../../../dto-service/modules.export";
 import { BrandModel } from "../../brand/schemas/modules.export";
+import { UserRoleModel } from "./user-role.schema";
 
 export interface UserDetails {
   id?: number;
@@ -127,4 +129,7 @@ export class UserModel extends Model<UserModel, UserDetails> {
 
   @BelongsTo(() => BrandModel)
   brand?: BrandModel;
+
+  @HasMany(() => UserRoleModel)
+  userRoles?: UserRoleModel[];
 }
