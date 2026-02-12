@@ -15,7 +15,7 @@ import {
 } from "../services/helper-service/modules.export";
 import { HttpStatusCode } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
-import { LicenseModel, VideoLinkType } from "../services/persistence-service/exports";
+import { LicenseModel, VideoLinkType, OwnerType } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -52,13 +52,27 @@ export const getTokenBalance = catchAsync(async (req: AuthRequest, res: Response
 });
 
 export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { brandId, tokens } = req.body;
+  const { brandId, tokens, type, expiryDate } = req.body;
 
   if (!brandId || tokens === undefined) {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Brand ID and tokens are required", {});
   }
 
-  const response = await assignTokensService(brandId, tokens);
+  if (!type) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Token type is required", {});
+  }
+
+  const validTypes = Object.values(OwnerType);
+  if (!validTypes.includes(type)) {
+    return sendError(
+      res,
+      HttpStatusCode.BAD_REQUEST,
+      `Invalid token type. Must be one of: ${validTypes.join(", ")}`,
+      {}
+    );
+  }
+
+  const response = await assignTokensService(brandId, tokens, type, expiryDate ? new Date(expiryDate) : undefined);
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,

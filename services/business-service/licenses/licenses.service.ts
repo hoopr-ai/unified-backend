@@ -7,14 +7,17 @@ import {
   type LicenseDetails,
 } from "../../persistence-service/licenses/modules.export";
 import {
-  getTokenBalance,
-  addTokens,
-  deductToken,
   findBrandById,
 } from "../../persistence-service/brand/modules.export";
+import {
+  getAllTokenBalances,
+  addTokensByType,
+  deductTokenByType,
+  findTokensByBrandId,
+} from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
-import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { OwnerModel, OwnerType } from "../../persistence-service/owner/modules.export";
 import { Op } from "sequelize";
 import { AppError, generateGCSSignedUrl } from "../../helper-service/modules.export";
 import type {
@@ -27,6 +30,7 @@ import type {
   BrandLicenseHistoryItem,
   DownloadTrackRequest,
   DownloadTrackResponse,
+  AssignTokensRequest,
 } from "../../dto-service/licenses/modules.export";
 
 const TOKEN_COST_PER_LICENSE = 1;
@@ -52,26 +56,62 @@ export const licenseTrackService = async (
 
   const brandId = user.brandId;
 
-  // Check token balance
-  const tokenBalance = await getTokenBalance(brandId);
-  if (tokenBalance < TOKEN_COST_PER_LICENSE) {
-    throw new AppError("Insufficient tokens. Please contact your administrator to add more tokens.", 400);
-  }
-
-  // Get track details
+  // Get track details including ownerId
   const track = await TrackModel.findOne({
     where: { trackCode },
-    attributes: ["id", "trackCode", "name"],
+    attributes: ["id", "trackCode", "name", "ownerId"],
   });
   if (!track) {
     throw new AppError("Track not found", 404);
   }
 
+  // Get owner types for the track
+  const ownerIds = track.ownerId || [];
+  if (ownerIds.length === 0) {
+    throw new AppError("Track has no owners assigned", 400);
+  }
+
+  const owners = await OwnerModel.findAll({
+    where: { id: { [Op.in]: ownerIds } },
+    attributes: ["id", "type"],
+  });
+
+  const trackOwnerTypes = [...new Set(owners.map((owner) => owner.type).filter(Boolean))] as OwnerType[];
+
+  if (trackOwnerTypes.length === 0) {
+    throw new AppError("Track owners do not have valid types", 400);
+  }
+
+  // Get brand's token balances
+  const brandTokens = await findTokensByBrandId(brandId);
+
+  // Find a matching token type (track owner type matches brand's token type)
+  let matchingTokenType: OwnerType | null = null;
+  let matchingTokenBalance = 0;
+
+  for (const ownerType of trackOwnerTypes) {
+    const brandToken = brandTokens.find((t) => t.type === ownerType && t.tokenBalance >= TOKEN_COST_PER_LICENSE);
+    if (brandToken) {
+      matchingTokenType = ownerType;
+      matchingTokenBalance = brandToken.tokenBalance;
+      break;
+    }
+  }
+
+  if (!matchingTokenType) {
+    const availableTypes = brandTokens.filter((t) => t.tokenBalance > 0).map((t) => t.type);
+    throw new AppError(
+      `No matching tokens available. Track requires tokens of type: ${trackOwnerTypes.join(", ")}. ` +
+      `Your available token types: ${availableTypes.length > 0 ? availableTypes.join(", ") : "none"}`,
+      400
+    );
+  }
+
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
-  // Deduct token
-  const { success, remainingTokens } = await deductToken(brandId, TOKEN_COST_PER_LICENSE);
+  // Deduct token from the matching type
+  const { success, remainingTokens } = await deductTokenByType(brandId, matchingTokenType, TOKEN_COST_PER_LICENSE);
 
   if (!success) {
     throw new AppError("Failed to process token deduction. Insufficient tokens.", 400);
@@ -98,9 +138,19 @@ export const licenseTrackService = async (
   };
 };
 
+export interface TokenBalanceByTypeResponse {
+  brandId: number;
+  tokens: {
+    type: OwnerType;
+    tokenBalance: number;
+    totalAssignedToken: number;
+    expiryDate?: Date;
+  }[];
+}
+
 export const getTokenBalanceService = async (
   userId: number
-): Promise<TokenBalanceResponse> => {
+): Promise<TokenBalanceByTypeResponse> => {
   const user = await UserModel.findByPk(userId, {
     attributes: ["id", "brandId"],
   });
@@ -113,7 +163,7 @@ export const getTokenBalanceService = async (
     throw new AppError("User is not associated with any brand", 400);
   }
 
-  const tokens = await getTokenBalance(user.brandId);
+  const tokens = await getAllTokenBalances(user.brandId);
 
   return {
     brandId: user.brandId,
@@ -121,12 +171,33 @@ export const getTokenBalanceService = async (
   };
 };
 
+export interface AssignTokensByTypeRequest {
+  brandId: number;
+  tokens: number;
+  type: OwnerType;
+  expiryDate?: Date;
+}
+
+export interface AssignTokensByTypeResponse {
+  brandId: number;
+  type: OwnerType;
+  tokenBalance: number;
+  totalAssignedToken: number;
+  expiryDate?: Date;
+}
+
 export const assignTokensService = async (
   brandId: number,
-  tokens: number
-): Promise<TokenBalanceResponse> => {
+  tokens: number,
+  type: OwnerType,
+  expiryDate?: Date
+): Promise<AssignTokensByTypeResponse> => {
   if (tokens <= 0) {
     throw new AppError("Token amount must be greater than 0", 400);
+  }
+
+  if (!Object.values(OwnerType).includes(type)) {
+    throw new AppError(`Invalid token type. Must be one of: ${Object.values(OwnerType).join(", ")}`, 400);
   }
 
   const brand = await findBrandById(brandId);
@@ -134,11 +205,14 @@ export const assignTokensService = async (
     throw new AppError("Brand not found", 404);
   }
 
-  const newBalance = await addTokens(brandId, tokens);
+  const updatedToken = await addTokensByType(brandId, type, tokens, expiryDate);
 
   return {
     brandId,
-    tokens: newBalance,
+    type: updatedToken.type,
+    tokenBalance: updatedToken.tokenBalance,
+    totalAssignedToken: updatedToken.totalAssignedToken,
+    expiryDate: updatedToken.expiryDate,
   };
 };
 

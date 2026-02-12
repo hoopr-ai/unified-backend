@@ -14,6 +14,7 @@ import { BrandModel } from "./brand/modules.export";
 import { LicenseModel, LicenseTypeModel, VideoLinkModel } from "./licenses/modules.export";
 import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
+import { TokenModel } from "./token/modules.export";
 
 config();
 
@@ -80,6 +81,7 @@ sequelize.addModels([
   SkuModel,
   OwnerModel,
   VideoLinkModel,
+  TokenModel,
 ]);
 
 export async function connectDatabase() {
