@@ -105,9 +105,7 @@ export const sendInviteEmail = async (
               <!-- Logo -->
               <tr>
                 <td align="center" style="padding:30px 20px 10px 20px;">
-                  <h2 style="margin:0; font-size:28px; font-weight:600; color:#111;">
-                    hoopr
-                  </h2>
+                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/hoopr_logo.webp" alt="Hoopr" style="max-width:150px; height:auto;" />
                 </td>
               </tr>
 
