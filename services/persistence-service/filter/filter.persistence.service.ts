@@ -1,10 +1,17 @@
 import { FilterModel, FilterDetails } from "./schemas/filter.schema";
 import { TrackFilterMappingModel } from "./schemas/track-filter-mapping.schema";
 import { FilterStatus } from "../../dto-service/modules.export";
+import { Op } from "sequelize";
 
 export const findAllActiveFilters = async (): Promise<FilterDetails[]> => {
   const filters = await FilterModel.findAll({
-    where: { status: FilterStatus.ACTIVE },
+    where: {
+      status: FilterStatus.ACTIVE,
+      // Exclude instrument filters at database level for better performance
+      type: {
+        [Op.notIn]: ["instrument", "instruments", "Instrument", "Instruments"]
+      }
+    },
     include: [
       {
         model: TrackFilterMappingModel,

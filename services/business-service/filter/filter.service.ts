@@ -8,6 +8,7 @@ export const getAllFiltersService = async (): Promise<GetAllFiltersResponse> => 
   const groupedFilters: GroupedFilters = {};
   for (const filter of filters) {
     const type = filter.type?.toLowerCase() || "other";
+
     if (!groupedFilters[type]) {
       groupedFilters[type] = [];
     }
