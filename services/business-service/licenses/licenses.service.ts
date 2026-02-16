@@ -6,9 +6,7 @@ import {
   VideoLinkModel,
   type LicenseDetails,
 } from "../../persistence-service/licenses/modules.export";
-import {
-  findBrandById,
-} from "../../persistence-service/brand/modules.export";
+import { findBrandById } from "../../persistence-service/brand/modules.export";
 import {
   getAllTokenBalances,
   getAllTokenDetails,
@@ -20,7 +18,12 @@ import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { Op } from "sequelize";
-import { AppError, generateGCSSignedUrl } from "../../helper-service/modules.export";
+import {
+  AppError,
+  generateGCSSignedUrl,
+  uploadBufferToGCS,
+  generateLicensePdf,
+} from "../../helper-service/modules.export";
 import type {
   LicenseTrackRequest,
   LicenseResponse,
@@ -38,7 +41,7 @@ const TOKEN_COST_PER_LICENSE = 1;
 
 export const licenseTrackService = async (
   userId: number,
-  data: LicenseTrackRequest
+  data: LicenseTrackRequest,
 ): Promise<LicenseResponse> => {
   const { trackCode } = data;
 
@@ -77,7 +80,9 @@ export const licenseTrackService = async (
     attributes: ["id", "type"],
   });
 
-  let trackOwnerTypes = [...new Set(owners.map((owner) => owner.type).filter(Boolean))] as string[];
+  let trackOwnerTypes = [
+    ...new Set(owners.map((owner) => owner.type).filter(Boolean)),
+  ] as string[];
 
   if (trackOwnerTypes.length === 0) {
     trackOwnerTypes = ["Hoopr"]; //need to update later
@@ -92,7 +97,9 @@ export const licenseTrackService = async (
   let matchingTokenBalance = 0;
 
   for (const ownerType of trackOwnerTypes) {
-    const brandToken = brandTokens.find((t) => t.type === ownerType && t.tokenBalance >= TOKEN_COST_PER_LICENSE);
+    const brandToken = brandTokens.find(
+      (t) => t.type === ownerType && t.tokenBalance >= TOKEN_COST_PER_LICENSE,
+    );
     if (brandToken) {
       matchingTokenType = ownerType;
       matchingTokenBalance = brandToken.tokenBalance;
@@ -101,11 +108,13 @@ export const licenseTrackService = async (
   }
 
   if (!matchingTokenType) {
-    const availableTypes = brandTokens.filter((t) => t.tokenBalance > 0).map((t) => t.type);
+    const availableTypes = brandTokens
+      .filter((t) => t.tokenBalance > 0)
+      .map((t) => t.type);
     throw new AppError(
       `No matching tokens available. Track requires tokens of type: ${trackOwnerTypes.join(", ")}. ` +
-      `Your available token types: ${availableTypes.length > 0 ? availableTypes.join(", ") : "none"}`,
-      400
+        `Your available token types: ${availableTypes.length > 0 ? availableTypes.join(", ") : "none"}`,
+      400,
     );
   }
 
@@ -113,10 +122,17 @@ export const licenseTrackService = async (
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
   // Deduct token from the matching type
-  const { success, remainingTokens } = await deductTokenByType(brandId, matchingTokenType, TOKEN_COST_PER_LICENSE);
+  const { success, remainingTokens } = await deductTokenByType(
+    brandId,
+    matchingTokenType,
+    TOKEN_COST_PER_LICENSE,
+  );
 
   if (!success) {
-    throw new AppError("Failed to process token deduction. Insufficient tokens.", 400);
+    throw new AppError(
+      "Failed to process token deduction. Insufficient tokens.",
+      400,
+    );
   }
 
   // Create license record
@@ -151,7 +167,7 @@ export interface TokenBalanceByTypeResponse {
 }
 
 export const getTokenBalanceService = async (
-  userId: number
+  userId: number,
 ): Promise<TokenBalanceByTypeResponse> => {
   const user = await UserModel.findByPk(userId, {
     attributes: ["id", "brandId"],
@@ -192,7 +208,7 @@ export const assignTokensService = async (
   brandId: number,
   tokens: number,
   type: string,
-  expiryDate?: Date
+  expiryDate?: Date,
 ): Promise<AssignTokensByTypeResponse> => {
   if (tokens <= 0) {
     throw new AppError("Token amount must be greater than 0", 400);
@@ -221,7 +237,7 @@ export const assignTokensService = async (
 export const getBrandLicenseHistoryService = async (
   userId: number,
   page: number = 1,
-  limit: number = 50
+  limit: number = 50,
 ): Promise<BrandLicenseHistoryResponse> => {
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
@@ -251,12 +267,13 @@ export const getBrandLicenseHistoryService = async (
   const uniqueOwnerIds = [...new Set(allOwnerIds)];
 
   // Fetch all owners in one query
-  const owners = uniqueOwnerIds.length > 0
-    ? await OwnerModel.findAll({
-        where: { id: { [Op.in]: uniqueOwnerIds } },
-        attributes: ["id", "type", "sub_type"],
-      })
-    : [];
+  const owners =
+    uniqueOwnerIds.length > 0
+      ? await OwnerModel.findAll({
+          where: { id: { [Op.in]: uniqueOwnerIds } },
+          attributes: ["id", "type", "sub_type"],
+        })
+      : [];
 
   // Create maps of owner ID to owner type and sub_type
   const ownerTypeMap = new Map<string, string>();
@@ -328,7 +345,7 @@ export const getBrandLicenseHistoryService = async (
 
 export const downloadTrackService = async (
   userId: number,
-  data: DownloadTrackRequest
+  data: DownloadTrackRequest,
 ): Promise<DownloadTrackResponse> => {
   const { licenseId } = data;
 
@@ -369,6 +386,80 @@ export const downloadTrackService = async (
   };
 };
 
+export interface DownloadLicensePdfResponse {
+  downloadLink: string;
+}
+
+export const downloadLicensePdfService = async (
+  userId: number,
+  data: { licenseId: number },
+): Promise<DownloadLicensePdfResponse> => {
+  const { licenseId } = data;
+
+  const license = await LicenseModel.findByPk(licenseId, {
+    include: [TrackModel],
+  });
+
+  if (!license) {
+    throw new AppError("License not found", 404);
+  }
+
+  // Verify ownership
+  if (license.userId !== userId) {
+    const user = await UserModel.findByPk(userId);
+    if (!user || !user.brandId || user.brandId !== license.brandId) {
+      throw new AppError("Unauthorized access to license", 403);
+    }
+  }
+
+  const track = license.track;
+  if (!track) {
+    throw new AppError("Track associated with license not found", 404);
+  }
+
+  // Fetch user details
+  const user = await UserModel.findByPk(license.userId, {
+    attributes: ["id", "firstName", "lastName", "email", "mobile"],
+  });
+  if (!user) {
+    throw new AppError("License user not found", 404);
+  }
+
+  // Fetch owner username
+  let ownerName = "";
+  const ownerIds = track.ownerId || [];
+  if (ownerIds.length > 0) {
+    const owner = await OwnerModel.findByPk(ownerIds[0], {
+      attributes: ["id", "username"],
+    });
+    ownerName = owner?.username || "";
+  }
+
+  // Format date as DD/MM/YYYY
+  const licensedDate = new Date(license.licensedAt);
+  const formattedDate = `${String(licensedDate.getDate()).padStart(2, "0")}/${String(licensedDate.getMonth() + 1).padStart(2, "0")}/${licensedDate.getFullYear()}`;
+
+  // Generate PDF
+  const pdfBuffer = await generateLicensePdf({
+    name: [user.firstName, user.lastName].filter(Boolean).join(" "),
+    email: user.email || "",
+    mobile: user.mobile || "",
+    date: formattedDate,
+    trackName: track.name || "",
+    ownerName,
+  });
+
+  // Upload to GCS
+  const gcsPath = `licenses-pdf/${licenseId}/license-agreement.pdf`;
+  const downloadLink = await uploadBufferToGCS({
+    buffer: pdfBuffer,
+    gcsPath,
+    contentType: "application/pdf",
+  });
+
+  return { downloadLink };
+};
+
 export interface TokenDetailsResponse {
   brandId: number;
   tokens: {
@@ -379,7 +470,7 @@ export interface TokenDetailsResponse {
 }
 
 export const getTokenDetailsService = async (
-  userId: number
+  userId: number,
 ): Promise<TokenDetailsResponse> => {
   const user = await UserModel.findByPk(userId, {
     attributes: ["id", "brandId"],

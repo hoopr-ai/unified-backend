@@ -72,3 +72,35 @@ export const generateGCSSignedUrl = async (
     downloadLink: signedUrl,
   };
 };
+
+interface UploadBufferOptions {
+  buffer: Buffer;
+  gcsPath: string;
+  contentType: string;
+  expiresInMinutes?: number;
+}
+
+export const uploadBufferToGCS = async (
+  options: UploadBufferOptions
+): Promise<string> => {
+  const { buffer, gcsPath, contentType, expiresInMinutes = 30 } = options;
+
+  const bucketName = process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const storage = getStorageInstance();
+  const bucket = storage.bucket(bucketName);
+  const file = bucket.file(gcsPath);
+
+  await file.save(buffer, { contentType });
+
+  const [signedUrl] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + expiresInMinutes * 60 * 1000,
+    responseType: contentType,
+  });
+
+  return signedUrl;
+};

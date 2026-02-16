@@ -5,6 +5,7 @@ import {
   assignTokensService,
   getBrandLicenseHistoryService,
   downloadTrackService,
+  downloadLicensePdfService,
   addVideoLinkService,
   getVideoLinksService,
 } from "../services/business-service/modules.export";
@@ -107,6 +108,27 @@ export const downloadTrack = catchAsync(async (req: AuthRequest, res: Response) 
     status: HttpStatusCode.OK,
     data: response,
     message: "Track download link generated successfully",
+  });
+});
+
+export const downloadLicensePdf = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+
+  const { licenseId } = req.body;
+
+  if (!licenseId) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID is required", {});
+  }
+
+  const response = await downloadLicensePdfService(userId, { licenseId });
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: "License PDF generated successfully",
   });
 });
 

@@ -5,6 +5,7 @@ import {
   assignTokens,
   getBrandLicenseHistory,
   downloadTrack,
+  downloadLicensePdf,
   addVideoLink,
   getVideoLinks,
 } from "../controllers/licenses.controller";
@@ -49,6 +50,13 @@ router.post(
   "/track-download",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
   downloadTrack,
+);
+
+// Download license PDF - requires authenticated user
+router.post(
+  "/license-pdf",
+  authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
+  downloadLicensePdf,
 );
 
 router.post(
