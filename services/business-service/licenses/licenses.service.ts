@@ -146,9 +146,10 @@ export const licenseTrackService = async (
     createdAt: new Date(),
   };
 
-  await createLicenseRecord(licenseDetails);
+  const createdLicense = await createLicenseRecord(licenseDetails);
 
   return {
+    id: createdLicense.id!,
     downloadLink: gcsResult.downloadLink,
     remainingTokens,
     trackId: track.id,
@@ -464,6 +465,7 @@ export interface TokenDetailsResponse {
   brandId: number;
   tokens: {
     totalAssignedToken: number;
+    tokensUsed: number;
     tokenBalance: number;
     type: string;
   }[];
@@ -490,6 +492,7 @@ export const getTokenDetailsService = async (
     brandId: user.brandId,
     tokens: tokens.map((token) => ({
       totalAssignedToken: token.totalAssignedToken,
+      tokensUsed: token.totalAssignedToken - token.tokenBalance,
       tokenBalance: token.tokenBalance,
       type: token.type,
     })),

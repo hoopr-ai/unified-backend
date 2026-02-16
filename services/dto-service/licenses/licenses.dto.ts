@@ -12,6 +12,7 @@ export interface AssignTokensRequest {
 }
 
 export interface LicenseResponse {
+  id: number;
   downloadLink: string;
   remainingTokens: number;
   trackId: string;
@@ -158,5 +159,3 @@ export interface VideoLinksListResponse {
   licenseId: number;
   videoLinks: VideoLinkResponse[];
 }
-
-
