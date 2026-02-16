@@ -15,7 +15,7 @@ import {
 } from "../services/helper-service/modules.export";
 import { HttpStatusCode } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
-import { LicenseModel, VideoLinkType, OwnerType } from "../services/persistence-service/exports";
+import { LicenseModel, VideoLinkType } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -58,18 +58,8 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Brand ID and tokens are required", {});
   }
 
-  if (!type) {
+  if (!type || typeof type !== "string" || type.trim().length === 0) {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Token type is required", {});
-  }
-
-  const validTypes = Object.values(OwnerType);
-  if (!validTypes.includes(type)) {
-    return sendError(
-      res,
-      HttpStatusCode.BAD_REQUEST,
-      `Invalid token type. Must be one of: ${validTypes.join(", ")}`,
-      {}
-    );
   }
 
   const response = await assignTokensService(brandId, tokens, type, expiryDate ? new Date(expiryDate) : undefined);

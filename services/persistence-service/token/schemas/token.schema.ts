@@ -12,15 +12,13 @@ import {
   Index,
 } from "sequelize-typescript";
 import { BrandModel } from "../../brand/schemas/modules.export";
-import { OwnerType } from "../../owner/schemas/owner.schema";
-
 export interface TokenDetails {
   id?: number;
   totalAssignedToken: number;
   tokenBalance: number;
   expiryDate?: Date;
   brandId: number;
-  type: OwnerType;
+  type: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -65,10 +63,10 @@ export class TokenModel extends Model<TokenModel, TokenDetails> {
 
   @Index({ name: "idx_token_type" })
   @Column({
-    type: DataType.ENUM(...Object.values(OwnerType)),
+    type: DataType.STRING(255),
     allowNull: false,
   })
-  type!: OwnerType;
+  type!: string;
 
   @CreatedAt
   @Column({

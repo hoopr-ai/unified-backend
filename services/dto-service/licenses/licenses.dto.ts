@@ -1,4 +1,4 @@
-import { VideoLinkType, OwnerType } from "../../persistence-service/exports";
+import { VideoLinkType } from "../../persistence-service/exports";
 
 export interface LicenseTrackRequest {
   trackCode: string;
@@ -7,7 +7,7 @@ export interface LicenseTrackRequest {
 export interface AssignTokensRequest {
   brandId: number;
   tokens: number;
-  type: OwnerType;
+  type: string;
   expiryDate?: Date;
 }
 
@@ -19,7 +19,7 @@ export interface LicenseResponse {
 }
 
 export interface TokenBalanceItem {
-  type: OwnerType;
+  type: string;
   tokenBalance: number;
   totalAssignedToken: number;
   expiryDate?: Date;
@@ -32,7 +32,7 @@ export interface TokenBalanceResponse {
 
 export interface AssignTokensResponse {
   brandId: number;
-  type: OwnerType;
+  type: string;
   tokenBalance: number;
   totalAssignedToken: number;
   expiryDate?: Date;
@@ -72,6 +72,7 @@ export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   userEmail?: string;
   videoLinks?: BrandLicenseVideoLink[];
   ownerType?: string;
+  ownerSubType?: string;
 }
 
 export interface BrandLicenseHistoryResponse {

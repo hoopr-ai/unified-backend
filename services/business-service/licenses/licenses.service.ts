@@ -18,7 +18,7 @@ import {
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
-import { OwnerModel, OwnerType } from "../../persistence-service/owner/modules.export";
+import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { Op } from "sequelize";
 import { AppError, generateGCSSignedUrl } from "../../helper-service/modules.export";
 import type {
@@ -77,10 +77,10 @@ export const licenseTrackService = async (
     attributes: ["id", "type"],
   });
 
-  let trackOwnerTypes = [...new Set(owners.map((owner) => owner.type).filter(Boolean))] as OwnerType[];
+  let trackOwnerTypes = [...new Set(owners.map((owner) => owner.type).filter(Boolean))] as string[];
 
   if (trackOwnerTypes.length === 0) {
-    trackOwnerTypes = [OwnerType.Hoopr]; //need to update later
+    trackOwnerTypes = ["Hoopr"]; //need to update later
     // throw new AppError("Track owners do not have valid types", 400);
   }
 
@@ -88,7 +88,7 @@ export const licenseTrackService = async (
   const brandTokens = await findTokensByBrandId(brandId);
 
   // Find a matching token type (track owner type matches brand's token type)
-  let matchingTokenType: OwnerType | null = null;
+  let matchingTokenType: string | null = null;
   let matchingTokenBalance = 0;
 
   for (const ownerType of trackOwnerTypes) {
@@ -143,7 +143,7 @@ export const licenseTrackService = async (
 export interface TokenBalanceByTypeResponse {
   brandId: number;
   tokens: {
-    type: OwnerType;
+    type: string;
     tokenBalance: number;
     totalAssignedToken: number;
     expiryDate?: Date;
@@ -176,13 +176,13 @@ export const getTokenBalanceService = async (
 export interface AssignTokensByTypeRequest {
   brandId: number;
   tokens: number;
-  type: OwnerType;
+  type: string;
   expiryDate?: Date;
 }
 
 export interface AssignTokensByTypeResponse {
   brandId: number;
-  type: OwnerType;
+  type: string;
   tokenBalance: number;
   totalAssignedToken: number;
   expiryDate?: Date;
@@ -191,15 +191,15 @@ export interface AssignTokensByTypeResponse {
 export const assignTokensService = async (
   brandId: number,
   tokens: number,
-  type: OwnerType,
+  type: string,
   expiryDate?: Date
 ): Promise<AssignTokensByTypeResponse> => {
   if (tokens <= 0) {
     throw new AppError("Token amount must be greater than 0", 400);
   }
 
-  if (!Object.values(OwnerType).includes(type)) {
-    throw new AppError(`Invalid token type. Must be one of: ${Object.values(OwnerType).join(", ")}`, 400);
+  if (!type || type.trim().length === 0) {
+    throw new AppError("Token type is required", 400);
   }
 
   const brand = await findBrandById(brandId);
@@ -254,15 +254,19 @@ export const getBrandLicenseHistoryService = async (
   const owners = uniqueOwnerIds.length > 0
     ? await OwnerModel.findAll({
         where: { id: { [Op.in]: uniqueOwnerIds } },
-        attributes: ["id", "type"],
+        attributes: ["id", "type", "sub_type"],
       })
     : [];
 
-  // Create a map of owner ID to owner type
+  // Create maps of owner ID to owner type and sub_type
   const ownerTypeMap = new Map<string, string>();
+  const ownerSubTypeMap = new Map<string, string>();
   owners.forEach((owner) => {
     if (owner.type) {
       ownerTypeMap.set(owner.id, owner.type);
+    }
+    if (owner.sub_type) {
+      ownerSubTypeMap.set(owner.id, owner.sub_type);
     }
   });
 
@@ -271,13 +275,18 @@ export const getBrandLicenseHistoryService = async (
     const licenseUser = license.user as UserModel | undefined;
     const videoLinks = license.videoLinks as VideoLinkModel[] | undefined;
 
-    // Get owner types for this track
+    // Get owner types and sub types for this track
     const ownerTypes: string[] = [];
+    const ownerSubTypes: string[] = [];
     if (track?.ownerId && Array.isArray(track.ownerId)) {
       track.ownerId.forEach((oid) => {
         const ownerType = ownerTypeMap.get(oid);
         if (ownerType && !ownerTypes.includes(ownerType)) {
           ownerTypes.push(ownerType);
+        }
+        const ownerSubType = ownerSubTypeMap.get(oid);
+        if (ownerSubType && !ownerSubTypes.includes(ownerSubType)) {
+          ownerSubTypes.push(ownerSubType);
         }
       });
     }
@@ -301,6 +310,7 @@ export const getBrandLicenseHistoryService = async (
         createdAt: vl.createdAt,
       })),
       ownerType: ownerTypes.length > 0 ? ownerTypes[0] : undefined,
+      ownerSubType: ownerSubTypes.length > 0 ? ownerSubTypes[0] : undefined,
     };
   });
 
@@ -364,7 +374,7 @@ export interface TokenDetailsResponse {
   tokens: {
     totalAssignedToken: number;
     tokenBalance: number;
-    type: OwnerType;
+    type: string;
   }[];
 }
 

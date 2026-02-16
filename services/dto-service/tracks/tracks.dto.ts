@@ -38,6 +38,8 @@ export interface TrackWithArtists {
   primaryArtists: ArtistInfoTrack[];
   token: number; // Token required for standard SKU (default: 1)
   isLiked: boolean; // Whether the current user has liked this track
+  ownerType?: string;
+  ownerSubType?: string;
 }
 
 // Extended track details with both SKUs and filters
@@ -102,6 +104,7 @@ export interface RawTrackWithMappings {
   mp3Link: string | null;
   hasVocals: boolean | null;
   trending: boolean | null;
+  ownerId?: string[];
   trackArtistMappings?: Array<{
     isPrimary?: boolean;
     artist?: { id: string; name: string; type: ArtistType[] };

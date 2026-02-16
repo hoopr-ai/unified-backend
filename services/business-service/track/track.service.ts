@@ -18,6 +18,8 @@ import {
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
+import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { Op } from "sequelize";
 
 // Parse and validate pagination params
 const parsePaginationParams = (
@@ -68,10 +70,41 @@ const getStandardToken = (track: RawTrackWithMappings): number => {
   return 1; // Default token if no SKU exists
 };
 
+// Fetch owner type and sub_type maps from a list of tracks
+const fetchOwnerMaps = async (
+  tracks: RawTrackWithMappings[],
+): Promise<{ ownerTypeMap: Map<string, string>; ownerSubTypeMap: Map<string, string> }> => {
+  const allOwnerIds: string[] = [];
+  tracks.forEach((track) => {
+    if (track.ownerId && Array.isArray(track.ownerId)) {
+      allOwnerIds.push(...track.ownerId);
+    }
+  });
+
+  const uniqueOwnerIds = [...new Set(allOwnerIds)];
+  const ownerTypeMap = new Map<string, string>();
+  const ownerSubTypeMap = new Map<string, string>();
+
+  if (uniqueOwnerIds.length > 0) {
+    const owners = await OwnerModel.findAll({
+      where: { id: { [Op.in]: uniqueOwnerIds } },
+      attributes: ["id", "type", "sub_type"],
+    });
+    owners.forEach((owner) => {
+      if (owner.type) ownerTypeMap.set(owner.id, owner.type);
+      if (owner.sub_type) ownerSubTypeMap.set(owner.id, owner.sub_type);
+    });
+  }
+
+  return { ownerTypeMap, ownerSubTypeMap };
+};
+
 // Transform raw track data to TrackWithArtists DTO
 const transformTrackToDto = (
   track: RawTrackWithMappings,
   likedTrackCodes?: Set<string>,
+  ownerTypeMap?: Map<string, string>,
+  ownerSubTypeMap?: Map<string, string>,
 ): TrackWithArtists => {
   const primaryArtists: ArtistInfoTrack[] = [];
 
@@ -87,6 +120,17 @@ const transformTrackToDto = (
     }
   }
 
+  // Get owner type and sub_type for the first owner
+  let ownerType: string | undefined;
+  let ownerSubType: string | undefined;
+  if (track.ownerId && Array.isArray(track.ownerId) && ownerTypeMap) {
+    for (const oid of track.ownerId) {
+      if (!ownerType && ownerTypeMap.get(oid)) ownerType = ownerTypeMap.get(oid);
+      if (!ownerSubType && ownerSubTypeMap?.get(oid)) ownerSubType = ownerSubTypeMap.get(oid);
+      if (ownerType && ownerSubType) break;
+    }
+  }
+
   return {
     id: track.id,
     trackCode: track.trackCode,
@@ -99,6 +143,8 @@ const transformTrackToDto = (
     primaryArtists,
     token: getStandardToken(track),
     isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
+    ownerType,
+    ownerSubType,
   };
 };
 
@@ -106,12 +152,14 @@ const transformTrackToDto = (
 const buildPaginatedResponse = (
   rawData: PaginatedRawTracks,
   likedTrackCodes?: Set<string>,
+  ownerTypeMap?: Map<string, string>,
+  ownerSubTypeMap?: Map<string, string>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
 
   return {
-    tracks: rows.map((track) => transformTrackToDto(track, likedTrackCodes)),
+    tracks: rows.map((track) => transformTrackToDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap)),
     pagination: {
       page,
       limit,
@@ -155,7 +203,8 @@ export const getAllTracksService = async (
   }
 
   const rawData = await findAllTracks(page, limit, whereClause);
-  return buildPaginatedResponse(rawData, likedTrackCodes);
+  const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps(rawData.rows);
+  return buildPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
 };
 
 // Sort tracks in the same order as the requested trackCodes
@@ -190,10 +239,11 @@ export const getTracksByCodesService = async (
   // Sort tracks in the order of requested trackCodes
   const orderedTracks = sortTracksByRequestedOrder(rawData.rows, query.trackCodes);
 
+  const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps(orderedTracks);
   return buildPaginatedResponse({
     ...rawData,
     rows: orderedTracks,
-  }, likedTrackCodes);
+  }, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
 };
 
 export interface GetTracksByFilterQuery {
@@ -207,6 +257,8 @@ export interface GetTracksByFilterQuery {
 const buildFilterPaginatedResponse = (
   rawData: PaginatedRawFilterTracks,
   likedTrackCodes?: Set<string>,
+  ownerTypeMap?: Map<string, string>,
+  ownerSubTypeMap?: Map<string, string>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
@@ -221,7 +273,7 @@ const buildFilterPaginatedResponse = (
       }
       return true;
     })
-    .map((mapping) => transformTrackToDto(mapping.track!, likedTrackCodes));
+    .map((mapping) => transformTrackToDto(mapping.track!, likedTrackCodes, ownerTypeMap, ownerSubTypeMap));
 
   return {
     tracks,
@@ -256,15 +308,19 @@ export const getTracksByFilterService = async (
     limit,
   });
 
-  return buildFilterPaginatedResponse(rawData, likedTrackCodes);
+  const filterTracks = rawData.rows.filter((m) => m.track).map((m) => m.track!);
+  const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps(filterTracks);
+  return buildFilterPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
 };
 
 // Transform raw track data to TrackDetailsWithSkus DTO (includes both SKUs and filters)
 const transformTrackToDetailsDto = (
   track: RawTrackWithMappings,
   likedTrackCodes?: Set<string>,
+  ownerTypeMap?: Map<string, string>,
+  ownerSubTypeMap?: Map<string, string>,
 ): TrackDetailsWithSkus => {
-  const baseDto = transformTrackToDto(track, likedTrackCodes);
+  const baseDto = transformTrackToDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
 
   let standardSku: SkuInfo | undefined;
   let premiumSku: SkuInfo | undefined;
@@ -325,5 +381,6 @@ export const getTrackDetailsByCodeService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  return transformTrackToDetailsDto(track, likedTrackCodes);
+  const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps([track]);
+  return transformTrackToDetailsDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
 };

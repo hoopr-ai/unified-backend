@@ -11,12 +11,7 @@ import {
   Default,
 } from "sequelize-typescript";
 
-export enum OwnerType {
-  Indie = "Indie",
-  Hoopr = "Hoopr",
-  International = "International",
-  Label = "Label",
-}
+// OwnerType is now a free-form string (no enum restriction)
 
 export enum OwnerStatus {
   Active = "Active",
@@ -27,9 +22,9 @@ export enum OwnerStatus {
 export interface OwnerDetails {
   id?: string;
   ownerCode: string;
-  name?: string;
   username?: string;
-  type?: OwnerType;
+  type?: string; // Changed from OwnerType to string for flexibility
+  sub_type?: string; // New field for sub-categorization
   category?: string;
   status?: OwnerStatus;
   revenueGenerated?: number;
@@ -65,12 +60,6 @@ export class OwnerModel extends Model<OwnerModel, OwnerDetails> {
   })
   ownerCode!: string;
 
-  @Column({
-    type: DataType.STRING(255),
-    allowNull: true,
-  })
-  name!: string;
-
   @Index
   @Column({
     type: DataType.STRING(255),
@@ -79,10 +68,16 @@ export class OwnerModel extends Model<OwnerModel, OwnerDetails> {
   username!: string;
 
   @Column({
-    type: DataType.ENUM(...Object.values(OwnerType)),
+    type: DataType.STRING(100), // Changed from ENUM to STRING for flexibility
     allowNull: true,
   })
-  type?: OwnerType;
+  type?: string;
+
+  @Column({
+    type: DataType.STRING(100), // New field for sub-type
+    allowNull: true,
+  })
+  sub_type?: string;
 
   @Column({
     type: DataType.STRING(255),

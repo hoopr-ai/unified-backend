@@ -1,10 +1,9 @@
 import { TokenModel, type TokenDetails } from "./schemas/modules.export";
-import { OwnerType } from "../owner/schemas/owner.schema";
 import { sequelize } from "../database";
 
 export const findTokenByBrandAndType = async (
   brandId: number,
-  type: OwnerType
+  type: string
 ): Promise<TokenModel | null> => {
   const token = await TokenModel.findOne({
     where: { brandId, type },
@@ -23,7 +22,7 @@ export const findTokensByBrandId = async (
 
 export const getTokenBalanceByType = async (
   brandId: number,
-  type: OwnerType
+  type: string
 ): Promise<number> => {
   const token = await TokenModel.findOne({
     where: { brandId, type },
@@ -34,7 +33,7 @@ export const getTokenBalanceByType = async (
 
 export const getAllTokenBalances = async (
   brandId: number
-): Promise<{ type: OwnerType; tokenBalance: number; totalAssignedToken: number; expiryDate?: Date }[]> => {
+): Promise<{ type: string; tokenBalance: number; totalAssignedToken: number; expiryDate?: Date }[]> => {
   const tokens = await TokenModel.findAll({
     where: { brandId },
     attributes: ["type", "tokenBalance", "totalAssignedToken", "expiryDate"],
@@ -68,7 +67,7 @@ export const getAllTokenDetails = async (
 
 export const addTokensByType = async (
   brandId: number,
-  type: OwnerType,
+  type: string,
   amount: number,
   expiryDate?: Date
 ): Promise<TokenModel> => {
@@ -103,7 +102,7 @@ export const addTokensByType = async (
 
 export const deductTokenByType = async (
   brandId: number,
-  type: OwnerType,
+  type: string,
   amount: number = 1
 ): Promise<{ success: boolean; remainingTokens: number }> => {
   const transaction = await sequelize.transaction();
