@@ -2,7 +2,8 @@ import "dotenv/config";
 import "newrelic";
 import express from "express";
 import type { Application, Request, Response } from "express";
-import cors, { CorsOptions } from "cors";
+import cors from "cors";
+import { getCorsOptions } from "./services/helper-service/cors.config";
 import cookieParser from "cookie-parser";
 import userRoutes from "./routes/user.route";
 import filterRoutes from "./routes/filter.route";
@@ -24,28 +25,6 @@ app.use(cookieParser());
 await initializeBusinessService();
 // console.log('DOTENV FILE:', result?.parsed)
 // console.log('DOTENV PATH:', result?.error ?? 'loaded successfully')
-
-const getCorsOptions = (): CorsOptions => ({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      "https://dev-enterprise.hoopr.ai",
-      "http://localhost:3000",
-      "https://api-staging-enterprise.hoopr.ai",
-      "http://localhost:5173",
-    ];
-
-    // Allow requests with no origin (Postman, mobile apps, etc.)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS blocked for origin: ${origin}`));
-    }
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  credentials: true,
-  maxAge: 86400,
-});
 
 // App setup
 const corsOptions = getCorsOptions();
