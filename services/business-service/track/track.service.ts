@@ -121,12 +121,12 @@ const transformTrackToDto = (
   }
 
   // Get owner type and sub_type for the first owner
-  let ownerType: string | undefined;
-  let ownerSubType: string | undefined;
+  let ownerType: string | null = null;
+  let ownerSubType: string | null = null;
   if (track.ownerId && Array.isArray(track.ownerId) && ownerTypeMap) {
     for (const oid of track.ownerId) {
-      if (!ownerType && ownerTypeMap.get(oid)) ownerType = ownerTypeMap.get(oid);
-      if (!ownerSubType && ownerSubTypeMap?.get(oid)) ownerSubType = ownerSubTypeMap.get(oid);
+      if (!ownerType && ownerTypeMap.get(oid)) ownerType = ownerTypeMap.get(oid) || null;
+      if (!ownerSubType && ownerSubTypeMap?.get(oid)) ownerSubType = ownerSubTypeMap.get(oid) || null;
       if (ownerType && ownerSubType) break;
     }
   }
