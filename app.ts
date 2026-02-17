@@ -19,17 +19,16 @@ import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
 
 const app: Application = express();
+
+// CORS must be the very first middleware
+const corsOptions = getCorsOptions();
+app.options("/{*splat}", cors(corsOptions));
+app.use(cors(corsOptions));
+
 app.use(express.json());
 app.use(cookieParser());
 
 await initializeBusinessService();
-// console.log('DOTENV FILE:', result?.parsed)
-// console.log('DOTENV PATH:', result?.error ?? 'loaded successfully')
-
-// App setup
-const corsOptions = getCorsOptions();
-app.use(cors(corsOptions)); // ✅ First middleware
-app.options(/.*/, cors(corsOptions)); // ✅ Handle preflight
 
 app.use(activityLoggerMiddleware());
 
