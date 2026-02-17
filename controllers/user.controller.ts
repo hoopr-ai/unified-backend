@@ -10,6 +10,7 @@ import {
   getUserProfileService,
   updateUserProfileService,
   getUsersUnderAdminService,
+  removeInvitedUserService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -156,4 +157,14 @@ export const getUsers = catchAsync(async (req: AuthRequest, res: Response) => {
   const limit = parseInt(req.query.limit as string) || 10;
   const response = await getUsersUnderAdminService(userId, page, limit);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetUsersSuccess });
+});
+
+export const removeInvitedUser = catchAsync(async (req: AuthRequest, res: Response) => {
+  const adminUserId = req.session?.userId;
+  if (!adminUserId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const targetUserId = parseInt(req.params.userId as string);
+  const response = await removeInvitedUserService(targetUserId, adminUserId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserRemovedSuccess });
 });

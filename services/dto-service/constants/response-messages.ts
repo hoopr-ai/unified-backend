@@ -32,4 +32,5 @@ export const enum ResponseMessages {
   TrackLikedSuccess = "Track liked successfully",
   TrackUnlikedSuccess = "Track unliked successfully",
   GetLikedTracksSuccess = "Liked tracks fetched successfully",
+  UserRemovedSuccess = "User has been successfully removed",
 }

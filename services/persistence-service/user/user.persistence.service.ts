@@ -90,6 +90,17 @@ export const updateUserProfilePartial = async (
   );
 }
 
+export const softDeleteUserById = async (userId: number): Promise<void> => {
+  await UserModel.update(
+    { status: UserStatus.DELETED },
+    { where: { id: userId, status: UserStatus.ACTIVE } }
+  );
+  await UserRoleModel.update(
+    { status: UserStatus.DELETED },
+    { where: { userId, status: UserStatus.ACTIVE } }
+  );
+};
+
 export const findUsersByBrandId = async (
   brandId: number,
   page: number,

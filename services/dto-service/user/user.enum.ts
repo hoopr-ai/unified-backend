@@ -1,6 +1,7 @@
 
 export enum UserStatus {
-    ACTIVE = 'ACTIVE'
+    ACTIVE = 'ACTIVE',
+    DELETED = 'DELETED',
 }
 
 export enum UserRoles {

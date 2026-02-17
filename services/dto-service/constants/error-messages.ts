@@ -12,4 +12,7 @@ export const enum ErrorMessages {
     BrandNotFound = "Brand not found.",
     InvalidTokenAmount = "Token amount must be greater than 0.",
     ProfileAlreadyComplete = "Profile is already complete.",
+    CannotRemoveAdmin = "Cannot remove an admin or master user.",
+    CannotRemoveSelf = "You cannot remove yourself.",
+    UserNotInBrand = "User does not belong to your brand.",
 }

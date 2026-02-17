@@ -26,6 +26,7 @@ import {
   updateUserProfilePartial,
   findUserById,
   findUsersByBrandId,
+  softDeleteUserById,
   UserRoleDetails,
   type UserDetails,
   createSession,
@@ -343,6 +344,42 @@ export const updateUserProfileService = async (
     profileRole: updatedUser.profileRole,
     isProfileComplete: updatedUser.isProfileComplete ?? false,
   };
+};
+
+export const removeInvitedUserService = async (
+  targetUserId: number,
+  adminUserId: number,
+): Promise<{}> => {
+  if (targetUserId === adminUserId) {
+    throw new AppError(ErrorMessages.CannotRemoveSelf, 400);
+  }
+
+  const admin = await findUserById(adminUserId);
+  if (!admin) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  if (!admin.brandId) {
+    throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
+  }
+
+  const targetUser = await findUserById(targetUserId);
+  if (!targetUser) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  if (targetUser.brandId !== admin.brandId) {
+    throw new AppError(ErrorMessages.UserNotInBrand, 403);
+  }
+
+  const targetRole = await findUserRole(targetUserId);
+  if (targetRole === UserRoles.ADMIN || targetRole === UserRoles.MASTER) {
+    throw new AppError(ErrorMessages.CannotRemoveAdmin, 400);
+  }
+
+  await softDeleteUserById(targetUserId);
+
+  return {};
 };
 
 export interface PaginatedUsersResponse {

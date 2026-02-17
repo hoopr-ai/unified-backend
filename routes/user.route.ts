@@ -12,6 +12,7 @@ import {
   getProfile,
   updateProfile,
   getUsers,
+  removeInvitedUser,
 } from "../controllers/user.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
@@ -99,6 +100,13 @@ router.get(
   "/list",
   authenticateWithSession({ roles: [UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
   getUsers
+);
+
+// Remove invited user
+router.delete(
+  "/invited/:userId",
+  authenticateWithSession({ roles: [UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
+  removeInvitedUser
 );
 
 export default router;
