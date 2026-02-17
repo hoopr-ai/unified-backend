@@ -9,6 +9,7 @@ import {
 } from "../../dto-service/modules.export";
 import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel, SkuType } from "../sku/modules.export";
+import { Op } from "sequelize";
 
 // Reusable include configuration for artist mappings
 const getArtistInclude = () => [
@@ -70,8 +71,13 @@ export const findAllTracks = async (
   page: number,
   limit: number,
   whereClause: Record<string, unknown> = {},
+  ownerIds?: string[],
 ): Promise<PaginatedRawTracks> => {
   const offset = (page - 1) * limit;
+
+  if (ownerIds && ownerIds.length > 0) {
+    whereClause.ownerId = { [Op.overlap]: ownerIds };
+  }
 
   const { count, rows } = await TrackModel.findAndCountAll({
     where: whereClause,

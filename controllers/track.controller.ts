@@ -21,6 +21,7 @@ export const getAllTracks = catchAsync(async (req: AuthRequest, res: Response) =
     page: req.query.page as string,
     limit: req.query.limit as string,
     trending: req.query.trending as string,
+    type: req.query.type as string,
   };
   const response = await getAllTracksService(query, userId);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });

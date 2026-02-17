@@ -195,6 +195,24 @@ export const getAllTracksService = async (
     whereClause.trending = true;
   }
 
+  // If type filter is provided, find matching owner IDs
+  let ownerIds: string[] | undefined;
+  if (query.type) {
+    const normalize = (str: string) => str.trim().replace(/[\s_]+/g, "").toLowerCase();
+    const normalizedType = normalize(query.type);
+    const allOwners = await OwnerModel.findAll({
+      where: { type: { [Op.ne]: null } } as any,
+      attributes: ["id", "type"],
+    });
+    const matchedOwners = allOwners.filter(
+      (o) => normalize(o.type!) === normalizedType,
+    );
+    ownerIds = matchedOwners.map((o) => o.id);
+    if (ownerIds.length === 0) {
+      return emptyPaginatedResponse(page, limit);
+    }
+  }
+
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
   if (userId) {
@@ -202,7 +220,7 @@ export const getAllTracksService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const rawData = await findAllTracks(page, limit, whereClause);
+  const rawData = await findAllTracks(page, limit, whereClause, ownerIds);
   const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps(rawData.rows);
   return buildPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
 };
