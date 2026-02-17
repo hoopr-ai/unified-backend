@@ -1,8 +1,8 @@
-import 'dotenv/config';
-import 'newrelic';
+import "dotenv/config";
+import "newrelic";
 import express from "express";
 import type { Application, Request, Response } from "express";
-import cors from "cors";
+import cors, { CorsOptions } from "cors";
 import cookieParser from "cookie-parser";
 import userRoutes from "./routes/user.route";
 import filterRoutes from "./routes/filter.route";
@@ -15,7 +15,7 @@ import tokenRoutes from "./routes/token.route";
 import likedTrackRoutes from "./routes/liked-track.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
-import { activityLoggerMiddleware, getCorsOptions } from "./services/helper-service/modules.export";
+import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
 
 const app: Application = express();
 app.use(express.json());
@@ -25,9 +25,30 @@ await initializeBusinessService();
 // console.log('DOTENV FILE:', result?.parsed)
 // console.log('DOTENV PATH:', result?.error ?? 'loaded successfully')
 
+const getCorsOptions = (): CorsOptions => ({
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      "https://dev-enterprise.hoopr.ai",
+      "http://localhost:3000",
+    ];
+
+    // Allow requests with no origin (Postman, mobile apps, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  credentials: true,
+  maxAge: 86400,
+});
+
+// App setup
 const corsOptions = getCorsOptions();
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+app.use(cors(corsOptions)); // ✅ First middleware
+app.options(/.*/, cors(corsOptions)); // ✅ Handle preflight
 
 app.use(activityLoggerMiddleware());
 
