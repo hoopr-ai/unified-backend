@@ -30,6 +30,8 @@ const getCorsOptions = (): CorsOptions => ({
     const allowedOrigins = [
       "https://dev-enterprise.hoopr.ai",
       "http://localhost:3000",
+      "https://api-staging-enterprise.hoopr.ai",
+      "http://localhost:5173",
     ];
 
     // Allow requests with no origin (Postman, mobile apps, etc.)
