@@ -11,6 +11,8 @@ import {
   updateUserProfileService,
   getUsersUnderAdminService,
   removeInvitedUserService,
+  sendOtpService,
+  verifyOtpService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -167,4 +169,14 @@ export const removeInvitedUser = catchAsync(async (req: AuthRequest, res: Respon
   const targetUserId = parseInt(req.params.userId as string);
   const response = await removeInvitedUserService(targetUserId, adminUserId);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserRemovedSuccess });
+});
+
+export const sendOtp = catchAsync(async (req: Request, res: Response) => {
+  const response = await sendOtpService(req.body);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.OtpSentSuccess });
+});
+
+export const verifyOtp = catchAsync(async (req: Request, res: Response) => {
+  const response = await verifyOtpService(req.body);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.OtpVerifiedSuccess });
 });

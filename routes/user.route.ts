@@ -13,6 +13,8 @@ import {
   updateProfile,
   getUsers,
   removeInvitedUser,
+  sendOtp,
+  verifyOtp,
 } from "../controllers/user.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
@@ -22,6 +24,8 @@ import {
   inviteUserAuthRequestSchema,
   completeProfileRequestSchema,
   updateProfileRequestSchema,
+  sendOtpRequestSchema,
+  verifyOtpRequestSchema,
 } from "../middlewares/user.validation";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { Platform, UserRoles } from "../services/dto-service/modules.export";
@@ -57,7 +61,7 @@ router.post(
 
 router.post(
   "/invite",
-  authenticateWithSession({ roles: [UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
+  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.USER], platforms: [Platform.ENTERPRISE] }),
   validateRequest(inviteUserAuthRequestSchema),
   inviteUser
 );
@@ -98,15 +102,19 @@ router.put(
 // Get all users under admin
 router.get(
   "/list",
-  authenticateWithSession({ roles: [UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
+  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.USER], platforms: [Platform.ENTERPRISE] }),
   getUsers
 );
 
-// Remove invited user
+// Remove invited user — only MASTER and ADMIN can remove, USER cannot
 router.delete(
   "/invited/:userId",
-  authenticateWithSession({ roles: [UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
+  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN], platforms: [Platform.ENTERPRISE] }),
   removeInvitedUser
 );
+
+// OTP endpoints (public — no auth required)
+router.post("/send-otp", validateRequest(sendOtpRequestSchema), sendOtp);
+router.post("/verify-otp", validateRequest(verifyOtpRequestSchema), verifyOtp);
 
 export default router;

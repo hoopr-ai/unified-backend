@@ -10,3 +10,5 @@ export * from './gcs.helper';
 export * from './pdf-license.helper';
 export * from './newrelic.helper';
 export * from './logger';
+export * from './redis.client';
+export * from './sms.service';

@@ -2,6 +2,7 @@ import Joi from "joi";
 import type {
   CreateAuthRequestData, InviteUserAuthRequestData, LoginUserRequestData,
   ResetPasswordRequestData, CompleteProfileRequestData,
+  SendOtpRequestData, VerifyOtpRequestData,
 } from "../services/dto-service/modules.export";
 import { Platform } from "../services/dto-service/constants/modules.export";
 import { ProfileRole } from "../services/dto-service/modules.export";
@@ -49,3 +50,14 @@ export const updateProfileRequestSchema = Joi.object({
     mobile: Joi.string().min(8).max(15).optional(),
     profileRole: Joi.string().valid(...profileRoleValues).optional(),
 }).min(1);
+
+export const sendOtpRequestSchema = Joi.object<SendOtpRequestData>({
+  mobile: Joi.string().pattern(/^\d+$/).min(8).max(15).required(),
+  countryCode: Joi.string().pattern(/^\d+$/).min(1).max(4).required(),
+});
+
+export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
+  mobile: Joi.string().pattern(/^\d+$/).min(8).max(15).required(),
+  countryCode: Joi.string().pattern(/^\d+$/).min(1).max(4).required(),
+  otp: Joi.string().length(6).pattern(/^\d+$/).required(),
+});

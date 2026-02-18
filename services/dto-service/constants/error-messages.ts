@@ -16,4 +16,9 @@ export const enum ErrorMessages {
     CannotRemoveAdmin = "Cannot remove an admin or master user.",
     CannotRemoveSelf = "You cannot remove yourself.",
     UserNotInBrand = "User does not belong to your brand.",
+    InvalidMobileNumber = "Please provide a valid mobile number.",
+    OtpExpiredOrNotFound = "OTP expired or not found. Please request a new OTP.",
+    OtpResendLimitExceeded = "You have exceeded the OTP resend limit. Please try again later.",
+    OtpSendFailed = "Failed to send OTP. Please try again.",
+    NumberTemporarilyLocked = "Number temporarily locked due to too many failed attempts.",
 }
