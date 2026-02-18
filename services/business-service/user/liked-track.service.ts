@@ -36,7 +36,7 @@ export const likeTrackService = async (
 export const unlikeTrackService = async (
   userId: number,
   trackCode: string
-): Promise<{ trackCode: string; unliked: boolean }> => {
+): Promise<{ trackCode: string; liked: boolean }> => {
   // Check if track was liked
   const wasLiked = await isTrackLiked(userId, trackCode);
   if (!wasLiked) {
@@ -47,7 +47,7 @@ export const unlikeTrackService = async (
 
   return {
     trackCode,
-    unliked: true,
+    liked: false,
   };
 };
 
