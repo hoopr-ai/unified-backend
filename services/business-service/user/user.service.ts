@@ -18,6 +18,8 @@ import {
 import {
   findActiveUser,
   findActiveUserSilently,
+  findUserByEmailAndPlatform,
+  reactivateUser,
   findUserRole,
   saveUser,
   saveUserRole,
@@ -38,7 +40,7 @@ import {
   isSessionExpiredByInactivity,
   type UserSessionDetails,
 } from "../../persistence-service/exports";
-import { AppError, createJWTToken, sendWelcomeEmail, sendInviteEmail } from "../../helper-service/modules.export";
+import { AppError, createJWTToken, sendWelcomeEmail, sendInviteEmail, sendFirstLoginWelcomeEmail } from "../../helper-service/modules.export";
 import {
   ErrorMessages,
   Platform,
@@ -130,6 +132,16 @@ export const userLoginService = async (
     userId: user.id,
     route: "/login"
   });
+
+  // Send welcome email on first login (profile not yet completed)
+  if (!user.isProfileComplete) {
+    const loginUrl = `${process.env.FRONTEND_URL}/login`;
+    const userName = [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
+    sendFirstLoginWelcomeEmail(user.email, loginUrl, userName).catch((err) => {
+      logger.error("Failed to send first login welcome email", { userId: user.id, error: err.message });
+    });
+  }
+
   return buildLoginResponse(user, role, user.isProfileComplete ?? false, token, session.id!);
 };
 
@@ -247,10 +259,6 @@ export const inviteUserService = async (
   const { email } = data;
   const platform = sessionData?.platform!;
   const createdBy = sessionData?.userId;
-  const userDetails = await findActiveUserSilently(email, platform);
-  if (userDetails) {
-    throw new AppError(ErrorMessages.UserAlreadyExists, 400);
-  }
 
   // Get the brandId from the inviting user
   let brandId: number | undefined;
@@ -263,7 +271,28 @@ export const inviteUserService = async (
     throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
   }
 
-  // Generate a random password for the invited user
+  // Check if user already exists with any status
+  const existingUser = await findUserByEmailAndPlatform(email, platform);
+
+  if (existingUser) {
+    // User exists and is active — cannot re-invite
+    if (existingUser.status === UserStatus.ACTIVE) {
+      throw new AppError(ErrorMessages.UserAlreadyInvited, 400);
+    }
+
+    // User was previously removed (DELETED) — reactivate with new password
+    if (existingUser.status === UserStatus.DELETED) {
+      const password = generateRandomPassword();
+      const hashedNewPassword = await bcrypt.hash(password, 10);
+      await reactivateUser(existingUser.id!, hashedNewPassword, brandId, createdBy);
+
+      const loginUrl = `${process.env.FRONTEND_URL}/login`;
+      await sendInviteEmail(email, password, loginUrl);
+      return {};
+    }
+  }
+
+  // Brand new user — create fresh
   const password = generateRandomPassword();
   const hashedNewPassword = await bcrypt.hash(password, 10);
   const newUser = createUserDetails(email, platform, hashedNewPassword, brandId, createdBy);
@@ -271,7 +300,6 @@ export const inviteUserService = async (
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);
 
-  // Send invite email with credentials
   const loginUrl = `${process.env.FRONTEND_URL}/login`;
   await sendInviteEmail(email, password, loginUrl);
 

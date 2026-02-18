@@ -4,6 +4,7 @@ export const enum ErrorMessages {
     UserNotFound = "User details not found.",
     SamePassword = "New password cannot be the same as the old password",
     UserAlreadyExists = "User with given email already exists.",
+    UserAlreadyInvited = "User with given email has already been invited.",
     AlbumNotFound = "Album not found.",
     InsufficientTokens = "Insufficient tokens. Please contact your administrator to add more tokens.",
     TrackNotFound = "Track not found.",

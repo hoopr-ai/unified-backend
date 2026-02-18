@@ -20,6 +20,42 @@ export const findActiveUserSilently = async (email: string, platform: Platform):
   return userDetails;
 }
 
+export const findUserByEmailAndPlatform = async (email: string, platform: Platform): Promise<UserDetails | null> => {
+  const userDetails = await UserModel.findOne({
+    where: { email, platform },
+  });
+  return userDetails;
+}
+
+export const reactivateUser = async (
+  userId: number,
+  hashedPassword: string,
+  brandId?: number,
+  createdBy?: number,
+): Promise<void> => {
+  await UserModel.update(
+    {
+      status: UserStatus.ACTIVE,
+      password: hashedPassword,
+      brandId,
+      createdBy,
+      firstName: undefined,
+      lastName: undefined,
+      mobile: undefined,
+      profileRole: undefined,
+    },
+    { where: { id: userId } },
+  );
+  // Reactivate existing role or create new one
+  const existingRole = await UserRoleModel.findOne({ where: { userId } });
+  if (existingRole) {
+    await UserRoleModel.update(
+      { status: UserStatus.ACTIVE },
+      { where: { userId } },
+    );
+  }
+}
+
 export const updateUserPassword = async (
   email: string,
   platform: Platform,
