@@ -44,6 +44,7 @@ export const getUserLikedTracks = async (
     where: { userId },
     limit,
     offset,
+    distinct: true,
     order: [["createdAt", "DESC"]],
     include: [
       {
