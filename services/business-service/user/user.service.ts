@@ -40,7 +40,13 @@ import {
   isSessionExpiredByInactivity,
   type UserSessionDetails,
 } from "../../persistence-service/exports";
-import { AppError, createJWTToken, sendWelcomeEmail, sendInviteEmail, sendFirstLoginWelcomeEmail } from "../../helper-service/modules.export";
+import {
+  AppError,
+  createJWTToken,
+  sendWelcomeEmail,
+  sendInviteEmail,
+  sendFirstLoginWelcomeEmail,
+} from "../../helper-service/modules.export";
 import {
   ErrorMessages,
   Platform,
@@ -57,7 +63,7 @@ const buildLoginResponse = (
   role: string | null,
   isProfileComplete: boolean,
   token: string,
-  sessionId: number
+  sessionId: number,
 ): LoginResponseWithSession => {
   return {
     id: user.id!,
@@ -72,7 +78,7 @@ const buildLoginResponse = (
 
 const comparePasswordsEncrypted = async (
   password: string,
-  encryptedPassword: string
+  encryptedPassword: string,
 ) => {
   const passwordMatch = await bcrypt.compare(password, encryptedPassword);
   if (!passwordMatch) {
@@ -101,7 +107,7 @@ const createUserDetails = (
 
 export const userLoginService = async (
   data: LoginUserRequestData,
-  metadata?: SessionMetadata
+  metadata?: SessionMetadata,
 ): Promise<LoginResponseWithSession> => {
   const { email, password, platform } = data;
   const user = await findActiveUser(email, platform);
@@ -109,7 +115,7 @@ export const userLoginService = async (
   const role = await findUserRole(user.id!);
   const token = createJWTToken(
     { userId: user.id, email: user.email, platform: user.platform, role },
-    AccessTokenExpiry
+    AccessTokenExpiry,
   );
 
   // Create a new session for the user
@@ -130,27 +136,49 @@ export const userLoginService = async (
   const session = await createSession(sessionData);
   logger.info("User logged in", {
     userId: user.id,
-    route: "/login"
+    route: "/login",
   });
 
   // Send welcome email on first login (profile not yet completed)
   if (!user.isProfileComplete) {
     const loginUrl = `${process.env.FRONTEND_URL}/login`;
-    const userName = [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
+    const userName =
+      [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
     sendFirstLoginWelcomeEmail(user.email, loginUrl, userName).catch((err) => {
-      logger.error("Failed to send first login welcome email", { userId: user.id, error: err.message });
+      logger.error("Failed to send first login welcome email", {
+        userId: user.id,
+        error: err.message,
+      });
     });
   }
 
-  return buildLoginResponse(user, role, user.isProfileComplete ?? false, token, session.id!);
+  return buildLoginResponse(
+    user,
+    role,
+    user.isProfileComplete ?? false,
+    token,
+    session.id!,
+  );
 };
 
 export const validateAndRefreshSession = async (
-  sessionToken: string
-): Promise<{ isValid: boolean; session?: UserSessionDetails; needsNewSession: boolean }> => {
+  sessionToken: string,
+): Promise<{
+  isValid: boolean;
+  session?: UserSessionDetails;
+  needsNewSession: boolean;
+}> => {
   const session = await findActiveSessionByToken(sessionToken);
 
   if (!session) {
+    return { isValid: false, needsNewSession: true };
+  }
+
+  // Check if the user is still active (not deleted)
+  const user = await findUserById(session.userId);
+  if (!user || user.status !== UserStatus.ACTIVE) {
+    // User is deleted or inactive - deactivate the session
+    await deactivateSessionByToken(sessionToken);
     return { isValid: false, needsNewSession: true };
   }
 
@@ -170,19 +198,19 @@ export const validateAndRefreshSession = async (
 };
 
 export const logoutUserService = async (
-  sessionToken: string
+  sessionToken: string,
 ): Promise<void> => {
   await deactivateSessionByToken(sessionToken);
 };
 
 export const logoutAllSessionsService = async (
-  userId: number
+  userId: number,
 ): Promise<void> => {
   await deactivateAllUserSessions(userId);
 };
 
 export const userResetPasswordService = async (
-  data: ResetPasswordRequestData
+  data: ResetPasswordRequestData,
 ): Promise<void> => {
   const { email, newPassword, platform, oldPassword } = data;
   const user = await findActiveUser(email, platform);
@@ -202,22 +230,28 @@ const createUserRoleDetails = (userId: number, role: UserRoles) => {
     createdAt: new Date(),
   };
   return userRoleDetails;
-}
+};
 
 export const createUserService = async (
   data: CreateAuthRequestData,
-  createdBy?: number
+  createdBy?: number,
 ): Promise<{}> => {
   const { email, password, platform, brandId } = data;
   const userDetails = await findActiveUserSilently(email, platform);
   if (userDetails) {
     throw new AppError(ErrorMessages.UserAlreadyExists, 400);
   }
-  if(platform === Platform.ENTERPRISE && !brandId) {
+  if (platform === Platform.ENTERPRISE && !brandId) {
     throw new AppError(ErrorMessages.UserNotAssociatedWithBrand, 400);
   }
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, platform, hashedNewPassword, brandId, createdBy);
+  const newUser = createUserDetails(
+    email,
+    platform,
+    hashedNewPassword,
+    brandId,
+    createdBy,
+  );
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.ADMIN);
   await saveUserRole(userRoleDetails);
@@ -230,14 +264,14 @@ export const createUserService = async (
 };
 
 const generateRandomPassword = (length: number = 12): string => {
-  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
-  const numbers = '0123456789';
-  const special = '!@#$%^&*';
+  const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const lowercase = "abcdefghijklmnopqrstuvwxyz";
+  const numbers = "0123456789";
+  const special = "!@#$%^&*";
   const allChars = uppercase + lowercase + numbers + special;
 
   // Ensure at least one of each type
-  let password = '';
+  let password = "";
   password += uppercase[Math.floor(Math.random() * uppercase.length)];
   password += lowercase[Math.floor(Math.random() * lowercase.length)];
   password += numbers[Math.floor(Math.random() * numbers.length)];
@@ -249,7 +283,10 @@ const generateRandomPassword = (length: number = 12): string => {
   }
 
   // Shuffle the password
-  return password.split('').sort(() => Math.random() - 0.5).join('');
+  return password
+    .split("")
+    .sort(() => Math.random() - 0.5)
+    .join("");
 };
 
 export const inviteUserService = async (
@@ -284,7 +321,12 @@ export const inviteUserService = async (
     if (existingUser.status === UserStatus.DELETED) {
       const password = generateRandomPassword();
       const hashedNewPassword = await bcrypt.hash(password, 10);
-      await reactivateUser(existingUser.id!, hashedNewPassword, brandId, createdBy);
+      await reactivateUser(
+        existingUser.id!,
+        hashedNewPassword,
+        brandId,
+        createdBy,
+      );
 
       const loginUrl = `${process.env.FRONTEND_URL}/login`;
       await sendInviteEmail(email, password, loginUrl);
@@ -295,7 +337,13 @@ export const inviteUserService = async (
   // Brand new user — create fresh
   const password = generateRandomPassword();
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(email, platform, hashedNewPassword, brandId, createdBy);
+  const newUser = createUserDetails(
+    email,
+    platform,
+    hashedNewPassword,
+    brandId,
+    createdBy,
+  );
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);
@@ -308,7 +356,7 @@ export const inviteUserService = async (
 
 export const completeProfileService = async (
   data: CompleteProfileRequestData,
-  userId: number
+  userId: number,
 ): Promise<{}> => {
   const { firstName, lastName, mobile, profileRole } = data;
 
@@ -327,7 +375,7 @@ export const completeProfileService = async (
 };
 
 export const getUserProfileService = async (
-  userId: number
+  userId: number,
 ): Promise<UserProfileResponse> => {
   const user = await findUserById(userId);
   if (!user) {
@@ -348,7 +396,7 @@ export const getUserProfileService = async (
 
 export const updateUserProfileService = async (
   data: UpdateProfileRequestData,
-  userId: number
+  userId: number,
 ): Promise<UserProfileResponse> => {
   const user = await findUserById(userId);
   if (!user) {
@@ -405,6 +453,10 @@ export const removeInvitedUserService = async (
     throw new AppError(ErrorMessages.CannotRemoveAdmin, 400);
   }
 
+  // Deactivate all sessions of the target user to logout instantly
+  await deactivateAllUserSessions(targetUserId);
+
+  // Soft delete the user to remove access
   await softDeleteUserById(targetUserId);
 
   return {};
@@ -425,7 +477,7 @@ export interface PaginatedUsersResponse {
 export const getUsersUnderAdminService = async (
   adminUserId: number,
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
 ): Promise<PaginatedUsersResponse> => {
   const admin = await findUserById(adminUserId);
   if (!admin) {
@@ -439,7 +491,11 @@ export const getUsersUnderAdminService = async (
   const validPage = page > 0 ? page : 1;
   const validLimit = limit > 0 && limit <= 100 ? limit : 10;
 
-  const { rows, count } = await findUsersByBrandId(admin.brandId, validPage, validLimit);
+  const { rows, count } = await findUsersByBrandId(
+    admin.brandId,
+    validPage,
+    validLimit,
+  );
 
   const users: UserProfileResponse[] = rows.map((user: any) => ({
     id: user.id!,
