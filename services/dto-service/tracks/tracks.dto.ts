@@ -124,7 +124,7 @@ export interface GetAllTracksRequestData {
   page?: string;
   limit?: string;
   trending?: string;
-  type?: string;
+  type?: string[];
 }
 
 export interface GetTracksByCodesQuery {

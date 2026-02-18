@@ -197,15 +197,15 @@ export const getAllTracksService = async (
 
   // If type filter is provided, find matching owner IDs
   let ownerIds: string[] | undefined;
-  if (query.type) {
+  if (query.type && query.type.length > 0) {
     const normalize = (str: string) => str.trim().replace(/[\s_]+/g, "").toLowerCase();
-    const normalizedType = normalize(query.type);
+    const normalizedTypes = new Set(query.type.map(normalize));
     const allOwners = await OwnerModel.findAll({
       where: { type: { [Op.ne]: null } } as any,
       attributes: ["id", "type"],
     });
     const matchedOwners = allOwners.filter(
-      (o) => normalize(o.type!) === normalizedType,
+      (o) => normalizedTypes.has(normalize(o.type!)),
     );
     ownerIds = matchedOwners.map((o) => o.id);
     if (ownerIds.length === 0) {
