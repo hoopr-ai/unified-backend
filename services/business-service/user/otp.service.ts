@@ -21,11 +21,8 @@ const generateOtp = (): string => {
   return Math.floor(10 ** (OTP_LENGTH - 1) + Math.random() * 9 * 10 ** (OTP_LENGTH - 1)).toString();
 };
 
-const validateMobile = (mobile: string, countryCode: string): void => {
-  if (countryCode === "91" && mobile.length !== 10) {
-    throw new AppError(ErrorMessages.InvalidMobileNumber, 400);
-  }
-  if (mobile.length < 8 || mobile.length > 12) {
+const validateMobile = (mobile: string): void => {
+  if (mobile.length < 8 || mobile.length > 15) {
     throw new AppError(ErrorMessages.InvalidMobileNumber, 400);
   }
 };
@@ -33,9 +30,9 @@ const validateMobile = (mobile: string, countryCode: string): void => {
 export const sendOtpService = async (
   data: SendOtpRequestData,
 ): Promise<{ message: string }> => {
-  const { mobile, countryCode } = data;
+  const { mobile } = data;
 
-  validateMobile(mobile, countryCode);
+  validateMobile(mobile);
 
   // Check resend rate limit
   const resendAttempts = parseInt(await redisClient.get(KEY_RESEND_ATTEMPTS(mobile)) || "0", 10);
@@ -63,7 +60,7 @@ export const sendOtpService = async (
 
   // Send SMS
   try {
-    await sendOtpSms(mobile, countryCode, otp);
+    await sendOtpSms(mobile, otp);
   } catch (err) {
     logger.error("Failed to send OTP SMS", { mobile, error: (err as Error).message });
     throw new AppError(ErrorMessages.OtpSendFailed, 500);
