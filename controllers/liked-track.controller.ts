@@ -34,7 +34,7 @@ export const likeTrack = catchAsync(async (req: AuthRequest, res: Response) => {
 
 export const unlikeTrack = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
-  const trackCode = req.params.trackCode as string;
+  const { trackCode } = req.body;
 
   if (!userId) {
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
