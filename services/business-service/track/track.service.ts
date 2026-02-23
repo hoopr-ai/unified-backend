@@ -143,8 +143,8 @@ const transformTrackToDto = (
     primaryArtists,
     token: getStandardToken(track),
     isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
-    ownerType,
-    ownerSubType,
+    ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
+    ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
   };
 };
 
