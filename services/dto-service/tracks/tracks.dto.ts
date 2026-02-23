@@ -123,7 +123,7 @@ export interface PaginatedRawTracks {
 export interface GetAllTracksRequestData {
   page?: string;
   limit?: string;
-  trending?: string;
+  trending?: boolean;
   type?: string[];
 }
 

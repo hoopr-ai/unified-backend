@@ -6,26 +6,39 @@ import {
   getTrackDetailsByCodeService,
   GetTracksByFilterQuery,
 } from "../services/business-service/modules.export";
-import { catchAsync, sendResponse } from "../services/helper-service/modules.export";
+import {
+  catchAsync,
+  sendResponse,
+} from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
-import { GetAllTracksRequestData, GetTracksByCodesQuery, HttpStatusCode } from "../services/dto-service/modules.export";
+import {
+  GetAllTracksRequestData,
+  GetTracksByCodesQuery,
+  HttpStatusCode,
+} from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
-export const getAllTracks = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
-  const query: GetAllTracksRequestData = {
-    page: req.query.page as string,
-    limit: req.query.limit as string,
-    trending: req.body.trending as string,
-    type: req.body.type as string[] | undefined,
-  };
-  const response = await getAllTracksService(query, userId);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
-});
+export const getAllTracks = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    const query: GetAllTracksRequestData = {
+      page: req.query.page as string,
+      limit: req.query.limit as string,
+      trending: req.body.trending as boolean,
+      type: req.body.type as string[] | undefined,
+    };
+    const response = await getAllTracksService(query, userId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.GetTracksSuccess,
+    });
+  },
+);
 
 export const getTracksByCodes = catchAsync(
   async (req: AuthRequest, res: Response) => {
@@ -37,7 +50,11 @@ export const getTracksByCodes = catchAsync(
       type: req.body.type as string[] | undefined,
     };
     const response = await getTracksByCodesService(query, userId);
-    sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.GetTracksSuccess,
+    });
   },
 );
 
@@ -46,13 +63,17 @@ export const getTracksByFilter = catchAsync(
     const userId = req.session?.userId;
     const query: GetTracksByFilterQuery = {
       filterName: req.params.filterName as string,
-      filterIds: req.body.filterIds as string[] || [],
+      filterIds: (req.body.filterIds as string[]) || [],
       page: req.query.page as string,
       limit: req.query.limit as string,
       type: req.body.type as string[] | undefined,
     };
     const response = await getTracksByFilterService(query, userId);
-    sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksByFilterSuccess });
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.GetTracksByFilterSuccess,
+    });
   },
 );
 
@@ -63,10 +84,18 @@ export const getTrackDetailsByCode = catchAsync(
     const response = await getTrackDetailsByCodeService(trackCode, userId);
 
     if (!response) {
-      sendResponse(res, { status: HttpStatusCode.NOT_FOUND, data: null, message: ResponseMessages.TrackNotFound });
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: ResponseMessages.TrackNotFound,
+      });
       return;
     }
 
-    sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTrackDetailSuccess });
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.GetTrackDetailSuccess,
+    });
   },
 );

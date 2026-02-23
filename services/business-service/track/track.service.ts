@@ -210,7 +210,7 @@ export const getAllTracksService = async (
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
   const whereClause: Record<string, unknown> = {};
-  if (query.trending === "true") {
+  if (query.trending === true) {
     whereClause.trending = true;
   }
 
