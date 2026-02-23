@@ -131,4 +131,5 @@ export interface GetTracksByCodesQuery {
   trackCodes: string[];
   page?: string;
   limit?: string;
+  type?: string[];
 }

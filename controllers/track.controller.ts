@@ -15,34 +15,37 @@ interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
-export const getAllTracks = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
-  // Parse type: supports ?type=a,b,c or ?type=a&type=b or ?type=["a","b"]
-  let types: string[] | undefined;
-  const typeParam = req.query.type;
-  if (typeParam) {
-    if (Array.isArray(typeParam)) {
-      types = typeParam.map((t) => String(t).trim()).filter(Boolean);
-    } else {
-      const trimmed = String(typeParam).trim();
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) {
-          types = parsed.map((t: unknown) => String(t).trim()).filter(Boolean);
-        } else {
-          types = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
-        }
-      } catch {
+// Parse type query param: supports ?type=a,b,c or ?type=a&type=b or ?type=["a","b"]
+const parseTypeParam = (typeParam: unknown): string[] | undefined => {
+  if (!typeParam) return undefined;
+
+  let types: string[];
+  if (Array.isArray(typeParam)) {
+    types = typeParam.map((t) => String(t).trim()).filter(Boolean);
+  } else {
+    const trimmed = String(typeParam).trim();
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        types = parsed.map((t: unknown) => String(t).trim()).filter(Boolean);
+      } else {
         types = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
       }
+    } catch {
+      types = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
     }
   }
 
+  return types.length > 0 ? types : undefined;
+};
+
+export const getAllTracks = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
   const query: GetAllTracksRequestData = {
     page: req.query.page as string,
     limit: req.query.limit as string,
     trending: req.query.trending as string,
-    type: types && types.length > 0 ? types : undefined,
+    type: parseTypeParam(req.query.type),
   };
   const response = await getAllTracksService(query, userId);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
@@ -55,6 +58,7 @@ export const getTracksByCodes = catchAsync(
       trackCodes: req.body.trackCodes as string[],
       page: req.query.page as string,
       limit: req.query.limit as string,
+      type: req.body.type as string[] | undefined,
     };
     const response = await getTracksByCodesService(query, userId);
     sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });
@@ -64,32 +68,12 @@ export const getTracksByCodes = catchAsync(
 export const getTracksByFilter = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const userId = req.session?.userId;
-    const filterIdsParam = req.query.filterIds;
-    let filterIds: string[] = [];
-
-    if (Array.isArray(filterIdsParam)) {
-      filterIds = filterIdsParam.map((id) => String(id).trim()).filter((id) => id.length > 0);
-    } else if (typeof filterIdsParam === "string") {
-      const trimmed = filterIdsParam.trim();
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) {
-          filterIds = parsed.map((id: unknown) => String(id).trim()).filter((id) => id.length > 0);
-        } else {
-          // Parsed successfully but not an array, treat as comma-separated
-          filterIds = trimmed.split(",").map((id) => id.trim()).filter((id) => id.length > 0);
-        }
-      } catch {
-        // JSON parsing failed, treat as comma-separated values
-        filterIds = trimmed.split(",").map((id) => id.trim()).filter((id) => id.length > 0);
-      }
-    }
-
     const query: GetTracksByFilterQuery = {
       filterName: req.params.filterName as string,
-      filterIds,
+      filterIds: req.body.filterIds as string[] || [],
       page: req.query.page as string,
       limit: req.query.limit as string,
+      type: req.body.type as string[] | undefined,
     };
     const response = await getTracksByFilterService(query, userId);
     sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksByFilterSuccess });

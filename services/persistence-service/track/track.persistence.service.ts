@@ -101,11 +101,17 @@ export const findTracksByTrackCodes = async (
   trackCodes: string[],
   page: number,
   limit: number,
+  ownerIds?: string[],
 ): Promise<PaginatedRawTracks> => {
   const offset = (page - 1) * limit;
 
+  const whereClause: Record<string, unknown> = { trackCode: trackCodes };
+  if (ownerIds && ownerIds.length > 0) {
+    whereClause.ownerId = { [Op.overlap]: ownerIds };
+  }
+
   const { count, rows } = await TrackModel.findAndCountAll({
-    where: { trackCode: trackCodes },
+    where: whereClause,
     order: [["createdAt", "DESC"]],
     limit,
     offset,
@@ -126,6 +132,7 @@ export interface GetTracksByFilterParams {
   filterIds: string[];
   page: number;
   limit: number;
+  ownerIds?: string[];
 }
 
 export interface RawFilterMappingResult {
@@ -154,8 +161,14 @@ export const findTrackByTrackCode = async (
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {
-  const { filterIds, page, limit } = params;
+  const { filterIds, page, limit, ownerIds } = params;
   const offset = (page - 1) * limit;
+
+  // Build track-level where clause for owner type filtering
+  const trackWhere: Record<string, unknown> = {};
+  if (ownerIds && ownerIds.length > 0) {
+    trackWhere.ownerId = { [Op.overlap]: ownerIds };
+  }
 
   const { count, rows: mappings } =
     await TrackFilterMappingModel.findAndCountAll({
@@ -166,6 +179,8 @@ export const findTracksByFilter = async (
         {
           model: TrackModel,
           as: "track",
+          where: Object.keys(trackWhere).length > 0 ? trackWhere : undefined,
+          required: Object.keys(trackWhere).length > 0,
           include: [
             {
               model: TrackArtistMappingModel,

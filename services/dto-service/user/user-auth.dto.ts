@@ -58,6 +58,7 @@ export interface LoginResponse {
   isProfileComplete: boolean;
   expiresIn: number;
   token: string;
+  brandId?: number;
 }
 
 export const AccessTokenExpiry = "3h";

@@ -73,6 +73,7 @@ const buildLoginResponse = (
     expiresIn: AccessTokenExpiryInSeconds,
     token,
     sessionId,
+    brandId: user.brandId,
   };
 };
 

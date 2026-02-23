@@ -171,6 +171,25 @@ const buildPaginatedResponse = (
   };
 };
 
+// Resolve type filter to matching owner IDs
+const resolveOwnerIdsByType = async (
+  types?: string[],
+): Promise<string[] | undefined> => {
+  if (!types || types.length === 0) return undefined;
+
+  const normalize = (str: string) => str.trim().replace(/[\s_]+/g, "").toLowerCase();
+  const normalizedTypes = new Set(types.map(normalize));
+  const allOwners = await OwnerModel.findAll({
+    where: { type: { [Op.ne]: null } } as any,
+    attributes: ["id", "type"],
+  });
+  const matchedOwners = allOwners.filter(
+    (o) => normalizedTypes.has(normalize(o.type!)),
+  );
+  const ownerIds = matchedOwners.map((o) => o.id);
+  return ownerIds.length > 0 ? ownerIds : [];
+};
+
 // Empty pagination response helper
 const emptyPaginatedResponse = (page: number, limit: number): PaginatedTracksResponseData => ({
   tracks: [],
@@ -196,21 +215,9 @@ export const getAllTracksService = async (
   }
 
   // If type filter is provided, find matching owner IDs
-  let ownerIds: string[] | undefined;
-  if (query.type && query.type.length > 0) {
-    const normalize = (str: string) => str.trim().replace(/[\s_]+/g, "").toLowerCase();
-    const normalizedTypes = new Set(query.type.map(normalize));
-    const allOwners = await OwnerModel.findAll({
-      where: { type: { [Op.ne]: null } } as any,
-      attributes: ["id", "type"],
-    });
-    const matchedOwners = allOwners.filter(
-      (o) => normalizedTypes.has(normalize(o.type!)),
-    );
-    ownerIds = matchedOwners.map((o) => o.id);
-    if (ownerIds.length === 0) {
-      return emptyPaginatedResponse(page, limit);
-    }
+  const ownerIds = await resolveOwnerIdsByType(query.type);
+  if (ownerIds && ownerIds.length === 0) {
+    return emptyPaginatedResponse(page, limit);
   }
 
   // Fetch user's liked track codes if authenticated
@@ -245,6 +252,12 @@ export const getTracksByCodesService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
+  // If type filter is provided, find matching owner IDs
+  const ownerIds = await resolveOwnerIdsByType(query.type);
+  if (ownerIds && ownerIds.length === 0) {
+    return emptyPaginatedResponse(page, limit);
+  }
+
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
   if (userId) {
@@ -252,7 +265,7 @@ export const getTracksByCodesService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const rawData = await findTracksByTrackCodes(query.trackCodes, page, limit);
+  const rawData = await findTracksByTrackCodes(query.trackCodes, page, limit, ownerIds);
 
   // Sort tracks in the order of requested trackCodes
   const orderedTracks = sortTracksByRequestedOrder(rawData.rows, query.trackCodes);
@@ -269,6 +282,7 @@ export interface GetTracksByFilterQuery {
   filterIds: string[];
   page?: string;
   limit?: string;
+  type?: string[];
 }
 
 // Transform raw filter mapping data to paginated response
@@ -311,7 +325,12 @@ export const getTracksByFilterService = async (
   userId?: number,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
-  console.log("Query:", query);
+
+  // If type filter is provided, find matching owner IDs
+  const ownerIds = await resolveOwnerIdsByType(query.type);
+  if (ownerIds && ownerIds.length === 0) {
+    return emptyPaginatedResponse(page, limit);
+  }
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -324,6 +343,7 @@ export const getTracksByFilterService = async (
     filterIds: query.filterIds,
     page,
     limit,
+    ownerIds,
   });
 
   const filterTracks = rawData.rows.filter((m) => m.track).map((m) => m.track!);
