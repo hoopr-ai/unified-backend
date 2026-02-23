@@ -147,7 +147,7 @@ export const findUsersByBrandId = async (
 ): Promise<{ rows: (UserDetails & { userRoles?: UserRoleDetails[] })[]; count: number }> => {
   const offset = (page - 1) * limit;
   const { rows, count } = await UserModel.findAndCountAll({
-    where: { brandId, status: UserStatus.ACTIVE },
+    where: { brandId, status: ACTIVE_OR_INVITED },
     limit,
     offset,
     order: [["createdAt", "DESC"]],

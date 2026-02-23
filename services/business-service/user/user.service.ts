@@ -175,9 +175,9 @@ export const validateAndRefreshSession = async (
     return { isValid: false, needsNewSession: true };
   }
 
-  // Check if the user is still active (not deleted)
+  // Check if the user is still active or invited (not deleted)
   const user = await findUserById(session.userId);
-  if (!user || user.status !== UserStatus.ACTIVE) {
+  if (!user || (user.status !== UserStatus.ACTIVE && user.status !== UserStatus.INVITED)) {
     // User is deleted or inactive - deactivate the session
     await deactivateSessionByToken(sessionToken);
     return { isValid: false, needsNewSession: true };
