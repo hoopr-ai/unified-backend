@@ -338,13 +338,10 @@ export const inviteUserService = async (
   // Brand new user — create fresh
   const password = generateRandomPassword();
   const hashedNewPassword = await bcrypt.hash(password, 10);
-  const newUser = createUserDetails(
-    email,
-    platform,
-    hashedNewPassword,
-    brandId,
-    createdBy,
-  );
+  const newUser = {
+    ...createUserDetails(email, platform, hashedNewPassword, brandId, createdBy),
+    status: UserStatus.INVITED,
+  };
   const savedUser = await saveUser(newUser);
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);

@@ -2,10 +2,13 @@ import { ErrorMessages, type Platform } from "../../dto-service/constants/module
 import { UserStatus, type UserRoles, type ProfileRole } from "../../dto-service/modules.export";
 import { AppError } from "../../helper-service/AppError";
 import { UserModel, UserRoleDetails, UserRoleModel, type UserDetails } from "./schemas/modules.export";
+import { Op } from "sequelize";
+
+const ACTIVE_OR_INVITED = { [Op.in]: [UserStatus.ACTIVE, UserStatus.INVITED] };
 
 export const findActiveUser = async (email: string, platform: Platform): Promise<UserDetails> => {
     const userDetails =  await UserModel.findOne({
-      where: { email, platform, status: UserStatus.ACTIVE },
+      where: { email, platform, status: ACTIVE_OR_INVITED },
     });
     if (!userDetails) {
       throw new AppError(ErrorMessages.UserNotFound, 404);
@@ -15,7 +18,7 @@ export const findActiveUser = async (email: string, platform: Platform): Promise
 
 export const findActiveUserSilently = async (email: string, platform: Platform): Promise<UserDetails | null> => {
   const userDetails =  await UserModel.findOne({
-    where: { email, platform, status: UserStatus.ACTIVE },
+    where: { email, platform, status: ACTIVE_OR_INVITED },
   });
   return userDetails;
 }
@@ -35,7 +38,7 @@ export const reactivateUser = async (
 ): Promise<void> => {
   await UserModel.update(
     {
-      status: UserStatus.ACTIVE,
+      status: UserStatus.INVITED,
       password: hashedPassword,
       brandId,
       createdBy,
@@ -93,7 +96,7 @@ export const findUserById = async (
   userId: number
 ): Promise<UserDetails | null> => {
   const userDetails = await UserModel.findOne({
-    where: { id: userId, status: UserStatus.ACTIVE },
+    where: { id: userId, status: ACTIVE_OR_INVITED },
   });
   return userDetails;
 }
@@ -106,8 +109,8 @@ export const updateUserProfile = async (
   profileRole: ProfileRole
 ): Promise<void> => {
   await UserModel.update(
-    { firstName, lastName, mobile, profileRole },
-    { where: { id: userId, status: UserStatus.ACTIVE } }
+    { firstName, lastName, mobile, profileRole, status: UserStatus.ACTIVE, isProfileComplete: true },
+    { where: { id: userId, status: ACTIVE_OR_INVITED } }
   );
 }
 
@@ -129,7 +132,7 @@ export const updateUserProfilePartial = async (
 export const softDeleteUserById = async (userId: number): Promise<void> => {
   await UserModel.update(
     { status: UserStatus.DELETED },
-    { where: { id: userId, status: UserStatus.ACTIVE } }
+    { where: { id: userId, status: ACTIVE_OR_INVITED } }
   );
   await UserRoleModel.update(
     { status: UserStatus.DELETED },
