@@ -46,8 +46,7 @@ export const reactivateUser = async (
       lastName: null,
       mobile: null,
       profileRole: null,
-      isProfileComplete: false,
-    },
+    } as any,
     { where: { id: userId } },
   );
   // Reactivate existing role or create new one
@@ -148,7 +147,7 @@ export const findUsersByBrandId = async (
 ): Promise<{ rows: (UserDetails & { userRoles?: UserRoleDetails[] })[]; count: number }> => {
   const offset = (page - 1) * limit;
   const { rows, count } = await UserModel.findAndCountAll({
-    where: { brandId },
+    where: { brandId, status: UserStatus.ACTIVE },
     limit,
     offset,
     order: [["createdAt", "DESC"]],
