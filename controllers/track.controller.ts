@@ -15,37 +15,13 @@ interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
-// Parse type query param: supports ?type=a,b,c or ?type=a&type=b or ?type=["a","b"]
-const parseTypeParam = (typeParam: unknown): string[] | undefined => {
-  if (!typeParam) return undefined;
-
-  let types: string[];
-  if (Array.isArray(typeParam)) {
-    types = typeParam.map((t) => String(t).trim()).filter(Boolean);
-  } else {
-    const trimmed = String(typeParam).trim();
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        types = parsed.map((t: unknown) => String(t).trim()).filter(Boolean);
-      } else {
-        types = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
-      }
-    } catch {
-      types = trimmed.split(",").map((t) => t.trim()).filter(Boolean);
-    }
-  }
-
-  return types.length > 0 ? types : undefined;
-};
-
 export const getAllTracks = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
   const query: GetAllTracksRequestData = {
     page: req.query.page as string,
     limit: req.query.limit as string,
-    trending: req.query.trending as string,
-    type: parseTypeParam(req.query.type),
+    trending: req.body.trending as string,
+    type: req.body.type as string[] | undefined,
   };
   const response = await getAllTracksService(query, userId);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetTracksSuccess });

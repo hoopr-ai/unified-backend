@@ -10,7 +10,7 @@ import { getTracksByCodesRequestSchema } from "../middlewares/track.validation";
 
 const router = Router();
 
-router.get("/", getAllTracks);
+router.post("/", getAllTracks);
 router.post("/by-codes", validateRequest(getTracksByCodesRequestSchema), getTracksByCodes);
 router.get("/:trackCode", getTrackDetailsByCode);
 router.post("/filter/:filterName", getTracksByFilter);
