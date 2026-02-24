@@ -13,6 +13,7 @@ import {
   addTokensByType,
   deductTokenByType,
   findTokensByBrandId,
+  getDistinctTokenTypes,
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
@@ -486,15 +487,33 @@ export const getTokenDetailsService = async (
     throw new AppError("User is not associated with any brand", 400);
   }
 
-  const tokens = await getAllTokenDetails(user.brandId);
+  const [tokens, allTokenTypes] = await Promise.all([
+    getAllTokenDetails(user.brandId),
+    getDistinctTokenTypes(),
+  ]);
+
+  const assignedTokenMap = new Map(tokens.map((t) => [t.type, t]));
+
+  const mergedTokens = allTokenTypes.map((type) => {
+    const token = assignedTokenMap.get(type);
+    if (token) {
+      return {
+        totalAssignedToken: token.totalAssignedToken,
+        tokensUsed: token.totalAssignedToken - token.tokenBalance,
+        tokenBalance: token.tokenBalance,
+        type: token.type,
+      };
+    }
+    return {
+      totalAssignedToken: 0,
+      tokensUsed: 0,
+      tokenBalance: 0,
+      type,
+    };
+  });
 
   return {
     brandId: user.brandId,
-    tokens: tokens.map((token) => ({
-      totalAssignedToken: token.totalAssignedToken,
-      tokensUsed: token.totalAssignedToken - token.tokenBalance,
-      tokenBalance: token.tokenBalance,
-      type: token.type,
-    })),
+    tokens: mergedTokens,
   };
 };

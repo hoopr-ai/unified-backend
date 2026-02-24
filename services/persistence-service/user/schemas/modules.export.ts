@@ -3,3 +3,4 @@ export * from './user-role.schema';
 export * from './user-session.schema';
 export * from './user-activity.schema';
 export * from './user-liked-track.schema';
+export * from './user-stream-history.schema';

@@ -1,5 +1,15 @@
 import { TokenModel, type TokenDetails } from "./schemas/modules.export";
 import { sequelize } from "../database";
+import { fn, col, literal } from "sequelize";
+
+export const getDistinctTokenTypes = async (): Promise<string[]> => {
+  const results = await TokenModel.findAll({
+    attributes: [[fn("DISTINCT", col("type")), "type"]],
+    where: literal('"type" IS NOT NULL'),
+    raw: true,
+  });
+  return results.map((r: any) => r.type as string).filter(Boolean);
+};
 
 export const findTokenByBrandAndType = async (
   brandId: number,
