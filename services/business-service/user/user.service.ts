@@ -319,6 +319,11 @@ export const inviteUserService = async (
       throw new AppError(ErrorMessages.UserAlreadyInvited, 400);
     }
 
+    // User is already invited (by same or another brand) — cannot re-invite
+    if (existingUser.status === UserStatus.INVITED) {
+      throw new AppError(ErrorMessages.UserAlreadyInvitedByAnotherBrand, 400);
+    }
+
     // User was previously removed (DELETED) — reactivate with new password
     if (existingUser.status === UserStatus.DELETED) {
       const password = generateRandomPassword();
