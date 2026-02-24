@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { UniqueConstraintError } from "sequelize";
 import {
   type LoginUserRequestData,
   type LoginResponse,
@@ -367,7 +368,18 @@ export const completeProfileService = async (
     throw new AppError(ErrorMessages.ProfileAlreadyComplete, 400);
   }
 
-  await updateUserProfile(userId, firstName, lastName, mobile, profileRole);
+  try {
+    await updateUserProfile(userId, firstName, lastName, mobile, profileRole);
+  } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      const constraint = (error as any).parent?.constraint ?? "";
+      if (constraint === "unique_mobile_platform" || "mobile" in (error.fields ?? {})) {
+        throw new AppError(ErrorMessages.MobileAlreadyInUse, 409);
+      }
+      throw new AppError("A conflicting value already exists. Please check your details.", 409);
+    }
+    throw error;
+  }
 
   return {};
 };
@@ -401,7 +413,18 @@ export const updateUserProfileService = async (
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
 
-  await updateUserProfilePartial(userId, data);
+  try {
+    await updateUserProfilePartial(userId, data);
+  } catch (error) {
+    if (error instanceof UniqueConstraintError) {
+      const constraint = (error as any).parent?.constraint ?? "";
+      if (constraint === "unique_mobile_platform" || "mobile" in (error.fields ?? {})) {
+        throw new AppError(ErrorMessages.MobileAlreadyInUse, 409);
+      }
+      throw new AppError("A conflicting value already exists. Please check your details.", 409);
+    }
+    throw error;
+  }
 
   const updatedUser = await findUserById(userId);
   if (!updatedUser) {

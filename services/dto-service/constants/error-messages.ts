@@ -21,4 +21,5 @@ export const enum ErrorMessages {
     OtpResendLimitExceeded = "You have exceeded the OTP resend limit. Please try again later.",
     OtpSendFailed = "Failed to send OTP. Please try again.",
     NumberTemporarilyLocked = "Number temporarily locked due to too many failed attempts.",
+    MobileAlreadyInUse = "This mobile number is already associated with another account.",
 }
