@@ -1,5 +1,3 @@
-import { VideoLinkType } from "../../persistence-service/exports";
-
 export interface LicenseTrackRequest {
   trackCode: string;
 }
@@ -62,7 +60,6 @@ export interface LicenseHistoryResponse {
 export interface BrandLicenseVideoLink {
   id: number;
   url: string;
-  type: VideoLinkType;
   status: string;
   trackCode?: string;
   createdAt: Date;
@@ -127,7 +124,6 @@ export interface DownloadTrackResponse {
 // Video Links DTOs
 export interface VideoLinkInput {
   url: string;
-  type: VideoLinkType;
 }
 
 export interface AddVideoLinksRequest {
@@ -136,18 +132,9 @@ export interface AddVideoLinksRequest {
   trackCode?: string;
 }
 
-// Keep for backwards compatibility or internal use
-export interface AddVideoLinkRequest {
-  licenseId: number;
-  url: string;
-  type: VideoLinkType;
-  trackCode?: string;
-}
-
 export interface VideoLinkResponse {
   id: number;
   url: string;
-  type: VideoLinkType;
   status: string;
   trackCode?: string;
   licenseId: number;

@@ -16,7 +16,7 @@ import {
 } from "../services/helper-service/modules.export";
 import { HttpStatusCode } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
-import { LicenseModel, VideoLinkType } from "../services/persistence-service/exports";
+import { LicenseModel } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -152,31 +152,10 @@ export const addVideoLink = catchAsync(async (req: AuthRequest, res: Response) =
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Maximum 3 video links can be added at a time", {});
   }
 
-  const validTypes = Object.values(VideoLinkType);
   for (const link of videoLinks) {
-    if (!link.url || !link.type) {
-      return sendError(res, HttpStatusCode.BAD_REQUEST, "Each video link must have url and type", {});
+    if (!link.url) {
+      return sendError(res, HttpStatusCode.BAD_REQUEST, "Each video link must have a url", {});
     }
-    if (!validTypes.includes(link.type)) {
-      return sendError(
-        res,
-        HttpStatusCode.BAD_REQUEST,
-        `Invalid video link type: ${link.type}. Must be one of: ${validTypes.join(", ")}`,
-        {}
-      );
-    }
-  }
-
-  // Check for duplicate types in the request
-  const types = videoLinks.map((link: { type: string }) => link.type);
-  const uniqueTypes = new Set(types);
-  if (uniqueTypes.size !== types.length) {
-    return sendError(
-      res,
-      HttpStatusCode.BAD_REQUEST,
-      "Duplicate video link types are not allowed. Each type can only be added once.",
-      {}
-    );
   }
 
   // Get track code from license details

@@ -46,16 +46,6 @@ export const addVideoLinkService = async (
         );
     }
 
-    // Check for duplicate types in the request
-    const typesInRequest = videoLinks.map((vl) => vl.type);
-    const uniqueTypes = new Set(typesInRequest);
-    if (uniqueTypes.size !== typesInRequest.length) {
-        throw new AppError(
-            "Duplicate video link types are not allowed. Each type (INSTAGRAM, FACEBOOK, YOUTUBE) can only be added once.",
-            400
-        );
-    }
-
     // Check video link limit: Maximum 3 links per license
     const existingLinksCount = await countVideoLinksByLicenseId(licenseId);
     const totalAfterAdd = existingLinksCount + videoLinks.length;
@@ -66,24 +56,12 @@ export const addVideoLinkService = async (
         );
     }
 
-    // Check if any of the requested types already exist for this license
-    const existingLinks = await getVideoLinksByLicenseId(licenseId);
-    const existingTypes = new Set(existingLinks.map((link) => link.type));
-    const conflictingTypes = typesInRequest.filter((type) => existingTypes.has(type));
-    if (conflictingTypes.length > 0) {
-        throw new AppError(
-            `Video links of type(s) ${conflictingTypes.join(", ")} already exist for this license. Only one link per type is allowed.`,
-            400
-        );
-    }
-
     // Create all video links
     const createdLinks: VideoLinkResponse[] = [];
     for (const videoLink of videoLinks) {
         const videoLinkDetails: VideoLinkDetails = {
             licenseId,
             url: videoLink.url,
-            type: videoLink.type,
             trackCode,
             status: "ACTIVE",
         };
@@ -92,7 +70,6 @@ export const addVideoLinkService = async (
         createdLinks.push({
             id: created.id,
             url: created.url,
-            type: created.type,
             status: created.status,
             trackCode: created.trackCode,
             licenseId: created.licenseId,
@@ -131,7 +108,6 @@ export const getVideoLinksService = async (
     const videoLinksResponse: VideoLinkResponse[] = videoLinks.map((vl) => ({
         id: vl.id,
         url: vl.url,
-        type: vl.type,
         status: vl.status,
         trackCode: vl.trackCode,
         licenseId: vl.licenseId,
