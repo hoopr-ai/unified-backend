@@ -377,9 +377,6 @@ export const downloadTrackService = async (
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
-  // Increment number of downloads
-  await license.increment("numberOfDownloads");
-
   return {
     downloadLink: gcsResult.downloadLink,
     trackId: track.id,

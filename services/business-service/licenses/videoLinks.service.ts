@@ -37,13 +37,9 @@ export const addVideoLinkService = async (
         }
     }
 
-    // Security check: Ensure the track has been downloaded at least once
-    // Users should only be able to add video links to tracks they have actually downloaded
-    if (license.numberOfDownloads === 0) {
-        throw new AppError(
-            "You must download the track at least once before adding video links. Please use the track download API first.",
-            403
-        );
+    // Security check: trackCode in payload must match the license's trackCode
+    if (trackCode && license.trackCode !== trackCode) {
+        throw new AppError("The provided track does not match this license.", 403);
     }
 
     // Check video link limit: Maximum 3 links per license

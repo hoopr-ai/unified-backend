@@ -122,14 +122,10 @@ export interface DownloadTrackResponse {
 }
 
 // Video Links DTOs
-export interface VideoLinkInput {
-  url: string;
-}
-
 export interface AddVideoLinksRequest {
   licenseId: number;
-  videoLinks: VideoLinkInput[];
-  trackCode?: string;
+  trackCode: string;
+  videoLinks: { url: string }[];
 }
 
 export interface VideoLinkResponse {
