@@ -140,6 +140,20 @@ export const softDeleteUserById = async (userId: number): Promise<void> => {
   );
 };
 
+export const findAllActiveUsersByBrandId = async (
+  brandId: number,
+  excludeUserId?: number
+): Promise<UserDetails[]> => {
+  const where: any = { brandId, status: UserStatus.ACTIVE };
+  if (excludeUserId) {
+    where.id = { [Op.ne]: excludeUserId };
+  }
+  return await UserModel.findAll({
+    where,
+    attributes: ["id", "email", "firstName", "lastName"],
+  });
+};
+
 export const findUsersByBrandId = async (
   brandId: number,
   page: number,

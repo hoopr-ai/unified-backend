@@ -16,7 +16,7 @@ import {
   getDistinctTokenTypes,
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
-import { UserModel } from "../../persistence-service/user/modules.export";
+import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { Op } from "sequelize";
 import {
@@ -24,7 +24,9 @@ import {
   generateGCSSignedUrl,
   uploadBufferToGCS,
   generateLicensePdf,
+  sendTrackDownloadNotificationEmail,
 } from "../../helper-service/modules.export";
+import { logger } from "../../helper-service/logger";
 import type {
   LicenseTrackRequest,
   LicenseResponse,
@@ -48,7 +50,7 @@ export const licenseTrackService = async (
 
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId"],
+    attributes: ["id", "brandId", "email"],
   });
 
   if (!user) {
@@ -109,12 +111,8 @@ export const licenseTrackService = async (
   }
 
   if (!matchingTokenType) {
-    const availableTypes = brandTokens
-      .filter((t) => t.tokenBalance > 0)
-      .map((t) => t.type);
     throw new AppError(
-      `No matching tokens available. Track requires tokens of type: ${trackOwnerTypes.join(", ")}. ` +
-        `Your available token types: ${availableTypes.length > 0 ? availableTypes.join(", ") : "none"}`,
+      `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
       400,
     );
   }
@@ -147,6 +145,39 @@ export const licenseTrackService = async (
   };
 
   const createdLicense = await createLicenseRecord(licenseDetails);
+
+  // Notify entire team about the track download
+  const licensedAt = new Date();
+  const expiryDate = new Date(licensedAt);
+  expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+  const formattedExpiry = `${String(expiryDate.getDate()).padStart(2, "0")}/${String(expiryDate.getMonth() + 1).padStart(2, "0")}/${expiryDate.getFullYear()}`;
+
+  findAllActiveUsersByBrandId(brandId)
+    .then((teamMembers) => {
+      const emailData = {
+        trackName: track.name || trackCode,
+        trackCode: track.trackCode,
+        downloadedBy: user.email || "",
+        creditsRemaining: remainingTokens,
+        licenseExpiryDate: formattedExpiry,
+      };
+      teamMembers.forEach((member) => {
+        if (member.email) {
+          sendTrackDownloadNotificationEmail(member.email, emailData).catch((err) => {
+            logger.error("Failed to send track download notification email", {
+              recipientEmail: member.email,
+              error: err.message,
+            });
+          });
+        }
+      });
+    })
+    .catch((err) => {
+      logger.error("Failed to fetch team members for track download notification", {
+        brandId,
+        error: err.message,
+      });
+    });
 
   return {
     id: createdLicense.id!,

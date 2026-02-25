@@ -29,6 +29,7 @@ import {
   updateUserProfilePartial,
   findUserById,
   findUsersByBrandId,
+  findAllActiveUsersByBrandId,
   softDeleteUserById,
   UserRoleDetails,
   type UserDetails,
@@ -44,7 +45,8 @@ import {
 import {
   AppError,
   createJWTToken,
-  sendWelcomeEmail,
+  sendAdminCredentialsEmail,
+  sendTeamJoinNotificationEmail,
   sendInviteEmail,
   sendFirstLoginWelcomeEmail,
 } from "../../helper-service/modules.export";
@@ -258,9 +260,9 @@ export const createUserService = async (
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.ADMIN);
   await saveUserRole(userRoleDetails);
 
-  // Send welcome email with credentials
+  // Send admin credentials email
   const loginUrl = `${process.env.FRONTEND_URL}/login`;
-  await sendWelcomeEmail(email, password, loginUrl);
+  await sendAdminCredentialsEmail(email, password, loginUrl);
 
   return {};
 };
@@ -384,6 +386,29 @@ export const completeProfileService = async (
       throw new AppError("A conflicting value already exists. Please check your details.", 409);
     }
     throw error;
+  }
+
+  // Notify existing team members that someone has joined
+  console.log("[TeamJoin] user.brandId:", user.brandId, "userId:", userId);
+  if (user.brandId) {
+    const newMemberName = [firstName, lastName].filter(Boolean).join(" ");
+    const teamMembers = await findAllActiveUsersByBrandId(user.brandId, userId);
+    console.log("[TeamJoin] teamMembers found:", teamMembers.length, teamMembers.map((m) => ({ id: m.id, email: m.email })));
+    await Promise.allSettled(
+      teamMembers
+        .filter((member) => !!member.email)
+        .map((member) =>
+          sendTeamJoinNotificationEmail(member.email, newMemberName, user.email)
+            .then(() => {
+              console.log("[TeamJoin] Email sent to:", member.email);
+            })
+            .catch((err) => {
+              console.error("[TeamJoin] Failed to send email to:", member.email, "Error:", err.message);
+            })
+        )
+    );
+  } else {
+    console.log("[TeamJoin] Skipped - user has no brandId");
   }
 
   return {};
