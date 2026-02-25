@@ -59,14 +59,6 @@ export const getLicensesByBrandId = async (
   return { rows, count };
 };
 
-export const getLicenseCountByTrackId = async (
-  trackId: string
-): Promise<number> => {
-  const count = await LicenseModel.count({
-    where: { trackId },
-  });
-  return count;
-};
 
 export const getTotalLicensesByBrandId = async (
   brandId: number

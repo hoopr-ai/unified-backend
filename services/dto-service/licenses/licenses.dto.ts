@@ -134,8 +134,13 @@ export interface VideoLinkResponse {
   status: string;
   trackCode?: string;
   licenseId: number;
+  isEditable: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface AddVideoLinksResponse {
+  videoLinks: VideoLinkResponse[];
 }
 
 export interface VideoLinksListResponse {

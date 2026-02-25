@@ -22,10 +22,8 @@ export interface LicenseDetails {
   id?: number;
   brandId: number;
   userId: number;
-  trackId: string;
   trackCode: string;
   tokenCost: number;
-  numberOfDownloads?: number;
   licensedAt: Date;
   status?: string;
   licenseTypeId?: string;
@@ -59,14 +57,7 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
   })
   userId!: number;
 
-  @Index({ name: "idx_licenses_track_id" })
   @ForeignKey(() => TrackModel)
-  @Column({
-    type: DataType.UUID,
-    allowNull: false,
-  })
-  trackId!: string;
-
   @Column({
     type: DataType.STRING(100),
     allowNull: false,
@@ -79,13 +70,6 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     defaultValue: 1,
   })
   tokenCost!: number;
-
-  @Column({
-    type: DataType.INTEGER,
-    allowNull: false,
-    defaultValue: 0,
-  })
-  numberOfDownloads!: number;
 
   @Column({
     type: DataType.DATE,
@@ -126,7 +110,7 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
   @BelongsTo(() => UserModel)
   user!: UserModel;
 
-  @BelongsTo(() => TrackModel)
+  @BelongsTo(() => TrackModel, { foreignKey: "trackCode", targetKey: "trackCode" })
   track!: TrackModel;
 
   @BelongsTo(() => LicenseTypeModel)

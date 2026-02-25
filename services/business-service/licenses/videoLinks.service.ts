@@ -10,6 +10,7 @@ import { UserModel } from "../../persistence-service/user/modules.export";
 import { AppError } from "../../helper-service/modules.export";
 import type {
     AddVideoLinksRequest,
+    AddVideoLinksResponse,
     VideoLinkResponse,
     VideoLinksListResponse,
 } from "../../dto-service/licenses/modules.export";
@@ -17,7 +18,7 @@ import type {
 export const addVideoLinkService = async (
     userId: number,
     data: AddVideoLinksRequest
-): Promise<VideoLinkResponse[]> => {
+): Promise<AddVideoLinksResponse> => {
     const { licenseId, videoLinks, trackCode } = data;
 
     // Get license details
@@ -69,12 +70,17 @@ export const addVideoLinkService = async (
             status: created.status,
             trackCode: created.trackCode,
             licenseId: created.licenseId,
+            isEditable: false, // will be recalculated below
             createdAt: created.createdAt,
             updatedAt: created.updatedAt,
         });
     }
 
-    return createdLinks;
+    const totalLinks = existingLinksCount + createdLinks.length;
+    const isEditable = totalLinks < 3;
+    return {
+        videoLinks: createdLinks.map((link) => ({ ...link, isEditable })),
+    };
 };
 
 export const getVideoLinksService = async (
@@ -101,12 +107,14 @@ export const getVideoLinksService = async (
     // Get video links
     const videoLinks = await getVideoLinksByLicenseId(licenseId);
 
+    const isEditable = videoLinks.length < 3;
     const videoLinksResponse: VideoLinkResponse[] = videoLinks.map((vl) => ({
         id: vl.id,
         url: vl.url,
         status: vl.status,
         trackCode: vl.trackCode,
         licenseId: vl.licenseId,
+        isEditable,
         createdAt: vl.createdAt,
         updatedAt: vl.updatedAt,
     }));

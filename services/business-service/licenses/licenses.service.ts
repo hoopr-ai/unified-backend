@@ -140,7 +140,6 @@ export const licenseTrackService = async (
   const licenseDetails: LicenseDetails = {
     brandId,
     userId,
-    trackId: track.id,
     trackCode: track.trackCode,
     tokenCost: TOKEN_COST_PER_LICENSE,
     licensedAt: new Date(),
@@ -312,7 +311,7 @@ export const getBrandLicenseHistoryService = async (
 
     return {
       id: license.id,
-      trackId: license.trackId,
+      trackId: track?.id,
       trackName: track?.name,
       trackCode: track?.trackCode,
       tokenCost: license.tokenCost,
