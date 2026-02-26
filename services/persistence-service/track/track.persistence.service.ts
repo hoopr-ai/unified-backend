@@ -164,7 +164,6 @@ export const findTracksByFilter = async (
   const { filterIds, page, limit, ownerIds } = params;
   const offset = (page - 1) * limit;
 
-  // Build track-level where clause for owner type filtering
   const trackWhere: Record<string, unknown> = {};
   if (ownerIds && ownerIds.length > 0) {
     trackWhere.ownerId = { [Op.overlap]: ownerIds };
@@ -175,12 +174,14 @@ export const findTracksByFilter = async (
       where: { filterId: filterIds },
       limit,
       offset,
+      distinct: true,
+      col: "id",
       include: [
         {
           model: TrackModel,
           as: "track",
           where: Object.keys(trackWhere).length > 0 ? trackWhere : undefined,
-          required: Object.keys(trackWhere).length > 0,
+          required: true,
           include: [
             {
               model: TrackArtistMappingModel,
