@@ -78,7 +78,6 @@ export class OwnerModel extends Model<OwnerModel, OwnerDetails> {
   @Column({
     type: DataType.STRING(100),
     allowNull: true,
-    field: "sub_type",
   })
   subType?: string;
 
