@@ -50,6 +50,8 @@ export interface TrackDetailsWithSkus extends TrackWithArtists {
   genres: FilterInfo[];
   categories: FilterInfo[];
   occasions: FilterInfo[];
+  usageInfo?: object;
+  restrictedCategories?: object;
 }
 
 export interface PaginatedTracksResponseData {

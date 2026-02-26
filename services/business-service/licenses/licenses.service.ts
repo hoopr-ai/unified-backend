@@ -303,19 +303,19 @@ export const getBrandLicenseHistoryService = async (
     uniqueOwnerIds.length > 0
       ? await OwnerModel.findAll({
           where: { id: { [Op.in]: uniqueOwnerIds } },
-          attributes: ["id", "type", "sub_type"],
+          attributes: ["id", "type", "subType"],
         })
       : [];
 
-  // Create maps of owner ID to owner type and sub_type
+  // Create maps of owner ID to owner type and subType
   const ownerTypeMap = new Map<string, string>();
   const ownerSubTypeMap = new Map<string, string>();
   owners.forEach((owner) => {
     if (owner.type) {
       ownerTypeMap.set(owner.id, owner.type);
     }
-    if (owner.sub_type) {
-      ownerSubTypeMap.set(owner.id, owner.sub_type);
+    if (owner.subType) {
+      ownerSubTypeMap.set(owner.id, owner.subType);
     }
   });
 

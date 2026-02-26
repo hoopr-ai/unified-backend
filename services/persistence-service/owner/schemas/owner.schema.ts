@@ -24,7 +24,7 @@ export interface OwnerDetails {
   ownerCode: string;
   username?: string;
   type?: string; // Changed from OwnerType to string for flexibility
-  sub_type?: string; // New field for sub-categorization
+  subType?: string;
   category?: string;
   status?: OwnerStatus;
   revenueGenerated?: number;
@@ -35,6 +35,8 @@ export interface OwnerDetails {
   IPRS?: number;
   remarks?: string;
   metadata?: object;
+  usageInfo?: object;
+  restrictedCategories?: object;
   deleted?: Date;
   createdAt?: Date;
   updatedAt?: Date;
@@ -74,10 +76,11 @@ export class OwnerModel extends Model<OwnerModel, OwnerDetails> {
   type?: string;
 
   @Column({
-    type: DataType.STRING(100), // New field for sub-type
+    type: DataType.STRING(100),
     allowNull: true,
+    field: "sub_type",
   })
-  sub_type?: string;
+  subType?: string;
 
   @Column({
     type: DataType.STRING(255),
@@ -142,6 +145,18 @@ export class OwnerModel extends Model<OwnerModel, OwnerDetails> {
     allowNull: true,
   })
   metadata?: object;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  usageInfo?: object;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  restrictedCategories?: object;
 
   @Index({ name: "idx_owner_deleted" })
   @Column({

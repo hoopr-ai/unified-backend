@@ -31,11 +31,11 @@ const buildOwnerMaps = async (
   if (uniqueOwnerIds.length > 0) {
     const owners = await OwnerModel.findAll({
       where: { id: { [Op.in]: uniqueOwnerIds } },
-      attributes: ["id", "type", "sub_type"],
+      attributes: ["id", "type", "subType"],
     });
     owners.forEach((owner) => {
       if (owner.type) ownerTypeMap.set(owner.id, owner.type);
-      if (owner.sub_type) ownerSubTypeMap.set(owner.id, owner.sub_type);
+      if (owner.subType) ownerSubTypeMap.set(owner.id, owner.subType);
     });
   }
 

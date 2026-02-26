@@ -90,7 +90,7 @@ async function importOwners() {
           {
             ownerCode: row.ownerCode,
             type: row.type || undefined,
-            sub_type: row.subType || undefined,
+            subType: row.subType || undefined,
           },
           {
             conflictFields: ["ownerCode"],
