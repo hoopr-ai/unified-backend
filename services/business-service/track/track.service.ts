@@ -223,8 +223,20 @@ export const getAllTracksService = async (
     whereClause.trending = true;
   }
 
+  // Handle special 'newOnHoopr' type (case-insensitive) — tracks added in the last 7 days
+  let types = query.type;
+  if (types && types.length > 0) {
+    const hasNewOnHoopr = types.some((t) => t.trim().toLowerCase() === "newonhoopr");
+    if (hasNewOnHoopr) {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      whereClause.createdAt = { [Op.gte]: oneWeekAgo };
+      types = types.filter((t) => t.trim().toLowerCase() !== "newonhoopr");
+    }
+  }
+
   // If type filter is provided, find matching owner IDs
-  const ownerIds = await resolveOwnerIdsByType(query.type);
+  const ownerIds = await resolveOwnerIdsByType(types);
   if (ownerIds && ownerIds.length === 0) {
     return emptyPaginatedResponse(page, limit);
   }
