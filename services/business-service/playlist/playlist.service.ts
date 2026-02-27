@@ -4,6 +4,8 @@ import {
   findTracksByPlaylistId,
 } from "../../persistence-service/exports";
 import { TrackModel } from "../../persistence-service/track/schemas/track.schema";
+import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { Op } from "sequelize";
 import {
   ArtistInfoTrack,
   ArtistType,
@@ -76,51 +78,87 @@ export const getPlaylistDetailService = async (
 
   const mappings = await findTracksByPlaylistId(playlist.id);
 
-  const tracks: PlaylistTrackInfo[] = mappings
-    .filter((mapping) => {
-      if (!mapping.track) {
-        console.warn(
-          `Skipped track with ID: ${mapping.trackId} - not found in tracks table`,
-        );
-        return false;
-      }
-      return true;
-    })
-    .map((mapping) => {
-      const trackData = mapping.track!.toJSON() as TrackModel & {
-        trackArtistMappings?: Array<{
-          isPrimary?: boolean;
-          artist?: { id: string; name: string; type: ArtistType[] };
-        }>;
-      };
+  const validMappings = mappings.filter((mapping) => {
+    if (!mapping.track) {
+      console.warn(
+        `Skipped track with ID: ${mapping.trackId} - not found in tracks table`,
+      );
+      return false;
+    }
+    return true;
+  });
 
-      const primaryArtists: ArtistInfoTrack[] = [];
+  // Collect all ownerIds from tracks and fetch owner type/subType
+  const allOwnerIds: string[] = [];
+  validMappings.forEach((mapping) => {
+    const trackData = mapping.track!.toJSON() as any;
+    if (trackData.ownerId && Array.isArray(trackData.ownerId)) {
+      allOwnerIds.push(...trackData.ownerId);
+    }
+  });
 
-      if (trackData.trackArtistMappings) {
-        for (const artistMapping of trackData.trackArtistMappings) {
-          if (artistMapping.artist && artistMapping.isPrimary) {
-            primaryArtists.push({
-              id: artistMapping.artist.id,
-              name: artistMapping.artist.name,
-              type: artistMapping.artist.type || [],
-            });
-          }
+  const ownerTypeMap = new Map<string, string>();
+  const ownerSubTypeMap = new Map<string, string>();
+  const uniqueOwnerIds = [...new Set(allOwnerIds)];
+  if (uniqueOwnerIds.length > 0) {
+    const owners = await OwnerModel.findAll({
+      where: { id: { [Op.in]: uniqueOwnerIds } },
+      attributes: ["id", "type", "subType"],
+    });
+    owners.forEach((owner) => {
+      if (owner.type) ownerTypeMap.set(owner.id, owner.type);
+      if (owner.subType) ownerSubTypeMap.set(owner.id, owner.subType);
+    });
+  }
+
+  const tracks: PlaylistTrackInfo[] = validMappings.map((mapping) => {
+    const trackData = mapping.track!.toJSON() as TrackModel & {
+      ownerId?: string[];
+      trackArtistMappings?: Array<{
+        isPrimary?: boolean;
+        artist?: { id: string; name: string; type: ArtistType[] };
+      }>;
+    };
+
+    const primaryArtists: ArtistInfoTrack[] = [];
+
+    if (trackData.trackArtistMappings) {
+      for (const artistMapping of trackData.trackArtistMappings) {
+        if (artistMapping.artist && artistMapping.isPrimary) {
+          primaryArtists.push({
+            id: artistMapping.artist.id,
+            name: artistMapping.artist.name,
+            type: artistMapping.artist.type || [],
+          });
         }
       }
+    }
 
-      return {
-        id: trackData.id,
-        trackCode: trackData.trackCode,
-        name: trackData.name || "",
-        name_slug: trackData.name_slug || null,
-        sourceLink: trackData.sourceLink || null,
-        waveformLink: trackData.waveformLink || null,
-        mp3Link: trackData.mp3Link || null,
-        hasVocals: trackData.hasVocals || null,
-        trending: trackData.trending || null,
-        primaryArtists,
-      };
-    });
+    let ownerType: string | undefined;
+    let ownerSubType: string | undefined;
+    if (trackData.ownerId && Array.isArray(trackData.ownerId)) {
+      for (const oid of trackData.ownerId) {
+        if (!ownerType && ownerTypeMap.get(oid)) ownerType = ownerTypeMap.get(oid);
+        if (!ownerSubType && ownerSubTypeMap.get(oid)) ownerSubType = ownerSubTypeMap.get(oid);
+        if (ownerType && ownerSubType) break;
+      }
+    }
+
+    return {
+      id: trackData.id,
+      trackCode: trackData.trackCode,
+      name: trackData.name || "",
+      name_slug: trackData.name_slug || null,
+      sourceLink: trackData.sourceLink || null,
+      waveformLink: trackData.waveformLink || null,
+      mp3Link: trackData.mp3Link || null,
+      hasVocals: trackData.hasVocals || null,
+      trending: trackData.trending || null,
+      primaryArtists,
+      ...(ownerType && { ownerType }),
+      ...(ownerSubType && { ownerSubType }),
+    };
+  });
 
   return {
     id: playlist.id,
