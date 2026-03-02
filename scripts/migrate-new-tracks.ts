@@ -126,7 +126,56 @@ async function migrateNewTracks() {
       return;
     }
 
-    // ============ STEP 3: Migrate tracks ============
+    // ============ STEP 3: Migrate owners referenced by new tracks ============
+    console.log("\n📦 Migrating owners for new tracks...");
+
+    const allOwnerIds: string[] = [];
+    for (const track of newTracks) {
+      const ownerIdRaw = track.ownerId;
+      if (!ownerIdRaw) continue;
+      const ids: string[] = Array.isArray(ownerIdRaw)
+        ? ownerIdRaw
+        : String(ownerIdRaw).split(",").map((s: string) => s.trim()).filter(Boolean);
+      allOwnerIds.push(...ids);
+    }
+
+    const uniqueOwnerIds = [...new Set(allOwnerIds)];
+
+    if (uniqueOwnerIds.length > 0) {
+      const ownerPlaceholders = uniqueOwnerIds.map((_, i) => `$${i + 1}`).join(", ");
+      const { rows: owners } = await sourceClient.query(
+        `SELECT id, "ownerCode", username, type, "subType", category, status, "revenueGenerated", "revenueShare", "licenseStart", "licenseEnd", "isActive", "IPRS", remarks, metadata, "usageInfo", "restrictedCategories", deleted, "createdAt", "updatedAt" FROM owners WHERE id IN (${ownerPlaceholders})`,
+        uniqueOwnerIds,
+      );
+
+      console.log(`📦 Found ${owners.length} owners to migrate`);
+
+      let ownerSuccess = 0;
+      let ownerError = 0;
+
+      for (const owner of owners) {
+        try {
+          if (!owner.id) continue;
+          const data: Record<string, any> = {};
+          for (const [k, v] of Object.entries(owner)) {
+            if (v !== undefined && v !== null) data[k] = v;
+          }
+          const { sql, values } = buildUpsert("owners", data, "id");
+          await targetClient.query(sql, values);
+          ownerSuccess++;
+        } catch (err: any) {
+          ownerError++;
+          console.error(`❌ Error migrating owner ${owner.id}:`, err.message);
+        }
+      }
+
+      console.log(`✅ Owners: ${ownerSuccess} succeeded, ${ownerError} failed`);
+    } else {
+      console.log("⚠️  No owner IDs found in new tracks, skipping owner migration.");
+    }
+
+    // ============ STEP 4: Migrate tracks ============
+
     console.log("\n📦 Migrating tracks...");
     let trackSuccess = 0;
     let trackError = 0;
@@ -161,7 +210,7 @@ async function migrateNewTracks() {
       return;
     }
 
-    // ============ STEP 4: Migrate track-artist mappings for new tracks ============
+    // ============ STEP 5: Migrate track-artist mappings for new tracks ============
     console.log("\n📦 Migrating track-artist mappings for new tracks...");
 
     const placeholders = newTrackIds.map((_, i) => `$${i + 1}`).join(", ");
@@ -205,7 +254,7 @@ async function migrateNewTracks() {
 
     console.log(`✅ Track-artist mappings: ${artistMappingSuccess} succeeded, ${artistMappingError} failed`);
 
-    // ============ STEP 5: Migrate track-filter mappings for new tracks ============
+    // ============ STEP 6: Migrate track-filter mappings for new tracks ============
     console.log("\n📦 Migrating track-filter mappings for new tracks...");
 
     const { rows: filterMappings } = await sourceClient.query(

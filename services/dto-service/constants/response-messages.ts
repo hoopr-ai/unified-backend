@@ -35,4 +35,5 @@ export const enum ResponseMessages {
   UserRemovedSuccess = "User has been successfully removed",
   OtpSentSuccess = "OTP sent successfully",
   OtpVerifiedSuccess = "OTP verified successfully",
+  GetOwnersSuccess = "Owners fetched successfully",
 }
