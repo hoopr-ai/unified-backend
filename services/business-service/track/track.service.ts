@@ -78,6 +78,7 @@ const fetchOwnerMaps = async (
   ownerSubTypeMap: Map<string, string>;
   ownerUsageInfoMap: Map<string, object>;
   ownerRestrictedCategoriesMap: Map<string, object>;
+  ownerCodeMap: Map<string, string>;
 }> => {
   const allOwnerIds: string[] = [];
   tracks.forEach((track) => {
@@ -91,21 +92,23 @@ const fetchOwnerMaps = async (
   const ownerSubTypeMap = new Map<string, string>();
   const ownerUsageInfoMap = new Map<string, object>();
   const ownerRestrictedCategoriesMap = new Map<string, object>();
+  const ownerCodeMap = new Map<string, string>();
 
   if (uniqueOwnerIds.length > 0) {
     const owners = await OwnerModel.findAll({
       where: { id: { [Op.in]: uniqueOwnerIds } },
-      attributes: ["id", "type", "subType", "usageInfo", "restrictedCategories"],
+      attributes: ["id", "type", "subType", "usageInfo", "restrictedCategories", "ownerCode"],
     });
     owners.forEach((owner) => {
       if (owner.type) ownerTypeMap.set(owner.id, owner.type);
       if (owner.subType) ownerSubTypeMap.set(owner.id, owner.subType);
       if (owner.usageInfo) ownerUsageInfoMap.set(owner.id, owner.usageInfo);
       if (owner.restrictedCategories) ownerRestrictedCategoriesMap.set(owner.id, owner.restrictedCategories);
+      if (owner.ownerCode) ownerCodeMap.set(owner.id, owner.ownerCode);
     });
   }
 
-  return { ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap };
+  return { ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap, ownerCodeMap };
 };
 
 // Transform raw track data to TrackWithArtists DTO
@@ -377,17 +380,20 @@ const transformTrackToDetailsDto = (
   ownerSubTypeMap?: Map<string, string>,
   ownerUsageInfoMap?: Map<string, object>,
   ownerRestrictedCategoriesMap?: Map<string, object>,
+  ownerCodeMap?: Map<string, string>,
 ): TrackDetailsWithSkus => {
   const baseDto = transformTrackToDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
 
-  // Pick usageInfo and restrictedCategories from the first owner that has them
+  // Pick usageInfo, restrictedCategories and ownerCode from the first owner that has them
   let usageInfo: object | undefined;
   let restrictedCategories: object | undefined;
+  let ownerCode: string | undefined;
   if (track.ownerId && Array.isArray(track.ownerId)) {
     for (const oid of track.ownerId) {
       if (!usageInfo && ownerUsageInfoMap?.get(oid)) usageInfo = ownerUsageInfoMap.get(oid);
       if (!restrictedCategories && ownerRestrictedCategoriesMap?.get(oid)) restrictedCategories = ownerRestrictedCategoriesMap.get(oid);
-      if (usageInfo && restrictedCategories) break;
+      if (!ownerCode && ownerCodeMap?.get(oid)) ownerCode = ownerCodeMap.get(oid);
+      if (usageInfo && restrictedCategories && ownerCode) break;
     }
   }
 
@@ -432,6 +438,7 @@ const transformTrackToDetailsDto = (
     occasions,
     ...(usageInfo && { usageInfo }),
     ...(restrictedCategories && { restrictedCategories }),
+    ...(ownerCode && { ownerCode }),
   };
 };
 
@@ -452,6 +459,6 @@ export const getTrackDetailsByCodeService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const { ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap } = await fetchOwnerMaps([track]);
-  return transformTrackToDetailsDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap);
+  const { ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap, ownerCodeMap } = await fetchOwnerMaps([track]);
+  return transformTrackToDetailsDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap, ownerCodeMap);
 };
