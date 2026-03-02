@@ -185,6 +185,9 @@ const resolveOwnerIdsByType = async (
   types?: string[],
 ): Promise<string[] | undefined> => {
   if (!types || types.length === 0) return undefined;
+  const filteredTypes = types.filter((t) => t.trim() !== "");
+  if (filteredTypes.length === 0) return undefined;
+  types = filteredTypes;
 
   const normalize = (str: string) => str.trim().replace(/[\s_]+/g, "").toLowerCase();
   const normalizedTypes = new Set(types.map(normalize));
@@ -223,20 +226,14 @@ export const getAllTracksService = async (
     whereClause.trending = true;
   }
 
-  // Handle special 'newOnHoopr' type (case-insensitive) — tracks added in the last 7 days
-  let types = query.type;
-  if (types && types.length > 0) {
-    const hasNewOnHoopr = types.some((t) => t.trim().toLowerCase() === "newonhoopr");
-    if (hasNewOnHoopr) {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      whereClause.createdAt = { [Op.gte]: oneWeekAgo };
-      types = types.filter((t) => t.trim().toLowerCase() !== "newonhoopr");
-    }
+  if (query.newOnHoopr === true) {
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    whereClause.createdAt = { [Op.gte]: oneWeekAgo };
   }
 
   // If type filter is provided, find matching owner IDs
-  const ownerIds = await resolveOwnerIdsByType(types);
+  const ownerIds = await resolveOwnerIdsByType(query.type);
   if (ownerIds && ownerIds.length === 0) {
     return emptyPaginatedResponse(page, limit);
   }

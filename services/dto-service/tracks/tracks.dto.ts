@@ -126,6 +126,7 @@ export interface GetAllTracksRequestData {
   page?: string;
   limit?: string;
   trending?: boolean;
+  newOnHoopr?: boolean;
   type?: string[];
 }
 
