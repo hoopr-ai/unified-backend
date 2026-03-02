@@ -40,6 +40,7 @@ export interface TrackWithArtists {
   isLiked: boolean; // Whether the current user has liked this track
   ownerType?: string;
   ownerSubType?: string;
+  ownerCode?: string;
 }
 
 // Extended track details with both SKUs and filters

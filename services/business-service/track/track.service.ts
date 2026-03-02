@@ -117,6 +117,7 @@ const transformTrackToDto = (
   likedTrackCodes?: Set<string>,
   ownerTypeMap?: Map<string, string>,
   ownerSubTypeMap?: Map<string, string>,
+  ownerCodeMap?: Map<string, string>,
 ): TrackWithArtists => {
   const primaryArtists: ArtistInfoTrack[] = [];
 
@@ -132,14 +133,16 @@ const transformTrackToDto = (
     }
   }
 
-  // Get owner type and sub_type for the first owner
+  // Get ownerType, ownerSubType, ownerCode from the first matching owner
   let ownerType: string | null = null;
   let ownerSubType: string | null = null;
+  let ownerCode: string | null = null;
   if (track.ownerId && Array.isArray(track.ownerId) && ownerTypeMap) {
     for (const oid of track.ownerId) {
       if (!ownerType && ownerTypeMap.get(oid)) ownerType = ownerTypeMap.get(oid) || null;
       if (!ownerSubType && ownerSubTypeMap?.get(oid)) ownerSubType = ownerSubTypeMap.get(oid) || null;
-      if (ownerType && ownerSubType) break;
+      if (!ownerCode && ownerCodeMap?.get(oid)) ownerCode = ownerCodeMap.get(oid) || null;
+      if (ownerType && ownerSubType && ownerCode) break;
     }
   }
 
@@ -157,6 +160,7 @@ const transformTrackToDto = (
     isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
+    ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
   };
 };
 
@@ -166,12 +170,13 @@ const buildPaginatedResponse = (
   likedTrackCodes?: Set<string>,
   ownerTypeMap?: Map<string, string>,
   ownerSubTypeMap?: Map<string, string>,
+  ownerCodeMap?: Map<string, string>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
 
   return {
-    tracks: rows.map((track) => transformTrackToDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap)),
+    tracks: rows.map((track) => transformTrackToDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap)),
     pagination: {
       page,
       limit,
@@ -249,8 +254,8 @@ export const getAllTracksService = async (
   }
 
   const rawData = await findAllTracks(page, limit, whereClause, ownerIds);
-  const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps(rawData.rows);
-  return buildPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(rawData.rows);
+  return buildPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap);
 };
 
 // Sort tracks in the same order as the requested trackCodes
@@ -291,11 +296,11 @@ export const getTracksByCodesService = async (
   // Sort tracks in the order of requested trackCodes
   const orderedTracks = sortTracksByRequestedOrder(rawData.rows, query.trackCodes);
 
-  const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps(orderedTracks);
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(orderedTracks);
   return buildPaginatedResponse({
     ...rawData,
     rows: orderedTracks,
-  }, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
+  }, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap);
 };
 
 export interface GetTracksByFilterQuery {
@@ -312,6 +317,7 @@ const buildFilterPaginatedResponse = (
   likedTrackCodes?: Set<string>,
   ownerTypeMap?: Map<string, string>,
   ownerSubTypeMap?: Map<string, string>,
+  ownerCodeMap?: Map<string, string>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
@@ -326,7 +332,7 @@ const buildFilterPaginatedResponse = (
       }
       return true;
     })
-    .map((mapping) => transformTrackToDto(mapping.track!, likedTrackCodes, ownerTypeMap, ownerSubTypeMap));
+    .map((mapping) => transformTrackToDto(mapping.track!, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap));
 
   return {
     tracks,
@@ -368,8 +374,8 @@ export const getTracksByFilterService = async (
   });
 
   const filterTracks = rawData.rows.filter((m) => m.track).map((m) => m.track!);
-  const { ownerTypeMap, ownerSubTypeMap } = await fetchOwnerMaps(filterTracks);
-  return buildFilterPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(filterTracks);
+  return buildFilterPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap);
 };
 
 // Transform raw track data to TrackDetailsWithSkus DTO (includes both SKUs and filters)
