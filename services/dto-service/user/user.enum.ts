@@ -1,6 +1,8 @@
 
 export enum UserStatus {
-    ACTIVE = 'ACTIVE'
+    ACTIVE = 'ACTIVE',
+    INVITED = 'INVITED',
+    DELETED = 'DELETED',
 }
 
 export enum UserRoles {
@@ -35,5 +37,21 @@ export enum ActivityAction {
     IMPORT = 'IMPORT',
     API_CALL = 'API_CALL',
 }
+
+export enum ProfileRole {
+    FOUNDER_LEADERSHIP = 'FOUNDER_LEADERSHIP',
+    MARKETING_BRAND = 'MARKETING_BRAND',
+    SOCIAL_CONTENT = 'SOCIAL_CONTENT',
+    CREATIVE_PRODUCTION = 'CREATIVE_PRODUCTION',
+    AGENCY_EXTERNAL = 'AGENCY_EXTERNAL',
+}
+
+export const ProfileRoleDescriptions: Record<ProfileRole, string> = {
+    [ProfileRole.FOUNDER_LEADERSHIP]: 'Founders, CXOs, partners, business heads',
+    [ProfileRole.MARKETING_BRAND]: 'Brand managers, marketing managers, growth teams',
+    [ProfileRole.SOCIAL_CONTENT]: 'Social media managers, content strategists, community teams',
+    [ProfileRole.CREATIVE_PRODUCTION]: 'Video editors, filmmakers, in-house creatives, freelancers',
+    [ProfileRole.AGENCY_EXTERNAL]: 'Marketing agencies, production houses, consultants',
+};
 
 export const SESSION_TIMEOUT_MINUTES = 30;

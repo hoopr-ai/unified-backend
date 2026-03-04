@@ -70,6 +70,7 @@ export const findTracksByPlaylistId = async (
           "mp3Link",
           "hasVocals",
           "trending",
+          "ownerId",
         ],
         include: [
           {

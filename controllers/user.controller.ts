@@ -6,6 +6,13 @@ import {
   inviteUserService,
   logoutUserService,
   logoutAllSessionsService,
+  completeProfileService,
+  getUserProfileService,
+  updateUserProfileService,
+  getUsersUnderAdminService,
+  removeInvitedUserService,
+  sendOtpService,
+  verifyOtpService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -20,11 +27,21 @@ import type { SessionPayload } from "../middlewares/authenticate";
 interface AuthRequest extends Request {
   session?: SessionPayload;
   sessionToken?: string;
+  sessionIdFromCookie?: number;
 }
 
 export const login = catchAsync(async (req: Request, res: Response) => {
   const metadata = extractSessionMetadata(req);
   const response = await userLoginService(req.body, metadata);
+
+  // Set sessionId in HTTP-only cookie
+  res.cookie("sessionId", response.sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: response.expiresIn * 1000, // Convert seconds to milliseconds
+  });
+
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.LoginSuccess });
 });
 
@@ -33,6 +50,8 @@ export const logout = catchAsync(async (req: AuthRequest, res: Response) => {
   if (sessionToken) {
     await logoutUserService(sessionToken);
   }
+  // Clear the sessionId cookie
+  res.clearCookie("sessionId");
   sendResponse(res, { status: HttpStatusCode.OK, data: {}, message: ResponseMessages.LogoutSuccess });
 });
 
@@ -41,6 +60,8 @@ export const logoutAllSessions = catchAsync(async (req: AuthRequest, res: Respon
   if (userId) {
     await logoutAllSessionsService(userId);
   }
+  // Clear the sessionId cookie
+  res.clearCookie("sessionId");
   sendResponse(res, { status: HttpStatusCode.OK, data: {}, message: ResponseMessages.LogoutAllSuccess });
 });
 
@@ -56,9 +77,17 @@ export const create = catchAsync(async (req: AuthRequest, res: Response) => {
 });
 
 export const inviteUser = catchAsync(async (req: AuthRequest, res: Response) => {
-  const createdBy = req.session?.userId;
-  const response = await inviteUserService(req.body, createdBy);
+  const response = await inviteUserService(req.body, req.session);
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserInvitedSuccess });
+});
+
+export const completeProfile = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const response = await completeProfileService(req.body, userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.ProfileCompletedSuccess });
 });
 
 export const getUserActivities = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -101,4 +130,53 @@ export const getUserSessions = catchAsync(async (req: AuthRequest, res: Response
     status === "active" ? SessionStatus.ACTIVE : undefined
   );
   sendResponse(res, { status: HttpStatusCode.OK, data: { sessions }, message: ResponseMessages.GetUserSessionsSuccess });
+});
+
+export const getProfile = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const response = await getUserProfileService(userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetProfileSuccess });
+});
+
+export const updateProfile = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const response = await updateUserProfileService(req.body, userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UpdateProfileSuccess });
+});
+
+export const getUsers = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const response = await getUsersUnderAdminService(userId, page, limit);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetUsersSuccess });
+});
+
+export const removeInvitedUser = catchAsync(async (req: AuthRequest, res: Response) => {
+  const adminUserId = req.session?.userId;
+  if (!adminUserId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+  const targetUserId = parseInt(req.params.userId as string);
+  const response = await removeInvitedUserService(targetUserId, adminUserId);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserRemovedSuccess });
+});
+
+export const sendOtp = catchAsync(async (req: Request, res: Response) => {
+  const response = await sendOtpService(req.body);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.OtpSentSuccess });
+});
+
+export const verifyOtp = catchAsync(async (req: Request, res: Response) => {
+  const response = await verifyOtpService(req.body);
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.OtpVerifiedSuccess });
 });

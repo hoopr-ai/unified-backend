@@ -37,6 +37,18 @@ export const findActiveSessionByUserId = async (
   return session;
 };
 
+export const findActiveSessionById = async (
+  sessionId: number
+): Promise<UserSessionDetails | null> => {
+  const session = await UserSessionModel.findOne({
+    where: {
+      id: sessionId,
+      status: SessionStatus.ACTIVE,
+    },
+  });
+  return session;
+};
+
 export const updateSessionLastActivity = async (
   sessionId: number
 ): Promise<void> => {

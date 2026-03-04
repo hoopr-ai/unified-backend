@@ -4,14 +4,12 @@ import {
   ArtistModel,
 } from "../artists/modules.export";
 import {
-  ArtistInfoTrack,
-  ArtistType,
   PaginatedRawTracks,
-  PaginatedTracksResponseData,
   RawTrackWithMappings,
-  TrackWithArtists,
 } from "../../dto-service/modules.export";
-import { TrackFilterMappingModel } from "../exports";
+import { TrackFilterMappingModel, FilterModel } from "../exports";
+import { SkuModel, SkuType } from "../sku/modules.export";
+import { Op } from "sequelize";
 
 // Reusable include configuration for artist mappings
 const getArtistInclude = () => [
@@ -30,12 +28,56 @@ const getArtistInclude = () => [
   },
 ];
 
+// Include standard SKU for listing APIs (only token needed)
+const getStandardSkuInclude = () => [
+  {
+    model: SkuModel,
+    as: "skus",
+    required: false,
+    where: { skuType: SkuType.STANDARD, active: "Y" },
+    attributes: ["token"],
+  },
+];
+
+// Include all SKUs for track details API
+const getAllSkusInclude = () => [
+  {
+    model: SkuModel,
+    as: "skus",
+    required: false,
+    where: { active: "Y" },
+    attributes: ["id", "name", "costPrice", "sellingPrice", "gstPercent", "maxUsage", "description", "token", "skuType"],
+  },
+];
+
+// Include filter mappings for track details API
+const getFilterMappingsInclude = () => [
+  {
+    model: TrackFilterMappingModel,
+    as: "trackFilterMappings",
+    required: false,
+    include: [
+      {
+        model: FilterModel,
+        as: "filter",
+        attributes: ["id", "name", "name_slug", "type"],
+        required: false,
+      },
+    ],
+  },
+];
+
 export const findAllTracks = async (
   page: number,
   limit: number,
   whereClause: Record<string, unknown> = {},
+  ownerIds?: string[],
 ): Promise<PaginatedRawTracks> => {
   const offset = (page - 1) * limit;
+
+  if (ownerIds && ownerIds.length > 0) {
+    whereClause.ownerId = { [Op.overlap]: ownerIds };
+  }
 
   const { count, rows } = await TrackModel.findAndCountAll({
     where: whereClause,
@@ -44,7 +86,7 @@ export const findAllTracks = async (
     offset,
     distinct: true,
     col: "id",
-    include: getArtistInclude(),
+    include: [...getArtistInclude(), ...getStandardSkuInclude()],
   });
 
   return {
@@ -59,28 +101,27 @@ export const findTracksByTrackCodes = async (
   trackCodes: string[],
   page: number,
   limit: number,
+  ownerIds?: string[],
 ): Promise<PaginatedRawTracks> => {
   const offset = (page - 1) * limit;
 
+  const whereClause: Record<string, unknown> = { trackCode: trackCodes };
+  if (ownerIds && ownerIds.length > 0) {
+    whereClause.ownerId = { [Op.overlap]: ownerIds };
+  }
+
   const { count, rows } = await TrackModel.findAndCountAll({
-    where: { trackCode: trackCodes },
+    where: whereClause,
     order: [["createdAt", "DESC"]],
     limit,
     offset,
     distinct: true,
     col: "id",
-    include: getArtistInclude(),
+    include: [...getArtistInclude(), ...getStandardSkuInclude()],
   });
 
-  const tracksMap = rows.map((track) => track.toJSON() as RawTrackWithMappings);
-
-  // Sort tracks in the same order as the requested trackCodes
-  const orderedTracks = trackCodes
-    .map((code) => tracksMap.find((track) => track.trackCode === code))
-    .filter((track): track is RawTrackWithMappings => track !== undefined);
-
   return {
-    rows: orderedTracks,
+    rows: rows.map((track) => track.toJSON() as RawTrackWithMappings),
     count,
     page,
     limit,
@@ -88,26 +129,59 @@ export const findTracksByTrackCodes = async (
 };
 
 export interface GetTracksByFilterParams {
-  filterId: string;
+  filterIds: string[];
+  page: number;
+  limit: number;
+  ownerIds?: string[];
+}
+
+export interface RawFilterMappingResult {
+  trackId?: string;
+  track: RawTrackWithMappings | null;
+}
+
+export interface PaginatedRawFilterTracks {
+  rows: RawFilterMappingResult[];
+  count: number;
   page: number;
   limit: number;
 }
 
+export const findTrackByTrackCode = async (
+  trackCode: string,
+): Promise<RawTrackWithMappings | null> => {
+  const track = await TrackModel.findOne({
+    where: { trackCode },
+    include: [...getArtistInclude(), ...getAllSkusInclude(), ...getFilterMappingsInclude()],
+  });
+
+  return track ? (track.toJSON() as RawTrackWithMappings) : null;
+};
+
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
-): Promise<PaginatedTracksResponseData> => {
-  const { filterId, page, limit } = params;
+): Promise<PaginatedRawFilterTracks> => {
+  const { filterIds, page, limit, ownerIds } = params;
   const offset = (page - 1) * limit;
+
+  const trackWhere: Record<string, unknown> = {};
+  if (ownerIds && ownerIds.length > 0) {
+    trackWhere.ownerId = { [Op.overlap]: ownerIds };
+  }
 
   const { count, rows: mappings } =
     await TrackFilterMappingModel.findAndCountAll({
-      where: { filterId },
+      where: { filterId: filterIds },
       limit,
       offset,
+      distinct: true,
+      col: "id",
       include: [
         {
           model: TrackModel,
           as: "track",
+          where: Object.keys(trackWhere).length > 0 ? trackWhere : undefined,
+          required: true,
           include: [
             {
               model: TrackArtistMappingModel,
@@ -122,68 +196,25 @@ export const findTracksByFilter = async (
                 },
               ],
             },
+            {
+              model: SkuModel,
+              as: "skus",
+              required: false,
+              where: { skuType: SkuType.STANDARD, active: "Y" },
+              attributes: ["token"],
+            },
           ],
         },
       ],
     });
 
-  const tracks: TrackWithArtists[] = mappings
-    .filter((mapping) => {
-      if (!mapping.track) {
-        console.log(
-          `⚠️ Skipped track with ID: ${mapping.trackId} - not found in tracks table`,
-        );
-        return false;
-      }
-      return true;
-    })
-    .map((mapping) => {
-      const trackData = mapping.track!.toJSON() as TrackModel & {
-        trackArtistMappings?: Array<{
-          isPrimary?: boolean;
-          artist?: { id: string; name: string; type: ArtistType[] };
-        }>;
-      };
-
-      const primaryArtists: ArtistInfoTrack[] = [];
-
-      if (trackData.trackArtistMappings) {
-        for (const artistMapping of trackData.trackArtistMappings) {
-          if (artistMapping.artist && artistMapping.isPrimary) {
-            primaryArtists.push({
-              id: artistMapping.artist.id,
-              name: artistMapping.artist.name,
-              type: artistMapping.artist.type || [],
-            });
-          }
-        }
-      }
-
-      return {
-        id: trackData.id,
-        trackCode: trackData.trackCode,
-        name: trackData.name || "",
-        name_slug: trackData.name_slug || "",
-        sourceLink: trackData.sourceLink || null,
-        waveformLink: trackData.waveformLink || null,
-        mp3Link: trackData.mp3Link || null,
-        hasVocals: trackData.hasVocals || null,
-        trending: trackData.trending || null,
-        primaryArtists,
-      };
-    });
-
-  const totalPages = Math.ceil(count / limit);
-
   return {
-    tracks,
-    pagination: {
-      page,
-      limit,
-      totalItems: count,
-      totalPages,
-      hasNextPage: page < totalPages,
-      hasPrevPage: page > 1,
-    },
+    rows: mappings.map((mapping) => ({
+      trackId: mapping.trackId,
+      track: mapping.track ? (mapping.track.toJSON() as RawTrackWithMappings) : null,
+    })),
+    count,
+    page,
+    limit,
   };
 };

@@ -1,14 +1,41 @@
 import type { Platform } from "../constants/modules.export";
+import type { ProfileRole, UserRoles, UserStatus } from "./user.enum";
 
 export interface CreateAuthRequestData {
     email: string;
+    password: string;
+    platform: Platform;
+    brandId?: number;
+}
+
+export interface InviteUserAuthRequestData {
+    email: string;
+}
+
+export interface CompleteProfileRequestData {
     firstName: string;
     lastName: string;
     mobile: string;
-    password: string;
-    platform: Platform;
-    organizationId?: number;
-    brandId?: number;
+    profileRole: ProfileRole;
+}
+
+export interface UpdateProfileRequestData {
+    firstName?: string;
+    lastName?: string;
+    mobile?: string;
+    profileRole?: ProfileRole;
+}
+
+export interface UserProfileResponse {
+    id: number;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    mobile?: string;
+    profileRole?: string;
+    role?: UserRoles;
+    isProfileComplete: boolean;
+    status: UserStatus;
 }
 
 export interface LoginUserRequestData {
@@ -28,9 +55,10 @@ export interface LoginResponse {
   id: number;
   email: string;
   role: string | null;
-  updatedAt: number | undefined;
+  isProfileComplete: boolean;
   expiresIn: number;
   token: string;
+  brandId?: number;
 }
 
 export const AccessTokenExpiry = "3h";

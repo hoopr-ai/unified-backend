@@ -1,0 +1,382 @@
+{
+  "name": "Hoopr User Activity Dashboard",
+  "description": "Dashboard for monitoring user activity, endpoint performance, and user journeys",
+  "permissions": "PUBLIC_READ_WRITE",
+  "pages": [
+    {
+      "name": "Active Users Overview",
+      "description": "Track active users and sessions over time",
+      "widgets": [
+        {
+          "title": "Active Users (Last 24 Hours)",
+          "layout": { "column": 1, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT uniqueCount(userId) as 'Unique Users' FROM UserActivity SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Active Sessions (Last 24 Hours)",
+          "layout": { "column": 5, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT uniqueCount(sessionId) as 'Active Sessions' FROM UserActivity SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Total API Calls (Last 24 Hours)",
+          "layout": { "column": 9, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) as 'Total Requests' FROM UserActivity SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Active Users Over Time",
+          "layout": { "column": 1, "row": 4, "width": 12, "height": 3 },
+          "visualization": { "id": "viz.line" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT uniqueCount(userId) as 'Active Users' FROM UserActivity TIMESERIES 1 hour SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "New vs Returning Users",
+          "layout": { "column": 1, "row": 7, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.line" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT uniqueCount(userId) as 'Users' FROM UserActivity WHERE action = 'LOGIN' TIMESERIES 1 hour SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Users by Device Type",
+          "layout": { "column": 7, "row": 7, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.pie" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT uniqueCount(userId) FROM UserActivity FACET deviceType SINCE 7 days ago"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Endpoint Performance",
+      "description": "Monitor API endpoint performance and response times",
+      "widgets": [
+        {
+          "title": "Average Response Time",
+          "layout": { "column": 1, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(responseTime) as 'Avg Response (ms)' FROM EndpointMetrics SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "95th Percentile Response Time",
+          "layout": { "column": 5, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT percentile(responseTime, 95) as 'P95 Response (ms)' FROM EndpointMetrics SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Error Rate",
+          "layout": { "column": 9, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT percentage(count(*), WHERE isError = true) as 'Error Rate %' FROM EndpointMetrics SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Response Time Trend",
+          "layout": { "column": 1, "row": 4, "width": 12, "height": 3 },
+          "visualization": { "id": "viz.line" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(responseTime) as 'Avg', percentile(responseTime, 95) as 'P95' FROM EndpointMetrics TIMESERIES 15 minutes SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Most Used Endpoints",
+          "layout": { "column": 1, "row": 7, "width": 6, "height": 4 },
+          "visualization": { "id": "viz.bar" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM EndpointMetrics FACET endpoint LIMIT 10 SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Slowest Endpoints (Avg Response Time)",
+          "layout": { "column": 7, "row": 7, "width": 6, "height": 4 },
+          "visualization": { "id": "viz.bar" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(responseTime) FROM EndpointMetrics FACET endpoint LIMIT 10 SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Errors by Endpoint",
+          "layout": { "column": 1, "row": 11, "width": 12, "height": 3 },
+          "visualization": { "id": "viz.table" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) as 'Error Count', latest(statusCode) as 'Status Code' FROM EndpointMetrics WHERE isError = true FACET endpoint, method LIMIT 20 SINCE 24 hours ago"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Error Analysis",
+      "description": "Track and analyze errors by endpoint and user",
+      "widgets": [
+        {
+          "title": "Total Errors (Last 24 Hours)",
+          "layout": { "column": 1, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) as 'Total Errors' FROM EndpointMetrics WHERE isError = true SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Server Errors (5xx)",
+          "layout": { "column": 5, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) as '5xx Errors' FROM EndpointMetrics WHERE isServerError = true SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Client Errors (4xx)",
+          "layout": { "column": 9, "row": 1, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) as '4xx Errors' FROM EndpointMetrics WHERE isError = true AND isServerError = false SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Error Rate Over Time",
+          "layout": { "column": 1, "row": 4, "width": 12, "height": 3 },
+          "visualization": { "id": "viz.line" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT percentage(count(*), WHERE isError = true) as 'Error Rate %' FROM EndpointMetrics TIMESERIES 15 minutes SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Errors by Status Code",
+          "layout": { "column": 1, "row": 7, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.pie" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM EndpointMetrics WHERE isError = true FACET statusCode SINCE 24 hours ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Top Failing Endpoints",
+          "layout": { "column": 7, "row": 7, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.bar" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM EndpointMetrics WHERE isError = true FACET endpoint LIMIT 10 SINCE 24 hours ago"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Journey",
+      "description": "Track user flows and navigation patterns",
+      "widgets": [
+        {
+          "title": "Most Common Actions",
+          "layout": { "column": 1, "row": 1, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.pie" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM UserActivity FACET action SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Actions by Device Type",
+          "layout": { "column": 7, "row": 1, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.bar" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) FROM UserActivity FACET action, deviceType LIMIT 20 SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "User Flow (Action Sequences)",
+          "layout": { "column": 1, "row": 4, "width": 12, "height": 4 },
+          "visualization": { "id": "viz.table" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) as 'Count' FROM UserJourney FACET previousAction, action LIMIT 20 SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Login Success Rate",
+          "layout": { "column": 1, "row": 8, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT percentage(count(*), WHERE statusCode < 400) as 'Login Success %' FROM UserActivity WHERE action = 'LOGIN' SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Avg Session Duration",
+          "layout": { "column": 5, "row": 8, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT average(numeric(timestamp) - numeric(earliest(timestamp))) / 60000 as 'Avg Session (min)' FROM UserActivity FACET sessionId SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Actions Per Session",
+          "layout": { "column": 9, "row": 8, "width": 4, "height": 3 },
+          "visualization": { "id": "viz.billboard" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT count(*) / uniqueCount(sessionId) as 'Avg Actions/Session' FROM UserActivity SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Users by Browser",
+          "layout": { "column": 1, "row": 11, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.pie" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT uniqueCount(userId) FROM UserActivity FACET browser SINCE 7 days ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Users by OS",
+          "layout": { "column": 7, "row": 11, "width": 6, "height": 3 },
+          "visualization": { "id": "viz.pie" },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 0,
+                "query": "SELECT uniqueCount(userId) FROM UserActivity FACET os SINCE 7 days ago"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

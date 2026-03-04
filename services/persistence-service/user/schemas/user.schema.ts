@@ -10,9 +10,11 @@ import {
   Index,
   ForeignKey,
   BelongsTo,
+  HasMany,
 } from "sequelize-typescript";
 import type { UserStatus } from "../../../dto-service/modules.export";
 import { BrandModel } from "../../brand/schemas/modules.export";
+import { UserRoleModel } from "./user-role.schema";
 
 export interface UserDetails {
   id?: number;
@@ -24,9 +26,11 @@ export interface UserDetails {
   status: UserStatus;
   mobile?: string;
   platform: string;
+  profileRole?: string;
   createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
+  readonly isProfileComplete?: boolean;
 }
 
 @Table({
@@ -100,6 +104,16 @@ export class UserModel extends Model<UserModel, UserDetails> {
   })
   createdBy?: number;
 
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+  })
+  profileRole?: string;
+
+  get isProfileComplete(): boolean {
+    return !!(this.firstName && this.lastName && this.mobile && this.profileRole);
+  }
+
   @CreatedAt
   @Column({
     type: DataType.DATE,
@@ -115,4 +129,7 @@ export class UserModel extends Model<UserModel, UserDetails> {
 
   @BelongsTo(() => BrandModel)
   brand?: BrandModel;
+
+  @HasMany(() => UserRoleModel)
+  userRoles?: UserRoleModel[];
 }

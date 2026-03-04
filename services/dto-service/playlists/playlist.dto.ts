@@ -47,6 +47,8 @@ export interface PlaylistTrackInfo {
   hasVocals: boolean | null;
   trending: boolean | null;
   primaryArtists: ArtistInfoTrack[];
+  ownerType?: string;
+  ownerSubType?: string;
 }
 
 export interface PlaylistDetail {

@@ -3,14 +3,16 @@ import {
   getAllTracks,
   getTracksByCodes,
   getTracksByFilter,
+  getTrackDetailsByCode,
 } from "../controllers/track.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import { getTracksByCodesRequestSchema } from "../middlewares/track.validation";
 
 const router = Router();
 
-router.get("/", getAllTracks);
+router.post("/", getAllTracks);
 router.post("/by-codes", validateRequest(getTracksByCodesRequestSchema), getTracksByCodes);
-router.get("/:filterName/:filterId", getTracksByFilter);
+router.get("/:trackCode", getTrackDetailsByCode);
+router.post("/filter/:filterName", getTracksByFilter);
 
 export default router;

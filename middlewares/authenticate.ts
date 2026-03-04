@@ -4,11 +4,12 @@ import type { JwtPayload } from "jsonwebtoken";
 import { AppError } from "../services/helper-service/AppError";
 import { validateAndRefreshSession } from "../services/business-service/user/user.service";
 import { extractSessionMetadata } from "../services/helper-service/session.helper";
+import { Platform } from "../services/dto-service/modules.export";
 
 export interface SessionPayload extends JwtPayload {
   userId: number;
   email: string;
-  platform: string;
+  platform: Platform;
   role: string | null;
   sessionId?: number;
 }
@@ -16,6 +17,7 @@ export interface SessionPayload extends JwtPayload {
 interface AuthRequest extends Request {
   session?: SessionPayload;
   sessionToken?: string;
+  sessionIdFromCookie?: number;
 }
 
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -129,12 +131,18 @@ const handleAuthentication = (options: AuthOptions = {}) => {
         throw new AppError("Invalid session. Please login again.", 401);
       }
 
+      // Get sessionId from cookie
+      const sessionIdFromCookie = req.cookies?.sessionId
+        ? parseInt(req.cookies.sessionId, 10)
+        : undefined;
+
       // Attach session info to request
       req.session = {
         ...decoded,
         sessionId: session?.id,
       };
       req.sessionToken = token;
+      req.sessionIdFromCookie = sessionIdFromCookie;
 
       next();
     } catch (error) {
