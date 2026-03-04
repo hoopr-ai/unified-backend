@@ -19,7 +19,7 @@ import {
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
-import { Op } from "sequelize";
+import { Op, fn, col, where } from "sequelize";
 
 // Parse and validate pagination params
 const parsePaginationParams = (
@@ -210,6 +210,35 @@ const resolveOwnerIdsByType = async (
   return ownerIds.length > 0 ? ownerIds : [];
 };
 
+// Resolve ownerCode filter to matching owner IDs (case-insensitive)
+const resolveOwnerIdsByOwnerCode = async (
+  ownerCodes?: string[],
+): Promise<string[] | undefined> => {
+  if (!ownerCodes || ownerCodes.length === 0) return undefined;
+  const filteredCodes = ownerCodes.map((c) => c.trim()).filter((c) => c !== "");
+  if (filteredCodes.length === 0) return undefined;
+
+  const lowerCodes = filteredCodes.map((c) => c.toLowerCase());
+  const owners = await OwnerModel.findAll({
+    where: where(fn("LOWER", col("ownerCode")), { [Op.in]: lowerCodes }) as any,
+    attributes: ["id"],
+  });
+  const ownerIds = owners.map((o) => o.id);
+  return ownerIds.length > 0 ? ownerIds : [];
+};
+
+// Intersect two owner ID arrays (both filters must match)
+const intersectOwnerIds = (
+  a: string[] | undefined,
+  b: string[] | undefined,
+): string[] | undefined => {
+  if (!a && !b) return undefined;
+  if (!a) return b;
+  if (!b) return a;
+  const setB = new Set(b);
+  return a.filter((id) => setB.has(id));
+};
+
 // Empty pagination response helper
 const emptyPaginatedResponse = (page: number, limit: number): PaginatedTracksResponseData => ({
   tracks: [],
@@ -240,8 +269,12 @@ export const getAllTracksService = async (
     whereClause.createdAt = { [Op.gte]: oneWeekAgo };
   }
 
-  // If type filter is provided, find matching owner IDs
-  const ownerIds = await resolveOwnerIdsByType(query.type);
+  // Resolve owner IDs from type and ownerCode filters, then intersect
+  const [ownerIdsByType, ownerIdsByCode] = await Promise.all([
+    resolveOwnerIdsByType(query.type),
+    resolveOwnerIdsByOwnerCode(query.ownerCode),
+  ]);
+  const ownerIds = intersectOwnerIds(ownerIdsByType, ownerIdsByCode);
   if (ownerIds && ownerIds.length === 0) {
     return emptyPaginatedResponse(page, limit);
   }

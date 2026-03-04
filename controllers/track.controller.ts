@@ -31,6 +31,7 @@ export const getAllTracks = catchAsync(
       trending: req.body.trending as boolean,
       newOnHoopr: req.body.newOnHoopr as boolean,
       type: req.body.type as string[] | undefined,
+      ownerCode: req.body.ownerCode as string[] | undefined,
     };
     const response = await getAllTracksService(query, userId);
     sendResponse(res, {

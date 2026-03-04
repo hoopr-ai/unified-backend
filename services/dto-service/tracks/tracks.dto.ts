@@ -130,6 +130,7 @@ export interface GetAllTracksRequestData {
   trending?: boolean;
   newOnHoopr?: boolean;
   type?: string[];
+  ownerCode?: string[];
 }
 
 export interface GetTracksByCodesQuery {
