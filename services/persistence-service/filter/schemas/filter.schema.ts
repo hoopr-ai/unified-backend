@@ -18,6 +18,7 @@ export interface FilterDetails {
   name_slug?: string | null;
   status: FilterStatus;
   type?: string;
+  rank?: number | null;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -58,6 +59,12 @@ export class FilterModel extends Model<FilterModel, FilterDetails> {
     allowNull: true,
   })
   type?: string;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  rank?: number | null;
 
   @CreatedAt
   @Column({

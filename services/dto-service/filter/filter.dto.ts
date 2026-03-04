@@ -4,6 +4,7 @@ export interface FilterItem {
   id: string;
   name: string;
   slug: string | null;
+  rank: number | null;
 }
 
 export interface GroupedFilters {
