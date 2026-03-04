@@ -16,6 +16,7 @@ export const getCorsOptions = (): CorsOptions => {
     "http://127.0.0.1:3001",
     "http://127.0.0.1:5174",
     "https://dev-enterprise.hoopr.ai",
+    "https://smash.hoopr.ai",
   ].filter((origin): origin is string => Boolean(origin));
 
   return {
