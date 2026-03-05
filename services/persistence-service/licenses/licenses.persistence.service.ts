@@ -55,6 +55,7 @@ export const getLicensesByBrandId = async (
     order: [["licensedAt", "DESC"]],
     limit,
     offset,
+    distinct: true,
   });
   return { rows, count };
 };
