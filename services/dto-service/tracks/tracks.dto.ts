@@ -51,6 +51,7 @@ export interface TrackDetailsWithSkus extends TrackWithArtists {
   genres: FilterInfo[];
   categories: FilterInfo[];
   occasions: FilterInfo[];
+  description?: string | null;
   usageInfo?: object;
   restrictedCategories?: object;
   ownerCode?: string;
@@ -104,6 +105,7 @@ export interface RawTrackWithMappings {
   trackCode: string;
   name: string | null;
   name_slug: string | null;
+  description?: string | null;
   sourceLink: string | null;
   waveformLink: string | null;
   mp3Link: string | null;
