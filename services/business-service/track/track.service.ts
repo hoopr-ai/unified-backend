@@ -582,6 +582,7 @@ const transformTrackToDetailsDto = (
     genres,
     categories,
     occasions,
+    description: track.description ?? null,
     ...(usageInfo && { usageInfo }),
     ...(restrictedCategories && { restrictedCategories }),
     ...(ownerCode && { ownerCode }),

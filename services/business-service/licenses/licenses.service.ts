@@ -344,6 +344,10 @@ export const getBrandLicenseHistoryService = async (
       });
     }
 
+    const primaryArtists = (track as any)?.trackArtistMappings
+      ?.filter((m: any) => m.isPrimary && m.artist)
+      .map((m: any) => ({ id: m.artist.id, name: m.artist.name })) ?? [];
+
     return {
       id: license.id,
       trackId: track?.id,
@@ -363,6 +367,7 @@ export const getBrandLicenseHistoryService = async (
       })),
       ownerType: ownerTypes.length > 0 ? ownerTypes[0] : undefined,
       ownerSubType: ownerSubTypes.length > 0 ? ownerSubTypes[0] : undefined,
+      primaryArtists,
     };
   });
 

@@ -71,6 +71,7 @@ export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   videoLinks?: BrandLicenseVideoLink[];
   ownerType?: string;
   ownerSubType?: string;
+  primaryArtists?: { id: string; name: string }[];
 }
 
 export interface BrandLicenseHistoryResponse {

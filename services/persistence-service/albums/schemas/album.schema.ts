@@ -13,7 +13,6 @@ export interface AlbumDetails {
   id: string;
   title?: string;
   type?: AlbumType;
-  artistId?: string;
   trackId?: string[];
   deleted?: Date | null;
   createdAt: Date;
@@ -43,12 +42,6 @@ export class AlbumModel extends Model<AlbumModel, AlbumDetails> {
     allowNull: true,
   })
   type?: AlbumType;
-
-  @Column({
-    type: DataType.UUID,
-    allowNull: true,
-  })
-  artistId?: string;
 
   @Column({
     type: DataType.ARRAY(DataType.UUID),
