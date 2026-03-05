@@ -39,7 +39,7 @@ export interface AssignTokensResponse {
 
 export interface LicenseHistoryItem {
   id: number;
-  trackId: string;
+  trackId?: string;
   trackName?: string;
   trackCode?: string;
   tokenCost: number;
