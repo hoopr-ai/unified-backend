@@ -64,7 +64,8 @@ const extractFiltersByType = (
 const getStandardToken = (track: RawTrackWithMappings): number => {
   if (track.skus && track.skus.length > 0) {
     // For listing APIs, we only get standard SKU (skuType = 'N')
-    const standardSku = track.skus.find((sku) => sku.skuType === "N") || track.skus[0];
+    const standardSku =
+      track.skus.find((sku) => sku.skuType === "N") || track.skus[0];
     return standardSku.token ?? 1;
   }
   return 1; // Default token if no SKU exists
@@ -79,6 +80,7 @@ const fetchOwnerMaps = async (
   ownerUsageInfoMap: Map<string, object>;
   ownerRestrictedCategoriesMap: Map<string, object>;
   ownerCodeMap: Map<string, string>;
+  ownerUsernameMap: Map<string, string>;
 }> => {
   const allOwnerIds: string[] = [];
   tracks.forEach((track) => {
@@ -93,22 +95,40 @@ const fetchOwnerMaps = async (
   const ownerUsageInfoMap = new Map<string, object>();
   const ownerRestrictedCategoriesMap = new Map<string, object>();
   const ownerCodeMap = new Map<string, string>();
+  const ownerUsernameMap = new Map<string, string>();
 
   if (uniqueOwnerIds.length > 0) {
     const owners = await OwnerModel.findAll({
       where: { id: { [Op.in]: uniqueOwnerIds } },
-      attributes: ["id", "type", "subType", "usageInfo", "restrictedCategories", "ownerCode"],
+      attributes: [
+        "id",
+        "type",
+        "subType",
+        "usageInfo",
+        "restrictedCategories",
+        "ownerCode",
+        "username",
+      ],
     });
     owners.forEach((owner) => {
       if (owner.type) ownerTypeMap.set(owner.id, owner.type);
       if (owner.subType) ownerSubTypeMap.set(owner.id, owner.subType);
       if (owner.usageInfo) ownerUsageInfoMap.set(owner.id, owner.usageInfo);
-      if (owner.restrictedCategories) ownerRestrictedCategoriesMap.set(owner.id, owner.restrictedCategories);
+      if (owner.restrictedCategories)
+        ownerRestrictedCategoriesMap.set(owner.id, owner.restrictedCategories);
       if (owner.ownerCode) ownerCodeMap.set(owner.id, owner.ownerCode);
+      if (owner.username) ownerUsernameMap.set(owner.id, owner.username);
     });
   }
 
-  return { ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap, ownerCodeMap };
+  return {
+    ownerTypeMap,
+    ownerSubTypeMap,
+    ownerUsageInfoMap,
+    ownerRestrictedCategoriesMap,
+    ownerCodeMap,
+    ownerUsernameMap,
+  };
 };
 
 // Transform raw track data to TrackWithArtists DTO
@@ -139,9 +159,12 @@ const transformTrackToDto = (
   let ownerCode: string | null = null;
   if (track.ownerId && Array.isArray(track.ownerId) && ownerTypeMap) {
     for (const oid of track.ownerId) {
-      if (!ownerType && ownerTypeMap.get(oid)) ownerType = ownerTypeMap.get(oid) || null;
-      if (!ownerSubType && ownerSubTypeMap?.get(oid)) ownerSubType = ownerSubTypeMap.get(oid) || null;
-      if (!ownerCode && ownerCodeMap?.get(oid)) ownerCode = ownerCodeMap.get(oid) || null;
+      if (!ownerType && ownerTypeMap.get(oid))
+        ownerType = ownerTypeMap.get(oid) || null;
+      if (!ownerSubType && ownerSubTypeMap?.get(oid))
+        ownerSubType = ownerSubTypeMap.get(oid) || null;
+      if (!ownerCode && ownerCodeMap?.get(oid))
+        ownerCode = ownerCodeMap.get(oid) || null;
       if (ownerType && ownerSubType && ownerCode) break;
     }
   }
@@ -176,7 +199,15 @@ const buildPaginatedResponse = (
   const totalPages = Math.ceil(count / limit);
 
   return {
-    tracks: rows.map((track) => transformTrackToDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap)),
+    tracks: rows.map((track) =>
+      transformTrackToDto(
+        track,
+        likedTrackCodes,
+        ownerTypeMap,
+        ownerSubTypeMap,
+        ownerCodeMap,
+      ),
+    ),
     pagination: {
       page,
       limit,
@@ -197,14 +228,18 @@ const resolveOwnerIdsByType = async (
   if (filteredTypes.length === 0) return undefined;
   types = filteredTypes;
 
-  const normalize = (str: string) => str.trim().replace(/[\s_]+/g, "").toLowerCase();
+  const normalize = (str: string) =>
+    str
+      .trim()
+      .replace(/[\s_]+/g, "")
+      .toLowerCase();
   const normalizedTypes = new Set(types.map(normalize));
   const allOwners = await OwnerModel.findAll({
     where: { type: { [Op.ne]: null } } as any,
     attributes: ["id", "type"],
   });
-  const matchedOwners = allOwners.filter(
-    (o) => normalizedTypes.has(normalize(o.type!)),
+  const matchedOwners = allOwners.filter((o) =>
+    normalizedTypes.has(normalize(o.type!)),
   );
   const ownerIds = matchedOwners.map((o) => o.id);
   return ownerIds.length > 0 ? ownerIds : [];
@@ -240,7 +275,10 @@ const intersectOwnerIds = (
 };
 
 // Empty pagination response helper
-const emptyPaginatedResponse = (page: number, limit: number): PaginatedTracksResponseData => ({
+const emptyPaginatedResponse = (
+  page: number,
+  limit: number,
+): PaginatedTracksResponseData => ({
   tracks: [],
   pagination: {
     page,
@@ -287,8 +325,16 @@ export const getAllTracksService = async (
   }
 
   const rawData = await findAllTracks(page, limit, whereClause, ownerIds);
-  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(rawData.rows);
-  return buildPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap);
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
+    rawData.rows,
+  );
+  return buildPaginatedResponse(
+    rawData,
+    likedTrackCodes,
+    ownerTypeMap,
+    ownerSubTypeMap,
+    ownerCodeMap,
+  );
 };
 
 // Sort tracks in the same order as the requested trackCodes
@@ -307,7 +353,11 @@ export const getTracksByCodesService = async (
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
-  if (!query.trackCodes || !Array.isArray(query.trackCodes) || query.trackCodes.length === 0) {
+  if (
+    !query.trackCodes ||
+    !Array.isArray(query.trackCodes) ||
+    query.trackCodes.length === 0
+  ) {
     return emptyPaginatedResponse(page, limit);
   }
 
@@ -324,16 +374,31 @@ export const getTracksByCodesService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const rawData = await findTracksByTrackCodes(query.trackCodes, page, limit, ownerIds);
+  const rawData = await findTracksByTrackCodes(
+    query.trackCodes,
+    page,
+    limit,
+    ownerIds,
+  );
 
   // Sort tracks in the order of requested trackCodes
-  const orderedTracks = sortTracksByRequestedOrder(rawData.rows, query.trackCodes);
+  const orderedTracks = sortTracksByRequestedOrder(
+    rawData.rows,
+    query.trackCodes,
+  );
 
-  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(orderedTracks);
-  return buildPaginatedResponse({
-    ...rawData,
-    rows: orderedTracks,
-  }, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap);
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
+    await fetchOwnerMaps(orderedTracks);
+  return buildPaginatedResponse(
+    {
+      ...rawData,
+      rows: orderedTracks,
+    },
+    likedTrackCodes,
+    ownerTypeMap,
+    ownerSubTypeMap,
+    ownerCodeMap,
+  );
 };
 
 export interface GetTracksByFilterQuery {
@@ -359,13 +424,21 @@ const buildFilterPaginatedResponse = (
     .filter((mapping) => {
       if (!mapping.track) {
         console.log(
-          `Warning: Skipped track with ID: ${mapping.trackId ?? 'unknown'} - not found in tracks table`,
+          `Warning: Skipped track with ID: ${mapping.trackId ?? "unknown"} - not found in tracks table`,
         );
         return false;
       }
       return true;
     })
-    .map((mapping) => transformTrackToDto(mapping.track!, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap));
+    .map((mapping) =>
+      transformTrackToDto(
+        mapping.track!,
+        likedTrackCodes,
+        ownerTypeMap,
+        ownerSubTypeMap,
+        ownerCodeMap,
+      ),
+    );
 
   return {
     tracks,
@@ -407,8 +480,15 @@ export const getTracksByFilterService = async (
   });
 
   const filterTracks = rawData.rows.filter((m) => m.track).map((m) => m.track!);
-  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(filterTracks);
-  return buildFilterPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap);
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
+    await fetchOwnerMaps(filterTracks);
+  return buildFilterPaginatedResponse(
+    rawData,
+    likedTrackCodes,
+    ownerTypeMap,
+    ownerSubTypeMap,
+    ownerCodeMap,
+  );
 };
 
 // Transform raw track data to TrackDetailsWithSkus DTO (includes both SKUs and filters)
@@ -420,21 +500,48 @@ const transformTrackToDetailsDto = (
   ownerUsageInfoMap?: Map<string, object>,
   ownerRestrictedCategoriesMap?: Map<string, object>,
   ownerCodeMap?: Map<string, string>,
+  ownerUsernameMap?: Map<string, string>,
 ): TrackDetailsWithSkus => {
-  const baseDto = transformTrackToDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap);
+  const baseDto = transformTrackToDto(
+    track,
+    likedTrackCodes,
+    ownerTypeMap,
+    ownerSubTypeMap,
+  );
 
-  // Pick usageInfo, restrictedCategories and ownerCode from the first owner that has them
+  // Pick usageInfo, restrictedCategories, ownerCode and ownerName from the first owner that has them
   let usageInfo: object | undefined;
   let restrictedCategories: object | undefined;
   let ownerCode: string | undefined;
+  let ownerName: string | undefined;
   if (track.ownerId && Array.isArray(track.ownerId)) {
     for (const oid of track.ownerId) {
-      if (!usageInfo && ownerUsageInfoMap?.get(oid)) usageInfo = ownerUsageInfoMap.get(oid);
-      if (!restrictedCategories && ownerRestrictedCategoriesMap?.get(oid)) restrictedCategories = ownerRestrictedCategoriesMap.get(oid);
-      if (!ownerCode && ownerCodeMap?.get(oid)) ownerCode = ownerCodeMap.get(oid);
-      if (usageInfo && restrictedCategories && ownerCode) break;
+      if (!usageInfo && ownerUsageInfoMap?.get(oid))
+        usageInfo = ownerUsageInfoMap.get(oid);
+      if (!restrictedCategories && ownerRestrictedCategoriesMap?.get(oid))
+        restrictedCategories = ownerRestrictedCategoriesMap.get(oid);
+      if (!ownerCode && ownerCodeMap?.get(oid))
+        ownerCode = ownerCodeMap.get(oid);
+      if (!ownerName && ownerUsernameMap?.get(oid))
+        ownerName = ownerUsernameMap.get(oid);
+      if (usageInfo && restrictedCategories && ownerCode && ownerName) break;
     }
   }
+
+  // Build songCredits string
+  const allArtistNames = (track.trackArtistMappings || [])
+    .map((m) => m.artist?.name)
+    .filter((n): n is string => !!n);
+  const releaseYear = track.releaseDate
+    ? new Date(track.releaseDate).getFullYear()
+    : null;
+  const creditParts: string[] = [];
+  if (allArtistNames.length > 0) creditParts.push(allArtistNames.join(", "));
+  if (releaseYear) creditParts.push(String(releaseYear));
+  if (ownerName) creditParts.push(ownerName);
+  const songCredits = track.name
+    ? `From '${track.name}' by ${creditParts.join(" | ")}`
+    : undefined;
 
   let standardSku: SkuInfo | undefined;
   let premiumSku: SkuInfo | undefined;
@@ -478,6 +585,7 @@ const transformTrackToDetailsDto = (
     ...(usageInfo && { usageInfo }),
     ...(restrictedCategories && { restrictedCategories }),
     ...(ownerCode && { ownerCode }),
+    ...(songCredits && { songCredits }),
   };
 };
 
@@ -498,6 +606,22 @@ export const getTrackDetailsByCodeService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const { ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap, ownerCodeMap } = await fetchOwnerMaps([track]);
-  return transformTrackToDetailsDto(track, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerUsageInfoMap, ownerRestrictedCategoriesMap, ownerCodeMap);
+  const {
+    ownerTypeMap,
+    ownerSubTypeMap,
+    ownerUsageInfoMap,
+    ownerRestrictedCategoriesMap,
+    ownerCodeMap,
+    ownerUsernameMap,
+  } = await fetchOwnerMaps([track]);
+  return transformTrackToDetailsDto(
+    track,
+    likedTrackCodes,
+    ownerTypeMap,
+    ownerSubTypeMap,
+    ownerUsageInfoMap,
+    ownerRestrictedCategoriesMap,
+    ownerCodeMap,
+    ownerUsernameMap,
+  );
 };

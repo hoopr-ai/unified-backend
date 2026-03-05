@@ -54,6 +54,7 @@ export interface TrackDetailsWithSkus extends TrackWithArtists {
   usageInfo?: object;
   restrictedCategories?: object;
   ownerCode?: string;
+  songCredits?: string;
 }
 
 export interface PaginatedTracksResponseData {
@@ -108,9 +109,11 @@ export interface RawTrackWithMappings {
   mp3Link: string | null;
   hasVocals: boolean | null;
   trending: boolean | null;
+  releaseDate?: Date | null;
   ownerId?: string[];
   trackArtistMappings?: Array<{
     isPrimary?: boolean;
+    role?: string;
     artist?: { id: string; name: string; type: ArtistType[] };
   }>;
   skus?: RawSkuData[];

@@ -66,10 +66,14 @@ export const licenseTrackService = async (
   // Get track details including ownerId
   const track = await TrackModel.findOne({
     where: { trackCode },
-    attributes: ["id", "trackCode", "name", "ownerId"],
+    attributes: ["id", "trackCode", "name", "ownerId", "mp3Link"],
   });
   if (!track) {
     throw new AppError("Track not found", 404);
+  }
+
+  if (!track.mp3Link) {
+    throw new AppError("Track audio file is not available for download", 400);
   }
 
   // Get owner types for the track
@@ -117,8 +121,8 @@ export const licenseTrackService = async (
     );
   }
 
-  // Generate GCS signed URL for the track
-  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
+  // Generate GCS signed URL for the track using its stored mp3Link
+  const gcsResult = await generateGCSSignedUrl({ filePath: track.mp3Link! });
 
   // Deduct token from the matching type
   const { success, remainingTokens } = await deductTokenByType(
@@ -404,8 +408,12 @@ export const downloadTrackService = async (
     throw new AppError("Track associated with license not found", 404);
   }
 
-  // Generate GCS signed URL for the track
-  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
+  if (!track.mp3Link) {
+    throw new AppError("Track audio file is not available for download", 400);
+  }
+
+  // Generate GCS signed URL for the track using its stored mp3Link
+  const gcsResult = await generateGCSSignedUrl({ filePath: track.mp3Link });
 
   return {
     downloadLink: gcsResult.downloadLink,
