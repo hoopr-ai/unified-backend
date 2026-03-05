@@ -1,6 +1,7 @@
 import { LicenseModel, type LicenseDetails, VideoLinkModel } from "./schemas/modules.export";
 import { TrackModel } from "../track/schemas/modules.export";
 import { UserModel } from "../user/schemas/modules.export";
+import { TrackArtistMappingModel, ArtistModel } from "../artists/modules.export";
 
 export const createLicenseRecord = async (
   licenseDetails: LicenseDetails
@@ -42,6 +43,22 @@ export const getLicensesByBrandId = async (
       {
         model: TrackModel,
         attributes: ["id", "trackCode", "name", "sourceLink", "ownerId"],
+        include: [
+          {
+            model: TrackArtistMappingModel,
+            as: "trackArtistMappings",
+            required: false,
+            where: { isPrimary: true },
+            attributes: ["artistId", "isPrimary"],
+            include: [
+              {
+                model: ArtistModel,
+                as: "artist",
+                attributes: ["id", "name"],
+              },
+            ],
+          },
+        ],
       },
       {
         model: UserModel,
