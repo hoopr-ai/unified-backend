@@ -56,14 +56,12 @@ export const sequelize = new Sequelize({
   database: DB_NAME,
   logging: process.env.DB_LOGGING === "true",
 
-  dialectOptions: isProduction
-    ? {
-        ssl: {
-          require: true,
-          rejectUnauthorized: false,
-        },
-      }
-    : {},
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false,
+    },
+  },
 
   define: {
     freezeTableName: true,
