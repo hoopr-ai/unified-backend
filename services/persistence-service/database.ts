@@ -45,8 +45,6 @@ const DB_USER = process.env.DB_USER as string;
 const DB_PASSWORD = process.env.DB_PASSWORD as string;
 const DB_NAME = process.env.DB_NAME as string;
 
-const isProduction = process.env.NODE_ENV == "production";
-
 export const sequelize = new Sequelize({
   dialect: "postgres",
   host: DB_HOST,
