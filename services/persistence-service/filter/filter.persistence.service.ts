@@ -21,7 +21,6 @@ export const findAllActiveFilters = async (): Promise<FilterDetails[]> => {
       },
     ],
     group: ["FilterModel.id"], // Group by filter to avoid duplicates
-    order: [["name", "ASC"]],
   });
   return filters;
 };
