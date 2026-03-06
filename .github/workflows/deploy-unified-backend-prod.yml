@@ -78,7 +78,7 @@ jobs:
           ls -l deployment.sh
           file deployment.sh || true
 
-          echo "================================================="
+          echo "=================================================="
           echo "🔧 Ensuring executable"
           chmod +x deployment.sh
 
