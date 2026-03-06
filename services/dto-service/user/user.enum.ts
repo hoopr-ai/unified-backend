@@ -54,4 +54,5 @@ export const ProfileRoleDescriptions: Record<ProfileRole, string> = {
     [ProfileRole.AGENCY_EXTERNAL]: 'Marketing agencies, production houses, consultants',
 };
 
-export const SESSION_TIMEOUT_MINUTES = 300;
+//make it 24 hours for now
+export const SESSION_TIMEOUT_MINUTES = 24 * 60;
