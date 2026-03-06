@@ -2,6 +2,8 @@ export interface OwnerInfo {
   id: string;
   ownerCode: string;
   name: string | null;
+  type: string | null;
+  subType: string | null;
 }
 
 export interface GetAllOwnersResponseData {
