@@ -113,7 +113,7 @@ export const sendInviteEmail = async (
               <tr>
                 <td align="center" style="padding:10px 40px;">
                   <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
-                    Your Invite is Here!!
+                    You've been added to a Hoopr Enterprise team
                   </h1>
                 </td>
               </tr>
@@ -122,9 +122,9 @@ export const sendInviteEmail = async (
               <tr>
                 <td align="center" style="padding:10px 40px 25px 40px;">
                   <p style="margin:0; font-size:15px; color:#666; line-height:1.6;">
-                    Welcome to Hoopr! Your account has been successfully created.
-                    Use the credentials below to sign in and start accessing our complete
-                    library of licensed music.
+                    ${inviterName ? `<strong>${inviterName}</strong> has invited you to join their team on Hoopr Enterprise.` : `You have been invited to join a team on Hoopr Enterprise.`}<br/><br/>
+                    Once you accept, you'll be able to access Hoopr's catalog and download tracks based on the permissions assigned to you.<br/><br/>
+                    Accept the invitation to get started.
                   </p>
                 </td>
               </tr>
@@ -168,7 +168,7 @@ export const sendInviteEmail = async (
                     style="display:inline-block; background-color:#ff2f63; color:#ffffff;
                           text-decoration:none; padding:14px 36px; font-size:16px;
                           border-radius:6px; font-weight:600;">
-                    Start Now
+                    Join the Team
                   </a>
                 </td>
               </tr>
@@ -218,7 +218,7 @@ export const sendInviteEmail = async (
 
   await sendEmail({
     to: email,
-    subject: "You Have Been Invited - Your Account Credentials",
+    subject: "You've been invited to join your team on Hoopr",
     html,
   });
 };
@@ -269,105 +269,72 @@ export const sendTrackDownloadNotificationEmail = async (
               <tr>
                 <td align="center" style="padding:10px 40px;">
                   <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
-                    A Track Has Been Downloaded
+                    New track downloaded
                   </h1>
                 </td>
               </tr>
 
               <!-- Subtitle -->
               <tr>
-                <td align="center" style="padding:10px 40px 25px 40px;">
+                <td align="center" style="padding:10px 40px 20px 40px;">
                   <p style="margin:0; font-size:15px; color:#666; line-height:1.6;">
-                    A team member has just licensed and downloaded a track from your Hoopr workspace.
+                    A track has been downloaded from your Hoopr Enterprise account.
                   </p>
                 </td>
               </tr>
 
               <!-- Track Details Box -->
               <tr>
-                <td style="padding:0 40px;">
+                <td style="padding:0 40px 16px 40px;">
                   <table width="100%" cellpadding="0" cellspacing="0"
                     style="background:#f7f7f7; border-radius:6px; padding:20px;">
                     <tr>
-                      <td style="font-size:16px; font-weight:600; color:#ff2f63; padding-bottom:15px;">
-                        Track Details :-
+                      <td style="font-size:15px; padding:5px 0; color:#333;">
+                        <strong>Track:</strong> ${trackName}
                       </td>
                     </tr>
-
                     <tr>
                       <td style="font-size:15px; padding:5px 0; color:#333;">
-                        <strong>Track Name:</strong> ${trackName}
+                        <strong>Downloaded by:</strong> ${downloadedBy}
                       </td>
                     </tr>
-
                     <tr>
                       <td style="font-size:15px; padding:5px 0; color:#333;">
-                        <strong>Track Code:</strong> ${trackCode}
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td style="font-size:15px; padding:5px 0; color:#333;">
-                        <strong>Downloaded By:</strong> ${downloadedBy}
+                        <strong>Credits remaining:</strong> ${creditsRemaining}
                       </td>
                     </tr>
                   </table>
                 </td>
               </tr>
 
-              <!-- Spacer -->
-              <tr><td style="height:16px;"></td></tr>
-
-              <!-- Credits & Validity Box -->
+              <!-- Reminder Box -->
               <tr>
-                <td style="padding:0 40px;">
-                  <table width="100%" cellpadding="0" cellspacing="0"
-                    style="border-radius:6px; overflow:hidden;">
-
-                    <!-- Credits Row -->
-                    <tr>
-                      <td width="50%" style="background:#fff3f6; padding:18px 20px; border-radius:6px 0 0 6px;">
-                        <p style="margin:0; font-size:12px; color:#999; text-transform:uppercase; letter-spacing:0.5px;">Credits Remaining</p>
-                        <p style="margin:6px 0 0 0; font-size:24px; font-weight:700; color:#ff2f63;">${creditsRemaining}</p>
-                      </td>
-
-                      <!-- License Valid Until -->
-                      <td width="50%" style="background:#f0f9f0; padding:18px 20px; border-radius:0 6px 6px 0;">
-                        <p style="margin:0; font-size:12px; color:#999; text-transform:uppercase; letter-spacing:0.5px;">License Valid Until</p>
-                        <p style="margin:6px 0 0 0; font-size:18px; font-weight:700; color:#2e7d32;">${licenseExpiryDate}</p>
-                      </td>
-                    </tr>
-
-                  </table>
-                </td>
-              </tr>
-
-              <!-- Spacer -->
-              <tr><td style="height:24px;"></td></tr>
-
-              <!-- Reminders Box -->
-              <tr>
-                <td style="padding:0 40px;">
+                <td style="padding:0 40px 25px 40px;">
                   <table width="100%" cellpadding="0" cellspacing="0"
                     style="background:#fffbf0; border-left:4px solid #f59e0b; border-radius:0 6px 6px 0; padding:16px 20px;">
                     <tr>
-                      <td style="font-size:14px; font-weight:600; color:#333; padding-bottom:10px;">
-                        Important Reminders
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="font-size:13px; color:#555; line-height:2;">
-                        ✅ &nbsp;Use this track in your content within the license validity period<br/>
-                        🔗 &nbsp;Add content links against this track in your dashboard after publishing<br/>
-                        📋 &nbsp;Download the license certificate for your records
+                      <td style="font-size:14px; color:#555; line-height:1.7;">
+                        🔗 &nbsp;Reminder: Please add the content link once the music is used to keep licenses compliant.
                       </td>
                     </tr>
                   </table>
                 </td>
               </tr>
 
+              <!-- CTA Button -->
+              <tr>
+                <td align="center" style="padding:10px 40px 10px 40px;">
+                  <a href="https://enterprise.hoopr.ai/activity"
+                    style="display:inline-block; background-color:#ff2f63; color:#ffffff;
+                          text-decoration:none; padding:14px 36px; font-size:16px;
+                          border-radius:6px; font-weight:600;">
+                    View Activity
+                  </a>
+                </td>
+              </tr>
+
               <!-- Spacer -->
-              <tr><td style="height:24px;"></td></tr>
+              <tr><td style="height:20px;"></td></tr>
 
               <!-- Help Section -->
               <tr>
@@ -405,7 +372,7 @@ export const sendTrackDownloadNotificationEmail = async (
 
   await sendEmail({
     to: recipientEmail,
-    subject: `Track Downloaded: ${trackName} — Hoopr`,
+    subject: `Track activity update on your Hoopr account`,
     html,
   });
 };
@@ -443,23 +410,25 @@ export const sendTeamJoinNotificationEmail = async (
               <tr>
                 <td align="center" style="padding:10px 40px;">
                   <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
-                    ${newMemberName} has joined your team!
+                    New team member added
                   </h1>
                 </td>
               </tr>
 
               <!-- Subtitle -->
               <tr>
-                <td align="center" style="padding:10px 40px 25px 40px;">
+                <td align="center" style="padding:10px 40px 20px 40px;">
                   <p style="margin:0; font-size:15px; color:#666; line-height:1.6;">
-                    A new member has completed their profile and is now part of your workspace on Hoopr.
+                    <strong>${newMemberName}</strong> has successfully joined your Hoopr Enterprise account.<br/><br/>
+                    They now have access based on the permissions set by the admin.<br/>
+                    You can update or revoke access at any time from the dashboard.
                   </p>
                 </td>
               </tr>
 
               <!-- Member Details Box -->
               <tr>
-                <td style="padding:0 40px;">
+                <td style="padding:0 40px 25px 40px;">
                   <table width="100%" cellpadding="0" cellspacing="0"
                     style="background:#f7f7f7; border-radius:6px; padding:20px;">
                     <tr>
@@ -483,14 +452,20 @@ export const sendTeamJoinNotificationEmail = async (
                 </td>
               </tr>
 
-              <!-- Spacer -->
+              <!-- CTA Button -->
               <tr>
-                <td style="padding:25px 40px 10px 40px;">
-                  <p style="margin:0; font-size:14px; color:#666; line-height:1.6;">
-                    They now have access to your team's workspace and can start collaborating right away.
-                  </p>
+                <td align="center" style="padding:10px 40px 10px 40px;">
+                  <a href="https://enterprise.hoopr.ai/team"
+                    style="display:inline-block; background-color:#ff2f63; color:#ffffff;
+                          text-decoration:none; padding:14px 36px; font-size:16px;
+                          border-radius:6px; font-weight:600;">
+                    View Team Access
+                  </a>
                 </td>
               </tr>
+
+              <!-- Spacer -->
+              <tr><td style="height:20px;"></td></tr>
 
               <!-- Help Section -->
               <tr>
@@ -528,7 +503,7 @@ export const sendTeamJoinNotificationEmail = async (
 
   await sendEmail({
     to: recipientEmail,
-    subject: `${newMemberName} has joined your team on Hoopr`,
+    subject: `${newMemberName} has joined your Hoopr team`,
     html,
   });
 };
@@ -566,18 +541,39 @@ export const sendAdminCredentialsEmail = async (
               <tr>
                 <td align="center" style="padding:10px 40px;">
                   <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
-                    Your Admin Account is Ready
+                    You're all set!
                   </h1>
                 </td>
               </tr>
 
               <!-- Subtitle -->
               <tr>
-                <td align="center" style="padding:10px 40px 25px 40px;">
+                <td align="center" style="padding:10px 40px 20px 40px;">
                   <p style="margin:0; font-size:15px; color:#666; line-height:1.6;">
-                    An admin account has been created for you on Hoopr Enterprise.
-                    Use the credentials below to sign in and manage your workspace.
+                    Your Hoopr Enterprise onboarding is now complete.<br/>
+                    Your team can start accessing music under a single, centrally managed account with full visibility and control.
                   </p>
+                </td>
+              </tr>
+
+              <!-- You can now box -->
+              <tr>
+                <td style="padding:0 40px 25px 40px;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#fff8f9; border-left:4px solid #ff2f63; border-radius:0 6px 6px 0; padding:16px 20px;">
+                    <tr>
+                      <td style="font-size:14px; font-weight:600; color:#333; padding-bottom:10px;">
+                        You can now:
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-size:14px; color:#555; line-height:2;">
+                        • &nbsp;Invite team members<br/>
+                        • &nbsp;Assign or update access<br/>
+                        • &nbsp;Monitor usage and credits
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 
@@ -670,7 +666,138 @@ export const sendAdminCredentialsEmail = async (
 
   await sendEmail({
     to: email,
-    subject: "Your Hoopr Admin Account Credentials",
+    subject: "Your Hoopr Enterprise setup is complete",
+    html,
+  });
+};
+
+export const sendLowCreditsAlertEmail = async (
+  recipientEmail: string,
+  creditsRemaining: number,
+): Promise<void> => {
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <title>Credits Running Low</title>
+    </head>
+
+    <body style="margin:0; padding:0; background-color:#f4f4f4; font-family: Arial, Helvetica, sans-serif;">
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4; padding:30px 0;">
+        <tr>
+          <td align="center">
+
+            <!-- Main Container -->
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+
+              <!-- Logo -->
+              <tr>
+                <td align="center" style="padding:30px 20px 10px 20px;">
+                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/Hoopr%20Logo%20SVG%20(2).png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                </td>
+              </tr>
+
+              <!-- Title -->
+              <tr>
+                <td align="center" style="padding:10px 40px;">
+                  <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
+                    Low credit alert
+                  </h1>
+                </td>
+              </tr>
+
+              <!-- Subtitle -->
+              <tr>
+                <td align="center" style="padding:10px 40px 20px 40px;">
+                  <p style="margin:0; font-size:15px; color:#666; line-height:1.6;">
+                    Your Hoopr Enterprise account is running low on credits.
+                  </p>
+                </td>
+              </tr>
+
+              <!-- Credits Box -->
+              <tr>
+                <td style="padding:0 40px 16px 40px;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#fff3f6; border-radius:6px; padding:20px; text-align:center;">
+                    <tr>
+                      <td>
+                        <p style="margin:0; font-size:12px; color:#999; text-transform:uppercase; letter-spacing:0.5px;">Credits Remaining</p>
+                        <p style="margin:8px 0 0 0; font-size:36px; font-weight:700; color:#ff2f63;">${creditsRemaining}</p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Warning Box -->
+              <tr>
+                <td style="padding:0 40px 25px 40px;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#fffbf0; border-left:4px solid #f59e0b; border-radius:0 6px 6px 0; padding:16px 20px;">
+                    <tr>
+                      <td style="font-size:14px; color:#555; line-height:1.7;">
+                        ⚠️ &nbsp;To avoid interruptions for your team, we recommend topping up or renewing your plan.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- CTA Button -->
+              <tr>
+                <td align="center" style="padding:10px 40px 10px 40px;">
+                  <a href="https://enterprise.hoopr.ai/credits"
+                    style="display:inline-block; background-color:#ff2f63; color:#ffffff;
+                          text-decoration:none; padding:14px 36px; font-size:16px;
+                          border-radius:6px; font-weight:600;">
+                    Manage Credits
+                  </a>
+                </td>
+              </tr>
+
+              <!-- Spacer -->
+              <tr><td style="height:20px;"></td></tr>
+
+              <!-- Help Section -->
+              <tr>
+                <td align="center" style="border-top:1px solid #eee; padding:25px 40px;">
+                  <p style="margin:0; font-size:14px; color:#333; font-weight:600;">
+                    Need Help?
+                  </p>
+                  <p style="margin:8px 0 0 0; font-size:13px; color:#777;">
+                    If you have any questions about your credits or plan,
+                    <a href="mailto:support@hoopr.ai" style="color:#ff2f63; text-decoration:none;">
+                      contact support
+                    </a>
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+
+            <!-- Footer -->
+            <table width="600" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:20px; font-size:12px; color:#aaa;">
+                  This is an automated email. Please do not reply.
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+      </table>
+
+    </body>
+    </html>
+  `;
+
+  await sendEmail({
+    to: recipientEmail,
+    subject: "Credits running low on your Hoopr account",
     html,
   });
 };
@@ -709,38 +836,36 @@ export const sendFirstLoginWelcomeEmail = async (
               <tr>
                 <td align="center" style="padding:10px 40px;">
                   <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
-                    Welcome to Hoopr!
+                    You're all set!
                   </h1>
                 </td>
               </tr>
 
               <!-- Subtitle -->
               <tr>
-                <td align="center" style="padding:10px 40px 25px 40px;">
+                <td align="center" style="padding:10px 40px 20px 40px;">
                   <p style="margin:0; font-size:15px; color:#666; line-height:1.6;">
-                    Hi ${displayName}, welcome aboard! We're thrilled to have you on Hoopr.
-                    Explore our complete library of licensed music and find the perfect
-                    track for your projects.
+                    Your Hoopr Enterprise onboarding is now complete.<br/>
+                    Your team can start accessing music under a single, centrally managed account with full visibility and control.
                   </p>
                 </td>
               </tr>
 
-              <!-- Getting Started Box -->
+              <!-- You can now box -->
               <tr>
-                <td style="padding:0 40px;">
+                <td style="padding:0 40px 25px 40px;">
                   <table width="100%" cellpadding="0" cellspacing="0"
-                    style="background:#f7f7f7; border-radius:6px; padding:20px;">
+                    style="background:#fff8f9; border-left:4px solid #ff2f63; border-radius:0 6px 6px 0; padding:16px 20px;">
                     <tr>
-                      <td style="font-size:16px; font-weight:600; color:#333; padding-bottom:10px;">
-                        Getting Started
+                      <td style="font-size:14px; font-weight:600; color:#333; padding-bottom:10px;">
+                        You can now:
                       </td>
                     </tr>
-
                     <tr>
-                      <td style="font-size:14px; color:#777; line-height:1.8;">
-                        1. Complete your profile to personalize your experience<br/>
-                        2. Browse our music library<br/>
-                        3. License tracks for your projects
+                      <td style="font-size:14px; color:#555; line-height:2;">
+                        • &nbsp;Invite team members<br/>
+                        • &nbsp;Assign or update access<br/>
+                        • &nbsp;Monitor usage and credits
                       </td>
                     </tr>
                   </table>
@@ -749,12 +874,12 @@ export const sendFirstLoginWelcomeEmail = async (
 
               <!-- CTA Button -->
               <tr>
-                <td align="center" style="padding:30px 40px 10px 40px;">
+                <td align="center" style="padding:10px 40px 10px 40px;">
                   <a href="${loginUrl}"
                     style="display:inline-block; background-color:#ff2f63; color:#ffffff;
                           text-decoration:none; padding:14px 36px; font-size:16px;
                           border-radius:6px; font-weight:600;">
-                    Explore Now
+                    Go to Dashboard
                   </a>
                 </td>
               </tr>
@@ -804,7 +929,7 @@ export const sendFirstLoginWelcomeEmail = async (
 
   await sendEmail({
     to: email,
-    subject: "Welcome to Hoopr - Let's Get Started!",
+    subject: "Your Hoopr Enterprise setup is complete",
     html,
   });
 };

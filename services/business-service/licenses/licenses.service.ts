@@ -25,6 +25,7 @@ import {
   uploadBufferToGCS,
   generateLicensePdf,
   sendTrackDownloadNotificationEmail,
+  sendLowCreditsAlertEmail,
 } from "../../helper-service/modules.export";
 import { logger } from "../../helper-service/logger";
 import type {
@@ -182,6 +183,16 @@ export const licenseTrackService = async (
         error: err.message,
       });
     });
+
+  // Send low credits alert if remaining tokens drop below 2
+  if (remainingTokens < 2 && user.email) {
+    sendLowCreditsAlertEmail(user.email, remainingTokens).catch((err) => {
+      logger.error("Failed to send low credits alert email", {
+        recipientEmail: user.email,
+        error: err.message,
+      });
+    });
+  }
 
   return {
     id: createdLicense.id!,
