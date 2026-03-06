@@ -177,6 +177,39 @@ export const validateAndRefreshSession = async (
   const session = await findActiveSessionByToken(sessionToken);
 
   if (!session) {
+    // No active session found - but if JWT is valid, create a new session
+    // This keeps the user logged in until their token expires (24h)
+    if (decodedToken) {
+      // Check if user is still active or invited
+      const user = await findUserById(decodedToken.userId);
+      if (!user || (user.status !== UserStatus.ACTIVE && user.status !== UserStatus.INVITED)) {
+        return { isValid: false, needsNewSession: true };
+      }
+
+      // Create a new session since JWT is still valid
+      const newSessionData: UserSessionDetails = {
+        userId: decodedToken.userId,
+        sessionToken: sessionToken,
+        ipAddress: metadata?.ipAddress,
+        userAgent: metadata?.userAgent,
+        deviceType: metadata?.deviceType,
+        browser: metadata?.browser,
+        os: metadata?.os,
+        status: SessionStatus.ACTIVE,
+        lastActivityAt: new Date(),
+        expiresAt: new Date(Date.now() + AccessTokenExpiryInSeconds * 1000),
+        createdAt: new Date(),
+      };
+
+      const newSession = await createSession(newSessionData);
+      logger.info("New session created (no existing active session found)", {
+        userId: decodedToken.userId,
+        newSessionId: newSession.id,
+      });
+
+      return { isValid: true, session: newSession, needsNewSession: false };
+    }
+
     return { isValid: false, needsNewSession: true };
   }
 
