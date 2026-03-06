@@ -42,6 +42,7 @@ import {
   isSessionExpiredByInactivity,
   type UserSessionDetails,
 } from "../../persistence-service/exports";
+import { findBrandById } from "../../persistence-service/brand/modules.export";
 import {
   AppError,
   createJWTToken,
@@ -261,8 +262,9 @@ export const createUserService = async (
   await saveUserRole(userRoleDetails);
 
   // Send admin credentials email
-  const loginUrl = `${process.env.FRONTEND_URL}/login`;
-  await sendAdminCredentialsEmail(email, password, loginUrl);
+  const brand = brandId ? await findBrandById(brandId) : null;
+  const brandName = (brand as any)?.name || "";
+  await sendAdminCredentialsEmail(email, password, brandName);
 
   return {};
 };

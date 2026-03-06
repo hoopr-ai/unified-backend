@@ -511,14 +511,16 @@ export const sendTeamJoinNotificationEmail = async (
 export const sendAdminCredentialsEmail = async (
   email: string,
   password: string,
-  loginUrl: string,
+  brandName: string,
 ): Promise<void> => {
+  const frontendUrl = process.env.FRONTEND_URL || "https://smash.hoopr.ai";
+
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8" />
-      <title>Your Admin Account is Ready</title>
+      <title>Welcome to Hoopr Smash</title>
     </head>
 
     <body style="margin:0; padding:0; background-color:#f4f4f4; font-family: Arial, Helvetica, sans-serif;">
@@ -537,71 +539,38 @@ export const sendAdminCredentialsEmail = async (
                 </td>
               </tr>
 
-              <!-- Title -->
+              <!-- Body -->
               <tr>
-                <td align="center" style="padding:10px 40px;">
-                  <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
-                    You're all set!
-                  </h1>
-                </td>
-              </tr>
-
-              <!-- Subtitle -->
-              <tr>
-                <td align="center" style="padding:10px 40px 20px 40px;">
-                  <p style="margin:0; font-size:15px; color:#666; line-height:1.6;">
-                    Your Hoopr Enterprise onboarding is now complete.<br/>
-                    Your team can start accessing music under a single, centrally managed account with full visibility and control.
+                <td style="padding:20px 40px 10px 40px;">
+                  <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
+                    Hey,
                   </p>
-                </td>
-              </tr>
-
-              <!-- You can now box -->
-              <tr>
-                <td style="padding:0 40px 25px 40px;">
-                  <table width="100%" cellpadding="0" cellspacing="0"
-                    style="background:#fff8f9; border-left:4px solid #ff2f63; border-radius:0 6px 6px 0; padding:16px 20px;">
-                    <tr>
-                      <td style="font-size:14px; font-weight:600; color:#333; padding-bottom:10px;">
-                        You can now:
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="font-size:14px; color:#555; line-height:2;">
-                        • &nbsp;Invite team members<br/>
-                        • &nbsp;Assign or update access<br/>
-                        • &nbsp;Monitor usage and credits
-                      </td>
-                    </tr>
-                  </table>
+                  <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
+                    Hoopr Smash account for <strong>${brandName}</strong> has been created.
+                  </p>
+                  <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
+                    To access the platform, login using the credentials below:
+                  </p>
                 </td>
               </tr>
 
               <!-- Credentials Box -->
               <tr>
-                <td style="padding:0 40px;">
+                <td style="padding:0 40px 20px 40px;">
                   <table width="100%" cellpadding="0" cellspacing="0"
                     style="background:#f7f7f7; border-radius:6px; padding:20px;">
                     <tr>
-                      <td style="font-size:16px; font-weight:600; color:#333; padding-bottom:10px;">
-                        Admin Credentials
+                      <td style="font-size:15px; padding:4px 0; color:#333;">
+                        <strong>Platform URL:</strong> <a href="${frontendUrl}" style="color:#ff2f63; text-decoration:none;">${frontendUrl}</a>
                       </td>
                     </tr>
-
                     <tr>
-                      <td style="font-size:14px; color:#777; padding-bottom:15px;">
-                        Keep these credentials safe and do not share them
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td style="font-size:15px; padding:4px 0;">
+                      <td style="font-size:15px; padding:4px 0; color:#333;">
                         <strong>Email:</strong> ${email}
                       </td>
                     </tr>
-
                     <tr>
-                      <td style="font-size:15px; padding:4px 0;">
+                      <td style="font-size:15px; padding:4px 0; color:#333;">
                         <strong>Password:</strong> ${password}
                       </td>
                     </tr>
@@ -611,36 +580,28 @@ export const sendAdminCredentialsEmail = async (
 
               <!-- CTA Button -->
               <tr>
-                <td align="center" style="padding:30px 40px 10px 40px;">
-                  <a href="${loginUrl}"
+                <td align="center" style="padding:10px 40px 20px 40px;">
+                  <a href="${frontendUrl}"
                     style="display:inline-block; background-color:#ff2f63; color:#ffffff;
                           text-decoration:none; padding:14px 36px; font-size:16px;
                           border-radius:6px; font-weight:600;">
-                    Login to Dashboard
+                    Login to Hoopr Smash
                   </a>
                 </td>
               </tr>
 
-              <!-- Small Note -->
+              <!-- Footer Message -->
               <tr>
-                <td align="center" style="padding:10px 40px 25px 40px;">
-                  <p style="margin:0; font-size:12px; color:#999;">
-                    We strongly recommend changing your password after your first login
+                <td style="padding:0 40px 25px 40px;">
+                  <p style="margin:0 0 10px 0; font-size:15px; color:#333; line-height:1.7;">
+                    In case you need any help, feel free to reach out to us at
+                    <a href="mailto:hello@hoopr.ai" style="color:#ff2f63; text-decoration:none;">hello@hoopr.ai</a>.
                   </p>
-                </td>
-              </tr>
-
-              <!-- Help Section -->
-              <tr>
-                <td align="center" style="border-top:1px solid #eee; padding:25px 40px;">
-                  <p style="margin:0; font-size:14px; color:#333; font-weight:600;">
-                    Need Help?
+                  <p style="margin:0 0 10px 0; font-size:15px; color:#333; line-height:1.7;">
+                    We hope you enjoy using Hoopr Smash.
                   </p>
-                  <p style="margin:8px 0 0 0; font-size:13px; color:#777;">
-                    If you did not request this account or need assistance,
-                    <a href="mailto:support@hoopr.ai" style="color:#ff2f63; text-decoration:none;">
-                      contact support
-                    </a>
+                  <p style="margin:0; font-size:15px; color:#333; line-height:1.7;">
+                    Regards,<br/>Team Hoopr
                   </p>
                 </td>
               </tr>
@@ -666,7 +627,7 @@ export const sendAdminCredentialsEmail = async (
 
   await sendEmail({
     to: email,
-    subject: "Your Hoopr Enterprise setup is complete",
+    subject: "Welcome to Hoopr Smash",
     html,
   });
 };
