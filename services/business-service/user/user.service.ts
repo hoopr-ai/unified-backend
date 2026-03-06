@@ -167,6 +167,8 @@ export const userLoginService = async (
 
 export const validateAndRefreshSession = async (
   sessionToken: string,
+  decodedToken?: SessionPayload,
+  metadata?: SessionMetadata,
 ): Promise<{
   isValid: boolean;
   session?: UserSessionDetails;
@@ -192,6 +194,33 @@ export const validateAndRefreshSession = async (
   if (isExpired) {
     // Delete the expired session
     await deleteSessionByToken(sessionToken);
+
+    // Create a new session if we have the token info (JWT is still valid)
+    if (decodedToken) {
+      const newSessionData: UserSessionDetails = {
+        userId: decodedToken.userId,
+        sessionToken: sessionToken,
+        ipAddress: metadata?.ipAddress,
+        userAgent: metadata?.userAgent,
+        deviceType: metadata?.deviceType,
+        browser: metadata?.browser,
+        os: metadata?.os,
+        status: SessionStatus.ACTIVE,
+        lastActivityAt: new Date(),
+        expiresAt: new Date(Date.now() + AccessTokenExpiryInSeconds * 1000),
+        createdAt: new Date(),
+      };
+
+      const newSession = await createSession(newSessionData);
+      logger.info("New session created after inactivity timeout", {
+        userId: decodedToken.userId,
+        oldSessionId: session.id,
+        newSessionId: newSession.id,
+      });
+
+      return { isValid: true, session: newSession, needsNewSession: false };
+    }
+
     return { isValid: false, needsNewSession: true };
   }
 

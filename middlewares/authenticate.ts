@@ -118,13 +118,21 @@ const handleAuthentication = (options: AuthOptions = {}) => {
         }
       }
 
+      // Extract metadata for potential session recreation
+      const metadata = extractSessionMetadata(req);
+
       // Validate session and check for inactivity
-      const { isValid, session, needsNewSession } = await validateAndRefreshSession(token);
+      // If inactive, a new session will be created automatically (user stays logged in until token expires)
+      const { isValid, session, needsNewSession } = await validateAndRefreshSession(
+        token,
+        decoded,
+        metadata
+      );
 
       if (!isValid) {
         if (needsNewSession) {
           throw new AppError(
-            "Session expired due to inactivity. Please login again.",
+            "Session expired. Please login again.",
             401
           );
         }

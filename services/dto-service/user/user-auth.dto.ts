@@ -61,8 +61,8 @@ export interface LoginResponse {
   brandId?: number;
 }
 
-export const AccessTokenExpiry = "3h";
-export const AccessTokenExpiryInSeconds = 3 * 60 * 60;
+export const AccessTokenExpiry = "24h";
+export const AccessTokenExpiryInSeconds = 24 * 60 * 60;
 
 export interface SessionMetadata {
   ipAddress?: string;
