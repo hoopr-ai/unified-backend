@@ -122,8 +122,8 @@ export const licenseTrackService = async (
     );
   }
 
-  // Generate GCS signed URL for the track using its stored mp3Link
-  const gcsResult = await generateGCSSignedUrl({ filePath: track.mp3Link! });
+  // Generate GCS signed URL for the track
+  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
   // Deduct token from the matching type
   const { success, remainingTokens } = await deductTokenByType(
@@ -428,8 +428,8 @@ export const downloadTrackService = async (
     throw new AppError("Track audio file is not available for download", 400);
   }
 
-  // Generate GCS signed URL for the track using its stored mp3Link
-  const gcsResult = await generateGCSSignedUrl({ filePath: track.mp3Link });
+  // Generate GCS signed URL for the track
+  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
   return {
     downloadLink: gcsResult.downloadLink,

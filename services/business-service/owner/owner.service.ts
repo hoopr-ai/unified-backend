@@ -17,6 +17,8 @@ export const getAllOwnersService = async (
       id: owner.id,
       ownerCode: owner.ownerCode,
       name: owner.username ?? null,
+      type: owner.type?? null,
+      subType: owner.subType?? null,
     })),
     pagination: {
       page,

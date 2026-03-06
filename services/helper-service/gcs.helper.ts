@@ -1,7 +1,7 @@
 import { Storage } from "@google-cloud/storage";
 
 interface GCSSignedUrlOptions {
-  filePath: string; // GCS object path, e.g. "musics/xyz/xyz-mp3.mp3"
+  trackId: string;
   expiresInMinutes?: number;
 }
 
@@ -42,7 +42,7 @@ const getStorageInstance = (): Storage => {
 export const generateGCSSignedUrl = async (
   options: GCSSignedUrlOptions
 ): Promise<GCSSignedUrlResult> => {
-  const { filePath, expiresInMinutes = 30 } = options;
+  const { trackId, expiresInMinutes = 30 } = options;
 
   const bucketName = process.env.SELECT_BUCKET;
   if (!bucketName) {
@@ -50,15 +50,7 @@ export const generateGCSSignedUrl = async (
   }
 
   const storage = getStorageInstance();
-
-  // Extract object path if a full URL was provided
-  // e.g. "https://storage.googleapis.com/bucket/musics/..." → "musics/..."
-  let gcsFilePath = filePath;
-  if (filePath.startsWith("https://") || filePath.startsWith("http://")) {
-    const url = new URL(filePath);
-    // pathname is like /bucketName/object/path — strip the leading /bucketName/
-    gcsFilePath = url.pathname.replace(/^\/[^/]+\//, "");
-  }
+  const gcsFilePath = `musics/${trackId}/${trackId}-mp3.mp3`;
 
   const bucket = storage.bucket(bucketName);
   const file = bucket.file(gcsFilePath);
@@ -72,7 +64,7 @@ export const generateGCSSignedUrl = async (
     action: "read",
     expires: Date.now() + expiresInMinutes * 60 * 1000,
     responseType: "audio/mpeg",
-    responseDisposition: `attachment; filename="${gcsFilePath.split("/").pop()}"`,
+    responseDisposition: `attachment; filename="${trackId}-mp3.mp3"`,
   });
 
   return {

@@ -5,7 +5,7 @@ export const findAllOwners = async (
   offset: number,
 ): Promise<{ count: number; rows: OwnerModel[] }> => {
   return OwnerModel.findAndCountAll({
-    attributes: ["id", "ownerCode", "username"],
+    attributes: ["id", "ownerCode", "username", "type", "subType"],
     order: [["username", "ASC"]],
     limit,
     offset,
