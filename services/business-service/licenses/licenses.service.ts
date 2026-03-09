@@ -51,7 +51,7 @@ export const licenseTrackService = async (
 
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId", "email"],
+    attributes: ["id", "brandId", "email", "firstName", "lastName"],
   });
 
   if (!user) {
@@ -152,23 +152,19 @@ export const licenseTrackService = async (
   const createdLicense = await createLicenseRecord(licenseDetails);
 
   // Notify entire team about the track download
-  const licensedAt = new Date();
-  const expiryDate = new Date(licensedAt);
-  expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-  const formattedExpiry = `${String(expiryDate.getDate()).padStart(2, "0")}/${String(expiryDate.getMonth() + 1).padStart(2, "0")}/${expiryDate.getFullYear()}`;
+  const downloadedByFullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "";
 
   findAllActiveUsersByBrandId(brandId)
     .then((teamMembers) => {
-      const emailData = {
-        trackName: track.name || trackCode,
-        trackCode: track.trackCode,
-        downloadedBy: user.email || "",
-        creditsRemaining: remainingTokens,
-        licenseExpiryDate: formattedExpiry,
-      };
       teamMembers.forEach((member) => {
         if (member.email) {
-          sendTrackDownloadNotificationEmail(member.email, emailData).catch((err) => {
+          sendTrackDownloadNotificationEmail(member.email, {
+            recipientFirstName: member.firstName || "",
+            trackName: track.name || trackCode,
+            assortmentType: matchingTokenType!,
+            creditsRemaining: remainingTokens,
+            downloadedByFullName,
+          }).catch((err) => {
             logger.error("Failed to send track download notification email", {
               recipientEmail: member.email,
               error: err.message,
@@ -184,14 +180,31 @@ export const licenseTrackService = async (
       });
     });
 
-  // Send low credits alert if remaining tokens drop below 2
-  if (remainingTokens < 2 && user.email) {
-    sendLowCreditsAlertEmail(user.email, remainingTokens).catch((err) => {
-      logger.error("Failed to send low credits alert email", {
-        recipientEmail: user.email,
-        error: err.message,
+  // Send low credits alert to whole team if remaining tokens drop below 2
+  if (remainingTokens < 2) {
+    findAllActiveUsersByBrandId(brandId)
+      .then((teamMembers) => {
+        teamMembers.forEach((member) => {
+          if (member.email) {
+            sendLowCreditsAlertEmail(member.email, {
+              recipientFirstName: member.firstName || "",
+              assortmentType: matchingTokenType!,
+              creditsRemaining: remainingTokens,
+            }).catch((err) => {
+              logger.error("Failed to send low credits alert email", {
+                recipientEmail: member.email,
+                error: err.message,
+              });
+            });
+          }
+        });
+      })
+      .catch((err) => {
+        logger.error("Failed to fetch team members for low credits alert", {
+          brandId,
+          error: err.message,
+        });
       });
-    });
   }
 
   return {

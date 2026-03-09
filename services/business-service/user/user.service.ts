@@ -146,10 +146,8 @@ export const userLoginService = async (
 
   // Send welcome email on first login (profile not yet completed)
   if (!user.isProfileComplete) {
-    const loginUrl = `${process.env.FRONTEND_URL}/login`;
-    const userName =
-      [user.firstName, user.lastName].filter(Boolean).join(" ") || undefined;
-    sendFirstLoginWelcomeEmail(user.email, loginUrl, userName).catch((err) => {
+    const firstName = user.firstName || "";
+    sendFirstLoginWelcomeEmail(user.email, firstName).catch((err) => {
       logger.error("Failed to send first login welcome email", {
         userId: user.id,
         error: err.message,
@@ -339,8 +337,11 @@ export const inviteUserService = async (
         createdBy,
       );
 
-      const loginUrl = `${process.env.FRONTEND_URL}/login`;
-      await sendInviteEmail(email, password, loginUrl);
+      const brand = brandId ? await findBrandById(brandId) : null;
+      const brandName = (brand as any)?.name || "";
+      const invitingUser = createdBy ? await findUserById(createdBy) : null;
+      const inviterName = invitingUser ? [invitingUser.firstName, invitingUser.lastName].filter(Boolean).join(" ") : undefined;
+      await sendInviteEmail(email, password, brandName, inviterName);
       return {};
     }
   }
@@ -356,8 +357,11 @@ export const inviteUserService = async (
   const userRoleDetails = createUserRoleDetails(savedUser.id!, UserRoles.USER);
   await saveUserRole(userRoleDetails);
 
-  const loginUrl = `${process.env.FRONTEND_URL}/login`;
-  await sendInviteEmail(email, password, loginUrl);
+  const brand = brandId ? await findBrandById(brandId) : null;
+  const brandName = (brand as any)?.name || "";
+  const invitingUser = createdBy ? await findUserById(createdBy) : null;
+  const inviterName = invitingUser ? [invitingUser.firstName, invitingUser.lastName].filter(Boolean).join(" ") : undefined;
+  await sendInviteEmail(email, password, brandName, inviterName);
 
   return {};
 };
@@ -391,26 +395,22 @@ export const completeProfileService = async (
   }
 
   // Notify existing team members that someone has joined
-  console.log("[TeamJoin] user.brandId:", user.brandId, "userId:", userId);
   if (user.brandId) {
-    const newMemberName = [firstName, lastName].filter(Boolean).join(" ");
+    const newMemberFirstName = firstName || "";
     const teamMembers = await findAllActiveUsersByBrandId(user.brandId, userId);
-    console.log("[TeamJoin] teamMembers found:", teamMembers.length, teamMembers.map((m) => ({ id: m.id, email: m.email })));
     await Promise.allSettled(
       teamMembers
         .filter((member) => !!member.email)
         .map((member) =>
-          sendTeamJoinNotificationEmail(member.email, newMemberName, user.email)
-            .then(() => {
-              console.log("[TeamJoin] Email sent to:", member.email);
-            })
+          sendTeamJoinNotificationEmail(member.email, member.firstName || "", newMemberFirstName)
             .catch((err) => {
-              console.error("[TeamJoin] Failed to send email to:", member.email, "Error:", err.message);
+              logger.error("Failed to send team join notification email", {
+                recipientEmail: member.email,
+                error: err.message,
+              });
             })
         )
     );
-  } else {
-    console.log("[TeamJoin] Skipped - user has no brandId");
   }
 
   return {};
