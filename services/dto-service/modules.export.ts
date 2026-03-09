@@ -8,3 +8,4 @@ export * from './organization/modules.export';
 export * from './brand/modules.export';
 export * from './licenses/modules.export';
 export * from './constants/modules.export';
+export * from './occasion/modules.export';
