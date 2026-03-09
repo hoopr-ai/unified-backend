@@ -54,6 +54,8 @@ export interface ResetPasswordRequestData {
 export interface LoginResponse {
   id: number;
   email: string;
+  firstName?: string | null;
+  lastName?: string | null;
   role: string | null;
   isProfileComplete: boolean;
   expiresIn: number;
