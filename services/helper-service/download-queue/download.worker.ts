@@ -14,7 +14,7 @@ const QUEUE_NAME = "media-download";
 // Paths for cookies, proxies, and yt-dlp binary
 const COOKIES_DIR = path.join(process.cwd(), "config", "cookies");
 const PROXIES_FILE = path.join(process.cwd(), "config", "proxies.json");
-const YT_DLP_PATH = process.env.YT_DLP_PATH || path.join(process.cwd(), "bin", "yt-dlp.exe");
+const YT_DLP_PATH = process.env.YT_DLP_PATH || path.join(process.cwd(), "bin", process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp");
 
 // Load cookies from directory
 const loadCookies = (): string[] => {
