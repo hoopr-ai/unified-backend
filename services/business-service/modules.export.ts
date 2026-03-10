@@ -6,3 +6,4 @@ export * from "./organization/organization.service";
 export * from "./licenses/licenses.service";
 export * from "./licenses/licenseType.service";
 export * from "./licenses/videoLinks.service";
+export * from "./occasion/modules.export";

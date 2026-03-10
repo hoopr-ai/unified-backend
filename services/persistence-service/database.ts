@@ -26,6 +26,7 @@ import {
 import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
 import { TokenModel } from "./token/modules.export";
+import { OccasionModel } from "./occasion/modules.export";
 
 config();
 
@@ -91,6 +92,7 @@ sequelize.addModels([
   OwnerModel,
   VideoLinkModel,
   TokenModel,
+  OccasionModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything

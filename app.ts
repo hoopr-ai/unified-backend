@@ -16,6 +16,7 @@ import tokenRoutes from "./routes/token.route";
 import likedTrackRoutes from "./routes/liked-track.route";
 import streamHistoryRoutes from "./routes/stream-history.route";
 import ownerRoutes from "./routes/owner.route";
+import occasionRoutes from "./routes/occasion.route";
 import mediaDownloadRoutes from "./routes/media-download.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
@@ -46,6 +47,7 @@ app.use("/tokens", tokenRoutes);
 app.use("/liked-tracks", likedTrackRoutes);
 app.use("/stream-history", streamHistoryRoutes);
 app.use("/owners", ownerRoutes);
+app.use("/occasions", occasionRoutes);
 app.use("/media-download", mediaDownloadRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {

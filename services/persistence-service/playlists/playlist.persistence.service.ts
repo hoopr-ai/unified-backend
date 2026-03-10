@@ -6,6 +6,7 @@ import {
   ArtistModel,
 } from "../artists/modules.export";
 import { PlaylistStatus } from "../../dto-service/modules.export";
+import { Op } from "sequelize";
 
 export interface FindAllPlaylistsParams {
   limit: number;
@@ -24,7 +25,7 @@ export const findAllPlaylists = async (
   const { limit, offset, status } = params;
 
   const whereClause: Record<string, unknown> = {
-    status: status || PlaylistStatus.ACTIVE,
+    status: status || { [Op.in]: [PlaylistStatus.ACTIVE] },
   };
 
   const { count, rows } = await PlaylistModel.findAndCountAll({
@@ -44,7 +45,7 @@ export const findPlaylistByCode = async (
   return await PlaylistModel.findOne({
     where: {
       playlistCode,
-      status: PlaylistStatus.ACTIVE,
+      status: { [Op.in]: [PlaylistStatus.ACTIVE, PlaylistStatus.HIDDEN] },
     },
     attributes: ["id", "playlistCode", "name", "name_slug", "description"],
   });

@@ -78,6 +78,7 @@ export const findAllTracks = async (
   if (ownerIds && ownerIds.length > 0) {
     whereClause.ownerId = { [Op.overlap]: ownerIds };
   }
+  whereClause.status = "ACTIVE";
 
   const { count, rows } = await TrackModel.findAndCountAll({
     where: whereClause,
@@ -105,7 +106,7 @@ export const findTracksByTrackCodes = async (
 ): Promise<PaginatedRawTracks> => {
   const offset = (page - 1) * limit;
 
-  const whereClause: Record<string, unknown> = { trackCode: trackCodes };
+  const whereClause: Record<string, unknown> = { trackCode: trackCodes, status: "ACTIVE" };
   if (ownerIds && ownerIds.length > 0) {
     whereClause.ownerId = { [Op.overlap]: ownerIds };
   }
@@ -151,7 +152,7 @@ export const findTrackByTrackCode = async (
   trackCode: string,
 ): Promise<RawTrackWithMappings | null> => {
   const track = await TrackModel.findOne({
-    where: { trackCode },
+    where: { trackCode, status: "ACTIVE" },
     include: [...getArtistInclude(), ...getAllSkusInclude(), ...getFilterMappingsInclude()],
   });
 
@@ -164,7 +165,7 @@ export const findTracksByFilter = async (
   const { filterIds, page, limit, ownerIds } = params;
   const offset = (page - 1) * limit;
 
-  const trackWhere: Record<string, unknown> = {};
+  const trackWhere: Record<string, unknown> = { status: "ACTIVE" };
   if (ownerIds && ownerIds.length > 0) {
     trackWhere.ownerId = { [Op.overlap]: ownerIds };
   }

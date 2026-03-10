@@ -107,7 +107,7 @@ export const sendInviteEmail = async (
               <!-- Logo -->
               <tr>
                 <td align="center" style="padding:30px 20px 10px 20px;">
-                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/Hoopr%20Logo%20SVG%20(2).png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
                 </td>
               </tr>
 
@@ -223,7 +223,13 @@ export const sendTrackDownloadNotificationEmail = async (
     downloadedByFullName: string;
   },
 ): Promise<void> => {
-  const { recipientFirstName, trackName, assortmentType, creditsRemaining, downloadedByFullName } = data;
+  const {
+    recipientFirstName,
+    trackName,
+    assortmentType,
+    creditsRemaining,
+    downloadedByFullName,
+  } = data;
   const frontendUrl = process.env.FRONTEND_URL || "https://smash.hoopr.ai";
 
   const html = `
@@ -246,7 +252,7 @@ export const sendTrackDownloadNotificationEmail = async (
               <!-- Logo -->
               <tr>
                 <td align="center" style="padding:30px 20px 10px 20px;">
-                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/Hoopr%20Logo%20SVG%20(2).png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
                 </td>
               </tr>
 
@@ -390,7 +396,7 @@ export const sendTeamJoinNotificationEmail = async (
               <!-- Logo -->
               <tr>
                 <td align="center" style="padding:30px 20px 10px 20px;">
-                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/Hoopr%20Logo%20SVG%20(2).png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
                 </td>
               </tr>
 
@@ -502,7 +508,7 @@ export const sendAdminCredentialsEmail = async (
               <!-- Logo -->
               <tr>
                 <td align="center" style="padding:30px 20px 10px 20px;">
-                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/Hoopr%20Logo%20SVG%20(2).png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
                 </td>
               </tr>
 
@@ -630,7 +636,7 @@ export const sendLowCreditsAlertEmail = async (
               <!-- Logo -->
               <tr>
                 <td align="center" style="padding:30px 20px 10px 20px;">
-                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/Hoopr%20Logo%20SVG%20(2).png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
                 </td>
               </tr>
 
@@ -741,7 +747,7 @@ export const sendFirstLoginWelcomeEmail = async (
               <!-- Logo -->
               <tr>
                 <td align="center" style="padding:30px 20px 10px 20px;">
-                  <img src="https://storage.googleapis.com/dev-enterprise/web/logos/Hoopr%20Logo%20SVG%20(2).png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
                 </td>
               </tr>
 
