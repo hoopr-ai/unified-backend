@@ -1,0 +1,22 @@
+{
+  "_comment": "Proxy configuration for media downloads. Replace with your actual proxies.",
+  "_instructions": [
+    "Add your proxy URLs to the 'proxies' array below.",
+    "Supported formats:",
+    "  - http://host:port",
+    "  - http://user:pass@host:port",
+    "  - socks5://host:port",
+    "  - socks5://user:pass@host:port",
+    "",
+    "Recommendations:",
+    "  - Residential proxies work best (lower block rate)",
+    "  - Mobile proxies are excellent but expensive",
+    "  - Datacenter proxies get blocked faster",
+    "  - Rotate between multiple proxies",
+    "",
+    "Leave empty array to run without proxies (not recommended for high volume)"
+  ],
+  "proxies": [
+
+  ]
+}
