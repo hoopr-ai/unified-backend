@@ -7,10 +7,6 @@ export interface FilterItem {
   rank: number | null;
 }
 
-export interface GroupedFilters {
-  [key: string]: FilterItem[];
-}
-
 export interface AssortmentItem {
   id: string;
   name: string;
@@ -18,7 +14,10 @@ export interface AssortmentItem {
   rank: number;
 }
 
+export interface GroupedFilters {
+  [key: string]: FilterItem[] | AssortmentItem[];
+}
+
 export interface GetAllFiltersResponse {
   filters: GroupedFilters;
-  assortment: AssortmentItem[];
 }

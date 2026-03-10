@@ -1,4 +1,5 @@
 import { GetAllFiltersResponse, GroupedFilters, AssortmentItem } from "../../dto-service/modules.export";
+
 import {
   findAllActiveFilters,
 } from "../../persistence-service/exports";
@@ -37,5 +38,7 @@ export const getAllFiltersService = async (): Promise<GetAllFiltersResponse> => 
     });
   }
 
-  return { filters: groupedFilters, assortment: ASSORTMENT };
+  groupedFilters["assortment"] = ASSORTMENT;
+
+  return { filters: groupedFilters };
 };
