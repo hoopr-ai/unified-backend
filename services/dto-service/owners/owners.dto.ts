@@ -4,6 +4,7 @@ export interface OwnerInfo {
   name: string | null;
   type: string | null;
   subType: string | null;
+  category: string | null;
 }
 
 export interface GetAllOwnersResponseData {
