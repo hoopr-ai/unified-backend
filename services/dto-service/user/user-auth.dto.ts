@@ -61,6 +61,7 @@ export interface LoginResponse {
   expiresIn: number;
   token: string;
   brandId?: number;
+  brandName?: string;
 }
 
 export const AccessTokenExpiry = "24h";

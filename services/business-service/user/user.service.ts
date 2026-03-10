@@ -68,6 +68,7 @@ const buildLoginResponse = (
   isProfileComplete: boolean,
   token: string,
   sessionId: number,
+  brandName?: string,
 ): LoginResponseWithSession => {
   return {
     id: user.id!,
@@ -80,6 +81,7 @@ const buildLoginResponse = (
     token,
     sessionId,
     brandId: user.brandId,
+    brandName,
   };
 };
 
@@ -157,12 +159,16 @@ export const userLoginService = async (
     });
   }
 
+  const brand = user.brandId ? await findBrandById(user.brandId) : null;
+  const brandName = (brand as any)?.name ?? undefined;
+
   return buildLoginResponse(
     user,
     role,
     user.isProfileComplete ?? false,
     token,
     session.id!,
+    brandName,
   );
 };
 
