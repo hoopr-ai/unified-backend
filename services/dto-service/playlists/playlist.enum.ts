@@ -8,5 +8,6 @@ export enum PlaylistType {
 export enum PlaylistStatus {
   ACTIVE = "ACTIVE",
   INACTIVE = "INACTIVE",
+  HIDDEN = "HIDDEN",
   DELETED = "DELETED",
 }
