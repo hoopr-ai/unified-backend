@@ -1,7 +1,14 @@
-import { GetAllFiltersResponse, GroupedFilters } from "../../dto-service/modules.export";
+import { GetAllFiltersResponse, GroupedFilters, AssortmentItem } from "../../dto-service/modules.export";
 import {
   findAllActiveFilters,
 } from "../../persistence-service/exports";
+
+const ASSORTMENT: AssortmentItem[] = [
+  { id: "charbuster",       name: "Charbuster",       slug: "charbuster",       rank: 1 },
+  { id: "international",    name: "International",    slug: "international",    rank: 2 },
+  { id: "regional & indie", name: "Regional & Indie", slug: "regional-indie",   rank: 3 },
+  { id: "hoopr originals",  name: "Hoopr Originals",  slug: "hoopr-originals",  rank: 4 },
+];
 
 export const getAllFiltersService = async (): Promise<GetAllFiltersResponse> => {
   const filters = await findAllActiveFilters();
@@ -30,5 +37,5 @@ export const getAllFiltersService = async (): Promise<GetAllFiltersResponse> => 
     });
   }
 
-  return { filters: groupedFilters };
+  return { filters: groupedFilters, assortment: ASSORTMENT };
 };
