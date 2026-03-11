@@ -3,6 +3,7 @@ import {
   queueDownload,
   getDownloadStatus,
   getStats,
+  extractInstagram,
 } from "../controllers/media-download.controller";
 
 const router = Router();
@@ -11,6 +12,11 @@ const router = Router();
 // POST /media-download
 // Body: { url: string, platform?: "instagram" | "youtube" | "tiktok" }
 router.post("/", queueDownload);
+
+// Direct Instagram extraction (no queue, instant response)
+// POST /media-download/instagram
+// Body: { url: string }
+router.post("/instagram", extractInstagram);
 
 // Get job status by jobId
 // GET /media-download/status/:jobId

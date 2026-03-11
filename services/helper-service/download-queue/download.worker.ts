@@ -8,6 +8,7 @@ import {
   WORKER_INSTANCES,
 } from "./queue.config";
 import type { DownloadJobData, DownloadJobResult } from "./download.queue";
+import { extractInstagramMedia } from "../instagram-extractor";
 
 const QUEUE_NAME = "media-download";
 
@@ -63,8 +64,30 @@ const randomItem = <T>(arr: T[]): T | undefined => {
   return arr[Math.floor(Math.random() * arr.length)];
 };
 
-// Process a download job
-const processDownload = async (
+// Process Instagram using custom extractor (no yt-dlp)
+const processInstagram = async (
+  job: Job<DownloadJobData, DownloadJobResult>
+): Promise<DownloadJobResult> => {
+  const { url } = job.data;
+
+  console.log(`📸 Processing Instagram job ${job.id} with custom extractor...`);
+
+  const media = await extractInstagramMedia(url);
+
+  const result: DownloadJobResult = {
+    title: media.title,
+    video_url: media.video_url,
+    thumbnail: media.thumbnail,
+    duration: media.duration,
+    formats: media.formats,
+  };
+
+  console.log(`✅ Job ${job.id} completed: ${result.title}`);
+  return result;
+};
+
+// Process download using yt-dlp (for YouTube, TikTok, etc.)
+const processWithYtDlp = async (
   job: Job<DownloadJobData, DownloadJobResult>
 ): Promise<DownloadJobResult> => {
   const { url, platform } = job.data;
@@ -161,6 +184,27 @@ const processDownload = async (
       }
     });
   });
+};
+
+// Process a download job - routes to appropriate handler
+const processDownload = async (
+  job: Job<DownloadJobData, DownloadJobResult>
+): Promise<DownloadJobResult> => {
+  const { platform } = job.data;
+
+  // Use custom extractor for Instagram (no authentication required)
+  if (platform === "instagram") {
+    try {
+      return await processInstagram(job);
+    } catch (error) {
+      console.log(`⚠️ Instagram extractor failed, falling back to yt-dlp...`);
+      // Fall back to yt-dlp if custom extractor fails
+      return await processWithYtDlp(job);
+    }
+  }
+
+  // Use yt-dlp for other platforms
+  return await processWithYtDlp(job);
 };
 
 // Store active workers for cleanup
