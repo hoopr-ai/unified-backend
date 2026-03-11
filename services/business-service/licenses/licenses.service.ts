@@ -512,6 +512,7 @@ export const downloadLicensePdfService = async (
     date: formattedDate,
     trackName: track.name || "",
     ownerName,
+    licenseId,
   });
 
   // Upload to GCS

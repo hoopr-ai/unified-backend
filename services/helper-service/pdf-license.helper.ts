@@ -23,6 +23,7 @@ export interface LicensePdfData {
   date: string;
   trackName: string;
   ownerName: string;
+  licenseId: number;
 }
 
 export const generateLicensePdf = async (
@@ -44,6 +45,7 @@ export const generateLicensePdf = async (
     date: data.date || "",
     trackName: data.trackName || "",
     ownerName: data.ownerName || "",
+    licenseId: `HLAN-${data.licenseId}`,
   });
 
   const filledDocxBuffer = doc.getZip().generate({
