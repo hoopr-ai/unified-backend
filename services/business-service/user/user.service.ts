@@ -306,7 +306,7 @@ export const inviteUserService = async (
   data: InviteUserAuthRequestData,
   sessionData?: SessionPayload,
 ): Promise<{}> => {
-  const { email } = data;
+  const email = data.email.trim().toLowerCase();
   const platform = sessionData?.platform!;
   const createdBy = sessionData?.userId;
 
