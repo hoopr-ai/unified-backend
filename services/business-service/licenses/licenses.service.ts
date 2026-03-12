@@ -182,7 +182,7 @@ export const licenseTrackService = async (
       });
 
       // Upload to GCS
-      const gcsPath = `licenses-pdf/HLAN-${createdLicense.id}/license-agreement-HLAN-${createdLicense.id}.pdf`;
+      const gcsPath = `licenses-pdf/${createdLicense.id}/license-agreement.pdf`;
       await uploadBufferToGCS({
         buffer: pdfBuffer,
         gcsPath,
