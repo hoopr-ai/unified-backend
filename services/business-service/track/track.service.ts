@@ -538,7 +538,7 @@ const transformTrackToDetailsDto = (
     ? new Date(track.releaseDate).getFullYear()
     : null;
   const creditParts: string[] = [];
-  if (allArtistNames.length > 0) creditParts.push(allArtistNames.join(", "));
+  if (allArtistNames.length > 0) creditParts.push([...new Set(allArtistNames)].join(", "));
   if (releaseYear) creditParts.push(String(releaseYear));
   if (ownerName) creditParts.push(ownerName);
   const songCredits = albumName && albumName.trim() !== ""
