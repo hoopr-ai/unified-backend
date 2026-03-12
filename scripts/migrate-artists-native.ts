@@ -144,9 +144,9 @@ async function migrateArtists() {
           continue;
         }
 
-        // Use upsert to handle conflicts on id
+        // Use upsert to handle conflicts on artistCode (unique business key)
         await ArtistModel.upsert(mappedArtist as any, {
-          conflictFields: ["id"],
+          conflictFields: ["artistCode"],
         });
 
         successCount++;
