@@ -1,6 +1,15 @@
 import { Client } from "pg";
 import { Sequelize } from "sequelize-typescript";
 import { TrackModel } from "../services/persistence-service/track/modules.export";
+import {
+  TrackArtistMappingModel,
+  ArtistModel,
+} from "../services/persistence-service/artists/modules.export";
+import {
+  TrackFilterMappingModel,
+  FilterModel,
+} from "../services/persistence-service/filter/modules.export";
+import { SkuModel } from "../services/persistence-service/sku/modules.export";
 
 function toStringArray(value: string | null): string[] | null {
   if (!value) return null;
@@ -57,11 +66,17 @@ const SOURCE_DB_CONFIG = {
 
 // ============ TARGET DATABASE (unified_staging) ============
 const TARGET_DB_CONFIG = {
-  host: "34.47.200.207",
-  port: 5432,
-  username: "select-server-dev",
-  password: "hO82GcLotttB5bLyoeG1",
-  database: "sage_staging",
+  // host: "34.47.200.207",
+  // port: 5432,
+  // username: "select-server-dev",
+  // password: "hO82GcLotttB5bLyoeG1",
+  // database: "sage_staging",
+  host: process.env.DB_HOST || "34.47.153.109",
+  username: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
+  port: parseInt(process.env.DB_PORT || "5432"),
+  ssl: { rejectUnauthorized: false },
 };
 
 // Fields that exist in TrackModel (from track.schema.ts)
@@ -160,14 +175,24 @@ async function migrateTracks() {
     password: TARGET_DB_CONFIG.password,
     database: TARGET_DB_CONFIG.database,
     logging: false,
+    dialectOptions: {
+      ssl: { rejectUnauthorized: false },
+    },
     define: {
       freezeTableName: true,
       timestamps: true,
     },
   });
 
-  // Register TrackModel with this Sequelize instance
-  targetSequelize.addModels([TrackModel]);
+  // Register TrackModel and all associated models with this Sequelize instance
+  targetSequelize.addModels([
+    TrackModel,
+    TrackArtistMappingModel,
+    ArtistModel,
+    TrackFilterMappingModel,
+    FilterModel,
+    SkuModel,
+  ]);
 
   try {
     await sourceClient.connect();
@@ -189,10 +214,12 @@ async function migrateTracks() {
     if (tracks.length > 0) {
       const sourceFields = Object.keys(tracks[0]);
       const skippedFields = sourceFields.filter(
-        (f) => !TRACK_MODEL_FIELDS.includes(f as any)
+        (f) => !TRACK_MODEL_FIELDS.includes(f as any),
       );
       if (skippedFields.length > 0) {
-        console.log(`⚠️  Skipping fields not in TrackModel: ${skippedFields.join(", ")}`);
+        console.log(
+          `⚠️  Skipping fields not in TrackModel: ${skippedFields.join(", ")}`,
+        );
       }
     }
 
@@ -209,9 +236,9 @@ async function migrateTracks() {
           continue;
         }
 
-        // Use upsert to handle conflicts on id
+        // Use upsert to handle conflicts on trackCode (unique business key)
         await TrackModel.upsert(mappedTrack as any, {
-          conflictFields: ["id"],
+          conflictFields: ["trackCode"],
         });
 
         successCount++;
@@ -226,7 +253,7 @@ async function migrateTracks() {
     }
 
     console.log(
-      `\n✅ Migration complete: ${successCount} succeeded, ${errorCount} failed`
+      `\n✅ Migration complete: ${successCount} succeeded, ${errorCount} failed`,
     );
   } catch (err) {
     console.error("❌ Migration failed:", err);

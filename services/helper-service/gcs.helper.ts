@@ -73,6 +73,40 @@ export const generateGCSSignedUrl = async (
   };
 };
 
+interface GetGCSSignedUrlOptions {
+  gcsPath: string;
+  contentType?: string;
+  expiresInMinutes?: number;
+}
+
+export const getGCSSignedUrl = async (
+  options: GetGCSSignedUrlOptions
+): Promise<string | null> => {
+  const { gcsPath, contentType = "application/pdf", expiresInMinutes = 30 } = options;
+
+  const bucketName = process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const storage = getStorageInstance();
+  const bucket = storage.bucket(bucketName);
+  const file = bucket.file(gcsPath);
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    return null;
+  }
+
+  const [signedUrl] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + expiresInMinutes * 60 * 1000,
+    responseType: contentType,
+  });
+
+  return signedUrl;
+};
+
 interface UploadBufferOptions {
   buffer: Buffer;
   gcsPath: string;
