@@ -189,12 +189,6 @@ export const licenseTrackService = async (
         contentType: "application/pdf",
       });
 
-      // Update license record with the PDF path
-      await LicenseModel.update(
-        { licensePdfPath: gcsPath },
-        { where: { id: createdLicense.id } },
-      );
-
       logger.info("License PDF generated and stored successfully", {
         licenseId: createdLicense.id,
         gcsPath,
@@ -538,10 +532,8 @@ export const downloadLicensePdfService = async (
     throw new AppError("Track associated with license not found", 404);
   }
 
-  // Use stored PDF path from database, or fallback to computed path for legacy licenses
-  const gcsPath = license.licensePdfPath || `licenses-pdf/${licenseId}/license-agreement.pdf`;
-
   // Try to get existing PDF from bucket first
+  const gcsPath = `licenses-pdf/${licenseId}/license-agreement.pdf`;
   const existingPdfUrl = await getGCSSignedUrl({
     gcsPath,
     contentType: "application/pdf",
@@ -591,12 +583,6 @@ export const downloadLicensePdfService = async (
     gcsPath,
     contentType: "application/pdf",
   });
-
-  // Store the PDF path in database for future lookups
-  await LicenseModel.update(
-    { licensePdfPath: gcsPath },
-    { where: { id: licenseId } },
-  );
 
   return { downloadLink };
 };
