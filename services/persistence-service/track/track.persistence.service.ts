@@ -209,14 +209,37 @@ export const findTrackByTrackCode = async (
   trackCode: string,
   excludeOwnerIds?: string[],
 ): Promise<RawTrackWithMappings | null> => {
-  const whereClause: Record<string, unknown> = { trackCode, status: "ACTIVE" };
-  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
-    whereClause.ownerId = { [Op.not]: { [Op.overlap]: excludeOwnerIds } };
+
+  const conditions: any[] = [];
+
+  const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+
+  if (excludeOwners.length) {
+    conditions.push({
+      [Op.not]: {
+        ownerId: {
+          [Op.overlap]: excludeOwners
+        }
+      }
+    });
+  }
+
+  const whereClause: any = {
+    trackCode,
+    status: "ACTIVE"
+  };
+
+  if (conditions.length) {
+    whereClause[Op.and] = conditions;
   }
 
   const track = await TrackModel.findOne({
     where: whereClause,
-    include: [...getArtistInclude(), ...getAllSkusInclude(), ...getFilterMappingsInclude()],
+    include: [
+      ...getArtistInclude(),
+      ...getAllSkusInclude(),
+      ...getFilterMappingsInclude(),
+    ],
   });
 
   return track ? (track.toJSON() as RawTrackWithMappings) : null;
