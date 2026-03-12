@@ -17,6 +17,7 @@ import {
   HttpStatusCode,
 } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
+import { findUserById } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -25,6 +26,8 @@ interface AuthRequest extends Request {
 export const getAllTracks = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const userId = req.session?.userId;
+    const user = userId ? await findUserById(userId) : null;
+    const brandId = user?.brandId;
     const query: GetAllTracksRequestData = {
       page: req.query.page as string,
       limit: req.query.limit as string,
@@ -33,7 +36,7 @@ export const getAllTracks = catchAsync(
       type: req.body.type as string[] | undefined,
       ownerCode: req.body.ownerCode as string[] | undefined,
     };
-    const response = await getAllTracksService(query, userId);
+    const response = await getAllTracksService(query, userId, brandId);
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: response,
@@ -45,13 +48,15 @@ export const getAllTracks = catchAsync(
 export const getTracksByCodes = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const userId = req.session?.userId;
+    const user = userId ? await findUserById(userId) : null;
+    const brandId = user?.brandId;
     const query: GetTracksByCodesQuery = {
       trackCodes: req.body.trackCodes as string[],
       page: req.query.page as string,
       limit: req.query.limit as string,
       type: req.body.type as string[] | undefined,
     };
-    const response = await getTracksByCodesService(query, userId);
+    const response = await getTracksByCodesService(query, userId, brandId);
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: response,
@@ -63,6 +68,8 @@ export const getTracksByCodes = catchAsync(
 export const getTracksByFilter = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const userId = req.session?.userId;
+    const user = userId ? await findUserById(userId) : null;
+    const brandId = user?.brandId;
     const query: GetTracksByFilterQuery = {
       filterName: req.params.filterName as string,
       filterIds: (req.body.filterIds as string[]) || [],
@@ -70,7 +77,7 @@ export const getTracksByFilter = catchAsync(
       limit: req.query.limit as string,
       type: req.body.type as string[] | undefined,
     };
-    const response = await getTracksByFilterService(query, userId);
+    const response = await getTracksByFilterService(query, userId, brandId);
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: response,
@@ -82,8 +89,10 @@ export const getTracksByFilter = catchAsync(
 export const getTrackDetailsByCode = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const userId = req.session?.userId;
+    const user = userId ? await findUserById(userId) : null;
+    const brandId = user?.brandId;
     const trackCode = req.params.trackCode as string;
-    const response = await getTrackDetailsByCodeService(trackCode, userId);
+    const response = await getTrackDetailsByCodeService(trackCode, userId, brandId);
 
     if (!response) {
       sendResponse(res, {
