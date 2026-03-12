@@ -248,23 +248,46 @@ export const findTrackByTrackCode = async (
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {
+
   const { filterIds, page, limit, ownerIds, excludeOwnerIds } = params;
   const offset = (page - 1) * limit;
 
-  const trackWhere: Record<string, unknown> = { status: "ACTIVE" };
-  if (ownerIds && ownerIds.length > 0) {
-    trackWhere.ownerId = { [Op.overlap]: ownerIds };
+  const conditions: any[] = [];
+
+  const includeOwners = Array.isArray(ownerIds) ? ownerIds : [];
+  const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+
+  if (includeOwners.length) {
+    conditions.push({
+      ownerId: {
+        [Op.overlap]: includeOwners
+      }
+    });
   }
-  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
-    trackWhere.ownerId = {
-      ...(trackWhere.ownerId as object),
-      [Op.not]: { [Op.overlap]: excludeOwnerIds },
-    };
+
+  if (excludeOwners.length) {
+    conditions.push({
+      [Op.not]: {
+        ownerId: {
+          [Op.overlap]: excludeOwners
+        }
+      }
+    });
+  }
+
+  const trackWhere: any = {
+    status: "ACTIVE"
+  };
+
+  if (conditions.length) {
+    trackWhere[Op.and] = conditions;
   }
 
   const { count, rows: mappings } =
     await TrackFilterMappingModel.findAndCountAll({
-      where: { filterId: filterIds },
+      where: {
+        filterId: { [Op.in]: filterIds }
+      },
       limit,
       offset,
       distinct: true,
@@ -273,7 +296,7 @@ export const findTracksByFilter = async (
         {
           model: TrackModel,
           as: "track",
-          where: Object.keys(trackWhere).length > 0 ? trackWhere : undefined,
+          where: trackWhere,
           required: true,
           include: [
             {
@@ -304,7 +327,9 @@ export const findTracksByFilter = async (
   return {
     rows: mappings.map((mapping) => ({
       trackId: mapping.trackId,
-      track: mapping.track ? (mapping.track.toJSON() as RawTrackWithMappings) : null,
+      track: mapping.track
+        ? (mapping.track.toJSON() as RawTrackWithMappings)
+        : null,
     })),
     count,
     page,
