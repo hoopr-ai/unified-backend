@@ -74,21 +74,42 @@ export const findAllTracks = async (
   ownerIds?: string[],
   excludeOwnerIds?: string[],
 ): Promise<PaginatedRawTracks> => {
-  const offset = (page - 1) * limit;
 
-  if (ownerIds && ownerIds.length > 0) {
-    whereClause.ownerId = { [Op.overlap]: ownerIds };
+  const offset = (page - 1) * limit;
+  const conditions: any[] = [];
+
+  const includeOwners = Array.isArray(ownerIds) ? ownerIds : [];
+  const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+
+  if (includeOwners.length) {
+    conditions.push({
+      ownerId: {
+        [Op.overlap]: includeOwners
+      }
+    });
   }
-  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
-    whereClause.ownerId = {
-      ...(whereClause.ownerId as object),
-      [Op.not]: { [Op.overlap]: excludeOwnerIds },
-    };
+
+  if (excludeOwners.length) {
+    conditions.push({
+      [Op.not]: {
+        ownerId: {
+          [Op.overlap]: excludeOwners
+        }
+      }
+    });
   }
-  whereClause.status = "ACTIVE";
+
+  const finalWhereClause: any = {
+    ...whereClause,
+    status: "ACTIVE"
+  };
+
+  if (conditions.length) {
+    finalWhereClause[Op.and] = conditions;
+  }
 
   const { count, rows } = await TrackModel.findAndCountAll({
-    where: whereClause,
+    where: finalWhereClause,
     order: [["createdAt", "DESC"]],
     limit,
     offset,
@@ -98,7 +119,7 @@ export const findAllTracks = async (
   });
 
   return {
-    rows: rows.map((track) => track.toJSON() as RawTrackWithMappings),
+    rows: rows.map(track => track.toJSON() as RawTrackWithMappings),
     count,
     page,
     limit,

@@ -39,5 +39,6 @@ export const getRestrictedOwnersByBrandId = async (
   const brand = await BrandModel.findByPk(brandId, {
     attributes: ["restrictedOwners"],
   });
-  return brand?.restrictedOwners ?? [];
+  const restrictedOwners = brand?.restrictedOwners;
+  return Array.isArray(restrictedOwners) ? restrictedOwners : [];
 };
