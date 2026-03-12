@@ -5,6 +5,11 @@ import {
   TrackFilterMappingModel,
 } from "../services/persistence-service/filter/modules.export";
 import { TrackModel } from "../services/persistence-service/track/modules.export";
+import {
+  TrackArtistMappingModel,
+  ArtistModel,
+} from "../services/persistence-service/artists/modules.export";
+import { SkuModel } from "../services/persistence-service/sku/modules.export";
 
 // ============ SOURCE DATABASE (select_staging) ============
 const SOURCE_DB_CONFIG = {
@@ -17,11 +22,17 @@ const SOURCE_DB_CONFIG = {
 
 // ============ TARGET DATABASE (unified_staging) ============
 const TARGET_DB_CONFIG = {
-  host: "34.47.200.207",
-  port: 5432,
-  username: "select-server-dev",
-  password: "hO82GcLotttB5bLyoeG1",
-  database: "sage_staging",
+  // host: "34.47.200.207",
+  // port: 5432,
+  // username: "select-server-dev",
+  // password: "hO82GcLotttB5bLyoeG1",
+  // database: "sage_staging",
+  host: process.env.DB_HOST || "34.47.153.109",
+  username: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
+  port: parseInt(process.env.DB_PORT || "5432"),
+  ssl: { rejectUnauthorized: false },
 };
 
 // Fields that exist in FilterModel (from filter.schema.ts)
@@ -92,6 +103,9 @@ async function migrateFilters() {
     password: TARGET_DB_CONFIG.password,
     database: TARGET_DB_CONFIG.database,
     logging: false,
+    dialectOptions: {
+      ssl: { rejectUnauthorized: false },
+    },
     define: {
       freezeTableName: true,
       timestamps: true,
@@ -99,7 +113,14 @@ async function migrateFilters() {
   });
 
   // Register models with this Sequelize instance
-  targetSequelize.addModels([FilterModel, TrackFilterMappingModel, TrackModel]);
+  targetSequelize.addModels([
+    FilterModel,
+    TrackFilterMappingModel,
+    TrackModel,
+    TrackArtistMappingModel,
+    ArtistModel,
+    SkuModel,
+  ]);
 
   try {
     await sourceClient.connect();
@@ -193,9 +214,9 @@ async function migrateFilters() {
             continue;
           }
 
-          // Use upsert to handle conflicts on id
+          // Use upsert to handle conflicts on unique (filterId, trackId) pair
           await TrackFilterMappingModel.upsert(mappedMapping as any, {
-            conflictFields: ["id"],
+            conflictFields: ["filterId", "trackId"],
           });
 
           mappingSuccessCount++;

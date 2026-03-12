@@ -32,11 +32,17 @@ const SOURCE_DB_CONFIG = {
 
 // ============ TARGET DATABASE (unified_staging) ============
 const TARGET_DB_CONFIG = {
-  host: "34.47.200.207",
-  port: 5432,
-  username: "select-server-dev",
-  password: "hO82GcLotttB5bLyoeG1",
-  database: "sage_staging",
+  // host: "34.47.200.207",
+  // port: 5432,
+  // username: "select-server-dev",
+  // password: "hO82GcLotttB5bLyoeG1",
+  // database: "sage_staging",
+  host: process.env.DB_HOST || "34.47.153.109",
+  username: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
+  port: parseInt(process.env.DB_PORT || "5432"),
+  ssl: { rejectUnauthorized: false },
 };
 
 // Fields that exist in ArtistModel (from artist.schema.ts)
@@ -93,6 +99,9 @@ async function migrateArtists() {
     password: TARGET_DB_CONFIG.password,
     database: TARGET_DB_CONFIG.database,
     logging: false,
+    dialectOptions: {
+      ssl: { rejectUnauthorized: false },
+    },
     define: {
       freezeTableName: true,
       timestamps: true,
@@ -122,10 +131,12 @@ async function migrateArtists() {
     if (artists.length > 0) {
       const sourceFields = Object.keys(artists[0]);
       const skippedFields = sourceFields.filter(
-        (f) => !ARTIST_MODEL_FIELDS.includes(f as any)
+        (f) => !ARTIST_MODEL_FIELDS.includes(f as any),
       );
       if (skippedFields.length > 0) {
-        console.log(`⚠️  Skipping fields not in ArtistModel: ${skippedFields.join(", ")}`);
+        console.log(
+          `⚠️  Skipping fields not in ArtistModel: ${skippedFields.join(", ")}`,
+        );
       }
     }
 
@@ -142,9 +153,9 @@ async function migrateArtists() {
           continue;
         }
 
-        // Use upsert to handle conflicts on id
+        // Use upsert to handle conflicts on artistCode (unique business key)
         await ArtistModel.upsert(mappedArtist as any, {
-          conflictFields: ["id"],
+          conflictFields: ["artistCode"],
         });
 
         successCount++;
@@ -159,7 +170,7 @@ async function migrateArtists() {
     }
 
     console.log(
-      `\n✅ Migration complete: ${successCount} succeeded, ${errorCount} failed`
+      `\n✅ Migration complete: ${successCount} succeeded, ${errorCount} failed`,
     );
   } catch (err) {
     console.error("❌ Migration failed:", err);
