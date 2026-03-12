@@ -292,11 +292,12 @@ export const sendTrackDownloadNotificationEmail = async (
                         <strong>Track Category:</strong> ${assortmentType}
                       </td>
                     </tr>
+                    ${assortmentType !== "Hoopr Originals" ? `
                     <tr>
                       <td style="font-size:15px; padding:5px 0; color:#333;">
                         <strong>${assortmentType} Credits Remaining:</strong> ${creditsRemaining}
                       </td>
-                    </tr>
+                    </tr>` : ""}
                     <tr>
                       <td style="font-size:15px; padding:5px 0; color:#333;">
                         <strong>Downloaded By:</strong> ${downloadedByFullName}
@@ -658,9 +659,9 @@ export const sendLowCreditsAlertEmail = async (
                   <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
                     Your Hoopr Smash account is running out of <strong>${assortmentType}</strong> credits.
                   </p>
-                  <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
+                  ${assortmentType !== "Hoopr Originals" ? `<p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
                     <strong>Credits Left:</strong> ${creditsRemaining}
-                  </p>
+                  </p>` : ""}
                   <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
                     Add more credits to keep using <strong>${assortmentType}</strong> tracks. You can directly purchase more from your account.
                   </p>
