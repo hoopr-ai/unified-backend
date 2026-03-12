@@ -2,6 +2,7 @@ import { ErrorMessages } from "../../dto-service/constants/modules.export";
 import type { AlbumType } from "../../dto-service/modules.export";
 import { AppError } from "../../helper-service/AppError";
 import { AlbumModel, type AlbumDetails } from "./schemas/modules.export";
+import { Op } from "sequelize";
 
 export const createAlbum = async (
   albumDetails: AlbumDetails
@@ -27,16 +28,6 @@ export const findAlbumByIdSilently = async (
     where: { id, deleted: null },
   });
   return album;
-};
-
-export const findAlbumsByArtistId = async (
-  artistId: string
-): Promise<AlbumDetails[]> => {
-  const albums = await AlbumModel.findAll({
-    where: { artistId, deleted: null },
-    order: [["createdAt", "DESC"]],
-  });
-  return albums;
 };
 
 export const findAlbumsByType = async (
@@ -73,4 +64,16 @@ export const softDeleteAlbum = async (id: string): Promise<void> => {
 
 export const hardDeleteAlbum = async (id: string): Promise<void> => {
   await AlbumModel.destroy({ where: { id } });
+};
+
+export const findAlbumByTrackId = async (
+  trackId: string
+): Promise<AlbumDetails | null> => {
+  const album = await AlbumModel.findOne({
+    where: {
+      trackId: { [Op.contains]: [trackId] },
+      deleted: null,
+    },
+  });
+  return album;
 };

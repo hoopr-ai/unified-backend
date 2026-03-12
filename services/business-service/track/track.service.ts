@@ -15,6 +15,7 @@ import {
   findTracksByTrackCodes,
   findTracksByFilter,
   findTrackByTrackCode,
+  findAlbumByTrackId,
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
@@ -501,6 +502,7 @@ const transformTrackToDetailsDto = (
   ownerRestrictedCategoriesMap?: Map<string, object>,
   ownerCodeMap?: Map<string, string>,
   ownerUsernameMap?: Map<string, string>,
+  albumName?: string,
 ): TrackDetailsWithSkus => {
   const baseDto = transformTrackToDto(
     track,
@@ -539,9 +541,9 @@ const transformTrackToDetailsDto = (
   if (allArtistNames.length > 0) creditParts.push(allArtistNames.join(", "));
   if (releaseYear) creditParts.push(String(releaseYear));
   if (ownerName) creditParts.push(ownerName);
-  const songCredits = track.name
-    ? `From '${track.name}' by ${creditParts.join(" | ")}`
-    : undefined;
+  const songCredits = albumName && albumName.trim() !== ""
+    ? `From '${albumName}' by ${creditParts.join(" | ")}`
+    : `'${track.name}' by ${creditParts.join(" | ")}`;
 
   let standardSku: SkuInfo | undefined;
   let premiumSku: SkuInfo | undefined;
@@ -607,6 +609,10 @@ export const getTrackDetailsByCodeService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
+  // Fetch album for the track
+  const album = await findAlbumByTrackId(track.id);
+  const albumName = album?.title;
+
   const {
     ownerTypeMap,
     ownerSubTypeMap,
@@ -624,5 +630,6 @@ export const getTrackDetailsByCodeService = async (
     ownerRestrictedCategoriesMap,
     ownerCodeMap,
     ownerUsernameMap,
+    albumName,
   );
 };
