@@ -23,6 +23,7 @@ import {
   AppError,
   generateGCSSignedUrl,
   uploadBufferToGCS,
+  getGCSSignedUrl,
   generateLicensePdf,
   sendTrackDownloadNotificationEmail,
   sendLowCreditsAlertEmail,
@@ -51,7 +52,7 @@ export const licenseTrackService = async (
 
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId", "email", "firstName", "lastName"],
+    attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile"],
   });
 
   if (!user) {
@@ -150,6 +151,55 @@ export const licenseTrackService = async (
   };
 
   const createdLicense = await createLicenseRecord(licenseDetails);
+
+  // Generate and store license PDF asynchronously
+  (async () => {
+    try {
+      // Get owner username for the PDF
+      let ownerName = "";
+      if (owners.length > 0 && owners[0].username) {
+        ownerName = (owners[0] as any).username || "";
+      } else if (ownerIds.length > 0) {
+        const ownerWithUsername = await OwnerModel.findByPk(ownerIds[0], {
+          attributes: ["id", "username"],
+        });
+        ownerName = ownerWithUsername?.username || "";
+      }
+
+      // Format date as DD/MM/YYYY
+      const licensedDate = new Date();
+      const formattedDate = `${String(licensedDate.getDate()).padStart(2, "0")}/${String(licensedDate.getMonth() + 1).padStart(2, "0")}/${licensedDate.getFullYear()}`;
+
+      // Generate PDF
+      const pdfBuffer = await generateLicensePdf({
+        name: [user.firstName, user.lastName].filter(Boolean).join(" "),
+        email: user.email || "",
+        mobile: user.mobile || "",
+        date: formattedDate,
+        trackName: track.name || "",
+        ownerName,
+        licenseId: createdLicense.id!,
+      });
+
+      // Upload to GCS
+      const gcsPath = `licenses-pdf/${createdLicense.id}/license-agreement.pdf`;
+      await uploadBufferToGCS({
+        buffer: pdfBuffer,
+        gcsPath,
+        contentType: "application/pdf",
+      });
+
+      logger.info("License PDF generated and stored successfully", {
+        licenseId: createdLicense.id,
+        gcsPath,
+      });
+    } catch (err: any) {
+      logger.error("Failed to generate and store license PDF", {
+        licenseId: createdLicense.id,
+        error: err.message,
+      });
+    }
+  })();
 
   // Notify entire team about the track download
   const downloadedByFullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "";
@@ -482,6 +532,18 @@ export const downloadLicensePdfService = async (
     throw new AppError("Track associated with license not found", 404);
   }
 
+  // Try to get existing PDF from bucket first
+  const gcsPath = `licenses-pdf/${licenseId}/license-agreement.pdf`;
+  const existingPdfUrl = await getGCSSignedUrl({
+    gcsPath,
+    contentType: "application/pdf",
+  });
+
+  if (existingPdfUrl) {
+    return { downloadLink: existingPdfUrl };
+  }
+
+  // PDF not found in bucket (legacy license), generate and upload it
   // Fetch user details
   const user = await UserModel.findByPk(license.userId, {
     attributes: ["id", "firstName", "lastName", "email", "mobile"],
@@ -516,7 +578,6 @@ export const downloadLicensePdfService = async (
   });
 
   // Upload to GCS
-  const gcsPath = `licenses-pdf/${licenseId}/license-agreement.pdf`;
   const downloadLink = await uploadBufferToGCS({
     buffer: pdfBuffer,
     gcsPath,
