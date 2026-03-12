@@ -27,7 +27,6 @@ export interface LicenseDetails {
   licensedAt: Date;
   status?: string;
   licenseTypeId?: string;
-  licensePdfPath?: string;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -91,12 +90,6 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     allowNull: true,
   })
   licenseTypeId?: string;
-
-  @Column({
-    type: DataType.STRING(500),
-    allowNull: true,
-  })
-  licensePdfPath?: string;
 
   @CreatedAt
   @Column({
