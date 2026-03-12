@@ -9,6 +9,7 @@ import {
   UpdatedAt,
   ForeignKey,
   BelongsTo,
+  Default,
 } from "sequelize-typescript";
 import { OrganizationModel } from "../../organization/schemas/modules.export";
 import type { BrandStatus } from "../../../dto-service/modules.export";
@@ -20,6 +21,7 @@ export interface BrandDetails {
   description?: string;
   status: BrandStatus;
   createdBy?: number;
+  restrictedOwners?: string[];
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -64,6 +66,13 @@ export class BrandModel extends Model<BrandModel, BrandDetails> {
     allowNull: true,
   })
   createdBy?: number;
+
+  @Default([])
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  restrictedOwners?: string[];
 
   @CreatedAt
   @Column({

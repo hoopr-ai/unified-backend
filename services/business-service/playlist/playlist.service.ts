@@ -2,6 +2,7 @@ import {
   findAllPlaylists,
   findPlaylistByCode,
   findTracksByPlaylistId,
+  getRestrictedOwnersByBrandId,
 } from "../../persistence-service/exports";
 import { TrackModel } from "../../persistence-service/track/schemas/track.schema";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
@@ -69,12 +70,19 @@ export const getAllPlaylistsService = async (
 
 export const getPlaylistDetailService = async (
   query: GetPlaylistDetailQuery,
+  brandId?: number,
 ): Promise<PlaylistDetail | null> => {
   const playlist = await findPlaylistByCode(query.playlistCode);
 
   if (!playlist) {
     return null;
   }
+
+  // Get restricted owners for the brand
+  const excludeOwnerIds = brandId
+    ? await getRestrictedOwnersByBrandId(brandId)
+    : [];
+  const excludeOwnerSet = new Set(excludeOwnerIds);
 
   const mappings = await findTracksByPlaylistId(playlist.id);
 
@@ -84,6 +92,18 @@ export const getPlaylistDetailService = async (
         `Skipped track with ID: ${mapping.trackId} - not found in tracks table`,
       );
       return false;
+    }
+    // Filter out tracks from restricted owners
+    if (excludeOwnerSet.size > 0) {
+      const trackData = mapping.track.toJSON() as any;
+      if (trackData.ownerId && Array.isArray(trackData.ownerId)) {
+        const hasRestrictedOwner = trackData.ownerId.some((oid: string) =>
+          excludeOwnerSet.has(oid)
+        );
+        if (hasRestrictedOwner) {
+          return false;
+        }
+      }
     }
     return true;
   });

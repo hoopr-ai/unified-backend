@@ -16,6 +16,7 @@ import {
   findTracksByFilter,
   findTrackByTrackCode,
   findAlbumByTrackId,
+  getRestrictedOwnersByBrandId,
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
@@ -294,6 +295,7 @@ const emptyPaginatedResponse = (
 export const getAllTracksService = async (
   query: GetAllTracksRequestData,
   userId?: number,
+  brandId?: number,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
@@ -318,6 +320,11 @@ export const getAllTracksService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
+  // Get restricted owners for the brand
+  const excludeOwnerIds = brandId
+    ? await getRestrictedOwnersByBrandId(brandId)
+    : undefined;
+
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
   if (userId) {
@@ -325,7 +332,7 @@ export const getAllTracksService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const rawData = await findAllTracks(page, limit, whereClause, ownerIds);
+  const rawData = await findAllTracks(page, limit, whereClause, ownerIds, excludeOwnerIds);
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
     rawData.rows,
   );
@@ -351,6 +358,7 @@ const sortTracksByRequestedOrder = (
 export const getTracksByCodesService = async (
   query: GetTracksByCodesQuery,
   userId?: number,
+  brandId?: number,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
@@ -368,6 +376,11 @@ export const getTracksByCodesService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
+  // Get restricted owners for the brand
+  const excludeOwnerIds = brandId
+    ? await getRestrictedOwnersByBrandId(brandId)
+    : undefined;
+
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
   if (userId) {
@@ -380,6 +393,7 @@ export const getTracksByCodesService = async (
     page,
     limit,
     ownerIds,
+    excludeOwnerIds,
   );
 
   // Sort tracks in the order of requested trackCodes
@@ -457,6 +471,7 @@ const buildFilterPaginatedResponse = (
 export const getTracksByFilterService = async (
   query: GetTracksByFilterQuery,
   userId?: number,
+  brandId?: number,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
@@ -465,6 +480,11 @@ export const getTracksByFilterService = async (
   if (ownerIds && ownerIds.length === 0) {
     return emptyPaginatedResponse(page, limit);
   }
+
+  // Get restricted owners for the brand
+  const excludeOwnerIds = brandId
+    ? await getRestrictedOwnersByBrandId(brandId)
+    : undefined;
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -478,6 +498,7 @@ export const getTracksByFilterService = async (
     page,
     limit,
     ownerIds,
+    excludeOwnerIds,
   });
 
   const filterTracks = rawData.rows.filter((m) => m.track).map((m) => m.track!);
@@ -595,8 +616,14 @@ const transformTrackToDetailsDto = (
 export const getTrackDetailsByCodeService = async (
   trackCode: string,
   userId?: number,
+  brandId?: number,
 ): Promise<TrackDetailsWithSkus | null> => {
-  const track = await findTrackByTrackCode(trackCode);
+  // Get restricted owners for the brand
+  const excludeOwnerIds = brandId
+    ? await getRestrictedOwnersByBrandId(brandId)
+    : undefined;
+
+  const track = await findTrackByTrackCode(trackCode, excludeOwnerIds);
 
   if (!track) {
     return null;

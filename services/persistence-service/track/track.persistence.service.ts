@@ -72,11 +72,18 @@ export const findAllTracks = async (
   limit: number,
   whereClause: Record<string, unknown> = {},
   ownerIds?: string[],
+  excludeOwnerIds?: string[],
 ): Promise<PaginatedRawTracks> => {
   const offset = (page - 1) * limit;
 
   if (ownerIds && ownerIds.length > 0) {
     whereClause.ownerId = { [Op.overlap]: ownerIds };
+  }
+  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
+    whereClause.ownerId = {
+      ...(whereClause.ownerId as object),
+      [Op.not]: { [Op.overlap]: excludeOwnerIds },
+    };
   }
   whereClause.status = "ACTIVE";
 
@@ -103,12 +110,19 @@ export const findTracksByTrackCodes = async (
   page: number,
   limit: number,
   ownerIds?: string[],
+  excludeOwnerIds?: string[],
 ): Promise<PaginatedRawTracks> => {
   const offset = (page - 1) * limit;
 
   const whereClause: Record<string, unknown> = { trackCode: trackCodes, status: "ACTIVE" };
   if (ownerIds && ownerIds.length > 0) {
     whereClause.ownerId = { [Op.overlap]: ownerIds };
+  }
+  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
+    whereClause.ownerId = {
+      ...(whereClause.ownerId as object),
+      [Op.not]: { [Op.overlap]: excludeOwnerIds },
+    };
   }
 
   const { count, rows } = await TrackModel.findAndCountAll({
@@ -134,6 +148,7 @@ export interface GetTracksByFilterParams {
   page: number;
   limit: number;
   ownerIds?: string[];
+  excludeOwnerIds?: string[];
 }
 
 export interface RawFilterMappingResult {
@@ -150,9 +165,15 @@ export interface PaginatedRawFilterTracks {
 
 export const findTrackByTrackCode = async (
   trackCode: string,
+  excludeOwnerIds?: string[],
 ): Promise<RawTrackWithMappings | null> => {
+  const whereClause: Record<string, unknown> = { trackCode, status: "ACTIVE" };
+  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
+    whereClause.ownerId = { [Op.not]: { [Op.overlap]: excludeOwnerIds } };
+  }
+
   const track = await TrackModel.findOne({
-    where: { trackCode, status: "ACTIVE" },
+    where: whereClause,
     include: [...getArtistInclude(), ...getAllSkusInclude(), ...getFilterMappingsInclude()],
   });
 
@@ -162,12 +183,18 @@ export const findTrackByTrackCode = async (
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {
-  const { filterIds, page, limit, ownerIds } = params;
+  const { filterIds, page, limit, ownerIds, excludeOwnerIds } = params;
   const offset = (page - 1) * limit;
 
   const trackWhere: Record<string, unknown> = { status: "ACTIVE" };
   if (ownerIds && ownerIds.length > 0) {
     trackWhere.ownerId = { [Op.overlap]: ownerIds };
+  }
+  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
+    trackWhere.ownerId = {
+      ...(trackWhere.ownerId as object),
+      [Op.not]: { [Op.overlap]: excludeOwnerIds },
+    };
   }
 
   const { count, rows: mappings } =

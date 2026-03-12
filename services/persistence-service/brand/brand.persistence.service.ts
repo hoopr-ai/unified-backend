@@ -32,3 +32,12 @@ export const findBrandByNameAndOrganization = async (
   });
   return brand;
 };
+
+export const getRestrictedOwnersByBrandId = async (
+  brandId: number
+): Promise<string[]> => {
+  const brand = await BrandModel.findByPk(brandId, {
+    attributes: ["restrictedOwners"],
+  });
+  return brand?.restrictedOwners ?? [];
+};

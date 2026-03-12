@@ -6,6 +6,12 @@ import {
 import { catchAsync, sendResponse, sendError } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import { GetAllPlaylistsQuery, GetPlaylistDetailQuery, HttpStatusCode } from "../services/dto-service/modules.export";
+import type { SessionPayload } from "../middlewares/authenticate";
+import { findUserById } from "../services/persistence-service/exports";
+
+interface AuthRequest extends Request {
+  session?: SessionPayload;
+}
 
 export const getAllPlaylists = catchAsync(async (req: Request, res: Response) => {
   const query: GetAllPlaylistsQuery = {
@@ -17,11 +23,14 @@ export const getAllPlaylists = catchAsync(async (req: Request, res: Response) =>
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetPlaylistsSuccess });
 });
 
-export const getPlaylistDetail = catchAsync(async (req: Request, res: Response) => {
+export const getPlaylistDetail = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  const user = userId ? await findUserById(userId) : null;
+  const brandId = user?.brandId;
   const query: GetPlaylistDetailQuery = {
     playlistCode: req.params.playlistCode as string,
   };
-  const response = await getPlaylistDetailService(query);
+  const response = await getPlaylistDetailService(query, brandId);
   if (!response) {
     return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.PlaylistNotFound);
   }
