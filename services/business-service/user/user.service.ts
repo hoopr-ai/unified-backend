@@ -103,7 +103,7 @@ const createUserDetails = (
   createdBy?: number,
 ): UserDetails => {
   const newUser: UserDetails = {
-    email,
+    email: email.toLowerCase().trim(),
     platform,
     password,
     status: UserStatus.ACTIVE,
@@ -118,7 +118,8 @@ export const userLoginService = async (
   data: LoginUserRequestData,
   metadata?: SessionMetadata,
 ): Promise<LoginResponseWithSession> => {
-  const { email, password, platform } = data;
+  const { password, platform } = data;
+  const email = data.email.toLowerCase().trim();
   const user = await findActiveUser(email, platform);
   await comparePasswordsEncrypted(password, user.password);
   const role = await findUserRole(user.id!);

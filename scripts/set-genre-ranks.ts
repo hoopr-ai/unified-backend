@@ -2,11 +2,18 @@ import { Client } from "pg";
 
 // ============ TARGET DATABASE ============
 const TARGET_DB_CONFIG = {
-  host: process.env.DB_HOST || "34.47.200.207",
+  // host: process.env.DB_HOST || "34.47.200.207",
+  // port: parseInt(process.env.DB_PORT || "5432"),
+  // user: process.env.DB_USER || "select-server-dev",
+  // password: process.env.DB_PASSWORD || "hO82GcLotttB5bLyoeG1",
+  // database: process.env.DB_NAME || "sage_staging",
+
+  host: process.env.DB_HOST || "34.47.153.109",
+  user: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
   port: parseInt(process.env.DB_PORT || "5432"),
-  user: process.env.DB_USER || "select-server-dev",
-  password: process.env.DB_PASSWORD || "hO82GcLotttB5bLyoeG1",
-  database: process.env.DB_NAME || "sage_staging",
+  ssl: { rejectUnauthorized: false },
 };
 
 const GENRE_RANKS: { name: string; rank: number }[] = [
@@ -49,7 +56,7 @@ async function setGenreRanks() {
     for (const { name, rank } of GENRE_RANKS) {
       const result = await client.query(
         `UPDATE "filters" SET "rank" = $1 WHERE "name" = $2 AND "type" = 'genre' RETURNING "id", "name"`,
-        [rank, name]
+        [rank, name],
       );
 
       if (result.rowCount && result.rowCount > 0) {
@@ -60,6 +67,14 @@ async function setGenreRanks() {
         notFound++;
       }
     }
+
+    // Set all genres NOT in the list to inactive
+    const activeNames = GENRE_RANKS.map((g) => g.name);
+    const inactiveResult = await client.query(
+      `UPDATE "filters" SET "status" = 'inactive' WHERE "type" = 'genre' AND "name" != ALL($1::text[])`,
+      [activeNames]
+    );
+    console.log(`  ✅ Set inactive: ${inactiveResult.rowCount} genres not in list`);
 
     console.log(`\n✅ Done. Updated: ${updated}, Not found: ${notFound}`);
   } catch (err) {

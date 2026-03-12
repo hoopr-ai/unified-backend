@@ -2,11 +2,18 @@ import { Client } from "pg";
 
 // ============ TARGET DATABASE ============
 const TARGET_DB_CONFIG = {
-  host: process.env.DB_HOST || "34.47.200.207",
+  // host: process.env.DB_HOST || "34.47.200.207",
+  // port: parseInt(process.env.DB_PORT || "5432"),
+  // user: process.env.DB_USER || "select-server-dev",
+  // password: process.env.DB_PASSWORD || "hO82GcLotttB5bLyoeG1",
+  // database: process.env.DB_NAME || "sage_staging",
+
+  host: process.env.DB_HOST || "34.47.153.109",
+  user: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
   port: parseInt(process.env.DB_PORT || "5432"),
-  user: process.env.DB_USER || "select-server-dev",
-  password: process.env.DB_PASSWORD || "hO82GcLotttB5bLyoeG1",
-  database: process.env.DB_NAME || "sage_staging",
+  ssl: { rejectUnauthorized: false },
 };
 
 const MOOD_RANKS: { name: string; rank: number }[] = [
@@ -59,7 +66,7 @@ async function setMoodRanks() {
     for (const { name, rank } of MOOD_RANKS) {
       const result = await client.query(
         `UPDATE "filters" SET "rank" = $1 WHERE "name" = $2 AND "type" = 'mood' RETURNING "id", "name"`,
-        [rank, name]
+        [rank, name],
       );
 
       if (result.rowCount && result.rowCount > 0) {
@@ -70,6 +77,14 @@ async function setMoodRanks() {
         notFound++;
       }
     }
+
+    // Set all moods NOT in the list to inactive
+    const activeNames = MOOD_RANKS.map((m) => m.name);
+    const inactiveResult = await client.query(
+      `UPDATE "filters" SET "status" = 'inactive' WHERE "type" = 'mood' AND "name" != ALL($1::text[])`,
+      [activeNames]
+    );
+    console.log(`  ✅ Set inactive: ${inactiveResult.rowCount} moods not in list`);
 
     console.log(`\n✅ Done. Updated: ${updated}, Not found: ${notFound}`);
   } catch (err) {
