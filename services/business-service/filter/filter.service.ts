@@ -8,7 +8,7 @@ import {
 import { findAllActiveFilters } from "../../persistence-service/exports";
 
 const ASSORTMENT: AssortmentItem[] = [
-  { id: "chartbuster", name: "Chartbuster", slug: "chartbuster", rank: 1 },
+  { id: "chartbusters", name: "Chartbusters", slug: "chartbusters", rank: 1 },
   {
     id: "international",
     name: "International",

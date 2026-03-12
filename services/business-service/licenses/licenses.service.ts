@@ -633,23 +633,36 @@ export const getTokenDetailsService = async (
 
   const assignedTokenMap = new Map(tokens.map((t) => [t.type, t]));
 
-  const mergedTokens = allTokenTypes.map((type) => {
-    const token = assignedTokenMap.get(type);
-    if (token) {
+  const ASSORTMENT_ORDER: Record<string, number> = {
+    chartbusters: 1,
+    international: 2,
+    "regional & indie": 3,
+    "hoopr originals": 4,
+  };
+
+  const mergedTokens = allTokenTypes
+    .map((type) => {
+      const token = assignedTokenMap.get(type);
+      if (token) {
+        return {
+          totalAssignedToken: token.totalAssignedToken,
+          tokensUsed: token.totalAssignedToken - token.tokenBalance,
+          tokenBalance: token.tokenBalance,
+          type: token.type,
+        };
+      }
       return {
-        totalAssignedToken: token.totalAssignedToken,
-        tokensUsed: token.totalAssignedToken - token.tokenBalance,
-        tokenBalance: token.tokenBalance,
-        type: token.type,
+        totalAssignedToken: 0,
+        tokensUsed: 0,
+        tokenBalance: 0,
+        type,
       };
-    }
-    return {
-      totalAssignedToken: 0,
-      tokensUsed: 0,
-      tokenBalance: 0,
-      type,
-    };
-  });
+    })
+    .sort((a, b) => {
+      const rankA = ASSORTMENT_ORDER[a.type.toLowerCase()] ?? 999;
+      const rankB = ASSORTMENT_ORDER[b.type.toLowerCase()] ?? 999;
+      return rankA - rankB;
+    });
 
   return {
     brandId: user.brandId,
