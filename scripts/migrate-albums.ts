@@ -13,11 +13,17 @@ const SOURCE_DB_CONFIG = {
 
 // ============ TARGET DATABASE ============
 const TARGET_DB_CONFIG = {
-  host: "34.47.200.207",
-  port: 5432,
-  username: "select-server-dev",
-  password: "hO82GcLotttB5bLyoeG1",
-  database: "sage_staging",
+  // host: "34.47.200.207",
+  // port: 5432,
+  // username: "select-server-dev",
+  // password: "hO82GcLotttB5bLyoeG1",
+  // database: "sage_staging",
+  host: process.env.DB_HOST || "34.47.153.109",
+  username: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
+  port: parseInt(process.env.DB_PORT || "5432"),
+  ssl: { rejectUnauthorized: false },
 };
 
 // Fields that exist in AlbumModel (excluding trackId — built from source tracks)
@@ -59,6 +65,9 @@ async function migrateAlbums() {
     username: TARGET_DB_CONFIG.username,
     password: TARGET_DB_CONFIG.password,
     database: TARGET_DB_CONFIG.database,
+    dialectOptions: {
+      ssl: { rejectUnauthorized: false },
+    },
     logging: false,
     define: {
       freezeTableName: true,
