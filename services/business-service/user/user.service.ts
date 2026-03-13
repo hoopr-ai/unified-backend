@@ -379,7 +379,7 @@ export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number,
 ): Promise<{}> => {
-  const { firstName, lastName, mobile, profileRole } = data;
+  const { firstName, lastName, mobile, countryCode, profileRole } = data;
 
   const user = await findUserById(userId);
   if (!user) {
@@ -391,7 +391,7 @@ export const completeProfileService = async (
   }
 
   try {
-    await updateUserProfile(userId, firstName, lastName, mobile, profileRole);
+    await updateUserProfile(userId, firstName, lastName, mobile, countryCode, profileRole);
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
@@ -440,6 +440,7 @@ export const getUserProfileService = async (
     lastName: user.lastName,
     status: user.status,
     mobile: user.mobile,
+    countryCode: user.countryCode,
     profileRole: user.profileRole,
     isProfileComplete: user.isProfileComplete ?? false,
   };

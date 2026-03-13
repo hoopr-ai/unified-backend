@@ -16,6 +16,7 @@ export interface CompleteProfileRequestData {
     firstName: string;
     lastName: string;
     mobile: string;
+    countryCode: string;
     profileRole: ProfileRole;
 }
 
@@ -23,6 +24,7 @@ export interface UpdateProfileRequestData {
     firstName?: string;
     lastName?: string;
     mobile?: string;
+    countryCode?: string;
     profileRole?: ProfileRole;
 }
 
@@ -32,6 +34,7 @@ export interface UserProfileResponse {
     firstName?: string;
     lastName?: string;
     mobile?: string;
+    countryCode?: string;
     profileRole?: string;
     role?: UserRoles;
     isProfileComplete: boolean;
