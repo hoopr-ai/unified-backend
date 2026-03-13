@@ -378,7 +378,7 @@ export const inviteUserService = async (
 export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number,
-): Promise<{}> => {
+): Promise<LoginResponseWithSession> => {
   const { firstName, lastName, mobile, countryCode, profileRole } = data;
 
   const user = await findUserById(userId);
@@ -422,7 +422,31 @@ export const completeProfileService = async (
     );
   }
 
-  return {};
+  // Fetch updated user, role, brand and return login-style response
+  const updatedUser = await findUserById(userId);
+  if (!updatedUser) throw new AppError(ErrorMessages.UserNotFound, 404);
+
+  const role = await findUserRole(userId);
+  const brand = updatedUser.brandId ? await findBrandById(updatedUser.brandId) : null;
+  const brandName = (brand as any)?.name ?? undefined;
+
+  const token = createJWTToken(
+    { userId, email: updatedUser.email, platform: updatedUser.platform, role },
+    AccessTokenExpiry,
+  );
+
+  const sessionData: UserSessionDetails = {
+    userId,
+    sessionToken: token,
+    status: SessionStatus.ACTIVE,
+    lastActivityAt: new Date(),
+    expiresAt: new Date(Date.now() + AccessTokenExpiryInSeconds * 1000),
+    createdAt: new Date(),
+  };
+
+  const session = await createSession(sessionData);
+
+  return buildLoginResponse(updatedUser, role, true, token, session.id!, brandName);
 };
 
 export const getUserProfileService = async (
