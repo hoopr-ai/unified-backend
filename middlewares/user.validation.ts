@@ -24,7 +24,7 @@ export const completeProfileRequestSchema = Joi.object<CompleteProfileRequestDat
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     mobile: Joi.string().min(8).max(15).required(),
-    countryCode: Joi.string().pattern(/^\d+$/).min(1).max(4).required(),
+    countryCode: Joi.string().min(1).max(4).required(),
     profileRole: Joi.string().valid(...profileRoleValues).required(),
 });
 
@@ -49,17 +49,17 @@ export const updateProfileRequestSchema = Joi.object({
     firstName: Joi.string().min(2).max(100).optional(),
     lastName: Joi.string().min(2).max(100).optional(),
     mobile: Joi.string().min(8).max(15).optional(),
-    countryCode: Joi.string().pattern(/^\d+$/).min(1).max(4).optional(),
+    countryCode: Joi.string().min(1).max(4).optional(),
     profileRole: Joi.string().valid(...profileRoleValues).optional(),
 }).min(1);
 
 export const sendOtpRequestSchema = Joi.object<SendOtpRequestData>({
   mobile: Joi.string().pattern(/^\d+$/).min(8).max(15).required(),
-  countryCode: Joi.string().pattern(/^\d+$/).min(1).max(4).required(),
+  countryCode: Joi.string().min(1).max(4).required(),
 });
 
 export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
   mobile: Joi.string().pattern(/^\d+$/).min(8).max(15).required(),
-  countryCode: Joi.string().pattern(/^\d+$/).min(1).max(4).required(),
+  countryCode: Joi.string().min(1).max(4).required(),
   otp: Joi.string().length(6).pattern(/^\d+$/).required(),
 });
