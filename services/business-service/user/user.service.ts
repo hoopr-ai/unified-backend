@@ -188,7 +188,10 @@ export const validateAndRefreshSession = async (
 
   // Check if the user is still active or invited (not deleted)
   const user = await findUserById(session.userId);
-  if (!user || (user.status !== UserStatus.ACTIVE && user.status !== UserStatus.INVITED)) {
+  if (
+    !user ||
+    (user.status !== UserStatus.ACTIVE && user.status !== UserStatus.INVITED)
+  ) {
     // User is deleted or inactive - deactivate the session
     await deactivateSessionByToken(sessionToken);
     return { isValid: false, needsNewSession: true };
@@ -224,10 +227,13 @@ export const logoutAllSessionsService = async (
 export const userResetPasswordService = async (
   data: ResetPasswordRequestData,
 ): Promise<void> => {
-  const { email, newPassword, platform, oldPassword } = data;
+  const { email, newPassword, platform } = data;
   const user = await findActiveUser(email, platform);
-  await comparePasswordsEncrypted(oldPassword, user.password);
-  if (oldPassword === newPassword) {
+  const isSameAsCurrentPassword = await bcrypt.compare(
+    newPassword,
+    user.password,
+  );
+  if (isSameAsCurrentPassword) {
     throw new AppError(ErrorMessages.SamePassword, 400);
   }
   const hashedNewPassword = await bcrypt.hash(newPassword, 10);
@@ -349,7 +355,11 @@ export const inviteUserService = async (
       const brand = brandId ? await findBrandById(brandId) : null;
       const brandName = (brand as any)?.name || "";
       const invitingUser = createdBy ? await findUserById(createdBy) : null;
-      const inviterName = invitingUser ? [invitingUser.firstName, invitingUser.lastName].filter(Boolean).join(" ") : undefined;
+      const inviterName = invitingUser
+        ? [invitingUser.firstName, invitingUser.lastName]
+            .filter(Boolean)
+            .join(" ")
+        : undefined;
       await sendInviteEmail(email, password, brandName, inviterName);
       return {};
     }
@@ -359,7 +369,13 @@ export const inviteUserService = async (
   const password = generateRandomPassword();
   const hashedNewPassword = await bcrypt.hash(password, 10);
   const newUser = {
-    ...createUserDetails(email, platform, hashedNewPassword, brandId, createdBy),
+    ...createUserDetails(
+      email,
+      platform,
+      hashedNewPassword,
+      brandId,
+      createdBy,
+    ),
     status: UserStatus.INVITED,
   };
   const savedUser = await saveUser(newUser);
@@ -369,7 +385,9 @@ export const inviteUserService = async (
   const brand = brandId ? await findBrandById(brandId) : null;
   const brandName = (brand as any)?.name || "";
   const invitingUser = createdBy ? await findUserById(createdBy) : null;
-  const inviterName = invitingUser ? [invitingUser.firstName, invitingUser.lastName].filter(Boolean).join(" ") : undefined;
+  const inviterName = invitingUser
+    ? [invitingUser.firstName, invitingUser.lastName].filter(Boolean).join(" ")
+    : undefined;
   await sendInviteEmail(email, password, brandName, inviterName);
 
   return {};
@@ -395,10 +413,16 @@ export const completeProfileService = async (
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
-      if (constraint === "unique_mobile_platform" || "mobile" in (error.fields ?? {})) {
+      if (
+        constraint === "unique_mobile_platform" ||
+        "mobile" in (error.fields ?? {})
+      ) {
         throw new AppError(ErrorMessages.MobileAlreadyInUse, 409);
       }
-      throw new AppError("A conflicting value already exists. Please check your details.", 409);
+      throw new AppError(
+        "A conflicting value already exists. Please check your details.",
+        409,
+      );
     }
     throw error;
   }
@@ -411,14 +435,17 @@ export const completeProfileService = async (
       teamMembers
         .filter((member) => !!member.email)
         .map((member) =>
-          sendTeamJoinNotificationEmail(member.email, member.firstName || "", newMemberFirstName)
-            .catch((err) => {
-              logger.error("Failed to send team join notification email", {
-                recipientEmail: member.email,
-                error: err.message,
-              });
-            })
-        )
+          sendTeamJoinNotificationEmail(
+            member.email,
+            member.firstName || "",
+            newMemberFirstName,
+          ).catch((err) => {
+            logger.error("Failed to send team join notification email", {
+              recipientEmail: member.email,
+              error: err.message,
+            });
+          }),
+        ),
     );
   }
 
@@ -427,7 +454,9 @@ export const completeProfileService = async (
   if (!updatedUser) throw new AppError(ErrorMessages.UserNotFound, 404);
 
   const role = await findUserRole(userId);
-  const brand = updatedUser.brandId ? await findBrandById(updatedUser.brandId) : null;
+  const brand = updatedUser.brandId
+    ? await findBrandById(updatedUser.brandId)
+    : null;
   const brandName = (brand as any)?.name ?? undefined;
 
   const token = createJWTToken(
@@ -446,7 +475,14 @@ export const completeProfileService = async (
 
   const session = await createSession(sessionData);
 
-  return buildLoginResponse(updatedUser, role, true, token, session.id!, brandName);
+  return buildLoginResponse(
+    updatedUser,
+    role,
+    true,
+    token,
+    session.id!,
+    brandName,
+  );
 };
 
 export const getUserProfileService = async (
@@ -483,10 +519,16 @@ export const updateUserProfileService = async (
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
-      if (constraint === "unique_mobile_platform" || "mobile" in (error.fields ?? {})) {
+      if (
+        constraint === "unique_mobile_platform" ||
+        "mobile" in (error.fields ?? {})
+      ) {
         throw new AppError(ErrorMessages.MobileAlreadyInUse, 409);
       }
-      throw new AppError("A conflicting value already exists. Please check your details.", 409);
+      throw new AppError(
+        "A conflicting value already exists. Please check your details.",
+        409,
+      );
     }
     throw error;
   }
