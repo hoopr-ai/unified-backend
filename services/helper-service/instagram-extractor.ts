@@ -1,8 +1,445 @@
 /**
  * Instagram Media Extractor
- * Extracts media URLs from Instagram without requiring authentication
- * Uses multiple methods: oEmbed API, GraphQL, and page parsing
+ * Extracts media URLs from Instagram
+ * Uses multiple methods: RapidAPI, Puppeteer, oEmbed API, GraphQL, and page parsing
+ * Supports authenticated requests via session cookies for profile access
  */
+
+import fs from "fs";
+import puppeteer from "puppeteer";
+
+// Instagram session configuration from environment
+const getInstagramSession = (): { sessionId: string; csrfToken: string; dsUserId: string } | null => {
+  const sessionId = process.env.INSTAGRAM_SESSION_ID;
+  const csrfToken = process.env.INSTAGRAM_CSRF_TOKEN;
+  const dsUserId = process.env.INSTAGRAM_DS_USER_ID;
+
+  if (sessionId && csrfToken) {
+    return { sessionId, csrfToken, dsUserId: dsUserId || "" };
+  }
+  return null;
+};
+
+// Build cookie header for authenticated requests
+const buildCookieHeader = (): string | null => {
+  const session = getInstagramSession();
+  if (!session) return null;
+
+  const cookies = [
+    `sessionid=${session.sessionId}`,
+    `csrftoken=${session.csrfToken}`,
+    `ds_user_id=${session.dsUserId}`,
+    "ig_did=placeholder",
+    "ig_nrcb=1",
+  ];
+  return cookies.join("; ");
+};
+
+// Build authenticated headers for Instagram API requests
+const buildAuthHeaders = (): Record<string, string> => {
+  const session = getInstagramSession();
+  const cookieHeader = buildCookieHeader();
+
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "X-IG-App-ID": "936619743392459",
+    "X-Requested-With": "XMLHttpRequest",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+  };
+
+  if (cookieHeader) {
+    headers["Cookie"] = cookieHeader;
+  }
+
+  if (session?.csrfToken) {
+    headers["X-CSRFToken"] = session.csrfToken;
+  }
+
+  return headers;
+};
+
+// ============================================================
+// RAPIDAPI INSTAGRAM SCRAPER
+// ============================================================
+
+interface RapidAPIConfig {
+  apiKey: string;
+  apiHost: string;
+}
+
+const getRapidAPIConfig = (): RapidAPIConfig | null => {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey) return null;
+  return {
+    apiKey,
+    apiHost: "instagram-api-fast-reliable-data-scraper.p.rapidapi.com",
+  };
+};
+
+interface RapidAPIProfileResponse {
+  data?: {
+    id: string;
+    username: string;
+    full_name: string;
+    biography: string;
+    profile_pic_url: string;
+    profile_pic_url_hd: string;
+    media_count: number;
+    follower_count: number;
+    following_count: number;
+    is_private: boolean;
+  };
+  status?: string;
+  message?: string;
+}
+
+interface RapidAPIReelItem {
+  id: string;
+  code: string;
+  taken_at: number;
+  video_url?: string;
+  thumbnail_url?: string;
+  caption?: { text: string };
+  video_duration?: number;
+  play_count?: number;
+  like_count?: number;
+}
+
+interface RapidAPIReelsResponse {
+  data?: {
+    items: RapidAPIReelItem[];
+    paging_info?: { max_id: string; more_available: boolean };
+  };
+  status?: string;
+  message?: string;
+}
+
+// Fetch profile info via RapidAPI
+const fetchProfileViaRapidAPI = async (username: string): Promise<{
+  profile: {
+    username: string;
+    full_name?: string;
+    biography?: string;
+    profile_pic?: string;
+    post_count?: number;
+    follower_count?: number;
+    following_count?: number;
+  };
+  userId: string;
+} | null> => {
+  const config = getRapidAPIConfig();
+  if (!config) {
+    console.log("  RapidAPI key not configured");
+    return null;
+  }
+  console.log(username);
+  
+
+  try {
+    console.log("  Trying RapidAPI profile endpoint...");
+    const response = await fetch(
+      `https://${config.apiHost}/profile?username=${encodeURIComponent(username)}`,
+      {
+        method: "GET",
+        headers: {
+          "x-rapidapi-key": config.apiKey,
+          "x-rapidapi-host": config.apiHost,
+        },
+      }
+    );
+
+    //SAVE RESPONSE FOR DEBUGGING in text file
+    fs.writeFileSync(`rapidapi_profile_response_${username}.txt`, await response.text());
+
+    if (!response.ok) {
+      console.log(`  RapidAPI profile failed` + JSON.stringify(await response.json()));
+      return null;
+    }
+
+    const data: RapidAPIProfileResponse = await response.json();
+
+    if (!data.data) {
+      console.log("  RapidAPI returned no profile data");
+      return null;
+    }
+
+    console.log(`  ✅ RapidAPI profile success for @${username}`);
+    return {
+      profile: {
+        username: data.data.username,
+        full_name: data.data.full_name,
+        biography: data.data.biography,
+        profile_pic: data.data.profile_pic_url_hd || data.data.profile_pic_url,
+        post_count: data.data.media_count,
+        follower_count: data.data.follower_count,
+        following_count: data.data.following_count,
+      },
+      userId: data.data.id,
+    };
+  } catch (error) {
+    console.log("  RapidAPI profile error:", error);
+    return null;
+  }
+};
+
+// Fetch reels via RapidAPI
+const fetchReelsViaRapidAPI = async (
+  username: string,
+  limit: number = 10
+): Promise<Array<{
+  shortcode: string;
+  url: string;
+  video_url: string;
+  thumbnail: string;
+  caption?: string;
+  duration?: number;
+}> | null> => {
+  const config = getRapidAPIConfig();
+  if (!config) return null;
+
+  try {
+    console.log(`  Trying RapidAPI reels endpoint for @${username}...`);
+    const response = await fetch(
+      `https://${config.apiHost}/reels?username=${encodeURIComponent(username)}&limit=${limit}`,
+      {
+        method: "GET",
+        headers: {
+          "x-rapidapi-key": config.apiKey,
+          "x-rapidapi-host": config.apiHost,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.log(`  RapidAPI reels failed: ${response.status}`);
+      return null;
+    }
+
+    const data: RapidAPIReelsResponse = await response.json();
+
+    if (!data.data?.items || data.data.items.length === 0) {
+      console.log("  RapidAPI returned no reels");
+      return null;
+    }
+
+    const reels = data.data.items.slice(0, limit).map((item) => ({
+      shortcode: item.code,
+      url: `https://www.instagram.com/reel/${item.code}/`,
+      video_url: item.video_url || "",
+      thumbnail: item.thumbnail_url || "",
+      caption: item.caption?.text,
+      duration: item.video_duration,
+    }));
+
+    console.log(`  ✅ RapidAPI found ${reels.length} reels`);
+    return reels;
+  } catch (error) {
+    console.log("  RapidAPI reels error:", error);
+    return null;
+  }
+};
+
+// Combined function to get profile + reels via RapidAPI
+const fetchProfileAndReelsViaRapidAPI = async (
+  username: string,
+  reelsLimit: number = 10
+): Promise<{
+  profile: {
+    username: string;
+    full_name?: string;
+    biography?: string;
+    profile_pic?: string;
+    post_count?: number;
+    follower_count?: number;
+    following_count?: number;
+  };
+  reels: Array<{
+    shortcode: string;
+    url: string;
+    video_url: string;
+    thumbnail: string;
+    caption?: string;
+    duration?: number;
+  }>;
+} | null> => {
+  // Get profile first
+  const profileResult = await fetchProfileViaRapidAPI(username);
+  if (!profileResult) return null;
+
+  // Get reels
+  const reels = await fetchReelsViaRapidAPI(username, reelsLimit);
+  if (!reels) {
+    // Return profile with empty reels if reels fetch fails
+    return { profile: profileResult.profile, reels: [] };
+  }
+
+  return { profile: profileResult.profile, reels };
+};
+
+// ============================================================
+// PUPPETEER FALLBACK FOR PROFILE SCRAPING
+// ============================================================
+
+interface PuppeteerReelData {
+  shortcode: string;
+  url: string;
+  video_url: string;
+  thumbnail: string;
+  caption?: string;
+}
+
+// Fetch profile reels using Puppeteer browser automation
+const fetchProfileViaPuppeteer = async (
+  username: string,
+  limit: number = 10
+): Promise<{
+  profile: {
+    username: string;
+    full_name?: string;
+    biography?: string;
+    profile_pic?: string;
+  };
+  reels: PuppeteerReelData[];
+} | null> => {
+  let browser = null;
+
+  try {
+    console.log(`  Trying Puppeteer for @${username}...`);
+
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--disable-gpu",
+        "--window-size=1920,1080",
+      ],
+    });
+
+    const page = await browser.newPage();
+
+    // Set viewport and user agent
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
+
+    // Add session cookies if available
+    const session = getInstagramSession();
+    if (session) {
+      await page.setCookie(
+        { name: "sessionid", value: session.sessionId, domain: ".instagram.com" },
+        { name: "csrftoken", value: session.csrfToken, domain: ".instagram.com" },
+        { name: "ds_user_id", value: session.dsUserId, domain: ".instagram.com" }
+      );
+    }
+
+    // Navigate to reels tab
+    const reelsUrl = `https://www.instagram.com/${username}/reels/`;
+    await page.goto(reelsUrl, { waitUntil: "networkidle2", timeout: 30000 });
+
+    // Wait for content to load
+    await page.waitForSelector("article", { timeout: 10000 }).catch(() => null);
+
+    // Scroll to load more content
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    // Extract reel links and data
+    const reelData = await page.evaluate((maxReels: number) => {
+      const reels: Array<{ shortcode: string; url: string; thumbnail: string }> = [];
+      const seen = new Set<string>();
+
+      // Find all reel links
+      const links = document.querySelectorAll('a[href*="/reel/"]');
+      for (const link of links) {
+        if (reels.length >= maxReels) break;
+
+        const href = (link as HTMLAnchorElement).href;
+        const match = href.match(/\/reel\/([A-Za-z0-9_-]+)/);
+        if (match && !seen.has(match[1])) {
+          seen.add(match[1]);
+
+          // Try to get thumbnail
+          const img = link.querySelector("img");
+          const thumbnail = img?.src || "";
+
+          reels.push({
+            shortcode: match[1],
+            url: `https://www.instagram.com/reel/${match[1]}/`,
+            thumbnail,
+          });
+        }
+      }
+
+      return reels;
+    }, limit);
+
+    // Extract profile info
+    const profileInfo = await page.evaluate(() => {
+      const usernameEl = document.querySelector('header h2, header span[dir="auto"]');
+      const bioEl = document.querySelector('header section > div > span');
+      const nameEl = document.querySelector('header section span[dir="auto"]');
+
+      return {
+        username: usernameEl?.textContent || "",
+        full_name: nameEl?.textContent || "",
+        biography: bioEl?.textContent || "",
+      };
+    });
+
+    await browser.close();
+
+    if (reelData.length === 0) {
+      console.log("  Puppeteer found no reels");
+      return null;
+    }
+
+    console.log(`  ✅ Puppeteer found ${reelData.length} reels`);
+
+    // Now fetch video URLs for each reel
+    const reelsWithVideos: PuppeteerReelData[] = [];
+
+    for (const reel of reelData.slice(0, limit)) {
+      try {
+        // Use existing extractInstagramMedia to get video URL
+        const media = await extractInstagramMedia(reel.url);
+        reelsWithVideos.push({
+          shortcode: reel.shortcode,
+          url: reel.url,
+          video_url: media.video_url,
+          thumbnail: reel.thumbnail || media.thumbnail,
+          caption: media.title,
+        });
+      } catch (e) {
+        console.log(`  Failed to extract video for ${reel.shortcode}`);
+      }
+    }
+
+    return {
+      profile: {
+        username: profileInfo.username || username,
+        full_name: profileInfo.full_name,
+        biography: profileInfo.biography,
+      },
+      reels: reelsWithVideos,
+    };
+  } catch (error) {
+    console.log("  Puppeteer error:", error);
+    if (browser) {
+      await browser.close();
+    }
+    return null;
+  }
+};
 
 export interface InstagramMedia {
   title: string;
@@ -430,18 +867,15 @@ export const isPostUrl = (url: string): boolean => {
 const fetchProfilePosts = async (username: string): Promise<ProfileInfo> => {
   console.log(`📱 Fetching profile posts for: ${username}`);
   const errors: string[] = [];
+  const hasSession = getInstagramSession() !== null;
+  console.log(`  Session available: ${hasSession}`);
 
-  // Method 1: Try Instagram's web API with mobile user agent
+  // Method 1: Try Instagram's web API with authenticated headers
   try {
     console.log("  Trying web API...");
+    const authHeaders = buildAuthHeaders();
     const response = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${username}`, {
-      headers: {
-        "User-Agent": "Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; samsung; SM-G991B; o1s; exynos2100; en_US; 458229237)",
-        "Accept": "*/*",
-        "X-IG-App-ID": "936619743392459",
-        "X-Requested-With": "XMLHttpRequest",
-        "X-ASBD-ID": "129477",
-      },
+      headers: authHeaders,
     });
 
     if (response.ok) {
@@ -487,12 +921,12 @@ const fetchProfilePosts = async (username: string): Promise<ProfileInfo> => {
   // Method 2: Try the GraphQL endpoint
   try {
     console.log("  Trying GraphQL API...");
+    const authHeaders = buildAuthHeaders();
     // First get user ID from username
     const userResponse = await fetch(`https://www.instagram.com/${username}/?__a=1&__d=dis`, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+        ...authHeaders,
         "Accept": "application/json",
-        "X-IG-App-ID": "936619743392459",
       },
     });
 
@@ -539,11 +973,11 @@ const fetchProfilePosts = async (username: string): Promise<ProfileInfo> => {
   // Method 3: Try scraping the profile page HTML
   try {
     console.log("  Trying page scraping...");
+    const authHeaders = buildAuthHeaders();
     const response = await fetch(`https://www.instagram.com/${username}/`, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        ...authHeaders,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
         "Sec-Fetch-Dest": "document",
         "Sec-Fetch-Mode": "navigate",
       },
@@ -663,11 +1097,19 @@ const fetchProfilePosts = async (username: string): Promise<ProfileInfo> => {
   // All methods failed
   const errorDetails = errors.join("; ");
   console.log(`  ❌ All profile extraction methods failed: ${errorDetails}`);
-  throw new Error(`Failed to fetch profile for @${username}. Instagram requires login for profile access from server IPs. Try extracting individual post URLs instead.`);
+  const sessionHint = hasSession
+    ? "Session cookies may be expired or invalid. Please update INSTAGRAM_SESSION_ID and INSTAGRAM_CSRF_TOKEN."
+    : "Configure INSTAGRAM_SESSION_ID, INSTAGRAM_CSRF_TOKEN, and INSTAGRAM_DS_USER_ID in .env for authenticated access.";
+  throw new Error(`Failed to fetch profile for @${username}. ${sessionHint}`);
 };
 
 /**
  * Extract all media from an Instagram profile
+ * Method priority:
+ * 1. RapidAPI (if configured) - returns video URLs directly
+ * 2. Puppeteer browser automation - headless browser scraping
+ * 3. Instagram session cookies + API
+ * 4. Page scraping fallback
  */
 export const extractProfileMedia = async (
   profileUrl: string,
@@ -680,6 +1122,72 @@ export const extractProfileMedia = async (
   }
 
   const { videosOnly = false, limit = 50 } = options;
+  const reelsLimit = Math.min(limit, 50);
+
+  console.log(`📱 Extracting profile media for @${username} (limit: ${reelsLimit}, videosOnly: ${videosOnly})`);
+
+  // Method 1: Try RapidAPI first (most reliable, gives video URLs directly)
+  const rapidAPIResult = await fetchProfileAndReelsViaRapidAPI(username, reelsLimit);
+  if (rapidAPIResult && rapidAPIResult.reels.length > 0) {
+    console.log(`✅ RapidAPI extracted ${rapidAPIResult.reels.length} reels from @${username}`);
+
+    const media: InstagramMedia[] = rapidAPIResult.reels
+      .filter((r) => r.video_url) // Only include reels with video URLs
+      .map((reel) => ({
+        title: reel.caption?.substring(0, 100) || "Instagram Reel",
+        video_url: reel.video_url,
+        thumbnail: reel.thumbnail,
+        duration: reel.duration,
+        author: username,
+        type: "video" as const,
+      }));
+
+    const profileInfo: ProfileInfo = {
+      ...rapidAPIResult.profile,
+      posts: rapidAPIResult.reels.map((r) => ({
+        shortcode: r.shortcode,
+        url: r.url,
+        is_video: true,
+        thumbnail: r.thumbnail,
+        caption: r.caption,
+      })),
+    };
+
+    return { profile: profileInfo, media };
+  }
+
+  // Method 2: Try Puppeteer browser automation
+  console.log("  RapidAPI unavailable or failed, trying Puppeteer...");
+  const puppeteerResult = await fetchProfileViaPuppeteer(username, reelsLimit);
+  if (puppeteerResult && puppeteerResult.reels.length > 0) {
+    console.log(`✅ Puppeteer extracted ${puppeteerResult.reels.length} reels from @${username}`);
+
+    const media: InstagramMedia[] = puppeteerResult.reels
+      .filter((r) => r.video_url)
+      .map((reel) => ({
+        title: reel.caption?.substring(0, 100) || "Instagram Reel",
+        video_url: reel.video_url,
+        thumbnail: reel.thumbnail,
+        author: username,
+        type: "video" as const,
+      }));
+
+    const profileInfo: ProfileInfo = {
+      ...puppeteerResult.profile,
+      posts: puppeteerResult.reels.map((r) => ({
+        shortcode: r.shortcode,
+        url: r.url,
+        is_video: true,
+        thumbnail: r.thumbnail,
+        caption: r.caption,
+      })),
+    };
+
+    return { profile: profileInfo, media };
+  }
+
+  // Method 3: Fall back to existing methods (session cookies + scraping)
+  console.log("  Puppeteer failed, trying legacy fallback methods...");
 
   const profileInfo = await fetchProfilePosts(username);
   const media: InstagramMedia[] = [];

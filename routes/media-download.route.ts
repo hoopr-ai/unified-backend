@@ -8,9 +8,12 @@ import {
 
 const router = Router();
 
-// Queue a new download job
+// Extract media from URLs (instant response)
 // POST /media-download
-// Body: { url: string, platform?: "instagram" | "youtube" | "tiktok" }
+// Body: { url?: string, urls?: string[], limit?: number, platform?: string }
+// - url/urls: Single URL or array of URLs (posts, reels, or profile URLs)
+// - limit: Max reels to fetch from profile (default: 10, max: 50)
+// - Profile URLs auto-detected: returns top N reels with download links
 router.post("/", queueDownload);
 
 // Direct Instagram extraction (no queue, instant response)

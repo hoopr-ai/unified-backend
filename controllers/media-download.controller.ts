@@ -1,7 +1,5 @@
 import type { Request, Response } from "express";
-import { v4 as uuidv4 } from "uuid";
 import {
-  addDownloadJob,
   getJobStatus,
   getQueueStats,
 } from "../services/helper-service/download-queue";
@@ -49,47 +47,195 @@ const isValidUrl = (url: string): boolean => {
 };
 
 /**
- * Queue a new download job
+ * Extract media from URLs (instant response, no queue)
  * POST /media-download
- * Body: { url: string, platform?: string }
+ *
+ * Accepts:
+ * - Single URL: { url: string }
+ * - Multiple URLs: { urls: string[] }
+ * - Profile URL auto-detected: fetches top N reels (videosOnly by default)
+ * - Mixed: both url and urls can be provided
+ *
+ * Options:
+ * - limit: number (default 10) - max reels to fetch from profile
+ * - platform?: string - override platform detection
  */
 export const queueDownload = catchAsync(async (req: Request, res: Response) => {
-  const { url, platform: requestedPlatform } = req.body;
+  const { url, urls, limit = 10, platform: requestedPlatform } = req.body;
 
-  if (!url) {
-    return sendError(res, HttpStatusCode.BAD_REQUEST, "URL is required", {});
+  // Normalize inputs
+  let allUrls: string[] = [];
+
+  // Handle single URL
+  if (url) {
+    if (!isValidUrl(url)) {
+      return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid URL format", {});
+    }
+    allUrls.push(url);
   }
 
-  if (!isValidUrl(url)) {
-    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid URL format", {});
+  // Handle multiple URLs
+  if (urls && Array.isArray(urls)) {
+    for (const u of urls) {
+      if (!isValidUrl(u)) {
+        return sendError(res, HttpStatusCode.BAD_REQUEST, `Invalid URL format: ${u}`, {});
+      }
+      allUrls.push(u);
+    }
   }
 
-  // Detect or validate platform
-  const detectedPlatform = detectPlatform(url);
-  const platform = (requestedPlatform || detectedPlatform || "instagram") as Platform;
-
-  if (!SUPPORTED_PLATFORMS.includes(platform)) {
+  // Must have at least one URL
+  if (allUrls.length === 0) {
     return sendError(
       res,
       HttpStatusCode.BAD_REQUEST,
-      `Unsupported platform. Supported: ${SUPPORTED_PLATFORMS.join(", ")}`,
+      "At least one URL is required. Use 'url' or 'urls' field.",
       {}
     );
   }
 
-  const jobId = uuidv4();
+  // Separate profile URLs and post URLs
+  const postUrls: string[] = [];
+  const profileUrls: string[] = [];
 
-  await addDownloadJob(url, jobId, platform);
+  for (const u of allUrls) {
+    const detectedPlatform = detectPlatform(u);
+    const platform = (requestedPlatform || detectedPlatform) as Platform | null;
 
-  sendResponse(res, {
-    status: HttpStatusCode.ACCEPTED,
-    data: {
-      jobId,
-      platform,
-      message: "Download job queued successfully",
-    },
-    message: "Job queued",
-  });
+    // Only Instagram supports profile extraction for now
+    if (platform === "instagram") {
+      if (isProfileUrl(u)) {
+        profileUrls.push(u);
+      } else if (isPostUrl(u)) {
+        postUrls.push(u);
+      } else {
+        return sendError(res, HttpStatusCode.BAD_REQUEST, `Invalid Instagram URL format: ${u}`, {});
+      }
+    } else if (platform) {
+      // For other platforms, treat as post URL (no profile support yet)
+      postUrls.push(u);
+    } else {
+      return sendError(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        `Could not detect platform for URL: ${u}. Supported: ${SUPPORTED_PLATFORMS.join(", ")}`,
+        {}
+      );
+    }
+  }
+
+  try {
+    const results: {
+      posts: { url: string; success: boolean; media?: any; error?: string }[];
+      profiles: { url: string; username: string; success: boolean; profile?: any; reels?: any[]; error?: string }[];
+      summary: { totalPosts: number; successfulPosts: number; totalProfiles: number; successfulProfiles: number; totalReels: number };
+    } = {
+      posts: [],
+      profiles: [],
+      summary: {
+        totalPosts: postUrls.length,
+        successfulPosts: 0,
+        totalProfiles: profileUrls.length,
+        successfulProfiles: 0,
+        totalReels: 0,
+      },
+    };
+
+    // Extract individual posts/reels
+    if (postUrls.length > 0) {
+      const postResults = await extractMultipleMedia(postUrls);
+      results.posts = postResults.map((r) => ({
+        url: r.url,
+        success: r.success,
+        media: r.media
+          ? {
+              title: r.media.title,
+              video_url: r.media.video_url,
+              thumbnail: r.media.thumbnail,
+              author: r.media.author,
+              type: r.media.type,
+              duration: r.media.duration,
+            }
+          : undefined,
+        error: r.error,
+      }));
+      results.summary.successfulPosts = postResults.filter((r) => r.success).length;
+    }
+
+    // Extract from profiles (reels only, limited by limit param)
+    if (profileUrls.length > 0) {
+      const profileResults = await extractMultipleProfiles(profileUrls, {
+        videosOnly: true, // Only fetch reels/videos
+        limitPerProfile: Math.min(limit, 50), // Cap at 50 for performance
+      });
+      results.profiles = profileResults.map((r) => ({
+        url: r.url,
+        username: r.username,
+        success: r.success,
+        profile: r.profile
+          ? {
+              username: r.profile.username,
+              full_name: r.profile.full_name,
+              biography: r.profile.biography,
+              profile_pic: r.profile.profile_pic,
+              post_count: r.profile.post_count,
+              follower_count: r.profile.follower_count,
+              following_count: r.profile.following_count,
+            }
+          : undefined,
+        reels: r.media?.map((m) => ({
+          title: m.title,
+          video_url: m.video_url,
+          thumbnail: m.thumbnail,
+          author: m.author,
+          type: m.type,
+          duration: m.duration,
+        })),
+        error: r.error,
+      }));
+      results.summary.successfulProfiles = profileResults.filter((r) => r.success).length;
+      results.summary.totalReels = profileResults.reduce(
+        (sum, r) => sum + (r.media?.length || 0),
+        0
+      );
+    }
+
+    // For backward compatibility: if single post URL with no profiles, return simple response
+    if (postUrls.length === 1 && profileUrls.length === 0 && results.posts[0]?.success) {
+      return sendResponse(res, {
+        status: HttpStatusCode.OK,
+        data: results.posts[0].media,
+        message: "Media extracted successfully",
+      });
+    }
+
+    // For single profile URL, return simplified response
+    if (profileUrls.length === 1 && postUrls.length === 0 && results.profiles[0]?.success) {
+      return sendResponse(res, {
+        status: HttpStatusCode.OK,
+        data: {
+          profile: results.profiles[0].profile,
+          reels: results.profiles[0].reels,
+          totalReels: results.profiles[0].reels?.length || 0,
+        },
+        message: `Extracted ${results.profiles[0].reels?.length || 0} reels from @${results.profiles[0].username}`,
+      });
+    }
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: results,
+      message: `Extracted ${results.summary.successfulPosts} posts and ${results.summary.totalReels} reels from ${results.summary.successfulProfiles} profiles`,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Extraction failed";
+    return sendError(
+      res,
+      HttpStatusCode.INTERNAL_SERVER_ERROR,
+      `Failed to extract media: ${errorMessage}`,
+      {}
+    );
+  }
 });
 
 /**
