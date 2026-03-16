@@ -7,6 +7,8 @@ import type {
   CompleteProfileRequestData,
   SendOtpRequestData,
   VerifyOtpRequestData,
+  SendEmailOtpRequestData,
+  VerifyEmailOtpRequestData,
 } from "../services/dto-service/modules.export";
 import { Platform } from "../services/dto-service/constants/modules.export";
 import { ProfileRole } from "../services/dto-service/modules.export";
@@ -81,3 +83,13 @@ export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
   countryCode: Joi.string().min(1).max(5).required(),
   otp: Joi.string().length(6).pattern(/^\d+$/).required(),
 });
+
+export const sendEmailOtpRequestSchema = Joi.object<SendEmailOtpRequestData>({
+  email: Joi.string().email().required(),
+}).unknown(false);
+
+export const verifyEmailOtpRequestSchema =
+  Joi.object<VerifyEmailOtpRequestData>({
+    email: Joi.string().email().required(),
+    otp: Joi.string().length(6).pattern(/^\d+$/).required(),
+  }).unknown(false);

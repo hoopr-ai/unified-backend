@@ -6,6 +6,13 @@ export interface ArtistInfoTrack {
   type: ArtistType[];
 }
 
+// Album info for track
+export interface AlbumInfo {
+  id: string;
+  title?: string;
+  type?: string;
+}
+
 // Filter info for track details
 export interface FilterInfo {
   id: string;
@@ -41,6 +48,7 @@ export interface TrackWithArtists {
   ownerType?: string;
   ownerSubType?: string;
   ownerCode?: string;
+  album?: AlbumInfo; // Album details for the track
 }
 
 // Extended track details with both SKUs and filters
@@ -120,6 +128,7 @@ export interface RawTrackWithMappings {
   }>;
   skus?: RawSkuData[];
   trackFilterMappings?: RawFilterMappingData[];
+  album?: { id: string; title?: string; type?: string };
 }
 
 export interface PaginatedRawTracks {

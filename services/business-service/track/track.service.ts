@@ -133,6 +133,29 @@ const fetchOwnerMaps = async (
   };
 };
 
+// Fetch albums for tracks
+const fetchAlbumsForTracks = async (
+  tracks: RawTrackWithMappings[],
+): Promise<Map<string, { id: string; title?: string; type?: string }>> => {
+  const albumMap = new Map<
+    string,
+    { id: string; title?: string; type?: string }
+  >();
+
+  for (const track of tracks) {
+    const album = await findAlbumByTrackId(track.id);
+    if (album) {
+      albumMap.set(track.id, {
+        id: album.id,
+        title: album.title,
+        type: album.type as string | undefined,
+      });
+    }
+  }
+
+  return albumMap;
+};
+
 // Transform raw track data to TrackWithArtists DTO
 const transformTrackToDto = (
   track: RawTrackWithMappings,
@@ -171,7 +194,7 @@ const transformTrackToDto = (
     }
   }
 
-  return {
+  const dto: TrackWithArtists = {
     id: track.id,
     trackCode: track.trackCode,
     name: track.name || "",
@@ -186,7 +209,10 @@ const transformTrackToDto = (
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
+    ...(track.album && { album: track.album }),
   };
+
+  return dto;
 };
 
 // Build paginated response from raw data
@@ -196,20 +222,25 @@ const buildPaginatedResponse = (
   ownerTypeMap?: Map<string, string>,
   ownerSubTypeMap?: Map<string, string>,
   ownerCodeMap?: Map<string, string>,
+  albumMap?: Map<string, { id: string; title?: string; type?: string }>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
 
   return {
-    tracks: rows.map((track) =>
-      transformTrackToDto(
+    tracks: rows.map((track) => {
+      // Add album data to track if it exists
+      if (albumMap && albumMap.has(track.id)) {
+        track.album = albumMap.get(track.id);
+      }
+      return transformTrackToDto(
         track,
         likedTrackCodes,
         ownerTypeMap,
         ownerSubTypeMap,
         ownerCodeMap,
-      ),
-    ),
+      );
+    }),
     pagination: {
       page,
       limit,
@@ -332,16 +363,24 @@ export const getAllTracksService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const rawData = await findAllTracks(page, limit, whereClause, ownerIds, excludeOwnerIds);
+  const rawData = await findAllTracks(
+    page,
+    limit,
+    whereClause,
+    ownerIds,
+    excludeOwnerIds,
+  );
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
     rawData.rows,
   );
+  const albumMap = await fetchAlbumsForTracks(rawData.rows);
   return buildPaginatedResponse(
     rawData,
     likedTrackCodes,
     ownerTypeMap,
     ownerSubTypeMap,
     ownerCodeMap,
+    albumMap,
   );
 };
 
@@ -404,6 +443,7 @@ export const getTracksByCodesService = async (
 
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
     await fetchOwnerMaps(orderedTracks);
+  const albumMap = await fetchAlbumsForTracks(orderedTracks);
   return buildPaginatedResponse(
     {
       ...rawData,
@@ -413,6 +453,7 @@ export const getTracksByCodesService = async (
     ownerTypeMap,
     ownerSubTypeMap,
     ownerCodeMap,
+    albumMap,
   );
 };
 
@@ -431,6 +472,7 @@ const buildFilterPaginatedResponse = (
   ownerTypeMap?: Map<string, string>,
   ownerSubTypeMap?: Map<string, string>,
   ownerCodeMap?: Map<string, string>,
+  albumMap?: Map<string, { id: string; title?: string; type?: string }>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
@@ -445,15 +487,19 @@ const buildFilterPaginatedResponse = (
       }
       return true;
     })
-    .map((mapping) =>
-      transformTrackToDto(
+    .map((mapping) => {
+      // Add album data to track if it exists
+      if (albumMap && albumMap.has(mapping.track!.id)) {
+        mapping.track!.album = albumMap.get(mapping.track!.id);
+      }
+      return transformTrackToDto(
         mapping.track!,
         likedTrackCodes,
         ownerTypeMap,
         ownerSubTypeMap,
         ownerCodeMap,
-      ),
-    );
+      );
+    });
 
   return {
     tracks,
@@ -504,12 +550,14 @@ export const getTracksByFilterService = async (
   const filterTracks = rawData.rows.filter((m) => m.track).map((m) => m.track!);
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
     await fetchOwnerMaps(filterTracks);
+  const albumMap = await fetchAlbumsForTracks(filterTracks);
   return buildFilterPaginatedResponse(
     rawData,
     likedTrackCodes,
     ownerTypeMap,
     ownerSubTypeMap,
     ownerCodeMap,
+    albumMap,
   );
 };
 
@@ -559,12 +607,14 @@ const transformTrackToDetailsDto = (
     ? new Date(track.releaseDate).getFullYear()
     : null;
   const creditParts: string[] = [];
-  if (allArtistNames.length > 0) creditParts.push([...new Set(allArtistNames)].join(", "));
+  if (allArtistNames.length > 0)
+    creditParts.push([...new Set(allArtistNames)].join(", "));
   if (releaseYear) creditParts.push(String(releaseYear));
   if (ownerName) creditParts.push(ownerName);
-  const songCredits = albumName && albumName.trim() !== ""
-    ? `From '${albumName}' by ${creditParts.join(" | ")}`
-    : `'${track.name}' by ${creditParts.join(" | ")}`;
+  const songCredits =
+    albumName && albumName.trim() !== ""
+      ? `From '${albumName}' by ${creditParts.join(" | ")}`
+      : `'${track.name}' by ${creditParts.join(" | ")}`;
 
   let standardSku: SkuInfo | undefined;
   let premiumSku: SkuInfo | undefined;

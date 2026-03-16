@@ -94,3 +94,12 @@ export interface ActivityLogData {
   requestBody?: Record<string, unknown>;
   responseTime?: number;
 }
+
+export interface SendEmailOtpRequestData {
+  email: string;
+}
+
+export interface VerifyEmailOtpRequestData {
+  email: string;
+  otp: string;
+}
