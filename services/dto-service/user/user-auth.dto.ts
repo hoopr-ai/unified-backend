@@ -2,43 +2,42 @@ import type { Platform } from "../constants/modules.export";
 import type { ProfileRole, UserRoles, UserStatus } from "./user.enum";
 
 export interface CreateAuthRequestData {
-    email: string;
-    password: string;
-    platform: Platform;
-    brandId?: number;
+  email: string;
+  password: string;
+  platform: Platform;
+  brandId?: number;
 }
 
 export interface InviteUserAuthRequestData {
-    email: string;
+  email: string;
 }
 
 export interface CompleteProfileRequestData {
-    firstName: string;
-    lastName: string;
-    mobile: string;
-    countryCode: string;
-    profileRole: ProfileRole;
+  firstName: string;
+  lastName: string;
+  mobile: string;
+  countryCode: string;
+  profileRole: ProfileRole;
 }
 
 export interface UpdateProfileRequestData {
-    firstName?: string;
-    lastName?: string;
-    mobile?: string;
-    countryCode?: string;
-    profileRole?: ProfileRole;
+  firstName?: string;
+  lastName?: string;
+  mobile?: string;
+  profileRole?: ProfileRole;
 }
 
 export interface UserProfileResponse {
-    id: number;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-    mobile?: string;
-    countryCode?: string;
-    profileRole?: string;
-    role?: UserRoles;
-    isProfileComplete: boolean;
-    status: UserStatus;
+  id: number;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  mobile?: string;
+  countryCode?: string;
+  profileRole?: string;
+  role?: UserRoles;
+  isProfileComplete: boolean;
+  status: UserStatus;
 }
 
 export interface LoginUserRequestData {
@@ -49,8 +48,8 @@ export interface LoginUserRequestData {
 
 export interface ResetPasswordRequestData {
   email: string;
-  oldPassword: string;
   newPassword: string;
+  confirmPassword: string;
   platform: Platform;
 }
 
