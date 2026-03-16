@@ -231,7 +231,7 @@ export interface VerifyEmailOtpData {
 
 export const sendEmailOtpService = async (
   data: SendEmailOtpData,
-): Promise<{ message: string }> => {
+): Promise<Record<string, never>> => {
   const { email } = data;
   const lowerEmail = email.toLowerCase().trim();
 
@@ -288,12 +288,12 @@ export const sendEmailOtpService = async (
   }
 
   logger.info("Email OTP sent", { email: lowerEmail });
-  return { message: "OTP sent successfully" };
+  return {};
 };
 
 export const verifyEmailOtpService = async (
   data: VerifyEmailOtpData,
-): Promise<{ message: string; verified: boolean }> => {
+): Promise<Record<string, never>> => {
   const { email, otp } = data;
   const lowerEmail = email.toLowerCase().trim();
 
@@ -325,7 +325,7 @@ export const verifyEmailOtpService = async (
     await redisClient.del(KEY_RESEND_ATTEMPTS(lowerEmail));
 
     logger.info("Email OTP verified", { email: lowerEmail });
-    return { message: "OTP verified successfully", verified: true };
+    return {};
   }
 
   // Wrong OTP — increment attempts
