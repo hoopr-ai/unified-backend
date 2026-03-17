@@ -66,6 +66,20 @@ export const hardDeleteAlbum = async (id: string): Promise<void> => {
   await AlbumModel.destroy({ where: { id } });
 };
 
+export const findAlbumsByTypes = async (
+  types?: string[],
+): Promise<AlbumDetails[]> => {
+  const whereClause: any = { deleted: null };
+  if (types && types.length > 0) {
+    whereClause.type = { [Op.in]: types };
+  }
+  const albums = await AlbumModel.findAll({
+    where: whereClause,
+    order: [["createdAt", "DESC"]],
+  });
+  return albums;
+};
+
 export const findAlbumByTrackId = async (
   trackId: string
 ): Promise<AlbumDetails | null> => {

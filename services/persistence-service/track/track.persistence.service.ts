@@ -185,6 +185,80 @@ export const findTracksByTrackCodes = async (
   };
 };
 
+// Returns only the subset of IDs that exist as ACTIVE tracks (excluding restricted owners)
+export const findActiveTrackIdsByIds = async (
+  ids: string[],
+  excludeOwnerIds?: string[],
+): Promise<Set<string>> => {
+  if (ids.length === 0) return new Set();
+
+  const whereClause: any = { id: { [Op.in]: ids }, status: "ACTIVE" };
+
+  const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  if (excludeOwners.length > 0) {
+    whereClause[Op.and] = [
+      { [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } },
+    ];
+  }
+
+  const rows = await TrackModel.findAll({
+    where: whereClause,
+    attributes: ["id"],
+    raw: true,
+  });
+
+  return new Set(rows.map((r: any) => r.id));
+};
+
+export const findAllTracksByIds = async (
+  ids: string[],
+  excludeOwnerIds?: string[],
+): Promise<RawTrackWithMappings[]> => {
+  if (ids.length === 0) return [];
+
+  const whereClause: any = { id: { [Op.in]: ids }, status: "ACTIVE" };
+
+  const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  if (excludeOwners.length > 0) {
+    whereClause[Op.and] = [
+      { [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } },
+    ];
+  }
+
+  const rows = await TrackModel.findAll({
+    where: whereClause,
+    order: [["createdAt", "DESC"]],
+    include: [...getArtistInclude(), ...getStandardSkuInclude()],
+  });
+
+  return rows.map((track) => track.toJSON() as RawTrackWithMappings);
+};
+
+export const findTracksByIds = async (
+  ids: string[],
+  page: number,
+  limit: number,
+): Promise<PaginatedRawTracks> => {
+  const offset = (page - 1) * limit;
+
+  const { count, rows } = await TrackModel.findAndCountAll({
+    where: { id: { [Op.in]: ids }, status: "ACTIVE" },
+    order: [["createdAt", "DESC"]],
+    limit,
+    offset,
+    distinct: true,
+    col: "id",
+    include: [...getArtistInclude(), ...getStandardSkuInclude()],
+  });
+
+  return {
+    rows: rows.map((track) => track.toJSON() as RawTrackWithMappings),
+    count,
+    page,
+    limit,
+  };
+};
+
 export interface GetTracksByFilterParams {
   filterIds: string[];
   page: number;

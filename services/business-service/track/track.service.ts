@@ -323,6 +323,47 @@ const emptyPaginatedResponse = (
   },
 });
 
+// Reusable helper: transform a flat array of raw tracks into TrackWithArtists[]
+export const transformRawTracksToDto = async (
+  tracks: RawTrackWithMappings[],
+  likedTrackCodes?: Set<string>,
+): Promise<TrackWithArtists[]> => {
+  if (tracks.length === 0) return [];
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
+    await fetchOwnerMaps(tracks);
+  const albumMap = await fetchAlbumsForTracks(tracks);
+  return tracks.map((track) => {
+    if (albumMap.has(track.id)) {
+      track.album = albumMap.get(track.id);
+    }
+    return transformTrackToDto(
+      track,
+      likedTrackCodes,
+      ownerTypeMap,
+      ownerSubTypeMap,
+      ownerCodeMap,
+    );
+  });
+};
+
+// Reusable helper: transform raw paginated tracks into the response DTO
+export const buildTracksResponseFromRawData = async (
+  rawData: PaginatedRawTracks,
+  likedTrackCodes?: Set<string>,
+): Promise<PaginatedTracksResponseData> => {
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
+    await fetchOwnerMaps(rawData.rows);
+  const albumMap = await fetchAlbumsForTracks(rawData.rows);
+  return buildPaginatedResponse(
+    rawData,
+    likedTrackCodes,
+    ownerTypeMap,
+    ownerSubTypeMap,
+    ownerCodeMap,
+    albumMap,
+  );
+};
+
 export const getAllTracksService = async (
   query: GetAllTracksRequestData,
   userId?: number,
