@@ -91,3 +91,24 @@ export const findAlbumByTrackId = async (
   });
   return album;
 };
+
+export const findTrackIdsByAlbumType = async (
+  albumType: string
+): Promise<string[]> => {
+  const albums = await AlbumModel.findAll({
+    where: {
+      type: albumType,
+      deleted: null,
+    },
+    attributes: ["trackId"],
+  });
+
+  // Flatten all trackId arrays and remove duplicates
+  const allTrackIds: string[] = [];
+  for (const album of albums) {
+    if (album.trackId && Array.isArray(album.trackId)) {
+      allTrackIds.push(...album.trackId);
+    }
+  }
+  return [...new Set(allTrackIds)];
+};

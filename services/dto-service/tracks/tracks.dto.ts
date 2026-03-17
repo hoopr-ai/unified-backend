@@ -49,6 +49,7 @@ export interface TrackWithArtists {
   ownerSubType?: string;
   ownerCode?: string;
   album?: AlbumInfo; // Album details for the track
+  jioSaavanStream?: string | null; // JioSaavan stream count
 }
 
 // Extended track details with both SKUs and filters
@@ -129,6 +130,7 @@ export interface RawTrackWithMappings {
   skus?: RawSkuData[];
   trackFilterMappings?: RawFilterMappingData[];
   album?: { id: string; title?: string; type?: string };
+  jioSaavanStream?: string | null;
 }
 
 export interface PaginatedRawTracks {

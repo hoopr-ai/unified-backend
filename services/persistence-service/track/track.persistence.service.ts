@@ -9,7 +9,7 @@ import {
 } from "../../dto-service/modules.export";
 import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel, SkuType } from "../sku/modules.export";
-import { Op } from "sequelize";
+import { Op, Sequelize } from "sequelize";
 
 // Reusable include configuration for artist mappings
 const getArtistInclude = () => [
@@ -73,6 +73,7 @@ export const findAllTracks = async (
   whereClause: Record<string, unknown> = {},
   ownerIds?: string[],
   excludeOwnerIds?: string[],
+  sortByPopular?: boolean,
 ): Promise<PaginatedRawTracks> => {
 
   const offset = (page - 1) * limit;
@@ -108,9 +109,17 @@ export const findAllTracks = async (
     finalWhereClause[Op.and] = conditions;
   }
 
+  // Sort by jioSaavanStream numerically (descending) when popular, then by createdAt
+  const orderClause: any[] = sortByPopular
+    ? [
+        [Sequelize.literal('CAST("jioSaavanStream" AS BIGINT)'), 'DESC NULLS LAST'],
+        ['createdAt', 'DESC'],
+      ]
+    : [['createdAt', 'DESC']];
+
   const { count, rows } = await TrackModel.findAndCountAll({
     where: finalWhereClause,
-    order: [["createdAt", "DESC"]],
+    order: orderClause,
     limit,
     offset,
     distinct: true,
