@@ -280,7 +280,7 @@ export class TrackModel extends Model<TrackModel> {
   bollywood?: string;
 
   @Column({
-    type: DataType.TEXT,
+    type: DataType.STRING,
     allowNull: true,
   })
   jioSaavanStream?: string;
