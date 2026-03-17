@@ -53,6 +53,7 @@ export interface TrackDetails {
   reelCount?: string;
   partnerId?: string;
   bollywood?: string;
+  jioSaavanStream?: string;
 }
 
 @Table({
@@ -277,6 +278,12 @@ export class TrackModel extends Model<TrackModel> {
     allowNull: true,
   })
   bollywood?: string;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  jioSaavanStream?: string;
 
   @HasMany(() => TrackArtistMappingModel, "trackId")
   trackArtistMappings?: TrackArtistMappingModel[];
