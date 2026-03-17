@@ -37,4 +37,7 @@ export const enum ResponseMessages {
   OtpVerifiedSuccess = "OTP verified successfully",
   GetOwnersSuccess = "Owners fetched successfully",
   GetOccasionsSuccess = "Occasions fetched successfully",
+  GetAlbumsSuccess = "Albums fetched successfully",
+  GetAlbumTracksSuccess = "Album tracks fetched successfully",
+  AlbumNotFound = "Album not found",
 }

@@ -17,6 +17,7 @@ import likedTrackRoutes from "./routes/liked-track.route";
 import streamHistoryRoutes from "./routes/stream-history.route";
 import ownerRoutes from "./routes/owner.route";
 import occasionRoutes from "./routes/occasion.route";
+import albumRoutes from "./routes/album.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -47,6 +48,7 @@ app.use("/liked-tracks", likedTrackRoutes);
 app.use("/stream-history", streamHistoryRoutes);
 app.use("/owners", ownerRoutes);
 app.use("/occasions", occasionRoutes);
+app.use("/albums", albumRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);
