@@ -306,7 +306,7 @@ export const getAllTracksService = async (
   if (query.popular === true) {
     //sort by jioSaavanStream in descending order and then by createdAt in descending order
     whereClause[Op.or as any] = [
-      { jioSaavanStream: { [Op.gt]: 0 } },
+      { jioSaavanStream: { [Op.gt]: '0' } },
       { jioSaavanStream: null },
     ];
   }
