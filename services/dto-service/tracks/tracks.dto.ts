@@ -132,6 +132,7 @@ export interface PaginatedRawTracks {
 export interface GetAllTracksRequestData {
   page?: string;
   limit?: string;
+  popular?: boolean;
   trending?: boolean;
   newOnHoopr?: boolean;
   type?: string[];

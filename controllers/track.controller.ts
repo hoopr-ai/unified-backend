@@ -32,6 +32,7 @@ export const getAllTracks = catchAsync(
       page: req.query.page as string,
       limit: req.query.limit as string,
       trending: req.body.trending as boolean,
+      popular: req.body.popular as boolean,
       newOnHoopr: req.body.newOnHoopr as boolean,
       type: req.body.type as string[] | undefined,
       ownerCode: req.body.ownerCode as string[] | undefined,

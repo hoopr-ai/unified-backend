@@ -303,6 +303,13 @@ export const getAllTracksService = async (
   if (query.trending === true) {
     whereClause.trending = true;
   }
+  if (query.popular === true) {
+    //sort by jioSaavanStreams in descending order and then by createdAt in descending order
+    whereClause[Op.or as any] = [
+      { jioSaavanStreams: { [Op.gt]: 0 } },
+      { jioSaavanStreams: null },
+    ];
+  }
 
   if (query.newOnHoopr === true) {
     const oneWeekAgo = new Date();
