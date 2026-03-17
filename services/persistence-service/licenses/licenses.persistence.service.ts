@@ -10,27 +10,6 @@ export const createLicenseRecord = async (
   return license;
 };
 
-export const getLicensesByUserId = async (
-  userId: number,
-  page: number = 1,
-  limit: number = 50
-): Promise<{ rows: LicenseModel[]; count: number }> => {
-  const offset = (page - 1) * limit;
-  const { rows, count } = await LicenseModel.findAndCountAll({
-    where: { userId },
-    include: [
-      {
-        model: TrackModel,
-        attributes: ["id", "trackCode", "name", "sourceLink"],
-      },
-    ],
-    order: [["licensedAt", "DESC"]],
-    limit,
-    offset,
-  });
-  return { rows, count };
-};
-
 export const getLicensesByBrandId = async (
   brandId: number,
   page: number = 1,

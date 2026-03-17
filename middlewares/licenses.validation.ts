@@ -1,6 +1,5 @@
 import Joi from "joi";
 import type {
-  LicenseTrackRequest,
   AssignTokensRequest,
   CreateLicenseTypeRequest,
 } from "../services/dto-service/modules.export";

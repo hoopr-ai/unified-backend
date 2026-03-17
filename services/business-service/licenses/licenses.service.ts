@@ -1,6 +1,5 @@
 import {
   createLicenseRecord,
-  getLicensesByUserId,
   getLicensesByBrandId,
   LicenseModel,
   VideoLinkModel,
@@ -32,14 +31,10 @@ import { logger } from "../../helper-service/logger";
 import type {
   LicenseTrackRequest,
   LicenseResponse,
-  TokenBalanceResponse,
-  LicenseHistoryResponse,
   BrandLicenseHistoryResponse,
-  LicenseHistoryItem,
   BrandLicenseHistoryItem,
   DownloadTrackRequest,
   DownloadTrackResponse,
-  AssignTokensRequest,
 } from "../../dto-service/licenses/modules.export";
 
 const TOKEN_COST_PER_LICENSE = 1;

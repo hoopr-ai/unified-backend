@@ -56,26 +56,6 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 
-const server = app.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log("Server started on port", PORT);
 });
-
-// Graceful shutdown handling
-const gracefulShutdown = (signal: string) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-
-  server.close(() => {
-    console.log("HTTP server closed");
-    console.log("Graceful shutdown complete");
-    process.exit(0);
-  });
-
-  // Force shutdown after 30 seconds
-  setTimeout(() => {
-    console.error("Forced shutdown after timeout");
-    process.exit(1);
-  }, 30000);
-};
-
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
