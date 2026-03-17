@@ -34,6 +34,7 @@ export const getAllTracks = catchAsync(
       trending: req.body.trending as boolean,
       popular: req.body.popular as boolean,
       newOnHoopr: req.body.newOnHoopr as boolean,
+      movie: req.body.movie as boolean,
       type: req.body.type as string[] | undefined,
       ownerCode: req.body.ownerCode as string[] | undefined,
     };
