@@ -16,6 +16,7 @@ import {
   findTracksByFilter,
   findTrackByTrackCode,
   findAlbumByTrackId,
+  findTrackIdsByAlbumType,
   getRestrictedOwnersByBrandId,
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
@@ -186,6 +187,8 @@ const transformTrackToDto = (
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
+    ...(track.album && { album: track.album }),
+    jioSaavanStream: track.jioSaavanStream ?? null,
   };
 };
 
@@ -304,11 +307,18 @@ export const getAllTracksService = async (
     whereClause.trending = true;
   }
   if (query.popular === true) {
-    //sort by jioSaavanStream in descending order and then by createdAt in descending order
+    // Filter tracks with jioSaavanStream > 0 or null, sorting handled in persistence layer
     whereClause[Op.or as any] = [
       { jioSaavanStream: { [Op.gt]: '0' } },
       { jioSaavanStream: null },
     ];
+
+    // Only include tracks from "movie" albums when popular filter is true
+    const movieTrackIds = await findTrackIdsByAlbumType("movie");
+    if (movieTrackIds.length === 0) {
+      return emptyPaginatedResponse(page, limit);
+    }
+    whereClause.id = { [Op.in]: movieTrackIds };
   }
 
   if (query.newOnHoopr === true) {
@@ -339,7 +349,14 @@ export const getAllTracksService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const rawData = await findAllTracks(page, limit, whereClause, ownerIds, excludeOwnerIds);
+  const rawData = await findAllTracks(
+    page,
+    limit,
+    whereClause,
+    ownerIds,
+    excludeOwnerIds,
+    query.popular === true,
+  );
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
     rawData.rows,
   );

@@ -23,4 +23,6 @@ export const enum ErrorMessages {
     NumberTemporarilyLocked = "Number temporarily locked due to too many failed attempts.",
     MobileAlreadyInUse = "This mobile number is already associated with another account.",
     UserAlreadyInvitedByAnotherBrand = "This email is already associated with another account and cannot be invited.",
+    AppProfileNotFound = "App user profile not found.",
+    ContentCategoriesLimitExceeded = "You can select a maximum of 3 content categories.",
 }
