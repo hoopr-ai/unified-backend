@@ -294,6 +294,31 @@ const emptyPaginatedResponse = (
   },
 });
 
+// Track codes to pin at the top for movie + popular + charbusters query (page 1 only)
+const CHARBUSTERS_PINNED_TRACK_CODES = [
+  "19622", "19623", "19624", "19625", "19626", "19627", "19628", "19629",
+];
+
+// Reorder tracks so pinned codes appear first (in specified order), then the rest
+const reorderWithPinnedTracks = (
+  tracks: TrackWithArtists[],
+  pinnedCodes: string[],
+): TrackWithArtists[] => {
+  const pinnedMap = new Map(pinnedCodes.map((code, idx) => [code, idx]));
+  const pinned: (TrackWithArtists | undefined)[] = new Array(pinnedCodes.length).fill(undefined);
+  const rest: TrackWithArtists[] = [];
+
+  for (const track of tracks) {
+    if (pinnedMap.has(track.trackCode)) {
+      pinned[pinnedMap.get(track.trackCode)!] = track;
+    } else {
+      rest.push(track);
+    }
+  }
+
+  return [...pinned.filter((t): t is TrackWithArtists => t !== undefined), ...rest];
+};
+
 export const getAllTracksService = async (
   query: GetAllTracksRequestData,
   userId?: number,
@@ -367,13 +392,30 @@ export const getAllTracksService = async (
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
     rawData.rows,
   );
-  return buildPaginatedResponse(
+  const response = buildPaginatedResponse(
     rawData,
     likedTrackCodes,
     ownerTypeMap,
     ownerSubTypeMap,
     ownerCodeMap,
   );
+
+  // Pin tracks 19622-19629 first on page 1 for:
+  // - movie=true + popular=true (any type, including no type)
+  // - popular=true + type includes 'movie'
+  const isCharbusters =
+    page === 1 &&
+    query.popular === true &&
+    (
+      query.movie === true ||
+      (Array.isArray(query.type) && query.type.some((t) => t.toLowerCase() === "movie"))
+    );
+
+  if (isCharbusters) {
+    response.tracks = reorderWithPinnedTracks(response.tracks, CHARBUSTERS_PINNED_TRACK_CODES);
+  }
+
+  return response;
 };
 
 // Sort tracks in the same order as the requested trackCodes
