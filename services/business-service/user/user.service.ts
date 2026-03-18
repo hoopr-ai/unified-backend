@@ -409,7 +409,14 @@ export const completeProfileService = async (
   }
 
   try {
-    await updateUserProfile(userId, firstName, lastName, mobile, countryCode, profileRole);
+    await updateUserProfile(
+      userId,
+      firstName,
+      lastName,
+      mobile,
+      countryCode,
+      profileRole,
+    );
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";

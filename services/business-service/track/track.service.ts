@@ -352,8 +352,9 @@ export const buildTracksResponseFromRawData = async (
   rawData: PaginatedRawTracks,
   likedTrackCodes?: Set<string>,
 ): Promise<PaginatedTracksResponseData> => {
-  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
-    await fetchOwnerMaps(rawData.rows);
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
+    rawData.rows,
+  );
   const albumMap = await fetchAlbumsForTracks(rawData.rows);
   return buildPaginatedResponse(
     rawData,
@@ -379,16 +380,24 @@ export const getAllTracksService = async (
   if (query.popular === true) {
     // Filter tracks with jioSaavanStream > 0 or null, sorting handled in persistence layer
     whereClause[Op.or as any] = [
-      { jioSaavanStream: { [Op.gt]: '0' } },
+      { jioSaavanStream: { [Op.gt]: "0" } },
       { jioSaavanStream: null },
     ];
 
-    // Only include tracks from "movie" albums when popular filter is true
+    // Filter by album type based on movie parameter
     const movieTrackIds = await findTrackIdsByAlbumType("movie");
-    if (movieTrackIds.length === 0) {
-      return emptyPaginatedResponse(page, limit);
+    if (query.movie === true) {
+      // Include only tracks from "movie" albums
+      if (movieTrackIds.length === 0) {
+        return emptyPaginatedResponse(page, limit);
+      }
+      whereClause.id = { [Op.in]: movieTrackIds };
+    } else if (query.movie === false) {
+      // Exclude tracks from "movie" albums
+      if (movieTrackIds.length > 0) {
+        whereClause.id = { [Op.notIn]: movieTrackIds };
+      }
     }
-    whereClause.id = { [Op.in]: movieTrackIds };
   }
 
   if (query.newOnHoopr === true) {

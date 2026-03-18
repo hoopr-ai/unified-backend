@@ -144,6 +144,7 @@ export interface GetAllTracksRequestData {
   popular?: boolean;
   trending?: boolean;
   newOnHoopr?: boolean;
+  movie?: boolean;
   type?: string[];
   ownerCode?: string[];
 }
