@@ -28,13 +28,15 @@ export const getAllTracks = catchAsync(
     const userId = req.session?.userId;
     const user = userId ? await findUserById(userId) : null;
     const brandId = user?.brandId;
+    const toBoolean = (val: unknown): boolean =>
+      val === true || val === "true";
     const query: GetAllTracksRequestData = {
       page: req.query.page as string,
       limit: req.query.limit as string,
-      trending: req.body.trending as boolean,
-      popular: req.body.popular as boolean,
-      newOnHoopr: req.body.newOnHoopr as boolean,
-      movie: req.body.movie as boolean,
+      trending: toBoolean(req.body.trending),
+      popular: toBoolean(req.body.popular),
+      newOnHoopr: toBoolean(req.body.newOnHoopr),
+      movie: toBoolean(req.body.movie),
       type: req.body.type as string[] | undefined,
       ownerCode: req.body.ownerCode as string[] | undefined,
     };
