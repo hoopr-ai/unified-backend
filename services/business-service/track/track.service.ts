@@ -400,16 +400,11 @@ export const getAllTracksService = async (
     ownerCodeMap,
   );
 
-  // Pin tracks 19622-19629 first on page 1 for:
-  // - movie=true + popular=true (any type, including no type)
-  // - popular=true + type includes 'movie'
+  // Pin tracks 19622-19629 first on page 1 when movie=true + popular=true
   const isCharbusters =
     page === 1 &&
-    query.popular === true &&
-    (
-      query.movie === true ||
-      (Array.isArray(query.type) && query.type.some((t) => t.toLowerCase() === "movie"))
-    );
+    query.movie === true &&
+    query.popular === true;
 
   if (isCharbusters) {
     response.tracks = reorderWithPinnedTracks(response.tracks, CHARBUSTERS_PINNED_TRACK_CODES);
