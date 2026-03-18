@@ -211,7 +211,6 @@ const transformTrackToDto = (
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
     ...(track.album && { album: track.album }),
-    jioSaavanStream: track.jioSaavanStream ?? null,
   };
 
   return dto;
