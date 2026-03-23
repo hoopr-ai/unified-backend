@@ -291,10 +291,10 @@ export class TrackModel extends Model<TrackModel> {
 
   @ForeignKey(() => CampaignModel)
   @Column({
-    type: DataType.UUID,
+    type: DataType.INTEGER,
     allowNull: true,
   })
-  campaignId?: string;
+  campaignId?: number;
 
   @BelongsTo(() => CampaignModel, "campaignId")
   campaign?: CampaignModel;
