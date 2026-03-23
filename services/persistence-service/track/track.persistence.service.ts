@@ -9,6 +9,7 @@ import {
 } from "../../dto-service/modules.export";
 import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel, SkuType } from "../sku/modules.export";
+import { CampaignModel, CampaignStatus } from "../campaign/modules.export";
 import { Op, Sequelize } from "sequelize";
 
 // Reusable include configuration for artist mappings
@@ -67,6 +68,20 @@ const getFilterMappingsInclude = () => [
   },
 ];
 
+// Helper function to mark expired campaigns as EXPIRED
+const markExpiredCampaigns = async (): Promise<void> => {
+  const now = new Date();
+  await CampaignModel.update(
+    { status: CampaignStatus.EXPIRED },
+    {
+      where: {
+        status: CampaignStatus.ACTIVE,
+        validTill: { [Op.lt]: now },
+      },
+    }
+  );
+};
+
 export const findAllTracks = async (
   page: number,
   limit: number,
@@ -74,6 +89,7 @@ export const findAllTracks = async (
   ownerIds?: string[],
   excludeOwnerIds?: string[],
   sortByPopular?: boolean,
+  campaignFilter?: boolean,
 ): Promise<PaginatedRawTracks> => {
 
   const offset = (page - 1) * limit;
@@ -105,6 +121,14 @@ export const findAllTracks = async (
     status: "ACTIVE"
   };
 
+  // If campaign filter is enabled, add campaignId not null condition
+  if (campaignFilter === true) {
+    // First, mark any expired campaigns
+    await markExpiredCampaigns();
+
+    finalWhereClause.campaignId = { [Op.ne]: null };
+  }
+
   if (conditions.length) {
     finalWhereClause[Op.and] = conditions;
   }
@@ -117,6 +141,24 @@ export const findAllTracks = async (
       ]
     : [['createdAt', 'DESC']];
 
+  // Build include array
+  const includeArray: any[] = [...getArtistInclude(), ...getStandardSkuInclude()];
+
+  // Add campaign include when filtering by campaign
+  if (campaignFilter === true) {
+    const now = new Date();
+    includeArray.push({
+      model: CampaignModel,
+      as: "campaign",
+      required: true,
+      where: {
+        status: CampaignStatus.ACTIVE,
+        validFrom: { [Op.lte]: now },
+        validTill: { [Op.gte]: now },
+      },
+    });
+  }
+
   const { count, rows } = await TrackModel.findAndCountAll({
     where: finalWhereClause,
     order: orderClause,
@@ -124,7 +166,7 @@ export const findAllTracks = async (
     offset,
     distinct: true,
     col: "id",
-    include: [...getArtistInclude(), ...getStandardSkuInclude()],
+    include: includeArray,
   });
 
   return {

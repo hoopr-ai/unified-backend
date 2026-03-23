@@ -11,3 +11,4 @@ export * from "./sku/modules.export";
 export * from "./owner/modules.export";
 export * from "./token/modules.export";
 export * from "./occasion/modules.export";
+export * from "./campaign/modules.export";

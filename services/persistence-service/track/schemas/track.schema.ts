@@ -8,10 +8,13 @@ import {
   UpdatedAt,
   Index,
   HasMany,
+  BelongsTo,
+  ForeignKey,
 } from "sequelize-typescript";
 import { TrackArtistMappingModel } from "../../artists/schemas/track-artist-mapping.schema";
 import { SkuModel } from "../../sku/schemas/sku.schema";
 import { TrackFilterMappingModel } from "../../filter/schemas/track-filter-mapping.schema";
+import { CampaignModel } from "../../campaign/schemas/campaign.schema";
 
 export enum TrackType {
   // Add your enum values based on public."enum_tracks_type"
@@ -54,6 +57,7 @@ export interface TrackDetails {
   partnerId?: string;
   bollywood?: string;
   jioSaavanStream?: string;
+  campaignId?: string;
 }
 
 @Table({
@@ -284,6 +288,16 @@ export class TrackModel extends Model<TrackModel> {
     allowNull: true,
   })
   jioSaavanStream?: string;
+
+  @ForeignKey(() => CampaignModel)
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  campaignId?: string;
+
+  @BelongsTo(() => CampaignModel, "campaignId")
+  campaign?: CampaignModel;
 
   @HasMany(() => TrackArtistMappingModel, "trackId")
   trackArtistMappings?: TrackArtistMappingModel[];

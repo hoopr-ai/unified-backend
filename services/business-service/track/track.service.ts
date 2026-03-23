@@ -460,6 +460,7 @@ export const getAllTracksService = async (
     ownerIds,
     excludeOwnerIds,
     query.popular === true,
+    query.campaign === true,
   );
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
     rawData.rows,

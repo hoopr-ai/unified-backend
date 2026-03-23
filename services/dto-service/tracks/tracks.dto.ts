@@ -147,6 +147,7 @@ export interface GetAllTracksRequestData {
   movie?: boolean;
   type?: string[];
   ownerCode?: string[];
+  campaign?: boolean;
 }
 
 export interface GetTracksByCodesQuery {

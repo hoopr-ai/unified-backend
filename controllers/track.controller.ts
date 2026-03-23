@@ -39,6 +39,7 @@ export const getAllTracks = catchAsync(
       movie: toBoolean(req.body.movie),
       type: req.body.type as string[] | undefined,
       ownerCode: req.body.ownerCode as string[] | undefined,
+      campaign: toBoolean(req.body.campaign),
     };
     const response = await getAllTracksService(query, userId, brandId);
     sendResponse(res, {
