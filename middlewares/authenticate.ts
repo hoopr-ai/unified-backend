@@ -43,6 +43,30 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   }
 };
 
+export const optionalAuthenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(" ")[1];
+    if (!token) {
+      return next();
+    }
+    jwt.verify(
+      token,
+      process.env.JWT_SECRET_KEY as string,
+      (err, decoded) => {
+        if (err || !decoded) {
+          return next();
+        }
+        req.session = decoded as SessionPayload;
+        req.sessionToken = token;
+        next();
+      }
+    );
+  } catch (error) {
+    next();
+  }
+};
+
 export interface AuthOptions {
   platforms?: string[];
   roles?: string[];
