@@ -413,6 +413,15 @@ export const getAllTracksService = async (
   return response;
 };
 
+// Build paginated response from raw paginated track data
+export const buildTracksResponseFromRawData = async (
+  rawData: PaginatedRawTracks,
+  likedTrackCodes?: Set<string>,
+): Promise<PaginatedTracksResponseData> => {
+  const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(rawData.rows);
+  return buildPaginatedResponse(rawData, likedTrackCodes, ownerTypeMap, ownerSubTypeMap, ownerCodeMap);
+};
+
 // Sort tracks in the same order as the requested trackCodes
 const sortTracksByRequestedOrder = (
   tracks: RawTrackWithMappings[],
