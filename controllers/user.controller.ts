@@ -13,6 +13,8 @@ import {
   removeInvitedUserService,
   sendOtpService,
   verifyOtpService,
+  sendEmailOtpService,
+  verifyEmailOtpService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -42,7 +44,11 @@ export const login = catchAsync(async (req: Request, res: Response) => {
     maxAge: response.expiresIn * 1000, // Convert seconds to milliseconds
   });
 
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.LoginSuccess });
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: ResponseMessages.LoginSuccess,
+  });
 });
 
 export const logout = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -52,103 +58,156 @@ export const logout = catchAsync(async (req: AuthRequest, res: Response) => {
   }
   // Clear the sessionId cookie
   res.clearCookie("sessionId");
-  sendResponse(res, { status: HttpStatusCode.OK, data: {}, message: ResponseMessages.LogoutSuccess });
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: {},
+    message: ResponseMessages.LogoutSuccess,
+  });
 });
 
-export const logoutAllSessions = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
-  if (userId) {
-    await logoutAllSessionsService(userId);
-  }
-  // Clear the sessionId cookie
-  res.clearCookie("sessionId");
-  sendResponse(res, { status: HttpStatusCode.OK, data: {}, message: ResponseMessages.LogoutAllSuccess });
-});
+export const logoutAllSessions = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (userId) {
+      await logoutAllSessionsService(userId);
+    }
+    // Clear the sessionId cookie
+    res.clearCookie("sessionId");
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: {},
+      message: ResponseMessages.LogoutAllSuccess,
+    });
+  },
+);
 
 export const resetPassword = catchAsync(async (req: Request, res: Response) => {
   const response = await userResetPasswordService(req.body);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.ResetPasswordSuccess });
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: ResponseMessages.ResetPasswordSuccess,
+  });
 });
 
 export const create = catchAsync(async (req: AuthRequest, res: Response) => {
   const createdBy = req.session?.userId;
   const response = await createUserService(req.body, createdBy);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.USerCreatedSuccess });
-});
-
-export const inviteUser = catchAsync(async (req: AuthRequest, res: Response) => {
-  const response = await inviteUserService(req.body, req.session);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserInvitedSuccess });
-});
-
-export const completeProfile = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
-  if (!userId) {
-    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
-  }
-  const response = await completeProfileService(req.body, userId);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.ProfileCompletedSuccess });
-});
-
-export const getUserActivities = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { findActivitiesByUserId } = await import("../services/persistence-service/exports");
-  const userId = req.session?.userId;
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 50;
-
-  if (!userId) {
-    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
-  }
-
-  const { rows, count } = await findActivitiesByUserId(userId, page, limit);
-
   sendResponse(res, {
     status: HttpStatusCode.OK,
-    data: {
-      activities: rows,
-      pagination: {
-        page,
-        limit,
-        totalItems: count,
-        totalPages: Math.ceil(count / limit),
-      },
-    },
-    message: ResponseMessages.GetUserActivitiesSuccess,
+    data: response,
+    message: ResponseMessages.USerCreatedSuccess,
   });
 });
 
-export const getUserSessions = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { getUserSessions: fetchUserSessions } = await import("../services/persistence-service/exports");
-  const { SessionStatus } = await import("../services/dto-service/modules.export");
-  const userId = req.session?.userId;
-  const status = req.query.status as string | undefined;
-  if (!userId) {
-    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
-  }
-  const sessions = await fetchUserSessions(
-    userId,
-    status === "active" ? SessionStatus.ACTIVE : undefined
-  );
-  sendResponse(res, { status: HttpStatusCode.OK, data: { sessions }, message: ResponseMessages.GetUserSessionsSuccess });
-});
+export const inviteUser = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const response = await inviteUserService(req.body, req.session);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.UserInvitedSuccess,
+    });
+  },
+);
 
-export const getProfile = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
-  if (!userId) {
-    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
-  }
-  const response = await getUserProfileService(userId);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetProfileSuccess });
-});
+export const completeProfile = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const response = await completeProfileService(req.body, userId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.ProfileCompletedSuccess,
+    });
+  },
+);
 
-export const updateProfile = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
-  if (!userId) {
-    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
-  }
-  const response = await updateUserProfileService(req.body, userId);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UpdateProfileSuccess });
-});
+export const getUserActivities = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const { findActivitiesByUserId } =
+      await import("../services/persistence-service/exports");
+    const userId = req.session?.userId;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+
+    const { rows, count } = await findActivitiesByUserId(userId, page, limit);
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: {
+        activities: rows,
+        pagination: {
+          page,
+          limit,
+          totalItems: count,
+          totalPages: Math.ceil(count / limit),
+        },
+      },
+      message: ResponseMessages.GetUserActivitiesSuccess,
+    });
+  },
+);
+
+export const getUserSessions = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const { getUserSessions: fetchUserSessions } =
+      await import("../services/persistence-service/exports");
+    const { SessionStatus } =
+      await import("../services/dto-service/modules.export");
+    const userId = req.session?.userId;
+    const status = req.query.status as string | undefined;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const sessions = await fetchUserSessions(
+      userId,
+      status === "active" ? SessionStatus.ACTIVE : undefined,
+    );
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: { sessions },
+      message: ResponseMessages.GetUserSessionsSuccess,
+    });
+  },
+);
+
+export const getProfile = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const response = await getUserProfileService(userId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.GetProfileSuccess,
+    });
+  },
+);
+
+export const updateProfile = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const response = await updateUserProfileService(req.body, userId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.UpdateProfileSuccess,
+    });
+  },
+);
 
 export const getUsers = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
@@ -158,25 +217,63 @@ export const getUsers = catchAsync(async (req: AuthRequest, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
   const response = await getUsersUnderAdminService(userId, page, limit);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetUsersSuccess });
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: ResponseMessages.GetUsersSuccess,
+  });
 });
 
-export const removeInvitedUser = catchAsync(async (req: AuthRequest, res: Response) => {
-  const adminUserId = req.session?.userId;
-  if (!adminUserId) {
-    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
-  }
-  const targetUserId = parseInt(req.params.userId as string);
-  const response = await removeInvitedUserService(targetUserId, adminUserId);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.UserRemovedSuccess });
-});
+export const removeInvitedUser = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const adminUserId = req.session?.userId;
+    if (!adminUserId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const targetUserId = parseInt(req.params.userId as string);
+    const response = await removeInvitedUserService(targetUserId, adminUserId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.UserRemovedSuccess,
+    });
+  },
+);
 
 export const sendOtp = catchAsync(async (req: Request, res: Response) => {
   const response = await sendOtpService(req.body);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.OtpSentSuccess });
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: ResponseMessages.OtpSentSuccess,
+  });
 });
 
 export const verifyOtp = catchAsync(async (req: Request, res: Response) => {
   const response = await verifyOtpService(req.body);
-  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.OtpVerifiedSuccess });
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: ResponseMessages.OtpVerifiedSuccess,
+  });
 });
+
+export const sendEmailOtp = catchAsync(async (req: Request, res: Response) => {
+  const response = await sendEmailOtpService(req.body);
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: ResponseMessages.OtpSentSuccess,
+  });
+});
+
+export const verifyEmailOtp = catchAsync(
+  async (req: Request, res: Response) => {
+    const response = await verifyEmailOtpService(req.body);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.OtpVerifiedSuccess,
+    });
+  },
+);

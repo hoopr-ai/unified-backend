@@ -24,11 +24,6 @@ export interface TokenBalanceItem {
   expiryDate?: Date;
 }
 
-export interface TokenBalanceResponse {
-  brandId: number;
-  tokens: TokenBalanceItem[];
-}
-
 export interface AssignTokensResponse {
   brandId: number;
   type: string;
@@ -45,16 +40,6 @@ export interface LicenseHistoryItem {
   tokenCost: number;
   licensedAt: Date;
   purchasedDate: Date;
-}
-
-export interface LicenseHistoryResponse {
-  licenses: LicenseHistoryItem[];
-  pagination: {
-    page: number;
-    limit: number;
-    totalItems: number;
-    totalPages: number;
-  };
 }
 
 export interface BrandLicenseVideoLink {

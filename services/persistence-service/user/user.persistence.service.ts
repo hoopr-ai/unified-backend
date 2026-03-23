@@ -106,10 +106,11 @@ export const updateUserProfile = async (
   firstName: string,
   lastName: string,
   mobile: string,
+  countryCode: string,
   profileRole: ProfileRole
 ): Promise<void> => {
   await UserModel.update(
-    { firstName, lastName, mobile, profileRole, status: UserStatus.ACTIVE, isProfileComplete: true },
+    { firstName, lastName, mobile, countryCode, profileRole, status: UserStatus.ACTIVE, isProfileComplete: true },
     { where: { id: userId, status: ACTIVE_OR_INVITED } }
   );
 }
@@ -120,6 +121,7 @@ export const updateUserProfilePartial = async (
     firstName?: string;
     lastName?: string;
     mobile?: string;
+    countryCode?: string;
     profileRole?: ProfileRole;
   }
 ): Promise<void> => {

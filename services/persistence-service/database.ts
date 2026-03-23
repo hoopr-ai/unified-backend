@@ -8,7 +8,7 @@ import {
   UserLikedTrackModel,
   UserStreamHistoryModel,
 } from "./user/modules.export";
-import { TrackModel } from "./track/modules.export";
+import { TrackModel, FeaturedTracksModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
 import { ArtistModel, TrackArtistMappingModel } from "./artists/modules.export";
@@ -27,7 +27,10 @@ import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
 import { TokenModel } from "./token/modules.export";
 import { OccasionModel } from "./occasion/modules.export";
-import { KeywordModel, TrackKeywordMappingModel } from "./keyword/modules.export";
+import {
+  KeywordModel,
+  TrackKeywordMappingModel,
+} from "./keyword/modules.export";
 
 config();
 
@@ -94,6 +97,7 @@ sequelize.addModels([
   VideoLinkModel,
   TokenModel,
   OccasionModel,
+  FeaturedTracksModel,
   KeywordModel,
   TrackKeywordMappingModel,
 ]);

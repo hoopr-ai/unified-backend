@@ -6,6 +6,13 @@ export interface ArtistInfoTrack {
   type: ArtistType[];
 }
 
+// Album info for track
+export interface AlbumInfo {
+  id: string;
+  title?: string;
+  type?: string;
+}
+
 // Filter info for track details
 export interface FilterInfo {
   id: string;

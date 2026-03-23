@@ -17,7 +17,8 @@ import likedTrackRoutes from "./routes/liked-track.route";
 import streamHistoryRoutes from "./routes/stream-history.route";
 import ownerRoutes from "./routes/owner.route";
 import occasionRoutes from "./routes/occasion.route";
-import mediaDownloadRoutes from "./routes/media-download.route";
+import albumRoutes from "./routes/album.route";
+import featuredTracksRoutes from "./routes/featured-tracks.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -48,7 +49,8 @@ app.use("/liked-tracks", likedTrackRoutes);
 app.use("/stream-history", streamHistoryRoutes);
 app.use("/owners", ownerRoutes);
 app.use("/occasions", occasionRoutes);
-app.use("/media-download", mediaDownloadRoutes);
+app.use("/albums", albumRoutes);
+app.use("/featured-tracks", featuredTracksRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);
@@ -58,26 +60,6 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3002;
 
-const server = app.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log("Server started on port", PORT);
 });
-
-// Graceful shutdown handling
-const gracefulShutdown = (signal: string) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-
-  server.close(() => {
-    console.log("HTTP server closed");
-    console.log("Graceful shutdown complete");
-    process.exit(0);
-  });
-
-  // Force shutdown after 30 seconds
-  setTimeout(() => {
-    console.error("Forced shutdown after timeout");
-    process.exit(1);
-  }, 30000);
-};
-
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
