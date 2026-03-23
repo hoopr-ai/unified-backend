@@ -40,4 +40,7 @@ export const enum ResponseMessages {
   GetAlbumsSuccess = "Albums fetched successfully",
   GetAlbumTracksSuccess = "Album tracks fetched successfully",
   AlbumNotFound = "Album not found",
+  GetFeaturedTracksSuccess = "Featured tracks fetched successfully",
+  FeaturedTracksNotFound = "Featured tracks not found for this platform",
+  UpsertFeaturedTracksSuccess = "Featured tracks updated successfully",
 }

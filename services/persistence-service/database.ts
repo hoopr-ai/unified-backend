@@ -8,7 +8,7 @@ import {
   UserLikedTrackModel,
   UserStreamHistoryModel,
 } from "./user/modules.export";
-import { TrackModel } from "./track/modules.export";
+import { TrackModel, FeaturedTracksModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
 import { ArtistModel, TrackArtistMappingModel } from "./artists/modules.export";
@@ -93,6 +93,7 @@ sequelize.addModels([
   VideoLinkModel,
   TokenModel,
   OccasionModel,
+  FeaturedTracksModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
