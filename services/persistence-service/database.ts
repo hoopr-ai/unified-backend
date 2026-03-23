@@ -27,6 +27,10 @@ import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
 import { TokenModel } from "./token/modules.export";
 import { OccasionModel } from "./occasion/modules.export";
+import {
+  KeywordModel,
+  TrackKeywordMappingModel,
+} from "./keyword/modules.export";
 
 config();
 
@@ -94,6 +98,8 @@ sequelize.addModels([
   TokenModel,
   OccasionModel,
   FeaturedTracksModel,
+  KeywordModel,
+  TrackKeywordMappingModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
