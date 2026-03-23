@@ -25,6 +25,7 @@ export interface UserDetails {
   lastName?: string;
   status: UserStatus;
   mobile?: string;
+  countryCode?: string;
   platform: string;
   profileRole?: string;
   createdBy?: number;
@@ -65,6 +66,13 @@ export class UserModel extends Model<UserModel, UserDetails> {
     allowNull: true,
   })
   mobile?: string;
+
+  @Index({ name: "unique_mobile_platform", unique: true })
+  @Column({
+    type: DataType.STRING(10),
+    allowNull: true,
+  })
+  countryCode?: string;
 
   @Index({ name: "unique_email_platform", unique: true })
   @Index({ name: "unique_mobile_platform", unique: true })
@@ -111,7 +119,7 @@ export class UserModel extends Model<UserModel, UserDetails> {
   profileRole?: string;
 
   get isProfileComplete(): boolean {
-    return !!(this.firstName && this.lastName && this.mobile && this.profileRole);
+    return !!(this.firstName && this.lastName && this.mobile && this.countryCode && this.profileRole);
   }
 
   @CreatedAt

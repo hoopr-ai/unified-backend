@@ -7,6 +7,8 @@ import type {
   CompleteProfileRequestData,
   SendOtpRequestData,
   VerifyOtpRequestData,
+  SendEmailOtpRequestData,
+  VerifyEmailOtpRequestData,
 } from "../services/dto-service/modules.export";
 import { Platform } from "../services/dto-service/constants/modules.export";
 import { ProfileRole } from "../services/dto-service/modules.export";
@@ -32,6 +34,7 @@ export const completeProfileRequestSchema =
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     mobile: Joi.string().min(8).max(15).required(),
+    countryCode: Joi.string().min(1).max(5).required(),
     profileRole: Joi.string()
       .valid(...profileRoleValues)
       .required(),
@@ -64,6 +67,7 @@ export const updateProfileRequestSchema = Joi.object({
   firstName: Joi.string().min(2).max(100).optional(),
   lastName: Joi.string().min(2).max(100).optional(),
   mobile: Joi.string().min(8).max(15).optional(),
+  countryCode: Joi.string().min(1).max(5).optional(),
   profileRole: Joi.string()
     .valid(...profileRoleValues)
     .optional(),
@@ -71,9 +75,21 @@ export const updateProfileRequestSchema = Joi.object({
 
 export const sendOtpRequestSchema = Joi.object<SendOtpRequestData>({
   mobile: Joi.string().pattern(/^\d+$/).min(8).max(15).required(),
+  countryCode: Joi.string().min(1).max(5).required(),
 });
 
 export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
   mobile: Joi.string().pattern(/^\d+$/).min(8).max(15).required(),
+  countryCode: Joi.string().min(1).max(5).required(),
   otp: Joi.string().length(6).pattern(/^\d+$/).required(),
 });
+
+export const sendEmailOtpRequestSchema = Joi.object<SendEmailOtpRequestData>({
+  email: Joi.string().email().required(),
+}).unknown(false);
+
+export const verifyEmailOtpRequestSchema =
+  Joi.object<VerifyEmailOtpRequestData>({
+    email: Joi.string().email().required(),
+    otp: Joi.string().length(6).pattern(/^\d+$/).required(),
+  }).unknown(false);

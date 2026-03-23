@@ -8,12 +8,13 @@ const ENABLEX_TEMPLATE_ID = Number(process.env.ENABLEX_TEMPLATE_ID);
 export const sendOtpSms = async (
   mobile: string,
   otp: string,
+  countryCode: string = "91",
 ): Promise<void> => {
   const payload = {
     type: "sms",
     data_coding: "plain",
     campaign_id: ENABLEX_CAMPAIGN_ID,
-    to: [`91${mobile}`],
+    to: [`${countryCode}${mobile}`],
     from: "HOOPRO",
     template_id: ENABLEX_TEMPLATE_ID,
     reference: "",
