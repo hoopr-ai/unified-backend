@@ -7,6 +7,7 @@ import {
   CreatedAt,
   UpdatedAt,
   Default,
+  AutoIncrement,
 } from "sequelize-typescript";
 
 export enum CampaignStatus {
@@ -28,7 +29,7 @@ export enum AmountType {
 }
 
 export interface CampaignDetails {
-  id: string;
+  id: number;
   status: string;
   validFrom: Date;
   validTill: Date;
@@ -48,11 +49,10 @@ export interface CampaignDetails {
 })
 export class CampaignModel extends Model<CampaignModel, CampaignDetails> {
   @PrimaryKey
-  @Column({
-    type: DataType.UUID,
-    defaultValue: DataType.UUIDV4,
-  })
-  id!: string;
+  @AutoIncrement
+  @Column(DataType.BIGINT)
+  id!: number;
+
 
   @Default(CampaignStatus.ACTIVE)
   @Column({
