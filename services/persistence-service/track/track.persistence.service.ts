@@ -68,7 +68,7 @@ const getFilterMappingsInclude = () => [
   },
 ];
 
-// Include campaign for listing APIs (only amount and amountType, when ACTIVE)
+// Include campaign for listing APIs (when ACTIVE)
 const getActiveCampaignInclude = () => {
   const now = new Date();
   return [
@@ -76,7 +76,7 @@ const getActiveCampaignInclude = () => {
       model: CampaignModel,
       as: "campaign",
       required: false,
-      attributes: ["amount", "amountType"],
+      attributes: ["amount", "amountType", "currentUsage", "totalUsage", "validFrom", "validTill"],
       where: {
         status: CampaignStatus.ACTIVE,
         validFrom: { [Op.lte]: now },
@@ -169,7 +169,7 @@ export const findAllTracks = async (
       model: CampaignModel,
       as: "campaign",
       required: true,
-      attributes: ["amount", "amountType"],
+      attributes: ["amount", "amountType", "currentUsage", "totalUsage", "validFrom", "validTill"],
       where: {
         status: CampaignStatus.ACTIVE,
         validFrom: { [Op.lte]: now },
@@ -472,7 +472,7 @@ export const findTracksByFilter = async (
               model: CampaignModel,
               as: "campaign",
               required: false,
-              attributes: ["amount", "amountType"],
+              attributes: ["amount", "amountType", "currentUsage", "totalUsage", "validFrom", "validTill"],
               where: {
                 status: CampaignStatus.ACTIVE,
                 validFrom: { [Op.lte]: now },

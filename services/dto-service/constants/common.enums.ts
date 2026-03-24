@@ -1,6 +1,7 @@
 
 export enum Platform {
     ENTERPRISE = 'ENTERPRISE',
+    SOUND_TRACKING_APP = 'SOUND_TRACKING_APP',
 }
 
 export enum HttpStatusCode {

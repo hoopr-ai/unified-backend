@@ -215,6 +215,10 @@ const transformTrackToDto = (
       campaign: {
         amount: track.campaign.amount,
         type: track.campaign.amountType,
+        currentUsage: track.campaign.currentUsage,
+        totalUsage: track.campaign.totalUsage,
+        validFrom: track.campaign.validFrom,
+        validTill: track.campaign.validTill,
       },
     }),
   };
