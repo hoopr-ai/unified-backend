@@ -9,6 +9,7 @@ import {
   GetAllTracksRequestData,
   GetTracksByCodesQuery,
   FilterInfo,
+  Platform,
 } from "../../dto-service/modules.export";
 import {
   findAllTracks,
@@ -381,6 +382,7 @@ export const getAllTracksService = async (
   query: GetAllTracksRequestData,
   userId?: number,
   brandId?: number,
+  platform?: Platform,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
@@ -439,6 +441,13 @@ export const getAllTracksService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
+  // Campaign data should only be fetched if:
+  // 1. User is NOT logged in (no token), OR
+  // 2. User IS logged in AND platform is SOUND_TRACKING_APP
+  const shouldFetchCampaign =
+    query.campaign === true &&
+    (!userId || platform === Platform.SOUND_TRACKING_APP);
+
   const rawData = await findAllTracks(
     page,
     limit,
@@ -446,7 +455,7 @@ export const getAllTracksService = async (
     ownerIds,
     excludeOwnerIds,
     query.popular === true,
-    query.campaign === true,
+    shouldFetchCampaign,
   );
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
     rawData.rows,

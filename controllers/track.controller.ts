@@ -26,6 +26,7 @@ interface AuthRequest extends Request {
 export const getAllTracks = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const userId = req.session?.userId;
+    const platform = req.session?.platform;
     const user = userId ? await findUserById(userId) : null;
     const brandId = user?.brandId;
     const toBoolean = (val: unknown): boolean =>
@@ -41,7 +42,7 @@ export const getAllTracks = catchAsync(
       ownerCode: req.body.ownerCode as string[] | undefined,
       campaign: toBoolean(req.body.campaign),
     };
-    const response = await getAllTracksService(query, userId, brandId);
+    const response = await getAllTracksService(query, userId, brandId, platform);
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: response,
