@@ -95,18 +95,16 @@ export const addTokensByType = async (
       },
       { where: { id: existingToken.id } }
     );
-    const updatedToken = await TokenModel.findByPk(existingToken.id);
-    return updatedToken!;
+    return (await TokenModel.findByPk(existingToken.id))!;
   } else {
     // Create new token record
-    const newToken = await TokenModel.create({
+    return await TokenModel.create({
       brandId,
       type,
       totalAssignedToken: amount,
       tokenBalance: amount,
       expiryDate,
     });
-    return newToken;
   }
 };
 

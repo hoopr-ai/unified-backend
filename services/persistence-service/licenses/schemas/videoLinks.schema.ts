@@ -12,6 +12,8 @@ import {
     Index,
 } from "sequelize-typescript";
 import { LicenseModel } from "./licenses.schema";
+import { UserModel } from "../../user/schemas/modules.export";
+import { BrandModel } from "../../brand/schemas/modules.export";
 
 export interface VideoLinkDetails {
     id?: number;
@@ -19,6 +21,8 @@ export interface VideoLinkDetails {
     status?: string;
     trackCode?: string;
     licenseId: number;
+    userId?: number;
+    brandId?: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -60,6 +64,22 @@ export class VideoLinkModel extends Model<VideoLinkModel, VideoLinkDetails> {
     })
     licenseId!: number;
 
+    @Index({ name: "idx_video_links_user_id" })
+    @ForeignKey(() => UserModel)
+    @Column({
+        type: DataType.BIGINT,
+        allowNull: true,
+    })
+    userId?: number;
+
+    @Index({ name: "idx_video_links_brand_id" })
+    @ForeignKey(() => BrandModel)
+    @Column({
+        type: DataType.BIGINT,
+        allowNull: true,
+    })
+    brandId?: number;
+
     @CreatedAt
     @Column({
         type: DataType.DATE,
@@ -74,4 +94,10 @@ export class VideoLinkModel extends Model<VideoLinkModel, VideoLinkDetails> {
 
     @BelongsTo(() => LicenseModel)
     license!: LicenseModel;
+
+    @BelongsTo(() => UserModel)
+    user?: UserModel;
+
+    @BelongsTo(() => BrandModel)
+    brand?: BrandModel;
 }
