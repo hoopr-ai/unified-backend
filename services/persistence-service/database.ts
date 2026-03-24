@@ -25,7 +25,7 @@ import {
 } from "./licenses/modules.export";
 import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
-import { TokenModel } from "./token/modules.export";
+import { TokenModel, TokenHistoryModel } from "./token/modules.export";
 import { OccasionModel } from "./occasion/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import {
@@ -97,6 +97,7 @@ sequelize.addModels([
   OwnerModel,
   VideoLinkModel,
   TokenModel,
+  TokenHistoryModel,
   OccasionModel,
   FeaturedTracksModel,
   KeywordModel,
@@ -177,6 +178,37 @@ const ENSURE_TRIGGERS_SQL = `
       CREATE TRIGGER trigger_notify_brand_profile_update
       AFTER UPDATE OF insta_username, industry ON brands_info
       FOR EACH ROW EXECUTE PROCEDURE notify_brand_profile_needed();
+    END IF;
+  END $$;
+
+  -- FUNCTION 5: Record token_history on every INSERT or UPDATE to tokens
+  CREATE OR REPLACE FUNCTION record_token_history()
+  RETURNS TRIGGER AS $$
+  DECLARE
+    assigned INT;
+  BEGIN
+    IF TG_OP = 'INSERT' THEN
+      assigned := NEW."totalAssignedToken";
+    ELSE
+      assigned := NEW."totalAssignedToken" - OLD."totalAssignedToken";
+    END IF;
+
+    IF assigned > 0 THEN
+      INSERT INTO token_history ("tokenId", "brandId", "type", "assignedAmount", "expiryDate", "createdAt", "updatedAt")
+      VALUES (NEW.id, NEW."brandId", NEW.type, assigned, NEW."expiryDate", NOW(), NOW());
+    END IF;
+
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql;
+
+  DO $$ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_record_token_history'
+    ) THEN
+      CREATE TRIGGER trigger_record_token_history
+      AFTER INSERT OR UPDATE OF "totalAssignedToken" ON tokens
+      FOR EACH ROW EXECUTE PROCEDURE record_token_history();
     END IF;
   END $$;
 `;
