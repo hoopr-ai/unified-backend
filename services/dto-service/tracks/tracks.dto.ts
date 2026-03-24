@@ -13,6 +13,12 @@ export interface AlbumInfo {
   type?: string;
 }
 
+// Campaign info for track (only amount and type)
+export interface CampaignInfo {
+  amount: number;
+  type: string;
+}
+
 // Filter info for track details
 export interface FilterInfo {
   id: string;
@@ -49,6 +55,7 @@ export interface TrackWithArtists {
   ownerSubType?: string;
   ownerCode?: string;
   album?: AlbumInfo; // Album details for the track
+  campaign?: CampaignInfo; // Campaign details (amount and type) if active
 }
 
 // Extended track details with both SKUs and filters
@@ -129,6 +136,7 @@ export interface RawTrackWithMappings {
   skus?: RawSkuData[];
   trackFilterMappings?: RawFilterMappingData[];
   album?: { id: string; title?: string; type?: string };
+  campaign?: { amount: number; amountType: string };
 }
 
 export interface PaginatedRawTracks {

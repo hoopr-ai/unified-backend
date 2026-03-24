@@ -68,6 +68,24 @@ const getFilterMappingsInclude = () => [
   },
 ];
 
+// Include campaign for listing APIs (only amount and amountType, when ACTIVE)
+const getActiveCampaignInclude = () => {
+  const now = new Date();
+  return [
+    {
+      model: CampaignModel,
+      as: "campaign",
+      required: false,
+      attributes: ["amount", "amountType"],
+      where: {
+        status: CampaignStatus.ACTIVE,
+        validFrom: { [Op.lte]: now },
+        validTill: { [Op.gte]: now },
+      },
+    },
+  ];
+};
+
 // Helper function to mark expired campaigns as EXPIRED
 const markExpiredCampaigns = async (): Promise<void> => {
   const now = new Date();
@@ -144,19 +162,23 @@ export const findAllTracks = async (
   // Build include array
   const includeArray: any[] = [...getArtistInclude(), ...getStandardSkuInclude()];
 
-  // Add campaign include when filtering by campaign
+  // Add campaign include when filtering by campaign (required) or always include active campaign details
   if (campaignFilter === true) {
     const now = new Date();
     includeArray.push({
       model: CampaignModel,
       as: "campaign",
       required: true,
+      attributes: ["amount", "amountType"],
       where: {
         status: CampaignStatus.ACTIVE,
         validFrom: { [Op.lte]: now },
         validTill: { [Op.gte]: now },
       },
     });
+  } else {
+    // Include active campaign details (optional) for all tracks with campaignId
+    includeArray.push(...getActiveCampaignInclude());
   }
 
   const { count, rows } = await TrackModel.findAndCountAll({
@@ -225,7 +247,7 @@ export const findTracksByTrackCodes = async (
     offset,
     distinct: true,
     col: "id",
-    include: [...getArtistInclude(), ...getStandardSkuInclude()],
+    include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
 
   return {
@@ -279,7 +301,7 @@ export const findAllTracksByIds = async (
   const rows = await TrackModel.findAll({
     where: whereClause,
     order: [["createdAt", "DESC"]],
-    include: [...getArtistInclude(), ...getStandardSkuInclude()],
+    include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
 
   return rows.map((track) => track.toJSON() as RawTrackWithMappings);
@@ -299,7 +321,7 @@ export const findTracksByIds = async (
     offset,
     distinct: true,
     col: "id",
-    include: [...getArtistInclude(), ...getStandardSkuInclude()],
+    include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
 
   return {
@@ -364,6 +386,7 @@ export const findTrackByTrackCode = async (
       ...getArtistInclude(),
       ...getAllSkusInclude(),
       ...getFilterMappingsInclude(),
+      ...getActiveCampaignInclude(),
     ],
   });
 
@@ -408,6 +431,7 @@ export const findTracksByFilter = async (
     trackWhere[Op.and] = conditions;
   }
 
+  const now = new Date();
   const { count, rows: mappings } =
     await TrackFilterMappingModel.findAndCountAll({
       where: {
@@ -443,6 +467,17 @@ export const findTracksByFilter = async (
               required: false,
               where: { skuType: SkuType.STANDARD, active: "Y" },
               attributes: ["token"],
+            },
+            {
+              model: CampaignModel,
+              as: "campaign",
+              required: false,
+              attributes: ["amount", "amountType"],
+              where: {
+                status: CampaignStatus.ACTIVE,
+                validFrom: { [Op.lte]: now },
+                validTill: { [Op.gte]: now },
+              },
             },
           ],
         },

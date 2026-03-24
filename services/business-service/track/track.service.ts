@@ -211,6 +211,12 @@ const transformTrackToDto = (
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
     ...(track.album && { album: track.album }),
+    ...(track.campaign && {
+      campaign: {
+        amount: track.campaign.amount,
+        type: track.campaign.amountType,
+      },
+    }),
   };
 
   return dto;
