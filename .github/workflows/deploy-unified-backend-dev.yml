@@ -62,29 +62,33 @@ jobs:
           ls -la
 
           echo "================================================="
-          echo "🔍 Looking for deployment.sh"
+          echo "📥 Pulling latest code..."
+          git pull origin staging
 
-          if [ ! -f "deployment.sh" ]; then
-            echo "❌ deployment.sh NOT FOUND"
-            echo "📄 Files in directory:"
-            ls -la
-            exit 1
+          echo "================================================="
+          echo "📦 Installing dependencies..."
+          npm ci --production=false
+
+          echo "================================================="
+          echo "🔨 Building project..."
+          npm run build
+
+          echo "================================================="
+          echo "🔄 Restarting PM2 process (unified-backend only)..."
+          APP_NAME="unified-backend"
+
+          # Only restart this specific app - DO NOT use pm2 kill or pm2 delete all
+          if pm2 describe "$APP_NAME" > /dev/null 2>&1; then
+            echo "✅ App found, reloading $APP_NAME..."
+            pm2 reload "$APP_NAME" --update-env
+          else
+            echo "⚠️ App not found, starting with ecosystem config..."
+            pm2 start ecosystem.config.cjs
           fi
 
-          echo "✅ deployment.sh EXISTS"
-
-          echo "================================================="
-          echo "📄 File details:"
-          ls -l deployment.sh
-          file deployment.sh || true
-
-          echo "================================================="
-          echo "🔧 Ensuring executable"
-          chmod +x deployment.sh
-
-          echo "================================================="
-          echo "▶️ Running deployment.sh"
-          ./deployment.sh
+          pm2 save
+          echo "📊 PM2 Status:"
+          pm2 status
 
           echo "================================================="
           echo "✅ Deployment finished successfully"
