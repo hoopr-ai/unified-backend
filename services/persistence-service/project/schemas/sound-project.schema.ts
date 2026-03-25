@@ -28,8 +28,6 @@ export interface SoundProjectDetails {
   name: string;
   platform: Platform;
   status?: ProjectStatus;
-  videoPath?: string;
-  trackCode?: string;
   campaignIds?: string[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -72,18 +70,6 @@ export class SoundProjectModel extends Model<SoundProjectModel, SoundProjectDeta
     allowNull: false,
   })
   status!: ProjectStatus;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  videoPath?: string;
-
-  @Column({
-    type: DataType.STRING(255),
-    allowNull: true,
-  })
-  trackCode?: string;
 
   @Column({
     type: DataType.JSON,
