@@ -10,6 +10,7 @@ import {
 import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel, SkuType } from "../sku/modules.export";
 import { CampaignModel, CampaignStatus } from "../campaign/modules.export";
+import { SoundProjectModel } from "../project/modules.export";
 import { Op, Sequelize } from "sequelize";
 
 // Reusable include configuration for artist mappings
@@ -495,4 +496,25 @@ export const findTracksByFilter = async (
     page,
     limit,
   };
+};
+
+// Get all campaign IDs used by a user from sound_projects
+export const getUserUsedCampaignIds = async (
+  userId: number,
+): Promise<Set<string>> => {
+  const projects = await SoundProjectModel.findAll({
+    where: { userId },
+    attributes: ["campaignIds"],
+  });
+
+  const usedCampaignIds = new Set<string>();
+  for (const project of projects) {
+    if (project.campaignIds && Array.isArray(project.campaignIds)) {
+      for (const campaignId of project.campaignIds) {
+        usedCampaignIds.add(campaignId);
+      }
+    }
+  }
+
+  return usedCampaignIds;
 };

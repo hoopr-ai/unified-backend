@@ -19,6 +19,7 @@ import {
   findAlbumByTrackId,
   findTrackIdsByAlbumType,
   getRestrictedOwnersByBrandId,
+  getUserUsedCampaignIds,
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
@@ -165,6 +166,7 @@ const transformTrackToDto = (
   ownerTypeMap?: Map<string, string>,
   ownerSubTypeMap?: Map<string, string>,
   ownerCodeMap?: Map<string, string>,
+  usedCampaignIds?: Set<string>,
 ): TrackWithArtists => {
   const primaryArtists: ArtistInfoTrack[] = [];
 
@@ -212,16 +214,18 @@ const transformTrackToDto = (
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
     ...(track.album && { album: track.album }),
-    ...(track.campaign && {
-      campaign: {
-        amount: track.campaign.amount,
-        type: track.campaign.amountType,
-        currentUsage: track.campaign.currentUsage,
-        totalUsage: track.campaign.totalUsage,
-        validFrom: track.campaign.validFrom,
-        validTill: track.campaign.validTill,
-      },
-    }),
+    // Only include campaign if it exists and hasn't been used by the user
+    ...(track.campaign &&
+      !(usedCampaignIds && track.campaignId && usedCampaignIds.has(String(track.campaignId))) && {
+        campaign: {
+          amount: track.campaign.amount,
+          type: track.campaign.amountType,
+          currentUsage: track.campaign.currentUsage,
+          totalUsage: track.campaign.totalUsage,
+          validFrom: track.campaign.validFrom,
+          validTill: track.campaign.validTill,
+        },
+      }),
   };
 
   return dto;
@@ -235,6 +239,7 @@ const buildPaginatedResponse = (
   ownerSubTypeMap?: Map<string, string>,
   ownerCodeMap?: Map<string, string>,
   albumMap?: Map<string, { id: string; title?: string; type?: string }>,
+  usedCampaignIds?: Set<string>,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
@@ -251,6 +256,7 @@ const buildPaginatedResponse = (
         ownerTypeMap,
         ownerSubTypeMap,
         ownerCodeMap,
+        usedCampaignIds,
       );
     }),
     pagination: {
@@ -445,8 +451,14 @@ export const getAllTracksService = async (
   // 1. User is NOT logged in (no token), OR
   // 2. User IS logged in AND platform is SOUND_TRACKING_APP
   const shouldFetchCampaign =
-    query.campaign === true &&
+    query.campaign === true ||
     (!userId || platform === Platform.SOUND_TRACKING_APP);
+
+  // Fetch user's used campaign IDs to filter them out from display
+  let usedCampaignIds: Set<string> | undefined;
+  if (shouldFetchCampaign && userId) {
+    usedCampaignIds = await getUserUsedCampaignIds(userId);
+  }
 
   const rawData = await findAllTracks(
     page,
@@ -468,6 +480,7 @@ export const getAllTracksService = async (
     ownerSubTypeMap,
     ownerCodeMap,
     albumMap,
+    usedCampaignIds,
   );
 
   return response;

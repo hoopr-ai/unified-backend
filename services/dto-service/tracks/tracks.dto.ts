@@ -132,6 +132,7 @@ export interface RawTrackWithMappings {
   trending: boolean | null;
   releaseDate?: Date | null;
   ownerId?: string[];
+  campaignId?: number;
   trackArtistMappings?: Array<{
     isPrimary?: boolean;
     role?: string;
