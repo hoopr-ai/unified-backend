@@ -5,7 +5,7 @@ import type { CorsOptions } from "cors";
  */
 export const getCorsOptions = (): CorsOptions => {
   const frontendUrl = process.env.FRONTEND_URL;
-  
+
   const allowedOrigins: string[] = [
     frontendUrl,
     "http://localhost:5173",
@@ -17,6 +17,9 @@ export const getCorsOptions = (): CorsOptions => {
     "http://127.0.0.1:5174",
     "https://dev-enterprise.hoopr.ai",
     "https://smash.hoopr.ai",
+    "https://api-staging-enterprise.hoopr.ai",
+    "https://api-smash.hoopr.ai",
+    "https://api-dev-soundtracking.hoopr.ai",
   ].filter((origin): origin is string => Boolean(origin));
 
   return {
