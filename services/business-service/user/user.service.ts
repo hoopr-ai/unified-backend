@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import { UniqueConstraintError } from "sequelize";
 import {
   type LoginUserRequestData,
@@ -6,6 +7,8 @@ import {
   type ResetPasswordRequestData,
   AccessTokenExpiry,
   AccessTokenExpiryInSeconds,
+  RefreshTokenExpiry,
+  RefreshTokenExpiryInSeconds,
   CreateAuthRequestData,
   UserStatus,
   UserRoles,
@@ -36,7 +39,9 @@ import {
   createSession,
   deactivateAllUserSessions,
   findActiveSessionByToken,
+  findActiveSessionByRefreshToken,
   updateSessionLastActivity,
+  updateSessionToken,
   deactivateSessionByToken,
   deleteSessionByToken,
   isSessionExpiredByInactivity,
@@ -67,6 +72,7 @@ const buildLoginResponse = (
   role: string | null,
   isProfileComplete: boolean,
   token: string,
+  refreshToken: string,
   sessionId: number,
   brandName?: string,
 ): LoginResponseWithSession => {
@@ -79,6 +85,7 @@ const buildLoginResponse = (
     isProfileComplete,
     expiresIn: AccessTokenExpiryInSeconds,
     token,
+    refreshToken,
     sessionId,
     brandId: user.brandId,
     brandName,
@@ -128,10 +135,16 @@ export const userLoginService = async (
     AccessTokenExpiry,
   );
 
+  const refreshToken = createJWTToken(
+    { userId: user.id },
+    RefreshTokenExpiry,
+  );
+
   // Create a new session for the user
   const sessionData: UserSessionDetails = {
     userId: user.id!,
     sessionToken: token,
+    refreshToken,
     ipAddress: metadata?.ipAddress,
     userAgent: metadata?.userAgent,
     deviceType: metadata?.deviceType,
@@ -139,7 +152,7 @@ export const userLoginService = async (
     os: metadata?.os,
     status: SessionStatus.ACTIVE,
     lastActivityAt: new Date(),
-    expiresAt: new Date(Date.now() + AccessTokenExpiryInSeconds * 1000),
+    expiresAt: new Date(Date.now() + RefreshTokenExpiryInSeconds * 1000),
     createdAt: new Date(),
   };
 
@@ -168,6 +181,7 @@ export const userLoginService = async (
     role,
     user.isProfileComplete ?? false,
     token,
+    refreshToken,
     session.id!,
     brandName,
   );
@@ -222,6 +236,50 @@ export const logoutAllSessionsService = async (
   userId: number,
 ): Promise<void> => {
   await deactivateAllUserSessions(userId);
+};
+
+export const refreshTokenService = async (
+  incomingRefreshToken: string,
+): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> => {
+  try {
+    jwt.verify(incomingRefreshToken, process.env.JWT_SECRET_KEY as string);
+  } catch {
+    throw new AppError("Invalid or expired refresh token", 401);
+  }
+
+  const session = await findActiveSessionByRefreshToken(incomingRefreshToken);
+  if (!session) {
+    throw new AppError("Session not found or already logged out", 401);
+  }
+
+  const user = await findUserById(session.userId);
+  if (
+    !user ||
+    (user.status !== UserStatus.ACTIVE && user.status !== UserStatus.INVITED)
+  ) {
+    await deactivateSessionByToken(session.sessionToken);
+    throw new AppError("User account is inactive", 401);
+  }
+
+  const role = await findUserRole(session.userId);
+
+  const newAccessToken = createJWTToken(
+    { userId: user.id, email: user.email, platform: user.platform, role },
+    AccessTokenExpiry,
+  );
+
+  const newRefreshToken = createJWTToken(
+    { userId: user.id },
+    RefreshTokenExpiry,
+  );
+
+  await updateSessionToken(session.id!, newAccessToken, newRefreshToken);
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+    expiresIn: AccessTokenExpiryInSeconds,
+  };
 };
 
 export const userResetPasswordService = async (
@@ -471,12 +529,18 @@ export const completeProfileService = async (
     AccessTokenExpiry,
   );
 
+  const refreshToken = createJWTToken(
+    { userId },
+    RefreshTokenExpiry,
+  );
+
   const sessionData: UserSessionDetails = {
     userId,
     sessionToken: token,
+    refreshToken,
     status: SessionStatus.ACTIVE,
     lastActivityAt: new Date(),
-    expiresAt: new Date(Date.now() + AccessTokenExpiryInSeconds * 1000),
+    expiresAt: new Date(Date.now() + RefreshTokenExpiryInSeconds * 1000),
     createdAt: new Date(),
   };
 
@@ -487,6 +551,7 @@ export const completeProfileService = async (
     role,
     true,
     token,
+    refreshToken,
     session.id!,
     brandName,
   );

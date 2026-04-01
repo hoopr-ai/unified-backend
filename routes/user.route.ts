@@ -4,6 +4,7 @@ import {
   logout,
   logoutAllSessions,
   resetPassword,
+  refreshToken,
   create,
   inviteUser,
   completeProfile,
@@ -47,6 +48,8 @@ router.post(
 );
 
 router.post("/login", validateRequest(loginRequestSchema), login);
+
+router.post("/refresh-token", refreshToken);
 
 router.post("/logout", authenticateWithSession, logout);
 

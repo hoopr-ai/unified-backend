@@ -62,12 +62,16 @@ export interface LoginResponse {
   isProfileComplete: boolean;
   expiresIn: number;
   token: string;
+  refreshToken: string;
   brandId?: number;
   brandName?: string;
 }
 
-export const AccessTokenExpiry = "24h";
-export const AccessTokenExpiryInSeconds = 24 * 60 * 60;
+export const AccessTokenExpiry = "15m";
+export const AccessTokenExpiryInSeconds = 15 * 60;
+
+export const RefreshTokenExpiry = "7d";
+export const RefreshTokenExpiryInSeconds = 7 * 24 * 60 * 60;
 
 export interface SessionMetadata {
   ipAddress?: string;

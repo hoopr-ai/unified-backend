@@ -6,6 +6,7 @@ import {
   inviteUserService,
   logoutUserService,
   logoutAllSessionsService,
+  refreshTokenService,
   completeProfileService,
   getUserProfileService,
   updateUserProfileService,
@@ -23,7 +24,7 @@ import {
   sendError,
 } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
-import { HttpStatusCode } from "../services/dto-service/modules.export";
+import { HttpStatusCode, RefreshTokenExpiryInSeconds } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
@@ -41,7 +42,15 @@ export const login = catchAsync(async (req: Request, res: Response) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
-    maxAge: response.expiresIn * 1000, // Convert seconds to milliseconds
+    maxAge: response.expiresIn * 1000,
+  });
+
+  // Set refreshToken in HTTP-only cookie
+  res.cookie("refreshToken", response.refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: RefreshTokenExpiryInSeconds * 1000,
   });
 
   sendResponse(res, {
@@ -56,12 +65,33 @@ export const logout = catchAsync(async (req: AuthRequest, res: Response) => {
   if (sessionToken) {
     await logoutUserService(sessionToken);
   }
-  // Clear the sessionId cookie
   res.clearCookie("sessionId");
+  res.clearCookie("refreshToken");
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: {},
     message: ResponseMessages.LogoutSuccess,
+  });
+});
+
+export const refreshToken = catchAsync(async (req: Request, res: Response) => {
+  const token = req.cookies?.refreshToken || req.body?.refreshToken;
+  if (!token) {
+    throw new Error("Refresh token required");
+  }
+  const result = await refreshTokenService(token);
+
+  res.cookie("refreshToken", result.refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: RefreshTokenExpiryInSeconds * 1000,
+  });
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: { accessToken: result.accessToken, expiresIn: result.expiresIn },
+    message: "Token refreshed successfully",
   });
 });
 
@@ -71,8 +101,8 @@ export const logoutAllSessions = catchAsync(
     if (userId) {
       await logoutAllSessionsService(userId);
     }
-    // Clear the sessionId cookie
     res.clearCookie("sessionId");
+    res.clearCookie("refreshToken");
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: {},
