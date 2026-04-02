@@ -67,8 +67,8 @@ export interface LoginResponse {
   brandName?: string;
 }
 
-export const AccessTokenExpiry = "2m";
-export const AccessTokenExpiryInSeconds = 2 * 60;
+export const AccessTokenExpiry = "3h";
+export const AccessTokenExpiryInSeconds = 3 * 60 * 60;
 
 export const RefreshTokenExpiry = "7d";
 export const RefreshTokenExpiryInSeconds = 7 * 24 * 60 * 60;
