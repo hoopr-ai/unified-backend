@@ -68,7 +68,7 @@ export interface LoginResponse {
 }
 
 export const AccessTokenExpiry = "15m";
-export const AccessTokenExpiryInSeconds = 15 * 60;
+export const AccessTokenExpiryInSeconds = 5 * 60;
 
 export const RefreshTokenExpiry = "7d";
 export const RefreshTokenExpiryInSeconds = 7 * 24 * 60 * 60;
