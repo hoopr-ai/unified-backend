@@ -20,21 +20,21 @@ router.get(
 // Admin only — create / update / delete
 router.post(
   "/",
-  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN] }),
+  authenticateWithSession,
   validateRequest(createFaqRequestSchema),
   createFaq
 );
 
 router.put(
   "/:id",
-  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN] }),
+  authenticateWithSession,
   validateRequest(updateFaqRequestSchema),
   updateFaq
 );
 
 router.delete(
   "/:id",
-  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN] }),
+  authenticateWithSession,
   deleteFaq
 );
 
