@@ -43,4 +43,9 @@ export const enum ResponseMessages {
   GetFeaturedTracksSuccess = "Featured tracks fetched successfully",
   FeaturedTracksNotFound = "Featured tracks not found for this platform",
   UpsertFeaturedTracksSuccess = "Featured tracks updated successfully",
+  GetFaqsSuccess = "FAQs fetched successfully",
+  FaqCreatedSuccess = "FAQ created successfully",
+  FaqUpdatedSuccess = "FAQ updated successfully",
+  FaqDeletedSuccess = "FAQ deleted successfully",
+  FaqNotFound = "FAQ not found",
 }
