@@ -2,22 +2,32 @@ import type {
   CreateFaqRequestData,
   UpdateFaqRequestData,
   GetFaqsQueryData,
+  ReorderFaqsRequestData,
 } from "../../dto-service/faq/faq.dto";
 import {
   saveFaq,
-  findFaqById,
-  findFaqsByPlatform,
+  findFaqByIdWithSection,
+  findFaqsByPlatformWithSections,
+  findFaqsBySectionId,
   updateFaqById,
   deleteFaqById,
+  bulkUpdateFaqOrders,
 } from "../../persistence-service/faq/modules.export";
 import { AppError } from "../../helper-service/modules.export";
 import { ResponseMessages } from "../../dto-service/constants/response-messages";
+import type { FaqModel } from "../../persistence-service/faq/schemas/faq.schema";
 import type { FaqDetails } from "../../persistence-service/faq/schemas/faq.schema";
 
 export interface FaqResponse {
   id: number;
-  platform: string;
-  section: string;
+  sectionId: number;
+  section: {
+    id: number;
+    platform: string;
+    name: string;
+    slug: string;
+    order: number;
+  } | null;
   question: string;
   answer: string;
   order: number;
@@ -25,10 +35,29 @@ export interface FaqResponse {
   createdAt: Date;
 }
 
-const toFaqResponse = (faq: FaqDetails): FaqResponse => ({
+const toFaqResponse = (faq: FaqModel): FaqResponse => ({
   id: faq.id!,
-  platform: faq.platform,
-  section: faq.section,
+  sectionId: faq.sectionId,
+  section: faq.section
+    ? {
+        id: faq.section.id,
+        platform: faq.section.platform,
+        name: faq.section.name,
+        slug: faq.section.slug,
+        order: faq.section.order,
+      }
+    : null,
+  question: faq.question,
+  answer: faq.answer,
+  order: faq.order,
+  isActive: faq.isActive,
+  createdAt: faq.createdAt,
+});
+
+const toSimpleFaqResponse = (faq: FaqDetails): Omit<FaqResponse, "section"> & { section: null } => ({
+  id: faq.id!,
+  sectionId: faq.sectionId,
+  section: null,
   question: faq.question,
   answer: faq.answer,
   order: faq.order,
@@ -39,7 +68,7 @@ const toFaqResponse = (faq: FaqDetails): FaqResponse => ({
 export const getFaqsService = async (
   query: GetFaqsQueryData
 ): Promise<FaqResponse[]> => {
-  const faqs = await findFaqsByPlatform(query.platform, query.section);
+  const faqs = await findFaqsByPlatformWithSections(query.platform, query.sectionId);
   return faqs.map(toFaqResponse);
 };
 
@@ -47,15 +76,19 @@ export const createFaqService = async (
   data: CreateFaqRequestData
 ): Promise<FaqResponse> => {
   const faq = await saveFaq({
-    platform: data.platform,
-    section: data.section,
+    sectionId: data.sectionId,
     question: data.question,
     answer: data.answer,
     order: data.order ?? 0,
     isActive: true,
     createdAt: new Date(),
   });
-  return toFaqResponse(faq);
+
+  const faqWithSection = await findFaqByIdWithSection(faq.id!);
+  if (!faqWithSection) {
+    return toSimpleFaqResponse(faq);
+  }
+  return toFaqResponse(faqWithSection);
 };
 
 export const updateFaqService = async (
@@ -66,7 +99,12 @@ export const updateFaqService = async (
   if (!updated) {
     throw new AppError(ResponseMessages.FaqNotFound, 404);
   }
-  return toFaqResponse(updated);
+
+  const faqWithSection = await findFaqByIdWithSection(id);
+  if (!faqWithSection) {
+    return toSimpleFaqResponse(updated);
+  }
+  return toFaqResponse(faqWithSection);
 };
 
 export const deleteFaqService = async (id: number): Promise<void> => {
@@ -74,4 +112,12 @@ export const deleteFaqService = async (id: number): Promise<void> => {
   if (!deleted) {
     throw new AppError(ResponseMessages.FaqNotFound, 404);
   }
+};
+
+export const reorderFaqsService = async (
+  data: ReorderFaqsRequestData
+): Promise<FaqResponse[]> => {
+  await bulkUpdateFaqOrders(data.faqOrders);
+  const faqs = await findFaqsBySectionId(data.sectionId);
+  return faqs.map(f => toSimpleFaqResponse(f));
 };

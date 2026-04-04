@@ -48,4 +48,11 @@ export const enum ResponseMessages {
   FaqUpdatedSuccess = "FAQ updated successfully",
   FaqDeletedSuccess = "FAQ deleted successfully",
   FaqNotFound = "FAQ not found",
+  FaqsReorderedSuccess = "FAQs reordered successfully",
+  GetFaqSectionsSuccess = "FAQ sections fetched successfully",
+  FaqSectionCreatedSuccess = "FAQ section created successfully",
+  FaqSectionUpdatedSuccess = "FAQ section updated successfully",
+  FaqSectionDeletedSuccess = "FAQ section deleted successfully",
+  FaqSectionNotFound = "FAQ section not found",
+  FaqSectionsReorderedSuccess = "FAQ sections reordered successfully",
 }

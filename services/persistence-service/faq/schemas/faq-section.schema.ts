@@ -7,16 +7,14 @@ import {
   AutoIncrement,
   CreatedAt,
   UpdatedAt,
-  ForeignKey,
-  BelongsTo,
 } from "sequelize-typescript";
-import { FaqSectionModel } from "./faq-section.schema";
+import type { Platform } from "../../../dto-service/constants/common.enums";
 
-export interface FaqDetails {
+export interface FaqSectionDetails {
   id?: number;
-  sectionId: number;
-  question: string;
-  answer: string;
+  platform: Platform;
+  name: string;
+  slug: string;
   order: number;
   isActive: boolean;
   createdAt: Date;
@@ -24,33 +22,32 @@ export interface FaqDetails {
 }
 
 @Table({
-  tableName: "faqs",
+  tableName: "faq_sections",
   timestamps: true,
 })
-export class FaqModel extends Model<FaqModel, FaqDetails> {
+export class FaqSectionModel extends Model<FaqSectionModel, FaqSectionDetails> {
   @PrimaryKey
   @AutoIncrement
   @Column(DataType.BIGINT)
   id!: number;
 
-  @ForeignKey(() => FaqSectionModel)
   @Column({
-    type: DataType.BIGINT,
+    type: DataType.STRING(100),
     allowNull: false,
   })
-  sectionId!: number;
+  platform!: Platform;
 
   @Column({
-    type: DataType.TEXT,
+    type: DataType.STRING(255),
     allowNull: false,
   })
-  question!: string;
+  name!: string;
 
   @Column({
-    type: DataType.TEXT,
+    type: DataType.STRING(255),
     allowNull: false,
   })
-  answer!: string;
+  slug!: string;
 
   @Column({
     type: DataType.INTEGER,
@@ -78,7 +75,4 @@ export class FaqModel extends Model<FaqModel, FaqDetails> {
     allowNull: true,
   })
   updatedAt?: Date;
-
-  @BelongsTo(() => FaqSectionModel)
-  section?: FaqSectionModel;
 }

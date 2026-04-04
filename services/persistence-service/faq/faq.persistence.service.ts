@@ -1,7 +1,4 @@
-import { Op } from "sequelize";
-import { FaqModel, type FaqDetails } from "./schemas/modules.export";
-import type { Platform } from "../../dto-service/constants/common.enums";
-import type { FaqSection } from "../../dto-service/faq/faq.enum";
+import { FaqModel, FaqSectionModel, type FaqDetails } from "./schemas/modules.export";
 
 export const saveFaq = async (faqDetails: FaqDetails): Promise<FaqDetails> => {
   const faq = await FaqModel.create(faqDetails);
@@ -13,17 +10,44 @@ export const findFaqById = async (id: number): Promise<FaqDetails | null> => {
   return faq;
 };
 
-export const findFaqsByPlatform = async (
-  platform: Platform,
-  section?: FaqSection
+export const findFaqByIdWithSection = async (
+  id: number
+): Promise<FaqModel | null> => {
+  const faq = await FaqModel.findByPk(id, {
+    include: [{ model: FaqSectionModel, as: "section" }],
+  });
+  return faq;
+};
+
+export const findFaqsBySectionId = async (
+  sectionId: number
 ): Promise<FaqDetails[]> => {
-  const where: Record<string, unknown> = { platform, isActive: true };
-  if (section) where.section = section;
+  const faqs = await FaqModel.findAll({
+    where: { sectionId, isActive: true },
+    order: [["order", "ASC"]],
+  });
+  return faqs;
+};
+
+export const findFaqsByPlatformWithSections = async (
+  platform: string,
+  sectionId?: number
+): Promise<FaqModel[]> => {
+  const sectionWhere: Record<string, unknown> = { platform, isActive: true };
+  if (sectionId) sectionWhere.id = sectionId;
 
   const faqs = await FaqModel.findAll({
-    where,
+    where: { isActive: true },
+    include: [
+      {
+        model: FaqSectionModel,
+        as: "section",
+        where: sectionWhere,
+        required: true,
+      },
+    ],
     order: [
-      ["section", "ASC"],
+      [{ model: FaqSectionModel, as: "section" }, "order", "ASC"],
       ["order", "ASC"],
     ],
   });
@@ -45,4 +69,14 @@ export const deleteFaqById = async (id: number): Promise<boolean> => {
   if (!faq) return false;
   await faq.update({ isActive: false });
   return true;
+};
+
+export const bulkUpdateFaqOrders = async (
+  faqOrders: { id: number; order: number }[]
+): Promise<void> => {
+  await Promise.all(
+    faqOrders.map(({ id, order }) =>
+      FaqModel.update({ order }, { where: { id } })
+    )
+  );
 };
