@@ -9,6 +9,7 @@ export enum UserRoles {
     MASTER = 'MASTER',
     ADMIN = 'ADMIN',
     USER = 'USER',
+    SALES = 'SALES',
 }
 
 export enum SessionStatus {

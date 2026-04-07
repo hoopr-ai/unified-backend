@@ -40,7 +40,7 @@ const router = Router();
 router.post(
   "/create",
   authenticateWithSession({
-    roles: [UserRoles.MASTER, UserRoles.ADMIN],
+    roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES],
     platforms: [Platform.ENTERPRISE, Platform.INTERNAL],
   }),
   validateRequest(createAuthRequestSchema),
