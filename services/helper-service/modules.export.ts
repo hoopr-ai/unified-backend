@@ -12,3 +12,4 @@ export * from './newrelic.helper';
 export * from './logger';
 export * from './redis.client';
 export * from './sms.service';
+export * from './reset-token.helper';

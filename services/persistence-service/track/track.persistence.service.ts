@@ -10,6 +10,7 @@ import {
 import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel, SkuType } from "../sku/modules.export";
 import { CampaignModel, CampaignStatus } from "../campaign/modules.export";
+import { SoundProjectModel } from "../project/modules.export";
 import { Op, Sequelize } from "sequelize";
 
 // Reusable include configuration for artist mappings
@@ -68,7 +69,7 @@ const getFilterMappingsInclude = () => [
   },
 ];
 
-// Include campaign for listing APIs (only amount and amountType, when ACTIVE)
+// Include campaign for listing APIs (when ACTIVE)
 const getActiveCampaignInclude = () => {
   const now = new Date();
   return [
@@ -76,7 +77,7 @@ const getActiveCampaignInclude = () => {
       model: CampaignModel,
       as: "campaign",
       required: false,
-      attributes: ["amount", "amountType"],
+      attributes: ["amount", "amountType", "currentUsage", "totalUsage", "validFrom", "validTill"],
       where: {
         status: CampaignStatus.ACTIVE,
         validFrom: { [Op.lte]: now },
@@ -169,7 +170,7 @@ export const findAllTracks = async (
       model: CampaignModel,
       as: "campaign",
       required: true,
-      attributes: ["amount", "amountType"],
+      attributes: ["amount", "amountType", "currentUsage", "totalUsage", "validFrom", "validTill"],
       where: {
         status: CampaignStatus.ACTIVE,
         validFrom: { [Op.lte]: now },
@@ -472,7 +473,7 @@ export const findTracksByFilter = async (
               model: CampaignModel,
               as: "campaign",
               required: false,
-              attributes: ["amount", "amountType"],
+              attributes: ["amount", "amountType", "currentUsage", "totalUsage", "validFrom", "validTill"],
               where: {
                 status: CampaignStatus.ACTIVE,
                 validFrom: { [Op.lte]: now },
@@ -495,4 +496,25 @@ export const findTracksByFilter = async (
     page,
     limit,
   };
+};
+
+// Get all campaign IDs used by a user from sound_projects
+export const getUserUsedCampaignIds = async (
+  userId: number,
+): Promise<Set<string>> => {
+  const projects = await SoundProjectModel.findAll({
+    where: { userId },
+    attributes: ["campaignIds"],
+  });
+
+  const usedCampaignIds = new Set<string>();
+  for (const project of projects) {
+    if (project.campaignIds && Array.isArray(project.campaignIds)) {
+      for (const campaignId of project.campaignIds) {
+        usedCampaignIds.add(campaignId);
+      }
+    }
+  }
+
+  return usedCampaignIds;
 };

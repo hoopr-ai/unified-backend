@@ -13,10 +13,14 @@ export interface AlbumInfo {
   type?: string;
 }
 
-// Campaign info for track (only amount and type)
+// Campaign info for track
 export interface CampaignInfo {
   amount: number;
   type: string;
+  currentUsage: number;
+  totalUsage: number;
+  validTill: Date;
+  validFrom: Date;
 }
 
 // Filter info for track details
@@ -128,6 +132,7 @@ export interface RawTrackWithMappings {
   trending: boolean | null;
   releaseDate?: Date | null;
   ownerId?: string[];
+  campaignId?: number;
   trackArtistMappings?: Array<{
     isPrimary?: boolean;
     role?: string;
@@ -136,7 +141,7 @@ export interface RawTrackWithMappings {
   skus?: RawSkuData[];
   trackFilterMappings?: RawFilterMappingData[];
   album?: { id: string; title?: string; type?: string };
-  campaign?: { amount: number; amountType: string };
+  campaign?: { amount: number; amountType: string; currentUsage: number; totalUsage: number; validFrom: Date; validTill: Date };
 }
 
 export interface PaginatedRawTracks {
@@ -164,3 +169,7 @@ export interface GetTracksByCodesQuery {
   limit?: string;
   type?: string[];
 }
+
+export const UNAUTHENTICATED_RESTRICTED_OWNER_NAMES: string[] = [
+  "YRF Music",
+];

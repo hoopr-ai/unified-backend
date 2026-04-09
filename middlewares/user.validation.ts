@@ -49,7 +49,10 @@ export const loginRequestSchema = Joi.object<LoginUserRequestData>({
 });
 
 export const resetPasswordRequestSchema = Joi.object<ResetPasswordRequestData>({
-  email: Joi.string().email().required(),
+  resetToken: Joi.string().required().messages({
+    "any.required": "Reset token is required. Please verify OTP first.",
+    "string.empty": "Reset token is required. Please verify OTP first.",
+  }),
   newPassword: Joi.string().min(6).required(),
   confirmPassword: Joi.string()
     .min(6)

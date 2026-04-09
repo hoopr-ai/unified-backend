@@ -4,6 +4,7 @@ import {
   logout,
   logoutAllSessions,
   resetPassword,
+  refreshToken,
   create,
   inviteUser,
   completeProfile,
@@ -39,8 +40,8 @@ const router = Router();
 router.post(
   "/create",
   authenticateWithSession({
-    roles: [UserRoles.MASTER],
-    platforms: [Platform.ENTERPRISE],
+    roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES],
+    platforms: [Platform.ENTERPRISE, Platform.INTERNAL],
   }),
   validateRequest(createAuthRequestSchema),
   create,
@@ -48,12 +49,20 @@ router.post(
 
 router.post("/login", validateRequest(loginRequestSchema), login);
 
+router.post("/refresh-token", refreshToken);
+
 router.post("/logout", authenticateWithSession, logout);
 
 router.post("/logout-all", authenticateWithSession, logoutAllSessions);
 
 router.post(
   "/reset-password",
+  validateRequest(resetPasswordRequestSchema),
+  resetPassword,
+);
+
+router.post(
+  "/forgot-password",
   validateRequest(resetPasswordRequestSchema),
   resetPassword,
 );

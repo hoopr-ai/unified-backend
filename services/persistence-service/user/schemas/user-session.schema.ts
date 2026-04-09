@@ -18,6 +18,7 @@ export interface UserSessionDetails {
   id?: number;
   userId: number;
   sessionToken: string;
+  refreshToken?: string;
   ipAddress?: string;
   userAgent?: string;
   deviceType?: string;
@@ -54,6 +55,13 @@ export class UserSessionModel extends Model<UserSessionModel, UserSessionDetails
     allowNull: false,
   })
   sessionToken!: string;
+
+  @Index({ name: "idx_session_refresh_token", unique: true })
+  @Column({
+    type: DataType.STRING(500),
+    allowNull: true,
+  })
+  refreshToken?: string;
 
   @Column({
     type: DataType.STRING(100),

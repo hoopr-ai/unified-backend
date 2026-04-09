@@ -24,6 +24,29 @@ export const findActiveSessionByToken = async (
   return session;
 };
 
+export const findActiveSessionByRefreshToken = async (
+  refreshToken: string
+): Promise<UserSessionDetails | null> => {
+  const session = await UserSessionModel.findOne({
+    where: {
+      refreshToken,
+      status: SessionStatus.ACTIVE,
+    },
+  });
+  return session;
+};
+
+export const updateSessionToken = async (
+  sessionId: number,
+  sessionToken: string,
+  refreshToken: string
+): Promise<void> => {
+  await UserSessionModel.update(
+    { sessionToken, refreshToken, lastActivityAt: new Date() },
+    { where: { id: sessionId } }
+  );
+};
+
 export const findActiveSessionByUserId = async (
   userId: number
 ): Promise<UserSessionDetails | null> => {

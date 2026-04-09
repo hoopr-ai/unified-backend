@@ -13,14 +13,14 @@ const router = Router();
 
 router.post(
   "/create",
-  authenticateWithSession({ roles: [UserRoles.MASTER], platforms: [Platform.ENTERPRISE] }),
+  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES], platforms: [Platform.ENTERPRISE, Platform.INTERNAL] }),
   validateRequest(createOrganizationRequestSchema),
   createOrganization
 );
 
 router.post(
   "/brand/create",
-  authenticateWithSession({ roles: [UserRoles.MASTER], platforms: [Platform.ENTERPRISE] }),
+  authenticateWithSession({ roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES], platforms: [Platform.ENTERPRISE, Platform.INTERNAL] }),
   validateRequest(createBrandRequestSchema),
   createBrand
 );

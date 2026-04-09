@@ -70,6 +70,11 @@ export const sendOtpService = async (
   return { message: "OTP sent successfully" };
 };
 
+/**
+ * Verifies SMS OTP for mobile number verification.
+ * Note: For password reset, use email OTP (verifyEmailOtpService) which returns a resetToken.
+ * SMS OTP is primarily used for phone number verification during signup/profile completion.
+ */
 export const verifyOtpService = async (
   data: VerifyOtpRequestData,
 ): Promise<{ message: string; verified: boolean }> => {

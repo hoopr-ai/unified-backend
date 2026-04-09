@@ -28,6 +28,7 @@ import { OwnerModel } from "./owner/modules.export";
 import { TokenModel, TokenHistoryModel } from "./token/modules.export";
 import { OccasionModel } from "./occasion/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
+import { FaqModel, FaqSectionModel } from "./faq/modules.export";
 import {
   KeywordModel,
   TrackKeywordMappingModel,
@@ -103,6 +104,8 @@ sequelize.addModels([
   KeywordModel,
   TrackKeywordMappingModel,
   CampaignModel,
+  FaqSectionModel,
+  FaqModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything

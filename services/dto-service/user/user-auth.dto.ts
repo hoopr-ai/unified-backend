@@ -47,10 +47,22 @@ export interface LoginUserRequestData {
 }
 
 export interface ResetPasswordRequestData {
+  resetToken: string;
+  newPassword: string;
+  confirmPassword: string;
+  platform: Platform;
+}
+
+// Legacy interface for reference (deprecated)
+export interface LegacyResetPasswordRequestData {
   email: string;
   newPassword: string;
   confirmPassword: string;
   platform: Platform;
+}
+
+export interface VerifyOtpResponse {
+  resetToken: string;
 }
 
 export interface LoginResponse {
@@ -62,12 +74,16 @@ export interface LoginResponse {
   isProfileComplete: boolean;
   expiresIn: number;
   token: string;
+  refreshToken: string;
   brandId?: number;
   brandName?: string;
 }
 
-export const AccessTokenExpiry = "24h";
-export const AccessTokenExpiryInSeconds = 24 * 60 * 60;
+export const AccessTokenExpiry = "3h";
+export const AccessTokenExpiryInSeconds = 3 * 60 * 60;
+
+export const RefreshTokenExpiry = "30d";
+export const RefreshTokenExpiryInSeconds = 30 * 24 * 60 * 60;
 
 export interface SessionMetadata {
   ipAddress?: string;
