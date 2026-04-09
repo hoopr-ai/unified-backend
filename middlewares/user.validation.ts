@@ -61,6 +61,9 @@ export const resetPasswordRequestSchema = Joi.object<ResetPasswordRequestData>({
     .messages({
       "any.only": "Passwords do not match",
     }),
+  platform: Joi.string()
+    .valid(...platformValues)
+    .required(),
 });
 
 export const updateProfileRequestSchema = Joi.object({

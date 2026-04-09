@@ -50,6 +50,7 @@ export interface ResetPasswordRequestData {
   resetToken: string;
   newPassword: string;
   confirmPassword: string;
+  platform: Platform;
 }
 
 // Legacy interface for reference (deprecated)

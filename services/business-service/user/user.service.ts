@@ -286,35 +286,27 @@ export const refreshTokenService = async (
 export const userResetPasswordService = async (
   data: ResetPasswordRequestData,
 ): Promise<void> => {
-  const { resetToken, newPassword } = data;
+  const { resetToken, newPassword, platform } = data;
 
   // Verify reset token and extract email (also marks token as used)
   const email = await verifyResetToken(resetToken);
 
-  // Find user across all platforms (since reset token doesn't contain platform)
-  // We need to update password for all platforms where this email exists
-  const platforms = [Platform.ENTERPRISE, Platform.INTERNAL];
-  let userFound = false;
-
-  for (const platform of platforms) {
-    const user = await findActiveUserSilently(email, platform);
-    if (user) {
-      userFound = true;
-      const isSameAsCurrentPassword = await bcrypt.compare(
-        newPassword,
-        user.password,
-      );
-      if (isSameAsCurrentPassword) {
-        throw new AppError(ErrorMessages.SamePassword, 400);
-      }
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-      await updateUserPassword(email, platform, hashedNewPassword);
-    }
-  }
-
-  if (!userFound) {
+  // Find user for the specific platform provided by FE
+  const user = await findActiveUserSilently(email, platform);
+  if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
+
+  const isSameAsCurrentPassword = await bcrypt.compare(
+    newPassword,
+    user.password,
+  );
+  if (isSameAsCurrentPassword) {
+    throw new AppError(ErrorMessages.SamePassword, 400);
+  }
+
+  const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+  await updateUserPassword(email, platform, hashedNewPassword);
 };
 
 const createUserRoleDetails = (userId: number, role: UserRoles) => {
