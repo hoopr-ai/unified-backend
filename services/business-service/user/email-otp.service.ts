@@ -1,7 +1,8 @@
-import { AppError, redisClient } from "../../helper-service/modules.export";
+import { AppError, redisClient, generateResetToken } from "../../helper-service/modules.export";
 import { ErrorMessages } from "../../dto-service/constants/modules.export";
 import { sendOtpEmail } from "../../helper-service/email.service";
 import { logger } from "../../helper-service/logger";
+import type { VerifyOtpResponse } from "../../dto-service/modules.export";
 
 // OTP Configuration
 const OTP_LENGTH = 6;
@@ -97,7 +98,7 @@ export const sendEmailOtpService = async (
 
 export const verifyEmailOtpService = async (
   data: VerifyEmailOtpData,
-): Promise<Record<string, never>> => {
+): Promise<VerifyOtpResponse> => {
   const { email, otp } = data;
   const lowerEmail = email.toLowerCase().trim();
 
@@ -128,8 +129,11 @@ export const verifyEmailOtpService = async (
     await redisClient.del(KEY_VERIFY_ATTEMPTS(lowerEmail));
     await redisClient.del(KEY_RESEND_ATTEMPTS(lowerEmail));
 
-    logger.info("Email OTP verified", { email: lowerEmail });
-    return {};
+    // Generate reset token for password reset
+    const resetToken = generateResetToken(lowerEmail);
+
+    logger.info("Email OTP verified, reset token generated", { email: lowerEmail });
+    return { resetToken };
   }
 
   // Wrong OTP — increment attempts

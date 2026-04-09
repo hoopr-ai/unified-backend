@@ -47,10 +47,21 @@ export interface LoginUserRequestData {
 }
 
 export interface ResetPasswordRequestData {
+  resetToken: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+// Legacy interface for reference (deprecated)
+export interface LegacyResetPasswordRequestData {
   email: string;
   newPassword: string;
   confirmPassword: string;
   platform: Platform;
+}
+
+export interface VerifyOtpResponse {
+  resetToken: string;
 }
 
 export interface LoginResponse {
