@@ -56,6 +56,7 @@ import {
   sendInviteEmail,
   sendFirstLoginWelcomeEmail,
   verifyResetToken,
+  markResetTokenAsUsed,
 } from "../../helper-service/modules.export";
 import {
   ErrorMessages,
@@ -288,8 +289,8 @@ export const userResetPasswordService = async (
 ): Promise<void> => {
   const { resetToken, newPassword, platform } = data;
 
-  // Verify reset token and extract email (also marks token as used)
-  const email = await verifyResetToken(resetToken);
+  // Verify reset token and extract email (does NOT mark token as used yet)
+  const { email, tokenId } = await verifyResetToken(resetToken);
 
   // Find user for the specific platform provided by FE
   const user = await findActiveUserSilently(email, platform);
@@ -307,6 +308,9 @@ export const userResetPasswordService = async (
 
   const hashedNewPassword = await bcrypt.hash(newPassword, 10);
   await updateUserPassword(email, platform, hashedNewPassword);
+
+  // Mark token as used only after password is successfully updated
+  await markResetTokenAsUsed(tokenId);
 };
 
 const createUserRoleDetails = (userId: number, role: UserRoles) => {

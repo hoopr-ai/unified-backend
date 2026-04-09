@@ -35,12 +35,17 @@ export const generateResetToken = (email: string): string => {
   return token;
 };
 
+export interface VerifyResetTokenResult {
+  email: string;
+  tokenId: string;
+}
+
 /**
  * Verifies the reset token and ensures it hasn't been used before.
- * Returns the email from the token payload.
- * Marks the token as used after successful verification.
+ * Returns the email and tokenId from the token payload.
+ * Does NOT mark the token as used - call markResetTokenAsUsed after successful operation.
  */
-export const verifyResetToken = async (token: string): Promise<string> => {
+export const verifyResetToken = async (token: string): Promise<VerifyResetTokenResult> => {
   let payload: ResetTokenPayload;
 
   try {
@@ -69,13 +74,18 @@ export const verifyResetToken = async (token: string): Promise<string> => {
     throw new AppError("Reset token has already been used.", 401);
   }
 
-  // Mark token as used (store for the remaining TTL of the token to prevent replay)
+  return { email: payload.email, tokenId: payload.tokenId };
+};
+
+/**
+ * Marks the reset token as used to prevent replay attacks.
+ * Call this ONLY after the password reset operation succeeds.
+ */
+export const markResetTokenAsUsed = async (tokenId: string): Promise<void> => {
   await redisClient.set(
-    KEY_USED_RESET_TOKEN(payload.tokenId),
+    KEY_USED_RESET_TOKEN(tokenId),
     "1",
     "EX",
     RESET_TOKEN_EXPIRY_SECONDS
   );
-
-  return payload.email;
 };
