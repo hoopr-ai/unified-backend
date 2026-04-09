@@ -169,3 +169,7 @@ export interface GetTracksByCodesQuery {
   limit?: string;
   type?: string[];
 }
+
+export const UNAUTHENTICATED_RESTRICTED_OWNER_NAMES: string[] = [
+  "YRF Music",
+];

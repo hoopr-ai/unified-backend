@@ -10,6 +10,7 @@ import {
   GetTracksByCodesQuery,
   FilterInfo,
   Platform,
+  UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
 } from "../../dto-service/modules.export";
 import {
   findAllTracks,
@@ -20,6 +21,7 @@ import {
   findTrackIdsByAlbumType,
   getRestrictedOwnersByBrandId,
   getUserUsedCampaignIds,
+  getOwnerIdsByNames,
   type PaginatedRawFilterTracks,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
@@ -435,10 +437,14 @@ export const getAllTracksService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners for the brand
-  const excludeOwnerIds = brandId
-    ? await getRestrictedOwnersByBrandId(brandId)
-    : undefined;
+  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  let excludeOwnerIds: string[] | undefined;
+  if (brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -526,10 +532,14 @@ export const getTracksByCodesService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners for the brand
-  const excludeOwnerIds = brandId
-    ? await getRestrictedOwnersByBrandId(brandId)
-    : undefined;
+  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  let excludeOwnerIds: string[] | undefined;
+  if (brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -638,10 +648,14 @@ export const getTracksByFilterService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners for the brand
-  const excludeOwnerIds = brandId
-    ? await getRestrictedOwnersByBrandId(brandId)
-    : undefined;
+  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  let excludeOwnerIds: string[] | undefined;
+  if (brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -779,10 +793,14 @@ export const getTrackDetailsByCodeService = async (
   userId?: number,
   brandId?: number,
 ): Promise<TrackDetailsWithSkus | null> => {
-  // Get restricted owners for the brand
-  const excludeOwnerIds = brandId
-    ? await getRestrictedOwnersByBrandId(brandId)
-    : undefined;
+  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  let excludeOwnerIds: string[] | undefined;
+  if (brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
 
   const track = await findTrackByTrackCode(trackCode, excludeOwnerIds);
 

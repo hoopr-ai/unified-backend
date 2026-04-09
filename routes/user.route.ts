@@ -62,6 +62,12 @@ router.post(
 );
 
 router.post(
+  "/forgot-password",
+  validateRequest(resetPasswordRequestSchema),
+  resetPassword,
+);
+
+router.post(
   "/invite",
   authenticateWithSession({
     roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.USER],
