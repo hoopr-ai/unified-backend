@@ -42,3 +42,13 @@ export const getRestrictedOwnersByBrandId = async (
   const restrictedOwners = brand?.restrictedOwners;
   return Array.isArray(restrictedOwners) ? restrictedOwners : [];
 };
+
+export const getRestrictedTrackTiersByBrandId = async (
+  brandId: number
+): Promise<string[]> => {
+  const brand = await BrandModel.findByPk(brandId, {
+    attributes: ["restrictedTrackTiers"],
+  });
+  const restrictedTrackTiers = brand?.restrictedTrackTiers;
+  return Array.isArray(restrictedTrackTiers) ? restrictedTrackTiers : [];
+};

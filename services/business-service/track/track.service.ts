@@ -20,6 +20,7 @@ import {
   findAlbumByTrackId,
   findTrackIdsByAlbumType,
   getRestrictedOwnersByBrandId,
+  getRestrictedTrackTiersByBrandId,
   getUserUsedCampaignIds,
   getOwnerIdsByNames,
   type PaginatedRawFilterTracks,
@@ -437,10 +438,14 @@ export const getAllTracksService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
   let excludeOwnerIds: string[] | undefined;
+  let excludeTiers: string[] | undefined;
   if (brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+    [excludeOwnerIds, excludeTiers] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getRestrictedTrackTiersByBrandId(brandId),
+    ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
@@ -474,6 +479,7 @@ export const getAllTracksService = async (
     excludeOwnerIds,
     query.popular === true,
     shouldFetchCampaign,
+    excludeTiers,
   );
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } = await fetchOwnerMaps(
     rawData.rows,
@@ -532,10 +538,14 @@ export const getTracksByCodesService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
   let excludeOwnerIds: string[] | undefined;
+  let excludeTiers: string[] | undefined;
   if (brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+    [excludeOwnerIds, excludeTiers] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getRestrictedTrackTiersByBrandId(brandId),
+    ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
@@ -554,6 +564,7 @@ export const getTracksByCodesService = async (
     limit,
     ownerIds,
     excludeOwnerIds,
+    excludeTiers,
   );
 
   // Sort tracks in the order of requested trackCodes
@@ -648,10 +659,14 @@ export const getTracksByFilterService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
   let excludeOwnerIds: string[] | undefined;
+  let excludeTiers: string[] | undefined;
   if (brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+    [excludeOwnerIds, excludeTiers] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getRestrictedTrackTiersByBrandId(brandId),
+    ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
@@ -670,6 +685,7 @@ export const getTracksByFilterService = async (
     limit,
     ownerIds,
     excludeOwnerIds,
+    excludeTiers,
   });
 
   const filterTracks = rawData.rows.filter((m) => m.track).map((m) => m.track!);
@@ -793,16 +809,20 @@ export const getTrackDetailsByCodeService = async (
   userId?: number,
   brandId?: number,
 ): Promise<TrackDetailsWithSkus | null> => {
-  // Get restricted owners for the brand, or use default blacklist for unauthenticated users
+  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
   let excludeOwnerIds: string[] | undefined;
+  let excludeTiers: string[] | undefined;
   if (brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+    [excludeOwnerIds, excludeTiers] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getRestrictedTrackTiersByBrandId(brandId),
+    ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
-  const track = await findTrackByTrackCode(trackCode, excludeOwnerIds);
+  const track = await findTrackByTrackCode(trackCode, excludeOwnerIds, excludeTiers);
 
   if (!track) {
     return null;
