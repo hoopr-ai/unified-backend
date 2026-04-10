@@ -17,4 +17,5 @@ export const createBrandRequestSchema = Joi.object<CreateBrandRequestData>({
   name: Joi.string().min(2).max(255).required(),
   description: Joi.string().max(1000).optional(),
   status: Joi.string().valid(...brandStatusValues).optional(),
+  insta_username: Joi.string().max(255).optional(),
 });

@@ -11,6 +11,7 @@ import {
   saveBrand,
   findBrandByNameAndOrganization,
 } from "../../persistence-service/exports";
+import { sequelize } from "../../persistence-service/database";
 import { AppError } from "../../helper-service/modules.export";
 import { ResponseMessages } from "../../dto-service/constants/response-messages";
 
@@ -63,7 +64,7 @@ export const createBrandService = async (
   data: CreateBrandRequestData,
   createdBy?: number
 ): Promise<BrandResponse> => {
-  const { organizationId, name, description, status } = data;
+  const { organizationId, name, description, status, insta_username } = data;
 
   const organization = await findOrganizationById(organizationId);
   if (!organization) {
@@ -83,6 +84,17 @@ export const createBrandService = async (
     createdBy,
     createdAt: new Date(),
   });
+
+  // Update brands_info with insta_username if provided
+  // The trigger automatically creates the brands_info row when brand is created
+  if (insta_username) {
+    await sequelize.query(
+      `UPDATE brands_info SET insta_username = :insta_username WHERE brand_id = :brandId`,
+      {
+        replacements: { insta_username, brandId: brand.id },
+      }
+    );
+  }
 
   return {
     id: brand.id!,

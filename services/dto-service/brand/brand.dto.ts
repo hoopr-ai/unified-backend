@@ -5,6 +5,7 @@ export interface CreateBrandRequestData {
   name: string;
   description?: string;
   status?: BrandStatus;
+  insta_username?: string;
 }
 
 export interface CreateBrandResponseData {
