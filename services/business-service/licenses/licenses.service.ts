@@ -622,7 +622,7 @@ export interface TokenDetailsItem {
   tokensUsed: number;
   tokenBalance: number;
   type: string;
-  ownerWiseBreakdown: OwnerWiseTokenBreakdown[];
+  ownerWiseBreakdown?: OwnerWiseTokenBreakdown[];
 }
 
 export interface TokenDetailsResponse {
@@ -690,13 +690,16 @@ export const getTokenDetailsService = async (
   const mergedTokens = allTokenTypes
     .map((type) => {
       const token = aggregatedTokenMap.get(type);
+      const isChartbusters = type.toLowerCase() === "chartbusters";
+
       if (token) {
         return {
           totalAssignedToken: token.totalAssignedToken,
           tokensUsed: token.totalAssignedToken - token.tokenBalance,
           tokenBalance: token.tokenBalance,
           type,
-          ownerWiseBreakdown: token.ownerWiseBreakdown,
+          // Only include ownerWiseBreakdown for Chartbusters type
+          ...(isChartbusters && { ownerWiseBreakdown: token.ownerWiseBreakdown }),
         };
       }
       return {
@@ -704,7 +707,7 @@ export const getTokenDetailsService = async (
         tokensUsed: 0,
         tokenBalance: 0,
         type,
-        ownerWiseBreakdown: [],
+        ...(isChartbusters && { ownerWiseBreakdown: [] }),
       };
     })
     .sort((a, b) => {
