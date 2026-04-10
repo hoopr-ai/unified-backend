@@ -22,6 +22,7 @@ export interface BrandDetails {
   status: BrandStatus;
   createdBy?: number;
   restrictedOwners?: string[];
+  restrictedTrackTiers?: string[];
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -73,6 +74,13 @@ export class BrandModel extends Model<BrandModel, BrandDetails> {
     allowNull: true,
   })
   restrictedOwners?: string[];
+
+  @Default([])
+  @Column({
+    type: DataType.ARRAY(DataType.TEXT),
+    allowNull: true,
+  })
+  restrictedTrackTiers?: string[];
 
   @CreatedAt
   @Column({

@@ -4,6 +4,7 @@ import {
   findAllTracksByIds,
   findActiveTrackIdsByIds,
   getRestrictedOwnersByBrandId,
+  getRestrictedTrackTiersByBrandId,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import {
@@ -32,9 +33,14 @@ export const getAllAlbumsService = async (
 ): Promise<GetAlbumsResponse> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
-  const excludeOwnerIds = brandId
-    ? await getRestrictedOwnersByBrandId(brandId)
-    : undefined;
+  let excludeOwnerIds: string[] | undefined;
+  let excludeTiers: string[] | undefined;
+  if (brandId) {
+    [excludeOwnerIds, excludeTiers] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getRestrictedTrackTiersByBrandId(brandId),
+    ]);
+  }
 
   const albums = await findAlbumsByTypes(query.type);
 
@@ -47,10 +53,11 @@ export const getAllAlbumsService = async (
     ...new Set(albumsWithIds.flatMap((album) => album.trackId!)),
   ];
 
-  // Single DB query: which IDs are active AND not from restricted owners
+  // Single DB query: which IDs are active AND not from restricted owners/tiers
   const activeTrackIds = await findActiveTrackIdsByIds(
     allTrackIds,
     excludeOwnerIds,
+    excludeTiers,
   );
 
   const filtered: AlbumDto[] = albumsWithIds
@@ -101,9 +108,14 @@ export const getAlbumTracksService = async (
     return { tracks: [], totalCount: 0 };
   }
 
-  const excludeOwnerIds = brandId
-    ? await getRestrictedOwnersByBrandId(brandId)
-    : undefined;
+  let excludeOwnerIds: string[] | undefined;
+  let excludeTiers: string[] | undefined;
+  if (brandId) {
+    [excludeOwnerIds, excludeTiers] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getRestrictedTrackTiersByBrandId(brandId),
+    ]);
+  }
 
   let likedTrackCodes: Set<string> | undefined;
   if (userId) {
@@ -111,7 +123,7 @@ export const getAlbumTracksService = async (
     likedTrackCodes = new Set(likedCodes);
   }
 
-  const rawTracks = await findAllTracksByIds(album.trackId, excludeOwnerIds);
+  const rawTracks = await findAllTracksByIds(album.trackId, excludeOwnerIds, excludeTiers);
   const tracks = await transformRawTracksToDto(rawTracks, likedTrackCodes);
 
   return { tracks, totalCount: tracks.length };

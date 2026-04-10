@@ -109,6 +109,7 @@ export const findAllTracks = async (
   excludeOwnerIds?: string[],
   sortByPopular?: boolean,
   campaignFilter?: boolean,
+  excludeTiers?: string[],
 ): Promise<PaginatedRawTracks> => {
 
   const offset = (page - 1) * limit;
@@ -116,6 +117,7 @@ export const findAllTracks = async (
 
   const includeOwners = Array.isArray(ownerIds) ? ownerIds : [];
   const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  const tiersToExclude = Array.isArray(excludeTiers) ? excludeTiers : [];
 
   if (includeOwners.length) {
     conditions.push({
@@ -132,6 +134,15 @@ export const findAllTracks = async (
           [Op.overlap]: excludeOwners
         }
       }
+    });
+  }
+
+  if (tiersToExclude.length) {
+    conditions.push({
+      [Op.or]: [
+        { tier: { [Op.notIn]: tiersToExclude } },
+        { tier: null }
+      ]
     });
   }
 
@@ -206,6 +217,7 @@ export const findTracksByTrackCodes = async (
   limit: number,
   ownerIds?: string[],
   excludeOwnerIds?: string[],
+  excludeTiers?: string[],
 ): Promise<PaginatedRawTracks> => {
 
   const offset = (page - 1) * limit;
@@ -213,6 +225,7 @@ export const findTracksByTrackCodes = async (
 
   const includeOwners = Array.isArray(ownerIds) ? ownerIds : [];
   const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  const tiersToExclude = Array.isArray(excludeTiers) ? excludeTiers : [];
 
   if (includeOwners.length) {
     conditions.push({
@@ -229,6 +242,15 @@ export const findTracksByTrackCodes = async (
           [Op.overlap]: excludeOwners
         }
       }
+    });
+  }
+
+  if (tiersToExclude.length) {
+    conditions.push({
+      [Op.or]: [
+        { tier: { [Op.notIn]: tiersToExclude } },
+        { tier: null }
+      ]
     });
   }
 
@@ -259,20 +281,35 @@ export const findTracksByTrackCodes = async (
   };
 };
 
-// Returns only the subset of IDs that exist as ACTIVE tracks (excluding restricted owners)
+// Returns only the subset of IDs that exist as ACTIVE tracks (excluding restricted owners and tiers)
 export const findActiveTrackIdsByIds = async (
   ids: string[],
   excludeOwnerIds?: string[],
+  excludeTiers?: string[],
 ): Promise<Set<string>> => {
   if (ids.length === 0) return new Set();
 
   const whereClause: any = { id: { [Op.in]: ids }, status: "ACTIVE" };
 
   const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  const tiersToExclude = Array.isArray(excludeTiers) ? excludeTiers : [];
+  const conditions: any[] = [];
+
   if (excludeOwners.length > 0) {
-    whereClause[Op.and] = [
-      { [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } },
-    ];
+    conditions.push({ [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } });
+  }
+
+  if (tiersToExclude.length > 0) {
+    conditions.push({
+      [Op.or]: [
+        { tier: { [Op.notIn]: tiersToExclude } },
+        { tier: null }
+      ]
+    });
+  }
+
+  if (conditions.length > 0) {
+    whereClause[Op.and] = conditions;
   }
 
   const rows = await TrackModel.findAll({
@@ -287,16 +324,31 @@ export const findActiveTrackIdsByIds = async (
 export const findAllTracksByIds = async (
   ids: string[],
   excludeOwnerIds?: string[],
+  excludeTiers?: string[],
 ): Promise<RawTrackWithMappings[]> => {
   if (ids.length === 0) return [];
 
   const whereClause: any = { id: { [Op.in]: ids }, status: "ACTIVE" };
 
   const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  const tiersToExclude = Array.isArray(excludeTiers) ? excludeTiers : [];
+  const conditions: any[] = [];
+
   if (excludeOwners.length > 0) {
-    whereClause[Op.and] = [
-      { [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } },
-    ];
+    conditions.push({ [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } });
+  }
+
+  if (tiersToExclude.length > 0) {
+    conditions.push({
+      [Op.or]: [
+        { tier: { [Op.notIn]: tiersToExclude } },
+        { tier: null }
+      ]
+    });
+  }
+
+  if (conditions.length > 0) {
+    whereClause[Op.and] = conditions;
   }
 
   const rows = await TrackModel.findAll({
@@ -339,6 +391,7 @@ export interface GetTracksByFilterParams {
   limit: number;
   ownerIds?: string[];
   excludeOwnerIds?: string[];
+  excludeTiers?: string[];
 }
 
 export interface RawFilterMappingResult {
@@ -356,11 +409,13 @@ export interface PaginatedRawFilterTracks {
 export const findTrackByTrackCode = async (
   trackCode: string,
   excludeOwnerIds?: string[],
+  excludeTiers?: string[],
 ): Promise<RawTrackWithMappings | null> => {
 
   const conditions: any[] = [];
 
   const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  const tiersToExclude = Array.isArray(excludeTiers) ? excludeTiers : [];
 
   if (excludeOwners.length) {
     conditions.push({
@@ -369,6 +424,15 @@ export const findTrackByTrackCode = async (
           [Op.overlap]: excludeOwners
         }
       }
+    });
+  }
+
+  if (tiersToExclude.length) {
+    conditions.push({
+      [Op.or]: [
+        { tier: { [Op.notIn]: tiersToExclude } },
+        { tier: null }
+      ]
     });
   }
 
@@ -398,13 +462,14 @@ export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {
 
-  const { filterIds, page, limit, ownerIds, excludeOwnerIds } = params;
+  const { filterIds, page, limit, ownerIds, excludeOwnerIds, excludeTiers } = params;
   const offset = (page - 1) * limit;
 
   const conditions: any[] = [];
 
   const includeOwners = Array.isArray(ownerIds) ? ownerIds : [];
   const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+  const tiersToExclude = Array.isArray(excludeTiers) ? excludeTiers : [];
 
   if (includeOwners.length) {
     conditions.push({
@@ -421,6 +486,15 @@ export const findTracksByFilter = async (
           [Op.overlap]: excludeOwners
         }
       }
+    });
+  }
+
+  if (tiersToExclude.length) {
+    conditions.push({
+      [Op.or]: [
+        { tier: { [Op.notIn]: tiersToExclude } },
+        { tier: null }
+      ]
     });
   }
 
