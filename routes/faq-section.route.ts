@@ -12,6 +12,8 @@ import {
   updateFaqSectionRequestSchema,
   reorderFaqSectionsRequestSchema,
 } from "../middlewares/faq-section.validation";
+import { authenticateWithSession } from "../middlewares/authenticate";
+import { Platform, UserRoles } from "../services/dto-service/modules.export";
 
 const router = Router();
 
@@ -21,28 +23,40 @@ router.get("/", getFaqSections);
 // Admin only — create / update / delete / reorder
 router.post(
   "/",
-  // authenticateWithSession,
+  authenticateWithSession({
+    roles: [UserRoles.ADMIN, UserRoles.SALES],
+    platforms: [Platform.INTERNAL],
+  }),
   validateRequest(createFaqSectionRequestSchema),
   createFaqSection
 );
 
 router.put(
   "/reorder",
-  // authenticateWithSession,
+  authenticateWithSession({
+    roles: [UserRoles.ADMIN, UserRoles.SALES],
+    platforms: [Platform.INTERNAL],
+  }),
   validateRequest(reorderFaqSectionsRequestSchema),
   reorderFaqSections
 );
 
 router.put(
   "/:id",
-  // authenticateWithSession,
+  authenticateWithSession({
+    roles: [UserRoles.ADMIN, UserRoles.SALES],
+    platforms: [Platform.INTERNAL],
+  }),
   validateRequest(updateFaqSectionRequestSchema),
   updateFaqSection
 );
 
 router.delete(
   "/:id",
-  // authenticateWithSession,
+  authenticateWithSession({
+    roles: [UserRoles.ADMIN, UserRoles.SALES],
+    platforms: [Platform.INTERNAL],
+  }),
   deleteFaqSection
 );
 
