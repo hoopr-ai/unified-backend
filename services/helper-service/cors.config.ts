@@ -11,6 +11,7 @@ export const getCorsOptions = (): CorsOptions => {
     "http://localhost:5173",
     "http://localhost:5173/",
     "https://internal.hoopr.ai",
+    "https://internal.hoopr.ai/",
     "http://localhost:3002",
     "http://localhost:3000",
     "http://localhost:5174",
