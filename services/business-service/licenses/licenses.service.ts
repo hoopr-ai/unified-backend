@@ -609,14 +609,25 @@ export const downloadLicensePdfService = async (
   return { downloadLink };
 };
 
+export interface OwnerWiseTokenBreakdown {
+  ownerIds: string[];
+  totalAssignedToken: number;
+  tokensUsed: number;
+  tokenBalance: number;
+  expiryDate?: Date;
+}
+
+export interface TokenDetailsItem {
+  totalAssignedToken: number;
+  tokensUsed: number;
+  tokenBalance: number;
+  type: string;
+  ownerWiseBreakdown: OwnerWiseTokenBreakdown[];
+}
+
 export interface TokenDetailsResponse {
   brandId: number;
-  tokens: {
-    totalAssignedToken: number;
-    tokensUsed: number;
-    tokenBalance: number;
-    type: string;
-  }[];
+  tokens: TokenDetailsItem[];
 }
 
 export const getTokenDetailsService = async (
@@ -639,17 +650,32 @@ export const getTokenDetailsService = async (
     getDistinctTokenTypes(),
   ]);
 
-  // Aggregate tokens by type (multiple entries per type are now allowed)
-  const aggregatedTokenMap = new Map<string, { totalAssignedToken: number; tokenBalance: number }>();
+  // Aggregate tokens by type and also collect owner-wise breakdown
+  const aggregatedTokenMap = new Map<string, {
+    totalAssignedToken: number;
+    tokenBalance: number;
+    ownerWiseBreakdown: OwnerWiseTokenBreakdown[];
+  }>();
+
   for (const token of tokens) {
     const existing = aggregatedTokenMap.get(token.type);
+    const breakdown: OwnerWiseTokenBreakdown = {
+      ownerIds: token.ownerIds || [],
+      totalAssignedToken: token.totalAssignedToken,
+      tokensUsed: token.totalAssignedToken - token.tokenBalance,
+      tokenBalance: token.tokenBalance,
+      expiryDate: token.expiryDate,
+    };
+
     if (existing) {
       existing.totalAssignedToken += token.totalAssignedToken;
       existing.tokenBalance += token.tokenBalance;
+      existing.ownerWiseBreakdown.push(breakdown);
     } else {
       aggregatedTokenMap.set(token.type, {
         totalAssignedToken: token.totalAssignedToken,
         tokenBalance: token.tokenBalance,
+        ownerWiseBreakdown: [breakdown],
       });
     }
   }
@@ -670,6 +696,7 @@ export const getTokenDetailsService = async (
           tokensUsed: token.totalAssignedToken - token.tokenBalance,
           tokenBalance: token.tokenBalance,
           type,
+          ownerWiseBreakdown: token.ownerWiseBreakdown,
         };
       }
       return {
@@ -677,6 +704,7 @@ export const getTokenDetailsService = async (
         tokensUsed: 0,
         tokenBalance: 0,
         type,
+        ownerWiseBreakdown: [],
       };
     })
     .sort((a, b) => {
