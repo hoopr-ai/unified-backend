@@ -21,6 +21,7 @@ export interface TokenHistoryDetails {
   type: string;
   assignedAmount: number;
   expiryDate?: Date;
+  ownerIds?: string[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -69,6 +70,13 @@ export class TokenHistoryModel extends Model<TokenHistoryModel, TokenHistoryDeta
     allowNull: true,
   })
   expiryDate?: Date;
+
+  @Column({
+    type: DataType.ARRAY(DataType.STRING),
+    allowNull: true,
+    defaultValue: [],
+  })
+  ownerIds?: string[];
 
   @CreatedAt
   @Column({

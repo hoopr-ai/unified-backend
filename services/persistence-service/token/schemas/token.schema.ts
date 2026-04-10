@@ -19,6 +19,7 @@ export interface TokenDetails {
   expiryDate?: Date;
   brandId: number;
   type: string;
+  ownerIds?: string[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -67,6 +68,13 @@ export class TokenModel extends Model<TokenModel, TokenDetails> {
     allowNull: false,
   })
   type!: string;
+
+  @Column({
+    type: DataType.ARRAY(DataType.STRING),
+    allowNull: true,
+    defaultValue: [],
+  })
+  ownerIds?: string[];
 
   @CreatedAt
   @Column({
