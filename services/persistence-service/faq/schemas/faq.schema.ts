@@ -19,6 +19,7 @@ export interface FaqDetails {
   answer: string;
   order: number;
   isActive: boolean;
+  updatedBy?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -65,6 +66,12 @@ export class FaqModel extends Model<FaqModel, FaqDetails> {
     defaultValue: true,
   })
   isActive!: boolean;
+
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  updatedBy?: number;
 
   @CreatedAt
   @Column({

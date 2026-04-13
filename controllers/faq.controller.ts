@@ -11,6 +11,11 @@ import {
 } from "../services/business-service/faq/faq.service";
 import { getFaqsQuerySchema } from "../middlewares/faq.validation";
 import { AppError } from "../services/helper-service/modules.export";
+import type { SessionPayload } from "../middlewares/authenticate";
+
+interface AuthRequest extends Request {
+  session?: SessionPayload;
+}
 
 export const getFaqs = catchAsync(async (req: Request, res: Response) => {
   const { error, value } = getFaqsQuerySchema.validate(req.query, {
@@ -35,9 +40,10 @@ export const createFaq = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const updateFaq = catchAsync(async (req: Request, res: Response) => {
+export const updateFaq = catchAsync(async (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
-  const response = await updateFaqService(id, req.body);
+  const userId = req.session?.userId;
+  const response = await updateFaqService(id, req.body, userId);
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,

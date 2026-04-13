@@ -23,6 +23,7 @@ export interface FaqSectionResponse {
   slug: string;
   order: number;
   isActive: boolean;
+  updatedBy?: number;
   createdAt: Date;
 }
 
@@ -33,6 +34,7 @@ const toFaqSectionResponse = (section: FaqSectionDetails): FaqSectionResponse =>
   slug: section.slug,
   order: section.order,
   isActive: section.isActive,
+  updatedBy: section.updatedBy,
   createdAt: section.createdAt,
 });
 
@@ -59,9 +61,10 @@ export const createFaqSectionService = async (
 
 export const updateFaqSectionService = async (
   id: number,
-  data: UpdateFaqSectionRequestData
+  data: UpdateFaqSectionRequestData,
+  userId?: number
 ): Promise<FaqSectionResponse> => {
-  const updated = await updateFaqSectionById(id, data);
+  const updated = await updateFaqSectionById(id, { ...data, updatedBy: userId });
   if (!updated) {
     throw new AppError(ResponseMessages.FaqSectionNotFound, 404);
   }

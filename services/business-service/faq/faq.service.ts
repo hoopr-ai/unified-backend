@@ -32,6 +32,7 @@ export interface FaqResponse {
   answer: string;
   order: number;
   isActive: boolean;
+  updatedBy?: number;
   createdAt: Date;
 }
 
@@ -51,6 +52,7 @@ const toFaqResponse = (faq: FaqModel): FaqResponse => ({
   answer: faq.answer,
   order: faq.order,
   isActive: faq.isActive,
+  updatedBy: faq.updatedBy,
   createdAt: faq.createdAt,
 });
 
@@ -62,6 +64,7 @@ const toSimpleFaqResponse = (faq: FaqDetails): Omit<FaqResponse, "section"> & { 
   answer: faq.answer,
   order: faq.order,
   isActive: faq.isActive,
+  updatedBy: faq.updatedBy,
   createdAt: faq.createdAt,
 });
 
@@ -93,9 +96,10 @@ export const createFaqService = async (
 
 export const updateFaqService = async (
   id: number,
-  data: UpdateFaqRequestData
+  data: UpdateFaqRequestData,
+  userId?: number
 ): Promise<FaqResponse> => {
-  const updated = await updateFaqById(id, data);
+  const updated = await updateFaqById(id, { ...data, updatedBy: userId });
   if (!updated) {
     throw new AppError(ResponseMessages.FaqNotFound, 404);
   }

@@ -17,6 +17,7 @@ export interface FaqSectionDetails {
   slug: string;
   order: number;
   isActive: boolean;
+  updatedBy?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -62,6 +63,12 @@ export class FaqSectionModel extends Model<FaqSectionModel, FaqSectionDetails> {
     defaultValue: true,
   })
   isActive!: boolean;
+
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  updatedBy?: number;
 
   @CreatedAt
   @Column({

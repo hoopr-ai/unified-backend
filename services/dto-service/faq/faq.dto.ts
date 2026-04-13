@@ -13,6 +13,7 @@ export interface UpdateFaqRequestData {
   answer?: string;
   order?: number;
   isActive?: boolean;
+  updatedBy?: number;
 }
 
 export interface GetFaqsQueryData {
