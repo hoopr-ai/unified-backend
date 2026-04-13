@@ -184,7 +184,7 @@ const ENSURE_TRIGGERS_SQL = `
     END IF;
   END $$;
 
-  -- FUNCTION 5: Record token_history on every INSERT or UPDATE to tokens
+  -- FUNCTION 5: Record token_history on every INSERT or UPDATE to tokens (including deductions)
   CREATE OR REPLACE FUNCTION record_token_history()
   RETURNS TRIGGER AS $$
   DECLARE
@@ -196,7 +196,8 @@ const ENSURE_TRIGGERS_SQL = `
       assigned := NEW."totalAssignedToken" - OLD."totalAssignedToken";
     END IF;
 
-    IF assigned > 0 THEN
+    -- Record both positive (additions) and negative (deductions) changes
+    IF assigned != 0 THEN
       INSERT INTO token_history ("tokenId", "brandId", "type", "assignedAmount", "expiryDate", "createdAt", "updatedAt")
       VALUES (NEW.id, NEW."brandId", NEW.type, assigned, NEW."expiryDate", NOW(), NOW());
     END IF;
@@ -212,6 +213,30 @@ const ENSURE_TRIGGERS_SQL = `
       CREATE TRIGGER trigger_record_token_history
       AFTER INSERT OR UPDATE OF "totalAssignedToken" ON tokens
       FOR EACH ROW EXECUTE PROCEDURE record_token_history();
+    END IF;
+  END $$;
+
+  -- FUNCTION 6: Record token_history when token entry is DELETED
+  CREATE OR REPLACE FUNCTION record_token_history_on_delete()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    -- Record the deletion as negative of remaining totalAssignedToken
+    IF OLD."totalAssignedToken" != 0 THEN
+      INSERT INTO token_history ("tokenId", "brandId", "type", "assignedAmount", "expiryDate", "createdAt", "updatedAt")
+      VALUES (OLD.id, OLD."brandId", OLD.type, -OLD."totalAssignedToken", OLD."expiryDate", NOW(), NOW());
+    END IF;
+
+    RETURN OLD;
+  END;
+  $$ LANGUAGE plpgsql;
+
+  DO $$ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_record_token_history_delete'
+    ) THEN
+      CREATE TRIGGER trigger_record_token_history_delete
+      BEFORE DELETE ON tokens
+      FOR EACH ROW EXECUTE PROCEDURE record_token_history_on_delete();
     END IF;
   END $$;
 `;
