@@ -12,6 +12,7 @@ export interface UpdateFaqSectionRequestData {
   slug?: string;
   order?: number;
   isActive?: boolean;
+  updatedBy?: number;
 }
 
 export interface GetFaqSectionsQueryData {

@@ -7,6 +7,9 @@ import type {
 export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
   brandId: Joi.number().integer().positive().required(),
   tokens: Joi.number().integer().positive().required(),
+  type: Joi.string().trim().min(1).required(),
+  expiryDate: Joi.date().optional(),
+  ownerIds: Joi.array().items(Joi.string()).optional(),
 });
 
 const licenseTypeEnumValues = ["standard", "premium", "enterprise"];

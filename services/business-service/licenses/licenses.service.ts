@@ -13,6 +13,7 @@ import {
   deductTokenByType,
   findTokensByBrandId,
   getDistinctTokenTypes,
+  findValidTokenForOwner,
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
@@ -93,25 +94,32 @@ export const licenseTrackService = async (
     // throw new AppError("Track owners do not have valid types", 400);
   }
 
-  // Get brand's token balances
-  const brandTokens = await findTokensByBrandId(brandId);
-
   // Find a matching token type (track owner type matches brand's token type)
+  // Also consider ownerIds restriction on tokens
   let matchingTokenType: string | null = null;
-  let matchingTokenBalance = 0;
+  let matchingOwnerId: string | null = null;
 
-  for (const ownerType of trackOwnerTypes) {
-    const brandToken = brandTokens.find(
-      (t) => t.type === ownerType && t.tokenBalance >= TOKEN_COST_PER_LICENSE,
+  // Try to find a valid token for each owner of the track
+  for (const owner of owners) {
+    const ownerType = owner.type;
+    if (!ownerType) continue;
+
+    // Check if there's a valid token for this owner type and owner ID
+    const validToken = await findValidTokenForOwner(
+      brandId,
+      ownerType,
+      owner.id,
+      TOKEN_COST_PER_LICENSE,
     );
-    if (brandToken) {
+
+    if (validToken) {
       matchingTokenType = ownerType;
-      matchingTokenBalance = brandToken.tokenBalance;
+      matchingOwnerId = owner.id;
       break;
     }
   }
 
-  if (!matchingTokenType) {
+  if (!matchingTokenType || matchingOwnerId === null) {
     throw new AppError(
       `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
       400,
@@ -121,11 +129,12 @@ export const licenseTrackService = async (
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
-  // Deduct token from the matching type
+  // Deduct token from the matching type (passing ownerId for ownerIds restriction)
   const { success, remainingTokens } = await deductTokenByType(
     brandId,
     matchingTokenType,
     TOKEN_COST_PER_LICENSE,
+    matchingOwnerId,
   );
 
   if (!success) {
@@ -305,6 +314,7 @@ export interface AssignTokensByTypeRequest {
   tokens: number;
   type: string;
   expiryDate?: Date;
+  ownerIds?: string[];
 }
 
 export interface AssignTokensByTypeResponse {
@@ -313,6 +323,7 @@ export interface AssignTokensByTypeResponse {
   tokenBalance: number;
   totalAssignedToken: number;
   expiryDate?: Date;
+  ownerIds?: string[];
 }
 
 export const assignTokensService = async (
@@ -320,6 +331,7 @@ export const assignTokensService = async (
   tokens: number,
   type: string,
   expiryDate?: Date,
+  ownerIds?: string[],
 ): Promise<AssignTokensByTypeResponse> => {
   if (tokens <= 0) {
     throw new AppError("Token amount must be greater than 0", 400);
@@ -334,14 +346,15 @@ export const assignTokensService = async (
     throw new AppError("Brand not found", 404);
   }
 
-  const updatedToken = await addTokensByType(brandId, type, tokens, expiryDate);
+  const createdToken = await addTokensByType(brandId, type, tokens, expiryDate, ownerIds);
 
   return {
     brandId,
-    type: updatedToken.type,
-    tokenBalance: updatedToken.tokenBalance,
-    totalAssignedToken: updatedToken.totalAssignedToken,
-    expiryDate: updatedToken.expiryDate,
+    type: createdToken.type,
+    tokenBalance: createdToken.tokenBalance,
+    totalAssignedToken: createdToken.totalAssignedToken,
+    expiryDate: createdToken.expiryDate,
+    ownerIds: createdToken.ownerIds,
   };
 };
 
@@ -596,14 +609,25 @@ export const downloadLicensePdfService = async (
   return { downloadLink };
 };
 
+export interface OwnerWiseTokenBreakdown {
+  ownerIds: string[];
+  totalAssignedToken: number;
+  tokensUsed: number;
+  tokenBalance: number;
+  expiryDate?: Date;
+}
+
+export interface TokenDetailsItem {
+  totalAssignedToken: number;
+  tokensUsed: number;
+  tokenBalance: number;
+  type: string;
+  ownerWiseBreakdown?: OwnerWiseTokenBreakdown[];
+}
+
 export interface TokenDetailsResponse {
   brandId: number;
-  tokens: {
-    totalAssignedToken: number;
-    tokensUsed: number;
-    tokenBalance: number;
-    type: string;
-  }[];
+  tokens: TokenDetailsItem[];
 }
 
 export const getTokenDetailsService = async (
@@ -626,7 +650,35 @@ export const getTokenDetailsService = async (
     getDistinctTokenTypes(),
   ]);
 
-  const assignedTokenMap = new Map(tokens.map((t) => [t.type, t]));
+  // Aggregate tokens by type and also collect owner-wise breakdown
+  const aggregatedTokenMap = new Map<string, {
+    totalAssignedToken: number;
+    tokenBalance: number;
+    ownerWiseBreakdown: OwnerWiseTokenBreakdown[];
+  }>();
+
+  for (const token of tokens) {
+    const existing = aggregatedTokenMap.get(token.type);
+    const breakdown: OwnerWiseTokenBreakdown = {
+      ownerIds: token.ownerIds || [],
+      totalAssignedToken: token.totalAssignedToken,
+      tokensUsed: token.totalAssignedToken - token.tokenBalance,
+      tokenBalance: token.tokenBalance,
+      expiryDate: token.expiryDate,
+    };
+
+    if (existing) {
+      existing.totalAssignedToken += token.totalAssignedToken;
+      existing.tokenBalance += token.tokenBalance;
+      existing.ownerWiseBreakdown.push(breakdown);
+    } else {
+      aggregatedTokenMap.set(token.type, {
+        totalAssignedToken: token.totalAssignedToken,
+        tokenBalance: token.tokenBalance,
+        ownerWiseBreakdown: [breakdown],
+      });
+    }
+  }
 
   const ASSORTMENT_ORDER: Record<string, number> = {
     chartbusters: 1,
@@ -637,13 +689,17 @@ export const getTokenDetailsService = async (
 
   const mergedTokens = allTokenTypes
     .map((type) => {
-      const token = assignedTokenMap.get(type);
+      const token = aggregatedTokenMap.get(type);
+      const isChartbusters = type.toLowerCase() === "chartbusters";
+
       if (token) {
         return {
           totalAssignedToken: token.totalAssignedToken,
           tokensUsed: token.totalAssignedToken - token.tokenBalance,
           tokenBalance: token.tokenBalance,
-          type: token.type,
+          type,
+          // Only include ownerWiseBreakdown for Chartbusters type
+          ...(isChartbusters && { ownerWiseBreakdown: token.ownerWiseBreakdown }),
         };
       }
       return {
@@ -651,6 +707,7 @@ export const getTokenDetailsService = async (
         tokensUsed: 0,
         tokenBalance: 0,
         type,
+        ...(isChartbusters && { ownerWiseBreakdown: [] }),
       };
     })
     .sort((a, b) => {

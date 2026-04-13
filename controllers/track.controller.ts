@@ -23,6 +23,17 @@ interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
+// Helper function to strip mp3Link and waveformLink from tracks for unauthenticated users
+const stripMediaUrls = <T extends { mp3Link?: string | null; waveformLink?: string | null }>(
+  tracks: T[]
+): T[] => {
+  return tracks.map(track => ({
+    ...track,
+    mp3Link: null,
+    waveformLink: null,
+  }));
+};
+
 export const getAllTracks = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const userId = req.session?.userId;
@@ -43,9 +54,16 @@ export const getAllTracks = catchAsync(
       campaign: toBoolean(req.body.campaign),
     };
     const response = await getAllTracksService(query, userId, brandId, platform);
+
+    // Strip mp3Link and waveformLink for unauthenticated users
+    const data = userId ? response : {
+      ...response,
+      tracks: stripMediaUrls(response.tracks),
+    };
+
     sendResponse(res, {
       status: HttpStatusCode.OK,
-      data: response,
+      data,
       message: ResponseMessages.GetTracksSuccess,
     });
   },
@@ -63,9 +81,16 @@ export const getTracksByCodes = catchAsync(
       type: req.body.type as string[] | undefined,
     };
     const response = await getTracksByCodesService(query, userId, brandId);
+
+    // Strip mp3Link and waveformLink for unauthenticated users
+    const data = userId ? response : {
+      ...response,
+      tracks: stripMediaUrls(response.tracks),
+    };
+
     sendResponse(res, {
       status: HttpStatusCode.OK,
-      data: response,
+      data,
       message: ResponseMessages.GetTracksSuccess,
     });
   },
@@ -84,9 +109,16 @@ export const getTracksByFilter = catchAsync(
       type: req.body.type as string[] | undefined,
     };
     const response = await getTracksByFilterService(query, userId, brandId);
+
+    // Strip mp3Link and waveformLink for unauthenticated users
+    const data = userId ? response : {
+      ...response,
+      tracks: stripMediaUrls(response.tracks),
+    };
+
     sendResponse(res, {
       status: HttpStatusCode.OK,
-      data: response,
+      data,
       message: ResponseMessages.GetTracksByFilterSuccess,
     });
   },
@@ -109,9 +141,16 @@ export const getTrackDetailsByCode = catchAsync(
       return;
     }
 
+    // Strip mp3Link and waveformLink for unauthenticated users
+    const data = userId ? response : {
+      ...response,
+      mp3Link: null,
+      waveformLink: null,
+    };
+
     sendResponse(res, {
       status: HttpStatusCode.OK,
-      data: response,
+      data,
       message: ResponseMessages.GetTrackDetailSuccess,
     });
   },

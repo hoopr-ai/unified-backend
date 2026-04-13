@@ -52,7 +52,7 @@ export const getTokenBalance = catchAsync(async (req: AuthRequest, res: Response
 });
 
 export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { brandId, tokens, type, expiryDate } = req.body;
+  const { brandId, tokens, type, expiryDate, ownerIds } = req.body;
 
   if (!brandId || tokens === undefined) {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Brand ID and tokens are required", {});
@@ -62,7 +62,18 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Token type is required", {});
   }
 
-  const response = await assignTokensService(brandId, tokens, type, expiryDate ? new Date(expiryDate) : undefined);
+  // Validate ownerIds if provided
+  if (ownerIds !== undefined && !Array.isArray(ownerIds)) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "ownerIds must be an array", {});
+  }
+
+  const response = await assignTokensService(
+    brandId,
+    tokens,
+    type,
+    expiryDate ? new Date(expiryDate) : undefined,
+    ownerIds,
+  );
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,

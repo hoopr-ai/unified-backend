@@ -350,8 +350,10 @@ export const createUserService = async (
   // Send admin credentials email
   const brand = brandId ? await findBrandById(brandId) : null;
   const brandName = (brand as any)?.name || "";
-  await sendAdminCredentialsEmail(email, password, brandName);
-
+  // For enterprise users, send credentials email. For internal users, we can skip this as they are likely creating their own account.
+  if (platform === Platform.ENTERPRISE) {
+      await sendAdminCredentialsEmail(email, password, brandName);
+  }
   return {};
 };
 
