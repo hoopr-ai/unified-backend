@@ -30,6 +30,7 @@ export interface LicenseDetails {
   licensePdfPath?: string;
   projectId?: string;
   type?: string;
+  price?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -111,6 +112,12 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     allowNull: true,
   })
   type?: string;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: true,
+  })
+  price?: number;
 
   @CreatedAt
   @Column({
