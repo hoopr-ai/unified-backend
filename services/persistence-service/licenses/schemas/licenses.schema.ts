@@ -28,6 +28,8 @@ export interface LicenseDetails {
   status?: string;
   licenseTypeId?: string;
   licensePdfPath?: string;
+  projectId?: string;
+  type?: string;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -97,6 +99,18 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     allowNull: true,
   })
   licensePdfPath?: string;
+
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  projectId?: string;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  type?: string;
 
   @CreatedAt
   @Column({
