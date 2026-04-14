@@ -31,6 +31,7 @@ export interface LicenseDetails {
   projectId?: string;
   type?: string;
   price?: number;
+  smashVisible?: boolean;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -118,6 +119,13 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     allowNull: true,
   })
   price?: number;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+  })
+  smashVisible?: boolean;
 
   @CreatedAt
   @Column({
