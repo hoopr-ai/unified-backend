@@ -12,16 +12,12 @@ const DB_CONFIG = {
 
 // Default usageInfo template based on your UI
 const DEFAULT_USAGE_INFO = {
-  clearanceSummary: {
-    usageType: "Short-form video",
-    usageTypeNote: "no paid promotion",
-    maxUsageTime: "12 months",
-    maxUsageTimeNote: "From purchase",
-    maxVideoLength: "60 seconds",
-    maxVideoLengthNote: "Per video",
-    uploadsLimit: "Up to 3",
-    uploadsLimitNote: "Platforms",
-  },
+  clearanceSummary: [
+    "Usage type, Short-form video, no paid promotion",
+    "Max usage time, 12 months, From purchase",
+    "Max video length, 60 seconds, Per video",
+    "Uploads limit, Up to 3, Platforms",
+  ],
   allowedPlatforms: ["Instagram", "Facebook", "YouTube Shorts"],
   allowed: [
     "Influencer collab",
@@ -39,8 +35,8 @@ const DEFAULT_USAGE_INFO = {
     "Celebrity collabs",
     "Overlaying two tracks",
   ],
-  AddYourLinksForClearance:
-    "After publishing, add your video links under My Downloads → Add Links. Only submitted links are legally cleared.Your license coveres content published during your active subscription period.",
+  addYourLinksForClearance:
+    "After publishing, add your video links under My Downloads → Add Links. Only submitted links are legally cleared. Your license covers content published during your active subscription period.",
 };
 
 async function migrateUsageInfo() {

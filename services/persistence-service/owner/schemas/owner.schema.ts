@@ -14,23 +14,12 @@ import {
 // OwnerType is now a free-form string (no enum restriction)
 
 // UsageInfo structured format for track usage rights
-export interface UsageInfoClearanceSummary {
-  usageType: string;
-  usageTypeNote?: string;
-  maxUsageTime: string;
-  maxUsageTimeNote?: string;
-  maxVideoLength: string;
-  maxVideoLengthNote?: string;
-  uploadsLimit: string;
-  uploadsLimitNote?: string;
-}
-
 export interface UsageInfo {
-  clearanceSummary: UsageInfoClearanceSummary;
+  clearanceSummary: string[]; // 4 items: ["Usage type, Short-form video, no paid promotion", ...]
   allowedPlatforms: string[];
   allowed: string[];
   notAllowed: string[];
-  note?: string;
+  addYourLinksForClearance?: string;
 }
 
 export enum OwnerStatus {
