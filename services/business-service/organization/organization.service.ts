@@ -3,6 +3,7 @@ import {
   type CreateBrandRequestData,
   OrganizationStatus,
   BrandStatus,
+  UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
 } from "../../dto-service/modules.export";
 import {
   saveOrganization,
@@ -10,6 +11,7 @@ import {
   findOrganizationById,
   saveBrand,
   findBrandByNameAndOrganization,
+  getOwnerIdsByNames,
 } from "../../persistence-service/exports";
 import { sequelize } from "../../persistence-service/database";
 import { AppError } from "../../helper-service/modules.export";
@@ -76,12 +78,20 @@ export const createBrandService = async (
     throw new AppError(ResponseMessages.BrandAlreadyExists, 400);
   }
 
+  // Resolve restricted owner names to owner IDs
+  let restrictedOwnerIds: string[] | undefined;
+  if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    restrictedOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
+
   const brand = await saveBrand({
     organizationId,
     name,
     description,
     status: status || BrandStatus.ACTIVE,
     createdBy,
+    restrictedOwners: restrictedOwnerIds,
     createdAt: new Date(),
   });
 
