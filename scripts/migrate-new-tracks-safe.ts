@@ -8,6 +8,7 @@ import { FilterModel } from "../services/persistence-service/filter/modules.expo
 import { SkuModel } from "../services/persistence-service/sku/modules.export";
 import { OwnerModel } from "../services/persistence-service/owner/modules.export";
 import { AlbumModel } from "../services/persistence-service/albums/schemas/album.schema";
+import { CampaignModel } from "../services/persistence-service/campaign/schemas/campaign.schema";
 import { TrackModel } from "../services/persistence-service/track/modules.export";
 import { TrackFilterMappingModel } from "../services/persistence-service/filter/modules.export";
 import { ArtistType } from "../services/dto-service/modules.export";
@@ -23,17 +24,17 @@ const SOURCE_DB_CONFIG = {
 
 // ============ TARGET DATABASE ============
 const TARGET_DB_CONFIG = {
-  // host: process.env.DB_HOST || "34.47.153.109",
-  // user: process.env.DB_USER || "unified-prod",
-  // password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
-  // database: process.env.DB_NAME || "unified-backend-prod",
-  // port: parseInt(process.env.DB_PORT || "5432"),
-  // ssl: { rejectUnauthorized: false },
-  host: "34.47.200.207",
-  port: 5432,
-  user: "select-server-dev",
-  password: "hO82GcLotttB5bLyoeG1",
-  database: "sage_staging",
+  host: process.env.DB_HOST || "34.47.153.109",
+  user: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
+  port: parseInt(process.env.DB_PORT || "5432"),
+  ssl: { rejectUnauthorized: false },
+  // host: "34.47.200.207",
+  // port: 5432,
+  // user: "select-server-dev",
+  // password: "hO82GcLotttB5bLyoeG1",
+  // database: "sage_staging",
 };
 
 // ============ HELPER FUNCTIONS ============
@@ -342,9 +343,9 @@ async function migrateNewData(
     console.log(`   Found ${newArtists.length} new artists`);
 
     for (const artist of newArtists) {
+      const mapped: Record<string, any> = {};
       try {
         if (!artist.id) continue;
-        const mapped: Record<string, any> = {};
         for (const field of [
           "id",
           "name",
@@ -364,9 +365,27 @@ async function migrateNewData(
         }
         await ArtistModel.upsert(mapped as any, { conflictFields: ["id"] });
         stats.artists.success++;
-      } catch (err) {
+      } catch (err: any) {
+        // If unique constraint on artistCode/name_slug, try upsert on artistCode
+        if (err.name === "SequelizeUniqueConstraintError") {
+          try {
+            await ArtistModel.upsert(mapped as any, {
+              conflictFields: ["artistCode"],
+            });
+            stats.artists.success++;
+            continue;
+          } catch (innerErr) {
+            stats.artists.failed++;
+            console.error(
+              `   ❌ Artist ${artist.id} (${artist.artistCode}): ${(innerErr as Error).message}`,
+            );
+            continue;
+          }
+        }
         stats.artists.failed++;
-        console.error(`   ❌ Artist ${artist.id}: ${(err as Error).message}`);
+        console.error(
+          `   ❌ Artist ${artist.id} (${artist.artistCode}): ${(err as Error).message}`,
+        );
       }
     }
   } catch (err) {
@@ -669,6 +688,7 @@ async function main() {
   });
 
   targetSequelize.addModels([
+    CampaignModel,
     TrackModel,
     ArtistModel,
     TrackArtistMappingModel,

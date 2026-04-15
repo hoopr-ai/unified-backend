@@ -13,6 +13,26 @@ import {
 
 // OwnerType is now a free-form string (no enum restriction)
 
+// UsageInfo structured format for track usage rights
+export interface UsageInfoClearanceSummary {
+  usageType: string;
+  usageTypeNote?: string;
+  maxUsageTime: string;
+  maxUsageTimeNote?: string;
+  maxVideoLength: string;
+  maxVideoLengthNote?: string;
+  uploadsLimit: string;
+  uploadsLimitNote?: string;
+}
+
+export interface UsageInfo {
+  clearanceSummary: UsageInfoClearanceSummary;
+  allowedPlatforms: string[];
+  allowed: string[];
+  notAllowed: string[];
+  note?: string;
+}
+
 export enum OwnerStatus {
   Active = "Active",
   Inactive = "Inactive",
@@ -35,7 +55,7 @@ export interface OwnerDetails {
   IPRS?: number;
   remarks?: string;
   metadata?: object;
-  usageInfo?: object;
+  usageInfo?: UsageInfo;
   restrictedCategories?: object;
   deleted?: Date;
   createdAt?: Date;
