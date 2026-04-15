@@ -32,6 +32,7 @@ export interface LicenseDetails {
   type?: string;
   price?: number;
   smashVisible?: boolean;
+  tokenId?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -126,6 +127,13 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     defaultValue: false,
   })
   smashVisible?: boolean;
+
+  @Index({ name: "idx_licenses_token_id" })
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  tokenId?: number;
 
   @CreatedAt
   @Column({

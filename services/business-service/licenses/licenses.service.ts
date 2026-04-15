@@ -14,6 +14,15 @@ import {
   findTokensByBrandId,
   getDistinctTokenTypes,
   findValidTokenForOwner,
+  // New token_assigned functions
+  getAllTokenAssignedBalances,
+  getAllTokenAssignedDetails,
+  addTokensAssignedByType,
+  deductTokenAssignedByType,
+  findTokensAssignedByBrandId,
+  getDistinctTokenAssignedTypes,
+  findValidTokenAssignedForOwner,
+  TokenDeductionReason,
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
@@ -96,6 +105,7 @@ export const licenseTrackService = async (
 
   // Find a matching token type (track owner type matches brand's token type)
   // Also consider ownerIds restriction on tokens
+  // Using NEW token_assigned table
   let matchingTokenType: string | null = null;
   let matchingOwnerId: string | null = null;
 
@@ -105,7 +115,8 @@ export const licenseTrackService = async (
     if (!ownerType) continue;
 
     // Check if there's a valid token for this owner type and owner ID
-    const validToken = await findValidTokenForOwner(
+    // Using NEW token_assigned table
+    const validToken = await findValidTokenAssignedForOwner(
       brandId,
       ownerType,
       owner.id,
@@ -129,22 +140,7 @@ export const licenseTrackService = async (
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
-  // Deduct token from the matching type (passing ownerId for ownerIds restriction)
-  const { success, remainingTokens } = await deductTokenByType(
-    brandId,
-    matchingTokenType,
-    TOKEN_COST_PER_LICENSE,
-    matchingOwnerId,
-  );
-
-  if (!success) {
-    throw new AppError(
-      "Failed to process token deduction. Insufficient tokens.",
-      400,
-    );
-  }
-
-  // Create license record
+  // Create license record first to get the licenseId for deduction tracking
   const licenseDetails: LicenseDetails = {
     brandId,
     userId,
@@ -155,6 +151,32 @@ export const licenseTrackService = async (
   };
 
   const createdLicense = await createLicenseRecord(licenseDetails);
+
+  // Deduct token from the matching type using NEW token_assigned table
+  // This also creates a token_deduction record linked to the license
+  const { success, remainingTokens, tokenAssignedId } = await deductTokenAssignedByType(
+    brandId,
+    matchingTokenType,
+    TOKEN_COST_PER_LICENSE,
+    matchingOwnerId,
+    TokenDeductionReason.LICENSE_PURCHASE,
+    createdLicense.id,
+  );
+
+  if (!success) {
+    throw new AppError(
+      "Failed to process token deduction. Insufficient tokens.",
+      400,
+    );
+  }
+
+  // Update license with tokenId (link to token_assigned)
+  if (tokenAssignedId) {
+    await LicenseModel.update(
+      { tokenId: tokenAssignedId },
+      { where: { id: createdLicense.id } },
+    );
+  }
 
   // Generate and store license PDF asynchronously
   (async () => {
@@ -301,7 +323,8 @@ export const getTokenBalanceService = async (
     throw new AppError("User is not associated with any brand", 400);
   }
 
-  const tokens = await getAllTokenBalances(user.brandId);
+  // Using NEW token_assigned table
+  const tokens = await getAllTokenAssignedBalances(user.brandId);
 
   return {
     brandId: user.brandId,
@@ -346,7 +369,8 @@ export const assignTokensService = async (
     throw new AppError("Brand not found", 404);
   }
 
-  const createdToken = await addTokensByType(brandId, type, tokens, expiryDate, ownerIds);
+  // Using NEW token_assigned table
+  const createdToken = await addTokensAssignedByType(brandId, type, tokens, expiryDate, ownerIds);
 
   return {
     brandId,
@@ -645,9 +669,10 @@ export const getTokenDetailsService = async (
     throw new AppError("User is not associated with any brand", 400);
   }
 
+  // Using NEW token_assigned table
   const [tokens, allTokenTypes] = await Promise.all([
-    getAllTokenDetails(user.brandId),
-    getDistinctTokenTypes(),
+    getAllTokenAssignedDetails(user.brandId),
+    getDistinctTokenAssignedTypes(),
   ]);
 
   // Aggregate tokens by type and also collect owner-wise breakdown

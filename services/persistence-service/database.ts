@@ -25,7 +25,7 @@ import {
 } from "./licenses/modules.export";
 import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
-import { TokenModel, TokenHistoryModel } from "./token/modules.export";
+import { TokenModel, TokenHistoryModel, TokenAssignedModel, TokenDeductionModel } from "./token/modules.export";
 import { OccasionModel } from "./occasion/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import { FaqModel, FaqSectionModel } from "./faq/modules.export";
@@ -99,6 +99,8 @@ sequelize.addModels([
   VideoLinkModel,
   TokenModel,
   TokenHistoryModel,
+  TokenAssignedModel,
+  TokenDeductionModel,
   OccasionModel,
   FeaturedTracksModel,
   KeywordModel,
