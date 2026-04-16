@@ -3,11 +3,11 @@ import {
   getAllPlaylists,
   getPlaylistDetail,
 } from "../controllers/playlist.controller";
-import { authenticate } from "../middlewares/authenticate";
+import { optionalAuthenticate } from "../middlewares/authenticate";
 
 const router = Router();
 
-router.get("/", authenticate, getAllPlaylists);
-router.get("/:playlistCode", authenticate, getPlaylistDetail);
+router.get("/", optionalAuthenticate, getAllPlaylists);
+router.get("/:playlistCode", optionalAuthenticate, getPlaylistDetail);
 
 export default router;
