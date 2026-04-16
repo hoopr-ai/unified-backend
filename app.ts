@@ -21,6 +21,7 @@ import albumRoutes from "./routes/album.route";
 import featuredTracksRoutes from "./routes/featured-tracks.route";
 import faqRoutes from "./routes/faq.route";
 import faqSectionRoutes from "./routes/faq-section.route";
+import contactRoutes from "./routes/contact.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -55,6 +56,7 @@ app.use("/albums", albumRoutes);
 app.use("/featured-tracks", featuredTracksRoutes);
 app.use("/faqs", faqRoutes);
 app.use("/faq-sections", faqSectionRoutes);
+app.use("/contact", contactRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);
