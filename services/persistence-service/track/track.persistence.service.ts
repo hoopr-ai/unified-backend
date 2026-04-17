@@ -193,6 +193,9 @@ export const findAllTracks = async (
     includeArray.push(...getActiveCampaignInclude());
   }
 
+  console.log("findAllTracks finalWhereClause:", finalWhereClause);
+  console.log("findAllTracks releaseDate in finalWhere:", finalWhereClause.releaseDate);
+
   const { count, rows } = await TrackModel.findAndCountAll({
     where: finalWhereClause,
     order: orderClause,
@@ -201,6 +204,7 @@ export const findAllTracks = async (
     distinct: true,
     col: "id",
     include: includeArray,
+    logging: (sql: string) => console.log("SQL:", sql),
   });
 
   return {

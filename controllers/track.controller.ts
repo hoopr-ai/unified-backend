@@ -24,10 +24,12 @@ interface AuthRequest extends Request {
 }
 
 // Helper function to strip mp3Link and waveformLink from tracks for unauthenticated users
-const stripMediaUrls = <T extends { mp3Link?: string | null; waveformLink?: string | null }>(
-  tracks: T[]
+const stripMediaUrls = <
+  T extends { mp3Link?: string | null; waveformLink?: string | null },
+>(
+  tracks: T[],
 ): T[] => {
-  return tracks.map(track => ({
+  return tracks.map((track) => ({
     ...track,
     mp3Link: null,
     waveformLink: null,
@@ -40,8 +42,7 @@ export const getAllTracks = catchAsync(
     const platform = req.session?.platform;
     const user = userId ? await findUserById(userId) : null;
     const brandId = user?.brandId;
-    const toBoolean = (val: unknown): boolean =>
-      val === true || val === "true";
+    const toBoolean = (val: unknown): boolean => val === true || val === "true";
     const query: GetAllTracksRequestData = {
       page: req.query.page as string,
       limit: req.query.limit as string,
@@ -51,15 +52,28 @@ export const getAllTracks = catchAsync(
       movie: toBoolean(req.body.movie),
       type: req.body.type as string[] | undefined,
       ownerCode: req.body.ownerCode as string[] | undefined,
-      campaign: toBoolean(req.body.campaign),
+      campaign: toBoolean(req.body.campaign) || false,
+      releaseYearFrom: req.body.releaseYearFrom
+        ? Number(req.body.releaseYearFrom)
+        : undefined,
+      releaseYearTo: req.body.releaseYearTo
+        ? Number(req.body.releaseYearTo)
+        : undefined,
     };
-    const response = await getAllTracksService(query, userId, brandId, platform);
+    const response = await getAllTracksService(
+      query,
+      userId,
+      brandId,
+      platform,
+    );
 
     // Strip mp3Link and waveformLink for unauthenticated users
-    const data = userId ? response : {
-      ...response,
-      tracks: stripMediaUrls(response.tracks),
-    };
+    const data = userId
+      ? response
+      : {
+          ...response,
+          tracks: stripMediaUrls(response.tracks),
+        };
 
     sendResponse(res, {
       status: HttpStatusCode.OK,
@@ -83,10 +97,12 @@ export const getTracksByCodes = catchAsync(
     const response = await getTracksByCodesService(query, userId, brandId);
 
     // Strip mp3Link and waveformLink for unauthenticated users
-    const data = userId ? response : {
-      ...response,
-      tracks: stripMediaUrls(response.tracks),
-    };
+    const data = userId
+      ? response
+      : {
+          ...response,
+          tracks: stripMediaUrls(response.tracks),
+        };
 
     sendResponse(res, {
       status: HttpStatusCode.OK,
@@ -111,10 +127,12 @@ export const getTracksByFilter = catchAsync(
     const response = await getTracksByFilterService(query, userId, brandId);
 
     // Strip mp3Link and waveformLink for unauthenticated users
-    const data = userId ? response : {
-      ...response,
-      tracks: stripMediaUrls(response.tracks),
-    };
+    const data = userId
+      ? response
+      : {
+          ...response,
+          tracks: stripMediaUrls(response.tracks),
+        };
 
     sendResponse(res, {
       status: HttpStatusCode.OK,
@@ -130,7 +148,11 @@ export const getTrackDetailsByCode = catchAsync(
     const user = userId ? await findUserById(userId) : null;
     const brandId = user?.brandId;
     const trackCode = req.params.trackCode as string;
-    const response = await getTrackDetailsByCodeService(trackCode, userId, brandId);
+    const response = await getTrackDetailsByCodeService(
+      trackCode,
+      userId,
+      brandId,
+    );
 
     if (!response) {
       sendResponse(res, {
@@ -142,11 +164,13 @@ export const getTrackDetailsByCode = catchAsync(
     }
 
     // Strip mp3Link and waveformLink for unauthenticated users
-    const data = userId ? response : {
-      ...response,
-      mp3Link: null,
-      waveformLink: null,
-    };
+    const data = userId
+      ? response
+      : {
+          ...response,
+          mp3Link: null,
+          waveformLink: null,
+        };
 
     sendResponse(res, {
       status: HttpStatusCode.OK,
