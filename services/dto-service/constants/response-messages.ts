@@ -55,4 +55,5 @@ export const enum ResponseMessages {
   FaqSectionDeletedSuccess = "FAQ section deleted successfully",
   FaqSectionNotFound = "FAQ section not found",
   FaqSectionsReorderedSuccess = "FAQ sections reordered successfully",
+  CompanyLookupSuccess = "Company revenue data fetched successfully",
 }

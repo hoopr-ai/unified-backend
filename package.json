@@ -25,6 +25,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@google/genai": "^1.49.0",
     "@google-cloud/storage": "^7.18.0",
     "@newrelic/winston-enricher": "^4.0.1",
     "@types/bcrypt": "^6.0.0",
