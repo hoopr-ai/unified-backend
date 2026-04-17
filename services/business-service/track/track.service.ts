@@ -219,7 +219,11 @@ const transformTrackToDto = (
     ...(track.album && { album: track.album }),
     // Only include campaign if it exists and hasn't been used by the user
     ...(track.campaign &&
-      !(usedCampaignIds && track.campaignId && usedCampaignIds.has(String(track.campaignId))) && {
+      !(
+        usedCampaignIds &&
+        track.campaignId &&
+        usedCampaignIds.has(String(track.campaignId))
+      ) && {
         campaign: {
           amount: track.campaign.amount,
           type: track.campaign.amountType,
@@ -386,7 +390,6 @@ export const buildTracksResponseFromRawData = async (
   );
 };
 
-
 export const getAllTracksService = async (
   query: GetAllTracksRequestData,
   userId?: number,
@@ -428,6 +431,19 @@ export const getAllTracksService = async (
     whereClause.createdAt = { [Op.gte]: oneWeekAgo };
   }
 
+  if (query.releaseYearFrom || query.releaseYearTo) {
+    const releaseDateCondition: any = {};
+    if (query.releaseYearFrom) {
+      releaseDateCondition[Op.gte] = new Date(`${query.releaseYearFrom}-01-01`);
+    }
+    if (query.releaseYearTo) {
+      releaseDateCondition[Op.lt] = new Date(
+        `${query.releaseYearTo + 1}-01-01`,
+      );
+    }
+    whereClause.releaseDate = releaseDateCondition;
+  }
+
   // Resolve owner IDs from type and ownerCode filters, then intersect
   const [ownerIdsByType, ownerIdsByCode] = await Promise.all([
     resolveOwnerIdsByType(query.type),
@@ -447,7 +463,9 @@ export const getAllTracksService = async (
       getRestrictedTrackTiersByBrandId(brandId),
     ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    const resolvedIds = await getOwnerIdsByNames(
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
+    );
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
@@ -461,15 +479,24 @@ export const getAllTracksService = async (
   // Campaign data should only be fetched if:
   // 1. User is NOT logged in (no token), OR
   // 2. User IS logged in AND platform is SOUND_TRACKING_APP
-  const shouldFetchCampaign =
-    query.campaign === true ||
-    (!userId || platform === Platform.SOUND_TRACKING_APP);
+  const shouldFetchCampaign = query.campaign === true;
 
   // Fetch user's used campaign IDs to filter them out from display
   let usedCampaignIds: Set<string> | undefined;
   if (shouldFetchCampaign && userId) {
     usedCampaignIds = await getUserUsedCampaignIds(userId);
   }
+
+  console.log(
+    "getAllTracksService releaseDate filter:",
+    whereClause.releaseDate,
+  );
+  console.log(
+    "getAllTracksService query.releaseYearFrom:",
+    query.releaseYearFrom,
+    "query.releaseYearTo:",
+    query.releaseYearTo,
+  );
 
   const rawData = await findAllTracks(
     page,
@@ -547,7 +574,9 @@ export const getTracksByCodesService = async (
       getRestrictedTrackTiersByBrandId(brandId),
     ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    const resolvedIds = await getOwnerIdsByNames(
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
+    );
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
@@ -668,7 +697,9 @@ export const getTracksByFilterService = async (
       getRestrictedTrackTiersByBrandId(brandId),
     ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    const resolvedIds = await getOwnerIdsByNames(
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
+    );
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
@@ -818,11 +849,17 @@ export const getTrackDetailsByCodeService = async (
       getRestrictedTrackTiersByBrandId(brandId),
     ]);
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    const resolvedIds = await getOwnerIdsByNames(
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
+    );
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
-  const track = await findTrackByTrackCode(trackCode, excludeOwnerIds, excludeTiers);
+  const track = await findTrackByTrackCode(
+    trackCode,
+    excludeOwnerIds,
+    excludeTiers,
+  );
 
   if (!track) {
     return null;

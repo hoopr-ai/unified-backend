@@ -161,6 +161,8 @@ export interface GetAllTracksRequestData {
   type?: string[];
   ownerCode?: string[];
   campaign?: boolean;
+  releaseYearFrom?: number;
+  releaseYearTo?: number;
 }
 
 export interface GetTracksByCodesQuery {
