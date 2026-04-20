@@ -72,6 +72,8 @@ jobs:
 
       - name: Publish to GitHub Packages
         working-directory: packages/db-schemas
-        run: npm publish
+        run: |
+          rm -f .npmrc
+          npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
