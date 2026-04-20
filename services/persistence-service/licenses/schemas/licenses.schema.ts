@@ -28,6 +28,11 @@ export interface LicenseDetails {
   status?: string;
   licenseTypeId?: string;
   licensePdfPath?: string;
+  projectId?: string;
+  type?: string;
+  price?: number;
+  smashVisible?: boolean;
+  tokenId?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -97,6 +102,38 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     allowNull: true,
   })
   licensePdfPath?: string;
+
+  @Column({
+    type: DataType.UUID,
+    allowNull: true,
+  })
+  projectId?: string;
+
+  @Column({
+    type: DataType.STRING(100),
+    allowNull: true,
+  })
+  type?: string;
+
+  @Column({
+    type: DataType.DECIMAL(10, 2),
+    allowNull: true,
+  })
+  price?: number;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: true,
+    defaultValue: false,
+  })
+  smashVisible?: boolean;
+
+  @Index({ name: "idx_licenses_token_id" })
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  tokenId?: number;
 
   @CreatedAt
   @Column({

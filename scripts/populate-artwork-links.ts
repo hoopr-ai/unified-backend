@@ -11,11 +11,11 @@ const CDN_BASE_URL = "https://cdn-prod.hooprsmash.com";
 
 // DB config — update to point to production DB when ready
 const DB_CONFIG = {
-  host: process.env.DB_HOST || "34.47.153.109",
+  host: process.env.DB_HOST || "34.47.200.207",
   port: parseInt(process.env.DB_PORT || "5432"),
-  user: process.env.DB_USER || "unified-prod",
-  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
-  database: process.env.DB_NAME || "unified-backend-prod",
+  user: process.env.DB_USER || "select-server-dev",
+  password: process.env.DB_PASSWORD || "hO82GcLotttB5bLyoeG1",
+  database: process.env.DB_NAME || "sage_staging",
   ssl: { rejectUnauthorized: false },
 };
 

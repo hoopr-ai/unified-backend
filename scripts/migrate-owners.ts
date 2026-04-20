@@ -4,25 +4,31 @@ import { OwnerModel } from "../services/persistence-service/owner/modules.export
 
 // ============ SOURCE DATABASE (select_staging) ============
 const SOURCE_DB_CONFIG = {
-  host: "34.100.172.44",
+  // host: "34.100.172.44",
+  // port: 5432,
+  // user: "s-prod",
+  // password: "ROUG2gact4whif_oorn",
+  // database: "S-PROD",
+  host: "34.47.153.109",
+  user: "unified-prod",
+  password: 'X"E6o+`{yvN|c30R',
+  database: "unified-backend-prod",
   port: 5432,
-  user: "s-prod",
-  password: "ROUG2gact4whif_oorn",
-  database: "S-PROD",
+  ssl: { rejectUnauthorized: false },
 };
 
 // ============ TARGET DATABASE (unified_staging) ============
 const TARGET_DB_CONFIG = {
-  // host: "34.47.200.207",
-  // port: 5432,
-  // username: "select-server-dev",
-  // password: "hO82GcLotttB5bLyoeG1",
-  // database: "sage_staging",
-  host: process.env.DB_HOST || "34.47.153.109",
-  username: process.env.DB_USER || "unified-prod",
-  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
-  database: process.env.DB_NAME || "unified-backend-prod",
-  port: parseInt(process.env.DB_PORT || "5432"),
+  host: "34.47.200.207",
+  port: 5432,
+  username: "select-server-dev",
+  password: "hO82GcLotttB5bLyoeG1",
+  database: "sage_staging",
+  // host: process.env.DB_HOST || "34.47.153.109",
+  // username: process.env.DB_USER || "unified-prod",
+  // password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  // database: process.env.DB_NAME || "unified-backend-prod",
+  // port: parseInt(process.env.DB_PORT || "5432"),
   ssl: { rejectUnauthorized: false },
 };
 

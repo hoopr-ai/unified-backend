@@ -838,6 +838,236 @@ export const sendFirstLoginWelcomeEmail = async (
   });
 };
 
+export const sendContactUsEmail = async (data: {
+  userName: string;
+  userEmail: string;
+  mobile?: string;
+  brandName?: string;
+  message?: string;
+}): Promise<void> => {
+  const { userName, userEmail, mobile, brandName, message } = data;
+  const adminEmails: string[] = []; // TODO: Add admin emails
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <title>New Contact Us Inquiry</title>
+    </head>
+
+    <body style="margin:0; padding:0; background-color:#f4f4f4; font-family: Arial, Helvetica, sans-serif;">
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4; padding:30px 0;">
+        <tr>
+          <td align="center">
+
+            <!-- Main Container -->
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+
+              <!-- Logo -->
+              <tr>
+                <td align="center" style="padding:30px 20px 10px 20px;">
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                </td>
+              </tr>
+
+              <!-- Title -->
+              <tr>
+                <td align="center" style="padding:10px 40px;">
+                  <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
+                    New Contact Us Inquiry
+                  </h1>
+                </td>
+              </tr>
+
+              <!-- Body -->
+              <tr>
+                <td style="padding:20px 40px 10px 40px;">
+                  <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
+                    A user has submitted a contact inquiry from Hoopr Smash.
+                  </p>
+                </td>
+              </tr>
+
+              <!-- Details Box -->
+              <tr>
+                <td style="padding:0 40px 20px 40px;">
+                  <table width="100%" cellpadding="0" cellspacing="0"
+                    style="background:#f7f7f7; border-radius:6px; padding:20px;">
+                    <tr>
+                      <td style="font-size:15px; padding:5px 0; color:#333;">
+                        <strong>Name:</strong> ${userName}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-size:15px; padding:5px 0; color:#333;">
+                        <strong>Email:</strong> <a href="mailto:${userEmail}" style="color:#ff2f63; text-decoration:none;">${userEmail}</a>
+                      </td>
+                    </tr>
+                    ${mobile ? `
+                    <tr>
+                      <td style="font-size:15px; padding:5px 0; color:#333;">
+                        <strong>Mobile:</strong> ${mobile}
+                      </td>
+                    </tr>
+                    ` : ""}
+                    ${brandName ? `
+                    <tr>
+                      <td style="font-size:15px; padding:5px 0; color:#333;">
+                        <strong>Brand:</strong> ${brandName}
+                      </td>
+                    </tr>
+                    ` : ""}
+                    ${message ? `
+                    <tr>
+                      <td style="font-size:15px; padding:10px 0 5px 0; color:#333;">
+                        <strong>Message:</strong>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-size:15px; padding:5px 0; color:#333; line-height:1.6;">
+                        ${message}
+                      </td>
+                    </tr>
+                    ` : ""}
+                  </table>
+                </td>
+              </tr>
+
+              <!-- Footer Message -->
+              <tr>
+                <td style="padding:0 40px 25px 40px;">
+                  <p style="margin:0 0 10px 0; font-size:15px; color:#333; line-height:1.7;">
+                    Please respond to this inquiry at your earliest convenience.
+                  </p>
+                  <p style="margin:0; font-size:15px; color:#333; line-height:1.7;">
+                    Regards,<br/>Hoopr Smash System
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+
+            <!-- Footer -->
+            <table width="600" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:20px; font-size:12px; color:#aaa;">
+                  This is an automated email from Hoopr Smash.
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+      </table>
+
+    </body>
+    </html>
+  `;
+
+  // Send to all admin emails
+  for (const adminEmail of adminEmails) {
+    await sendEmail({
+      to: adminEmail,
+      subject: `Hoopr Smash - Contact Us Inquiry from ${userName}`,
+      html,
+    });
+  }
+
+  // Send confirmation email to user
+  const userConfirmationHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8" />
+      <title>We Received Your Inquiry</title>
+    </head>
+
+    <body style="margin:0; padding:0; background-color:#f4f4f4; font-family: Arial, Helvetica, sans-serif;">
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4; padding:30px 0;">
+        <tr>
+          <td align="center">
+
+            <!-- Main Container -->
+            <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.08);">
+
+              <!-- Logo -->
+              <tr>
+                <td align="center" style="padding:30px 20px 10px 20px;">
+                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+                </td>
+              </tr>
+
+              <!-- Title -->
+              <tr>
+                <td align="center" style="padding:10px 40px;">
+                  <h1 style="margin:0; font-size:26px; color:#1a1a1a;">
+                    We Received Your Inquiry
+                  </h1>
+                </td>
+              </tr>
+
+              <!-- Body -->
+              <tr>
+                <td style="padding:20px 40px 10px 40px;">
+                  <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
+                    Hey ${userName},
+                  </p>
+                  <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
+                    Thank you for reaching out to us. We have received your inquiry and our team will get back to you shortly.
+                  </p>
+                  ${message ? `
+                  <p style="margin:0 0 8px 0; font-size:15px; color:#333; line-height:1.7;">
+                    <strong>Your message:</strong>
+                  </p>
+                  <p style="margin:0 0 16px 0; font-size:15px; color:#666; line-height:1.7; padding:15px; background:#f7f7f7; border-radius:6px;">
+                    ${message}
+                  </p>
+                  ` : ""}
+                </td>
+              </tr>
+
+              <!-- Footer Message -->
+              <tr>
+                <td style="padding:0 40px 25px 40px;">
+                  <p style="margin:0 0 10px 0; font-size:15px; color:#333; line-height:1.7;">
+                    In case you need any urgent help, feel free to reach out to us at
+                    <a href="mailto:hello@hoopr.ai" style="color:#ff2f63; text-decoration:none;">hello@hoopr.ai</a>.
+                  </p>
+                  <p style="margin:0; font-size:15px; color:#333; line-height:1.7;">
+                    Regards,<br/>Team Hoopr
+                  </p>
+                </td>
+              </tr>
+
+            </table>
+
+            <!-- Footer -->
+            <table width="600" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:20px; font-size:12px; color:#aaa;">
+                  This is an automated email. Please do not reply.
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+      </table>
+
+    </body>
+    </html>
+  `;
+
+  await sendEmail({
+    to: userEmail,
+    subject: "Hoopr Smash - We Received Your Inquiry",
+    html: userConfirmationHtml,
+  });
+};
+
 export const sendOtpEmail = async (
   email: string,
   otp: string,

@@ -17,6 +17,10 @@ export interface ProjectTrackDetails {
   projectId: string;
   trackCode: string;
   score?: number;
+  fromTime?: number;
+  tillTime?: number;
+  volume?: number;
+  finalVideoPath?: string;
   createdAt?: Date;
 }
 
@@ -49,6 +53,30 @@ export class ProjectTrackModel extends Model<ProjectTrackModel, ProjectTrackDeta
     allowNull: true,
   })
   score?: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  fromTime?: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  tillTime?: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  volume?: number;
+
+  @Column({
+    type: DataType.TEXT,
+    allowNull: true,
+  })
+  finalVideoPath?: string;
 
   @CreatedAt
   @Column({ type: DataType.DATE })
