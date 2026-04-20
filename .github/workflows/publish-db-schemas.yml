@@ -1,5 +1,6 @@
 name: Publish DB Schemas Package
 
+
 on:
   push:
     branches:
