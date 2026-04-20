@@ -29,12 +29,12 @@ export interface UserRoleDetails {
 export class UserRoleModel extends Model<UserRoleModel, UserRoleDetails> {
   @PrimaryKey
   @AutoIncrement
-  @Column(DataType.INTEGER)
+  @Column(DataType.BIGINT)
   id!: number;
 
   @ForeignKey(() => UserModel)
   @Column({
-    type: DataType.INTEGER,
+    type: DataType.BIGINT,
     allowNull: false,
   })
   userId!: number;

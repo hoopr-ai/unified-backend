@@ -41,7 +41,7 @@ export interface UserDetails {
 export class UserModel extends Model<UserModel, UserDetails> {
   @PrimaryKey
   @AutoIncrement
-  @Column(DataType.INTEGER)
+  @Column(DataType.BIGINT)
   id!: number;
 
   @ForeignKey(() => BrandModel)

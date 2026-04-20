@@ -582,13 +582,15 @@ export const getUserUsedCampaignIds = async (
 ): Promise<Set<string>> => {
   const projects = await SoundProjectModel.findAll({
     where: { userId },
-    attributes: ["campaignId"],
+    attributes: ["campaignIds"],
   });
 
   const usedCampaignIds = new Set<string>();
   for (const project of projects) {
-    if (project.campaignId) {
-      usedCampaignIds.add(String(project.campaignId));
+    if (project.campaignIds && Array.isArray(project.campaignIds)) {
+      for (const campaignId of project.campaignIds) {
+        usedCampaignIds.add(campaignId);
+      }
     }
   }
 

@@ -57,10 +57,7 @@ export interface TrackDetails {
   partnerId?: string;
   bollywood?: string;
   jioSaavanStream?: string;
-  campaignId?: number;
-  artLink?: string;
-  hookTimings?: object;
-  artworkLink?: string;
+  campaignId?: string;
 }
 
 @Table({
@@ -292,30 +289,12 @@ export class TrackModel extends Model<TrackModel> {
   })
   jioSaavanStream?: string;
 
-  @Column({
-    type: DataType.STRING(255),
-    allowNull: true,
-  })
-  artLink?: string;
-
   @ForeignKey(() => CampaignModel)
   @Column({
-    type: DataType.BIGINT,
+    type: DataType.INTEGER,
     allowNull: true,
   })
   campaignId?: number;
-
-  @Column({
-    type: DataType.JSONB,
-    allowNull: true,
-  })
-  hookTimings?: object;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  artworkLink?: string;
 
   @BelongsTo(() => CampaignModel, "campaignId")
   campaign?: CampaignModel;

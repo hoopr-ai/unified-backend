@@ -28,18 +28,7 @@ export interface SoundProjectDetails {
   name: string;
   platform: Platform;
   status?: ProjectStatus;
-  videoDuration?: number;
-  previewFrame?: string;
-  previewClip?: string;
-  originalVideoUrl?: string;
-  committedTrackCode?: string;
-  workingTrackCode?: string;
-  committedEdits?: object;
-  workingEdits?: object;
-  lastOpenedAt?: Date;
-  recommendations?: object[];
-  preprocessedFrames?: number;
-  campaignId?: number;
+  campaignIds?: string[];
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -83,80 +72,10 @@ export class SoundProjectModel extends Model<SoundProjectModel, SoundProjectDeta
   status!: ProjectStatus;
 
   @Column({
-    type: DataType.DOUBLE,
+    type: DataType.JSON,
     allowNull: true,
   })
-  videoDuration?: number;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  previewFrame?: string;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  previewClip?: string;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  originalVideoUrl?: string;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  committedTrackCode?: string;
-
-  @Column({
-    type: DataType.TEXT,
-    allowNull: true,
-  })
-  workingTrackCode?: string;
-
-  @Default({})
-  @Column({
-    type: DataType.JSONB,
-    allowNull: true,
-  })
-  committedEdits?: object;
-
-  @Default({})
-  @Column({
-    type: DataType.JSONB,
-    allowNull: true,
-  })
-  workingEdits?: object;
-
-  @Column({
-    type: DataType.DATE,
-    allowNull: true,
-  })
-  lastOpenedAt?: Date;
-
-  @Default([])
-  @Column({
-    type: DataType.JSONB,
-    allowNull: true,
-  })
-  recommendations?: object[];
-
-  @Default(0)
-  @Column({
-    type: DataType.INTEGER,
-    allowNull: true,
-  })
-  preprocessedFrames?: number;
-
-  @Column({
-    type: DataType.BIGINT,
-    allowNull: true,
-  })
-  campaignId?: number;
+  campaignIds?: string[];
 
   @CreatedAt
   @Column({ type: DataType.DATE })

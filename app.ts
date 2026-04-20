@@ -21,7 +21,6 @@ import albumRoutes from "./routes/album.route";
 import featuredTracksRoutes from "./routes/featured-tracks.route";
 import faqRoutes from "./routes/faq.route";
 import faqSectionRoutes from "./routes/faq-section.route";
-import contactRoutes from "./routes/contact.route";
 import companyLookupRoutes from "./routes/company-lookup.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
@@ -57,7 +56,6 @@ app.use("/albums", albumRoutes);
 app.use("/featured-tracks", featuredTracksRoutes);
 app.use("/faqs", faqRoutes);
 app.use("/faq-sections", faqSectionRoutes);
-app.use("/contact", contactRoutes);
 app.use("/company-lookup", companyLookupRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {

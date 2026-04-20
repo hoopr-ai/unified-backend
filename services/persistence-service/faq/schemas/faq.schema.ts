@@ -76,7 +76,6 @@ export class FaqModel extends Model<FaqModel, FaqDetails> {
   @CreatedAt
   @Column({
     type: DataType.DATE,
-    allowNull: false,
   })
   createdAt!: Date;
 

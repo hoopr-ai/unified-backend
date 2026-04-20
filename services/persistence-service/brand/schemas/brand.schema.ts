@@ -70,7 +70,7 @@ export class BrandModel extends Model<BrandModel, BrandDetails> {
 
   @Default([])
   @Column({
-    type: DataType.ARRAY(DataType.STRING),
+    type: DataType.ARRAY(DataType.TEXT),
     allowNull: true,
   })
   restrictedOwners?: string[];

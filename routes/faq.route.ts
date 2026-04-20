@@ -12,13 +12,13 @@ import {
   updateFaqRequestSchema,
   reorderFaqsRequestSchema,
 } from "../middlewares/faq.validation";
-import { authenticateWithSession, optionalAuthenticate } from "../middlewares/authenticate";
+import { authenticateWithSession } from "../middlewares/authenticate";
 import { Platform, UserRoles } from "../services/dto-service/modules.export";
 
 const router = Router();
 
 // Public — fetch FAQs by platform (and optionally sectionId)
-router.get("/", optionalAuthenticate, getFaqs);
+router.get("/", getFaqs);
 
 // Admin only — create / update / delete / reorder
 router.post(

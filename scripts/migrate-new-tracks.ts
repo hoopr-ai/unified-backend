@@ -9,23 +9,19 @@ const SOURCE_DB_CONFIG = {
   database: "S-PROD",
 };
 
-// ============ TARGET DATABASE (PRODUCTION) ============
+// ============ TARGET DATABASE ============
 const TARGET_DB_CONFIG = {
-  host: "34.47.153.109",
+  host: "34.47.200.207",
   port: 5432,
-  user: "unified-prod",
-  password: 'X"E6o+`{yvN|c30R',
-  database: "unified-backend-prod",
-  ssl: { rejectUnauthorized: false },
+  user: "select-server-dev",
+  password: "hO82GcLotttB5bLyoeG1",
+  database: "sage_staging",
 };
 
 // ============ HELPERS ============
 function toStringArray(value: string | null): string[] | null {
   if (!value) return null;
-  return value
-    .split(",")
-    .map((v) => v.trim())
-    .filter(Boolean);
+  return value.split(",").map((v) => v.trim()).filter(Boolean);
 }
 
 function toBoolean(value: string | null): boolean | null {
@@ -40,13 +36,7 @@ function toJsonbStrict(value: any): object | null {
   if (typeof value === "object") return value;
   if (typeof value === "string") {
     const trimmed = value.trim();
-    if (
-      !trimmed ||
-      trimmed === "{" ||
-      trimmed === "[" ||
-      trimmed.endsWith(":") ||
-      trimmed.endsWith(",")
-    ) {
+    if (!trimmed || trimmed === "{" || trimmed === "[" || trimmed.endsWith(":") || trimmed.endsWith(",")) {
       return null;
     }
     try {
@@ -60,41 +50,12 @@ function toJsonbStrict(value: any): object | null {
 
 // ============ TRACK MIGRATION ============
 const TRACK_MODEL_FIELDS = [
-  "id",
-  "trackCode",
-  "type",
-  "name",
-  "description",
-  "duration",
-  "size",
-  "bpm",
-  "songKey",
-  "timeSignature",
-  "region",
-  "releaseRegion",
-  "releaseDate",
-  "ownerId",
-  "hasVocals",
-  "isPRO",
-  "displayTags",
-  "sourceLink",
-  "name_slug",
-  "waveformLink",
-  "mp3Link",
-  "ISRC",
-  "lyrics",
-  "tier",
-  "energy",
-  "industry",
-  "status",
-  "createdAt",
-  "updatedAt",
-  "publisherId",
-  "trending",
-  "premium",
-  "reelCount",
-  "partnerId",
-  "bollywood",
+  "id", "trackCode", "type", "name", "description", "duration", "size", "bpm",
+  "songKey", "timeSignature", "region", "releaseRegion", "releaseDate", "ownerId",
+  "hasVocals", "isPRO", "displayTags", "sourceLink", "name_slug", "waveformLink",
+  "mp3Link", "ISRC", "lyrics", "tier", "energy", "industry", "status",
+  "createdAt", "updatedAt", "publisherId", "trending", "premium", "reelCount",
+  "partnerId", "bollywood",
 ] as const;
 
 const ARRAY_FIELDS = ["songKey", "displayTags", "ownerId", "publisherId"];
@@ -106,37 +67,21 @@ function mapSourceTrackToModel(sourceTrack: any): Record<string, any> {
   for (const field of TRACK_MODEL_FIELDS) {
     const sourceValue = sourceTrack[field];
     if (sourceValue === undefined) continue;
-    if (ARRAY_FIELDS.includes(field)) {
-      mappedTrack[field] = toStringArray(sourceValue);
-      continue;
-    }
-    if (JSONB_FIELDS.includes(field)) {
-      mappedTrack[field] = toJsonbStrict(sourceValue);
-      continue;
-    }
-    if (BOOLEAN_FIELDS.includes(field)) {
-      mappedTrack[field] = toBoolean(sourceValue);
-      continue;
-    }
+    if (ARRAY_FIELDS.includes(field)) { mappedTrack[field] = toStringArray(sourceValue); continue; }
+    if (JSONB_FIELDS.includes(field)) { mappedTrack[field] = toJsonbStrict(sourceValue); continue; }
+    if (BOOLEAN_FIELDS.includes(field)) { mappedTrack[field] = toBoolean(sourceValue); continue; }
     mappedTrack[field] = sourceValue;
   }
   return mappedTrack;
 }
 
 // Build parameterized upsert SQL
-function buildUpsert(
-  table: string,
-  data: Record<string, any>,
-  conflictCol: string,
-): { sql: string; values: any[] } {
+function buildUpsert(table: string, data: Record<string, any>, conflictCol: string): { sql: string; values: any[] } {
   const keys = Object.keys(data);
   const values = Object.values(data);
   const cols = keys.map((k) => `"${k}"`).join(", ");
   const params = keys.map((_, i) => `$${i + 1}`).join(", ");
-  const updates = keys
-    .filter((k) => k !== conflictCol)
-    .map((k) => `"${k}" = EXCLUDED."${k}"`)
-    .join(", ");
+  const updates = keys.filter((k) => k !== conflictCol).map((k) => `"${k}" = EXCLUDED."${k}"`).join(", ");
   return {
     sql: `INSERT INTO "${table}" (${cols}) VALUES (${params}) ON CONFLICT ("${conflictCol}") DO UPDATE SET ${updates}`,
     values,
@@ -156,19 +101,13 @@ async function migrateNewTracks() {
     console.log("✅ Connected to target database");
 
     // ============ STEP 1: Find latest createdAt in target ============
-    const latestResult = await targetClient.query(
-      `SELECT MAX("createdAt") AS latest FROM tracks`,
-    );
+    const latestResult = await targetClient.query(`SELECT MAX("createdAt") AS latest FROM tracks`);
     const latestCreatedAt: Date | null = latestResult.rows[0]?.latest ?? null;
     if (latestCreatedAt) {
-      console.log(
-        `\n🕐 Latest track in target DB: ${latestCreatedAt.toISOString()}`,
-      );
+      console.log(`\n🕐 Latest track in target DB: ${latestCreatedAt.toISOString()}`);
       console.log(`📦 Fetching tracks from source created after this date...`);
     } else {
-      console.log(
-        `\n⚠️  No tracks found in target DB — fetching all tracks from source`,
-      );
+      console.log(`\n⚠️  No tracks found in target DB — fetching all tracks from source`);
     }
 
     // ============ STEP 2: Fetch only new tracks from source ============
@@ -196,21 +135,16 @@ async function migrateNewTracks() {
       if (!ownerIdRaw) continue;
       const ids: string[] = Array.isArray(ownerIdRaw)
         ? ownerIdRaw
-        : String(ownerIdRaw)
-            .split(",")
-            .map((s: string) => s.trim())
-            .filter(Boolean);
+        : String(ownerIdRaw).split(",").map((s: string) => s.trim()).filter(Boolean);
       allOwnerIds.push(...ids);
     }
 
     const uniqueOwnerIds = [...new Set(allOwnerIds)];
 
     if (uniqueOwnerIds.length > 0) {
-      const ownerPlaceholders = uniqueOwnerIds
-        .map((_, i) => `$${i + 1}`)
-        .join(", ");
+      const ownerPlaceholders = uniqueOwnerIds.map((_, i) => `$${i + 1}`).join(", ");
       const { rows: owners } = await sourceClient.query(
-        `SELECT id, "ownerCode", username, category, "revenueGenerated", "revenueShare", "licenseStart", "licenseEnd", "isActive", "IPRS", remarks, metadata, deleted, "createdAt", "updatedAt" FROM owners WHERE id IN (${ownerPlaceholders})`,
+        `SELECT id, "ownerCode", username, type, "subType", category, status, "revenueGenerated", "revenueShare", "licenseStart", "licenseEnd", "isActive", "IPRS", remarks, metadata, "usageInfo", "restrictedCategories", deleted, "createdAt", "updatedAt" FROM owners WHERE id IN (${ownerPlaceholders})`,
         uniqueOwnerIds,
       );
 
@@ -237,9 +171,7 @@ async function migrateNewTracks() {
 
       console.log(`✅ Owners: ${ownerSuccess} succeeded, ${ownerError} failed`);
     } else {
-      console.log(
-        "⚠️  No owner IDs found in new tracks, skipping owner migration.",
-      );
+      console.log("⚠️  No owner IDs found in new tracks, skipping owner migration.");
     }
 
     // ============ STEP 4: Migrate tracks ============
@@ -274,9 +206,7 @@ async function migrateNewTracks() {
     console.log(`✅ Tracks: ${trackSuccess} succeeded, ${trackError} failed`);
 
     if (newTrackIds.length === 0) {
-      console.log(
-        "⚠️  No tracks were successfully migrated, skipping mappings.",
-      );
+      console.log("⚠️  No tracks were successfully migrated, skipping mappings.");
       return;
     }
 
@@ -296,15 +226,8 @@ async function migrateNewTracks() {
 
     for (const mapping of artistMappings) {
       try {
-        if (
-          !mapping.id ||
-          !mapping.artistId ||
-          !mapping.trackId ||
-          !mapping.role
-        ) {
-          console.warn(
-            `⚠️  Skipping artist mapping with missing required fields`,
-          );
+        if (!mapping.id || !mapping.artistId || !mapping.trackId || !mapping.role) {
+          console.warn(`⚠️  Skipping artist mapping with missing required fields`);
           continue;
         }
 
@@ -325,16 +248,11 @@ async function migrateNewTracks() {
         artistMappingSuccess++;
       } catch (err: any) {
         artistMappingError++;
-        console.error(
-          `❌ Error migrating artist mapping ${mapping.id}:`,
-          err.message,
-        );
+        console.error(`❌ Error migrating artist mapping ${mapping.id}:`, err.message);
       }
     }
 
-    console.log(
-      `✅ Track-artist mappings: ${artistMappingSuccess} succeeded, ${artistMappingError} failed`,
-    );
+    console.log(`✅ Track-artist mappings: ${artistMappingSuccess} succeeded, ${artistMappingError} failed`);
 
     // ============ STEP 6: Migrate track-filter mappings for new tracks ============
     console.log("\n📦 Migrating track-filter mappings for new tracks...");
@@ -356,11 +274,7 @@ async function migrateNewTracks() {
           continue;
         }
 
-        const data = {
-          id: mapping.id,
-          filterId: mapping.filterId,
-          trackId: mapping.trackId,
-        };
+        const data = { id: mapping.id, filterId: mapping.filterId, trackId: mapping.trackId };
         const keys = Object.keys(data);
         const cols = keys.map((k) => `"${k}"`).join(", ");
         const params = keys.map((_, i) => `$${i + 1}`).join(", ");
@@ -371,20 +285,13 @@ async function migrateNewTracks() {
         filterMappingSuccess++;
       } catch (err: any) {
         filterMappingError++;
-        console.error(
-          `❌ Error migrating filter mapping ${mapping.id}:`,
-          err.message,
-        );
+        console.error(`❌ Error migrating filter mapping ${mapping.id}:`, err.message);
       }
     }
 
-    console.log(
-      `✅ Track-filter mappings: ${filterMappingSuccess} succeeded, ${filterMappingError} failed`,
-    );
+    console.log(`✅ Track-filter mappings: ${filterMappingSuccess} succeeded, ${filterMappingError} failed`);
 
-    console.log(
-      `\n✅ All done! Migrated ${newTrackIds.length} new tracks with their artist and filter mappings.`,
-    );
+    console.log(`\n✅ All done! Migrated ${newTrackIds.length} new tracks with their artist and filter mappings.`);
   } catch (err) {
     console.error("❌ Migration failed:", err);
   } finally {
