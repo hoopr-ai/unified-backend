@@ -3,7 +3,7 @@ name: Publish DB Schemas Package
 on:
   push:
     branches:
-      - production
+      - staging
     paths:
       - 'packages/db-schemas/**'
       - 'services/persistence-service/**/*.schema.ts'
