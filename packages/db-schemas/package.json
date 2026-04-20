@@ -10,19 +10,27 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./enums": {
       "types": "./dist/enums/index.d.ts",
-      "require": "./dist/enums/index.js"
+      "import": "./dist/enums/index.js",
+      "require": "./dist/enums/index.js",
+      "default": "./dist/enums/index.js"
     },
     "./dto": {
       "types": "./dist/dto/index.d.ts",
-      "require": "./dist/dto/index.js"
+      "import": "./dist/dto/index.js",
+      "require": "./dist/dto/index.js",
+      "default": "./dist/dto/index.js"
     },
     "./models": {
       "types": "./dist/models/index.d.ts",
-      "require": "./dist/models/index.js"
+      "import": "./dist/models/index.js",
+      "require": "./dist/models/index.js",
+      "default": "./dist/models/index.js"
     }
   },
   "scripts": {
