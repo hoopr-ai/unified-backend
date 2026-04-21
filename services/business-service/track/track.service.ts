@@ -193,6 +193,8 @@ const transformTrackToDto = (
   ownerCodeMap?: Map<string, string>,
   usedCampaignIds?: Set<string>,
 ): TrackWithArtists => {
+  // Debug: Log hookTimings data to trace the issue
+  console.log(`[DEBUG hookTimings] trackCode=${track.trackCode}, raw hookTimings:`, JSON.stringify(track.hookTimings), `type:`, typeof track.hookTimings, `isArray:`, Array.isArray(track.hookTimings));
   const primaryArtists: ArtistInfoTrack[] = [];
 
   if (track.trackArtistMappings) {

@@ -207,6 +207,15 @@ export const findAllTracks = async (
     logging: (sql: string) => console.log("SQL:", sql),
   });
 
+  // Debug: Log raw hookTimings data from first few tracks
+  if (rows.length > 0) {
+    rows.slice(0, 3).forEach((track, idx) => {
+      const rawVal = track.getDataValue("hookTimings");
+      const jsonVal = track.toJSON();
+      console.log(`[DEBUG findAllTracks] Track ${idx} (${track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+    });
+  }
+
   return {
     rows: rows.map(track => track.toJSON() as RawTrackWithMappings),
     count,
@@ -276,6 +285,15 @@ export const findTracksByTrackCodes = async (
     col: "id",
     include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
+
+  // Debug: Log raw hookTimings data from first few tracks
+  if (rows.length > 0) {
+    rows.slice(0, 3).forEach((track, idx) => {
+      const rawVal = track.getDataValue("hookTimings");
+      const jsonVal = track.toJSON();
+      console.log(`[DEBUG findTracksByTrackCodes] Track ${idx} (${track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+    });
+  }
 
   return {
     rows: rows.map(track => track.toJSON() as RawTrackWithMappings),
@@ -360,6 +378,15 @@ export const findAllTracksByIds = async (
     order: [["createdAt", "DESC"]],
     include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
+
+  // Debug: Log hookTimings for first few tracks
+  if (rows.length > 0) {
+    rows.slice(0, 3).forEach((track, idx) => {
+      const rawVal = track.getDataValue("hookTimings");
+      const jsonVal = track.toJSON();
+      console.log(`[DEBUG findAllTracksByIds] Track ${idx} (${track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+    });
+  }
 
   return rows.map((track) => track.toJSON() as RawTrackWithMappings);
 };
@@ -458,6 +485,13 @@ export const findTrackByTrackCode = async (
       ...getActiveCampaignInclude(),
     ],
   });
+
+  // Debug: Log hookTimings data for track detail
+  if (track) {
+    const rawVal = track.getDataValue("hookTimings");
+    const jsonVal = track.toJSON();
+    console.log(`[DEBUG findTrackByTrackCode] Track ${track.trackCode}: rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+  }
 
   return track ? (track.toJSON() as RawTrackWithMappings) : null;
 };
@@ -562,6 +596,17 @@ export const findTracksByFilter = async (
         },
       ],
     });
+
+  // Debug: Log hookTimings for first few tracks in filter query
+  if (mappings.length > 0) {
+    mappings.slice(0, 3).forEach((mapping, idx) => {
+      if (mapping.track) {
+        const rawVal = mapping.track.getDataValue("hookTimings");
+        const jsonVal = mapping.track.toJSON();
+        console.log(`[DEBUG findTracksByFilter] Track ${idx} (${mapping.track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+      }
+    });
+  }
 
   return {
     rows: mappings.map((mapping) => ({
