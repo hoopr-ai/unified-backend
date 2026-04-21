@@ -78,6 +78,7 @@ export interface LoginResponse {
   brandId?: number;
   brandName?: string;
   missingVideoLinksCount?: number;
+  missingLink?: boolean;
 }
 
 export const AccessTokenExpiry = "3h";

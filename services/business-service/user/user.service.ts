@@ -69,6 +69,7 @@ import { SessionPayload } from "../../../middlewares/authenticate";
 interface LoginResponseWithSession extends LoginResponse {
   sessionId: number;
   missingVideoLinksCount?: number;
+  missingLink?: boolean;
 }
 
 const buildLoginResponse = (
@@ -80,6 +81,7 @@ const buildLoginResponse = (
   sessionId: number,
   brandName?: string,
   missingVideoLinksCount?: number,
+  missingLink?: boolean,
 ): LoginResponseWithSession => {
   return {
     id: user.id!,
@@ -95,6 +97,7 @@ const buildLoginResponse = (
     brandId: user.brandId,
     brandName,
     missingVideoLinksCount,
+    missingLink,
   };
 };
 
@@ -184,8 +187,10 @@ export const userLoginService = async (
 
   // For ENTERPRISE users, count licenses with missing video links
   let missingVideoLinksCount: number | undefined;
+  let missingLink: boolean | undefined;
   if (user.platform === Platform.ENTERPRISE && user.brandId) {
     missingVideoLinksCount = await countLicensesWithMissingVideoLinks(user.brandId);
+    missingLink = missingVideoLinksCount > 0;
   }
 
   return buildLoginResponse(
@@ -197,6 +202,7 @@ export const userLoginService = async (
     session.id!,
     brandName,
     missingVideoLinksCount,
+    missingLink,
   );
 };
 
