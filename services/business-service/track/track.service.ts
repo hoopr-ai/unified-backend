@@ -70,6 +70,7 @@ const extractFiltersByType = (
 
 // Normalize hookTimings which may be a JSON string, array, or object.
 // Always returns a value so the field is present in every track response.
+// Returns [] when no hook timings exist.
 const normalizeHookTimings = (raw: unknown): unknown => {
   if (raw === null || raw === undefined) return [];
   let value: unknown = raw;
@@ -80,8 +81,12 @@ const normalizeHookTimings = (raw: unknown): unknown => {
       return [];
     }
   }
-  if (Array.isArray(value)) return value;
-  if (typeof value === "object") return value;
+  if (Array.isArray(value)) return value.length > 0 ? value : [];
+  if (typeof value === "object") {
+    // If it's an empty object {}, return empty array
+    if (Object.keys(value as object).length === 0) return [];
+    return value;
+  }
   return [];
 };
 
