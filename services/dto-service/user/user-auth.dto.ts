@@ -77,6 +77,7 @@ export interface LoginResponse {
   refreshToken: string;
   brandId?: number;
   brandName?: string;
+  missingVideoLinksCount?: number;
 }
 
 export const AccessTokenExpiry = "3h";
