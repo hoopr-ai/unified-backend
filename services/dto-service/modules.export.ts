@@ -10,3 +10,4 @@ export * from './licenses/modules.export';
 export * from './constants/modules.export';
 export * from './occasion/modules.export';
 export * from './faq/modules.export';
+export * from './rail/modules.export';

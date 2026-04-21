@@ -1,0 +1,33 @@
+import { RailType, RailSourceType, RailItemType } from "./rail.enum";
+
+export interface RailSeeMoreDescriptor {
+  service: string;
+  endpoint: string;
+  params?: Record<string, unknown>;
+}
+
+export interface RailSourceConfig {
+  preview?: RailSeeMoreDescriptor;
+  seeMore?: RailSeeMoreDescriptor;
+  [key: string]: unknown;
+}
+
+export interface RailItemResponse {
+  itemType: RailItemType;
+  itemCode: string;
+  order: number;
+  data: unknown;
+}
+
+export interface RailResponse {
+  id: number;
+  key: string;
+  title: string;
+  subtitle?: string | null;
+  type: RailType;
+  subType?: string | null;
+  sourceType: RailSourceType;
+  order: number;
+  items: RailItemResponse[];
+  seeMore?: RailSeeMoreDescriptor | null;
+}

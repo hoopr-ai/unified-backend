@@ -23,6 +23,7 @@ import faqRoutes from "./routes/faq.route";
 import faqSectionRoutes from "./routes/faq-section.route";
 import contactRoutes from "./routes/contact.route";
 import companyLookupRoutes from "./routes/company-lookup.route";
+import railRoutes from "./routes/rail.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -59,6 +60,7 @@ app.use("/faqs", faqRoutes);
 app.use("/faq-sections", faqSectionRoutes);
 app.use("/contact", contactRoutes);
 app.use("/company-lookup", companyLookupRoutes);
+app.use("/rails", railRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);

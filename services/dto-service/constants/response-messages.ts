@@ -56,4 +56,8 @@ export const enum ResponseMessages {
   FaqSectionNotFound = "FAQ section not found",
   FaqSectionsReorderedSuccess = "FAQ sections reordered successfully",
   CompanyLookupSuccess = "Company revenue data fetched successfully",
+  GetRailsSuccess = "Rails fetched successfully",
+  GetRailSuccess = "Rail fetched successfully",
+  RailNotFound = "Rail not found",
+  UpsertRailSuccess = "Rail saved successfully",
 }
