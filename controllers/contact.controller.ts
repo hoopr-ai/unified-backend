@@ -14,6 +14,26 @@ export const contactUs = catchAsync(async (req: Request, res: Response) => {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Full name and email are required", {});
   }
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Please provide a valid email address", {});
+  }
+
+  if (mobile !== undefined && mobile !== null && mobile !== "") {
+    const mobileStr = String(mobile).replace(/\s+/g, "");
+    if (!/^\d{10}$/.test(mobileStr)) {
+      return sendError(res, HttpStatusCode.BAD_REQUEST, "Mobile number must be exactly 10 digits", {});
+    }
+  }
+
+  if (fullName.trim().length < 2) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Full name must be at least 2 characters", {});
+  }
+
+  if (message && message.trim().length > 1000) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Message must not exceed 1000 characters", {});
+  }
+
   await sendContactUsEmail({
     userName: fullName,
     userEmail: email,

@@ -101,60 +101,60 @@ function getFileName(filePath) {
 function transformDtoImports(content) {
   let result = content;
 
-  // Transform enum imports from same directory - e.g., './brand.enum.js' -> '../enums/brand.enum.js'
+  // Transform enum imports from same directory - e.g., './brand.enum' -> '../enums/brand.enum'
   result = result.replace(
     /from ["']\.\/([^"']+)\.enum\.js["']/g,
-    'from "../enums/$1.enum.js"'
+    'from "../enums/$1.enum"'
   );
   result = result.replace(
     /from ["']\.\/([^"']+)\.enum["']/g,
-    'from "../enums/$1.enum.js"'
+    'from "../enums/$1.enum"'
   );
 
   // Transform ./modules.export to ../enums/index
   result = result.replace(
     /from ["']\.\/modules\.export\.js["']/g,
-    'from "../enums/index.js"'
+    'from "../enums/index"'
   );
   result = result.replace(
     /from ["']\.\/modules\.export["']/g,
-    'from "../enums/index.js"'
+    'from "../enums/index"'
   );
 
   // Transform ../constants/modules.export to ../enums/index
   result = result.replace(
     /from ["']\.\.\/constants\/modules\.export["']/g,
-    'from "../enums/index.js"'
+    'from "../enums/index"'
   );
 
   // Transform ../constants/common.enums to ../enums/common.enums
   result = result.replace(
     /from ["']\.\.\/constants\/common\.enums["']/g,
-    'from "../enums/common.enums.js"'
+    'from "../enums/common.enums"'
   );
 
   // Transform ../tracks/tracks.dto to ./tracks.dto
   result = result.replace(
     /from ["']\.\.\/tracks\/tracks\.dto["']/g,
-    'from "./tracks.dto.js"'
+    'from "./tracks.dto"'
   );
 
-  // Transform dynamic import types: import("../tracks/tracks.dto") -> import("./tracks.dto.js")
+  // Transform dynamic import types: import("../tracks/tracks.dto") -> import("./tracks.dto")
   result = result.replace(
     /import\(["']\.\.\/tracks\/tracks\.dto["']\)/g,
-    'import("./tracks.dto.js")'
+    'import("./tracks.dto")'
   );
 
-  // Transform ./tracks.dto to ./tracks.dto.js (same directory)
+  // Transform ./tracks.dto to ./tracks.dto (same directory)
   result = result.replace(
     /from ["']\.\/tracks\.dto["']/g,
-    'from "./tracks.dto.js"'
+    'from "./tracks.dto"'
   );
 
   // Transform ../modules.export to ../enums/index
   result = result.replace(
     /from ["']\.\.\/modules\.export["']/g,
-    'from "../enums/index.js"'
+    'from "../enums/index"'
   );
 
   return result;
@@ -168,64 +168,61 @@ function transformSchemaImports(content) {
   // But if importing StreamType, need to go to ../dto/track-stream.dto
   result = result.replace(
     /import\s*\{\s*StreamType\s*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/dto-service\/modules\.export["']/g,
-    'import { StreamType } from "../dto/track-stream.dto.js"'
+    'import { StreamType } from "../dto/track-stream.dto"'
   );
 
   result = result.replace(
     /from ["']\.\.\/\.\.\/\.\.\/dto-service\/modules\.export["']/g,
-    'from "../enums/index.js"'
+    'from "../enums/index"'
   );
 
   // ../../../dto-service/constants/common.enums -> ../enums/common.enums
   result = result.replace(
     /from ["']\.\.\/\.\.\/\.\.\/dto-service\/constants\/common\.enums["']/g,
-    'from "../enums/common.enums.js"'
+    'from "../enums/common.enums"'
   );
 
   // ../../dto-service/modules.export -> ../enums/index
   result = result.replace(
     /from ["']\.\.\/\.\.\/dto-service\/modules\.export["']/g,
-    'from "../enums/index.js"'
+    'from "../enums/index"'
   );
 
   // ../../{module}/modules.export -> ./user.schema (need to handle differently)
   result = result.replace(
     /from ["']\.\.\/\.\.\/user\/modules\.export["']/g,
-    'from "./user.schema.js"'
+    'from "./user.schema"'
   );
 
   result = result.replace(
     /from ["']\.\.\/\.\.\/track\/modules\.export["']/g,
-    'from "./track.schema.js"'
+    'from "./track.schema"'
   );
 
   // Transform persistence-service schema imports
   // ../../organization/schemas/modules.export -> ./organization.schema
   result = result.replace(
     /from ["']\.\.\/\.\.\/([^/]+)\/schemas\/modules\.export["']/g,
-    (match, module) => `from "./${module}.schema.js"`
+    (match, module) => `from "./${module}.schema"`
   );
 
   // ../../brand/schemas/modules.export -> ./brand.schema
   result = result.replace(
     /from ["']\.\.\/\.\.\/([^/]+)\/schemas\/([^"']+)\.schema["']/g,
-    'from "./$2.schema.js"'
+    'from "./$2.schema"'
   );
 
-  // ./modules.export -> ./user.schema.js (same directory modules.export typically exports user)
+  // ./modules.export -> ./user.schema (same directory modules.export typically exports user)
   result = result.replace(
     /from ["']\.\/modules\.export["']/g,
-    'from "./user.schema.js"'
+    'from "./user.schema"'
   );
 
-  // ./user-role.schema -> ./user-role.schema.js (same directory)
+  // ./user-role.schema -> ./user-role.schema (same directory)
   result = result.replace(
     /from ["']\.\/([^"']+)\.schema["']/g,
-    'from "./$1.schema.js"'
+    'from "./$1.schema"'
   );
-
-  // Clean up any double .js.js
-  result = result.replace(/\.js\.js/g, '.js');
 
   return result;
 }
@@ -280,33 +277,33 @@ console.log('Creating index files...');
 // Enums index
 const enumExports = enumFiles
   .filter(f => existsSync(join(UNIFIED_BACKEND, 'services', f)))
-  .map(f => `export * from "./${getFileName(f).replace('.ts', '.js')}";`)
+  .map(f => `export * from "./${getFileName(f).replace('.ts', '')}";`)
   .join('\n');
 writeFileSync(join(SRC, 'enums', 'index.ts'), enumExports + '\n');
 
 // DTO index
 const dtoExports = dtoFiles
   .filter(f => existsSync(join(UNIFIED_BACKEND, 'services', f)))
-  .map(f => `export * from "./${getFileName(f).replace('.ts', '.js')}";`)
+  .map(f => `export * from "./${getFileName(f).replace('.ts', '')}";`)
   .join('\n');
 writeFileSync(join(SRC, 'dto', 'index.ts'), dtoExports + '\n');
 
 // Models index
 const modelExports = schemaFiles
   .filter(f => existsSync(join(UNIFIED_BACKEND, 'services', f)))
-  .map(f => `export * from "./${getFileName(f).replace('.ts', '.js')}";`)
+  .map(f => `export * from "./${getFileName(f).replace('.ts', '')}";`)
   .join('\n');
 writeFileSync(join(SRC, 'models', 'index.ts'), modelExports + '\n');
 
 // Main index
 const mainIndex = `// Enums
-export * from "./enums/index.js";
+export * from "./enums/index";
 
 // DTOs
-export * from "./dto/index.js";
+export * from "./dto/index";
 
 // Models
-export * from "./models/index.js";
+export * from "./models/index";
 `;
 writeFileSync(join(SRC, 'index.ts'), mainIndex);
 

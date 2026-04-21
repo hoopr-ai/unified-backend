@@ -70,7 +70,25 @@ jobs:
         working-directory: packages/db-schemas
         run: npm run build
 
+      - name: Check if version already published
+        id: version_check
+        working-directory: packages/db-schemas
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "Checking $PKG_NAME@$PKG_VERSION on GitHub Packages..."
+          if npm view "$PKG_NAME@$PKG_VERSION" version --registry=https://npm.pkg.github.com > /dev/null 2>&1; then
+            echo "Version $PKG_VERSION already exists on registry — skipping publish."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version $PKG_VERSION is new — will publish."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish to GitHub Packages
+        if: steps.version_check.outputs.exists == 'false'
         working-directory: packages/db-schemas
         run: |
           rm -f .npmrc

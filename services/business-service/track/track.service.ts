@@ -68,6 +68,23 @@ const extractFiltersByType = (
     }));
 };
 
+// Normalize hookTimings which may be a JSON string, array, or object.
+// Always returns a value so the field is present in every track response.
+const normalizeHookTimings = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return [];
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(value)) return value;
+  if (typeof value === "object") return value;
+  return [];
+};
+
 // Get token from standard SKU, default to 1 if not found
 const getStandardToken = (track: RawTrackWithMappings): number => {
   if (track.skus && track.skus.length > 0) {
@@ -217,6 +234,7 @@ const transformTrackToDto = (
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
     ...(track.album && { album: track.album }),
+    hookTimings: normalizeHookTimings(track.hookTimings),
     // Only include campaign if it exists and hasn't been used by the user
     ...(track.campaign &&
       !(
@@ -486,17 +504,6 @@ export const getAllTracksService = async (
   if (shouldFetchCampaign && userId) {
     usedCampaignIds = await getUserUsedCampaignIds(userId);
   }
-
-  console.log(
-    "getAllTracksService releaseDate filter:",
-    whereClause.releaseDate,
-  );
-  console.log(
-    "getAllTracksService query.releaseYearFrom:",
-    query.releaseYearFrom,
-    "query.releaseYearTo:",
-    query.releaseYearTo,
-  );
 
   const rawData = await findAllTracks(
     page,

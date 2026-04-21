@@ -30,6 +30,13 @@ export interface FilterInfo {
   slug: string | null;
 }
 
+// Hook timing segment for a track (e.g., chorus markers)
+export interface HookTiming {
+  start: number;
+  end: number;
+  label: string;
+}
+
 // SKU info for track details (both standard and premium)
 export interface SkuInfo {
   id: string;
@@ -60,6 +67,7 @@ export interface TrackWithArtists {
   ownerCode?: string;
   album?: AlbumInfo; // Album details for the track
   campaign?: CampaignInfo; // Campaign details (amount and type) if active
+  hookTimings: unknown; // Hook timing segments (e.g., chorus markers) — always present; `[]` when none
 }
 
 // Extended track details with both SKUs and filters
@@ -142,6 +150,7 @@ export interface RawTrackWithMappings {
   trackFilterMappings?: RawFilterMappingData[];
   album?: { id: string; title?: string; type?: string };
   campaign?: { amount: number; amountType: string; currentUsage: number; totalUsage: number; validFrom: Date; validTill: Date };
+  hookTimings?: unknown;
 }
 
 export interface PaginatedRawTracks {
