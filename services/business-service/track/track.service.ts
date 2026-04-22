@@ -345,6 +345,23 @@ const resolveOwnerIdsByOwnerCode = async (
   return ownerIds.length > 0 ? ownerIds : [];
 };
 
+// Resolve subType filter to matching owner IDs (case-insensitive)
+const resolveOwnerIdsBySubType = async (
+  subTypes?: string[],
+): Promise<string[] | undefined> => {
+  if (!subTypes || subTypes.length === 0) return undefined;
+  const filtered = subTypes.map((s) => s.trim()).filter((s) => s !== "");
+  if (filtered.length === 0) return undefined;
+
+  const lowerSubTypes = filtered.map((s) => s.toLowerCase());
+  const owners = await OwnerModel.findAll({
+    where: where(fn("LOWER", col("subType")), { [Op.in]: lowerSubTypes }) as any,
+    attributes: ["id"],
+  });
+  const ownerIds = owners.map((o) => o.id);
+  return ownerIds.length > 0 ? ownerIds : [];
+};
+
 // Intersect two owner ID arrays (both filters must match)
 const intersectOwnerIds = (
   a: string[] | undefined,
@@ -469,12 +486,16 @@ export const getAllTracksService = async (
     whereClause.releaseDate = releaseDateCondition;
   }
 
-  // Resolve owner IDs from type and ownerCode filters, then intersect
-  const [ownerIdsByType, ownerIdsByCode] = await Promise.all([
+  // Resolve owner IDs from type, ownerCode, and subType filters, then intersect
+  const [ownerIdsByType, ownerIdsByCode, ownerIdsBySubType] = await Promise.all([
     resolveOwnerIdsByType(query.type),
     resolveOwnerIdsByOwnerCode(query.ownerCode),
+    resolveOwnerIdsBySubType(query.subType),
   ]);
-  const ownerIds = intersectOwnerIds(ownerIdsByType, ownerIdsByCode);
+  const ownerIds = intersectOwnerIds(
+    intersectOwnerIds(ownerIdsByType, ownerIdsByCode),
+    ownerIdsBySubType,
+  );
   if (ownerIds && ownerIds.length === 0) {
     return emptyPaginatedResponse(page, limit);
   }

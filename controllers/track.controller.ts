@@ -43,6 +43,12 @@ export const getAllTracks = catchAsync(
     const user = userId ? await findUserById(userId) : null;
     const brandId = user?.brandId;
     const toBoolean = (val: unknown): boolean => val === true || val === "true";
+    const toStringArray = (val: unknown): string[] | undefined => {
+      if (val === undefined || val === null) return undefined;
+      if (Array.isArray(val)) return val as string[];
+      if (typeof val === "string") return [val];
+      return undefined;
+    };
     const query: GetAllTracksRequestData = {
       page: req.query.page as string,
       limit: req.query.limit as string,
@@ -52,6 +58,7 @@ export const getAllTracks = catchAsync(
       movie: toBoolean(req.body.movie),
       type: req.body.type as string[] | undefined,
       ownerCode: req.body.ownerCode as string[] | undefined,
+      subType: toStringArray(req.body.subType),
       campaign: toBoolean(req.body.campaign) || false,
       releaseYearFrom: req.body.releaseYearFrom
         ? Number(req.body.releaseYearFrom)
