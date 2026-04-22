@@ -91,9 +91,28 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
     if (!Array.isArray(b.itemCodes)) return "itemCodes array is required for MANUAL";
   } else if (sourceType === RailSourceType.QUERY) {
     if (type !== RailType.TRACKS) return "QUERY sourceType is only valid for TRACKS";
-    const q = b.query as { filterIds?: unknown } | undefined;
-    if (!q || !Array.isArray(q.filterIds) || q.filterIds.length === 0) {
-      return "query.filterIds is required for QUERY";
+    const q = b.query as {
+      filterIds?: unknown;
+      popular?: unknown;
+      trending?: unknown;
+      newOnHoopr?: unknown;
+      movie?: unknown;
+      campaign?: unknown;
+      type?: unknown;
+      ownerCode?: unknown;
+      releaseYearFrom?: unknown;
+      releaseYearTo?: unknown;
+    } | undefined;
+    if (!q) {
+      return "query object is required for QUERY sourceType";
+    }
+    const hasFilterIds = Array.isArray(q.filterIds) && q.filterIds.length > 0;
+    const hasTrackFilters = q.popular === true || q.trending === true ||
+      q.newOnHoopr === true || q.movie !== undefined || q.campaign === true ||
+      Array.isArray(q.type) || Array.isArray(q.ownerCode) ||
+      q.releaseYearFrom !== undefined || q.releaseYearTo !== undefined;
+    if (!hasFilterIds && !hasTrackFilters) {
+      return "query must have either filterIds or track filter parameters (popular, trending, newOnHoopr, movie, campaign, type, ownerCode, releaseYearFrom, releaseYearTo)";
     }
   } else if (sourceType === RailSourceType.AI_QUERY) {
     if (type !== RailType.TRACKS) return "AI_QUERY sourceType is only valid for TRACKS";

@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rails API Tester</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { color: #333; }
+    h2 { color: #555; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+    h3 { color: #666; margin-top: 20px; margin-bottom: 10px; font-size: 16px; }
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    label { display: block; margin: 10px 0 5px; font-weight: 600; color: #444; font-size: 13px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    input[type="checkbox"] { width: auto; margin-right: 8px; }
+    textarea { min-height: 100px; font-family: monospace; }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 15px;
+      margin-right: 10px;
+    }
+    button:hover { background: #0056b3; }
+    button.secondary { background: #6c757d; }
+    button.secondary:hover { background: #545b62; }
+    button.success { background: #28a745; }
+    button.success:hover { background: #218838; }
+    .response {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 15px;
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .response pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+    .status { padding: 5px 10px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
+    .status.success { background: #d4edda; color: #155724; }
+    .status.error { background: #f8d7da; color: #721c24; }
+    .row { display: flex; gap: 15px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 200px; }
+    .row-3 > div { flex: 0 0 calc(33.333% - 10px); min-width: 180px; }
+    .row-4 > div { flex: 0 0 calc(25% - 12px); min-width: 150px; }
+    .help { font-size: 12px; color: #666; margin-top: 5px; }
+    .config-section { background: #e9ecef; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+    .checkbox-row { display: flex; align-items: center; padding: 8px 0; }
+    .checkbox-row label { margin: 0; display: flex; align-items: center; font-weight: normal; }
+    .filter-group {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 15px;
+      border: 1px solid #e9ecef;
+    }
+    .filter-group-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #ddd;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 14px;
+      color: #666;
+      margin: 0;
+    }
+    .tab:hover { color: #333; }
+    .tab.active {
+      color: #007bff;
+      border-bottom: 2px solid #007bff;
+      margin-bottom: -2px;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+  <h1>Rails API Tester</h1>
+
+  <div class="config-section">
+    <div class="row">
+      <div>
+        <label for="baseUrl">Base URL</label>
+        <input type="text" id="baseUrl" value="http://localhost:3002">
+      </div>
+      <div>
+        <label for="authToken">Auth Token (for POST)</label>
+        <input type="text" id="authToken" placeholder="Bearer token for authenticated requests">
+      </div>
+    </div>
+  </div>
+
+  <!-- GET /rails -->
+  <div class="section">
+    <h2>GET /rails - Fetch All Rails</h2>
+    <div class="row">
+      <div>
+        <label for="getRailsBrandId">Brand ID (optional)</label>
+        <input type="number" id="getRailsBrandId" placeholder="e.g., 123">
+      </div>
+    </div>
+    <button onclick="fetchRails()">Fetch Rails</button>
+    <div id="getRailsResponse"></div>
+  </div>
+
+  <!-- GET /rails/:key -->
+  <div class="section">
+    <h2>GET /rails/:key - Fetch Rail by Key</h2>
+    <div class="row">
+      <div>
+        <label for="getRailKey">Rail Key *</label>
+        <input type="text" id="getRailKey" placeholder="e.g., featured-tracks">
+      </div>
+      <div>
+        <label for="getRailKeyBrandId">Brand ID (optional)</label>
+        <input type="number" id="getRailKeyBrandId" placeholder="e.g., 123">
+      </div>
+    </div>
+    <button onclick="fetchRailByKey()">Fetch Rail</button>
+    <div id="getRailKeyResponse"></div>
+  </div>
+
+  <!-- POST /rails -->
+  <div class="section">
+    <h2>POST /rails - Create/Update Rail</h2>
+    <p class="help">This endpoint requires authentication. Make sure to set the Auth Token above.</p>
+
+    <!-- Basic Info -->
+    <h3>Basic Information</h3>
+    <div class="row">
+      <div>
+        <label for="postRailKey">Key *</label>
+        <input type="text" id="postRailKey" placeholder="e.g., my-rail">
+      </div>
+      <div>
+        <label for="postRailTitle">Title *</label>
+        <input type="text" id="postRailTitle" placeholder="e.g., My Custom Rail">
+      </div>
+      <div>
+        <label for="postRailSubtitle">Subtitle</label>
+        <input type="text" id="postRailSubtitle" placeholder="e.g., Check out these tracks">
+      </div>
+    </div>
+
+    <div class="row row-4">
+      <div>
+        <label for="postRailType">Type *</label>
+        <select id="postRailType">
+          <option value="TRACKS">TRACKS</option>
+          <option value="GENRES">GENRES</option>
+          <option value="LANGUAGES">LANGUAGES</option>
+          <option value="MOODS">MOODS</option>
+          <option value="LABELS">LABELS</option>
+          <option value="PLAYLISTS">PLAYLISTS</option>
+        </select>
+      </div>
+      <div>
+        <label for="postRailSourceType">Source Type *</label>
+        <select id="postRailSourceType" onchange="toggleSourceFields()">
+          <option value="MANUAL">MANUAL</option>
+          <option value="QUERY">QUERY (TRACKS only)</option>
+          <option value="AI_QUERY">AI_QUERY (TRACKS only)</option>
+        </select>
+      </div>
+      <div>
+        <label for="postRailBrandId">Brand ID</label>
+        <input type="number" id="postRailBrandId" placeholder="Optional">
+      </div>
+      <div>
+        <label for="postRailOrder">Order</label>
+        <input type="number" id="postRailOrder" placeholder="Auto-assigned">
+      </div>
+    </div>
+
+    <div class="row row-3">
+      <div>
+        <label for="postRailLimit">Limit</label>
+        <input type="number" id="postRailLimit" placeholder="Default: 10, Max: 200" value="10">
+      </div>
+      <div class="checkbox-row" style="padding-top: 35px;">
+        <label><input type="checkbox" id="postRailIsVisible" checked> Is Visible</label>
+      </div>
+    </div>
+
+    <!-- MANUAL fields -->
+    <div id="manualFields" class="filter-group">
+      <div class="filter-group-title">MANUAL Source - Item Codes</div>
+      <label for="postRailItemCodes">Item Codes (comma-separated) *</label>
+      <input type="text" id="postRailItemCodes" placeholder="e.g., TRACK001,TRACK002,TRACK003">
+      <p class="help">Enter track codes, genre IDs, playlist codes, etc.</p>
+    </div>
+
+    <!-- QUERY fields -->
+    <div id="queryFields" style="display:none;">
+      <div class="filter-group">
+        <div class="filter-group-title">QUERY Source - Track Filters</div>
+        <p class="help">Use filterIds OR track filter parameters (or both). At least one filter must be specified.</p>
+
+        <div class="tabs">
+          <button class="tab active" onclick="switchQueryTab('filters')">Filter IDs</button>
+          <button class="tab" onclick="switchQueryTab('trackParams')">Track Parameters</button>
+          <button class="tab" onclick="switchQueryTab('advanced')">Advanced</button>
+        </div>
+
+        <!-- Filter IDs Tab -->
+        <div id="queryFiltersTab" class="tab-content active">
+          <label for="postRailFilterIds">Filter IDs (comma-separated)</label>
+          <input type="text" id="postRailFilterIds" placeholder="e.g., genre-123,mood-456">
+          <p class="help">Query tracks by filter IDs (genres, moods, languages, etc.)</p>
+        </div>
+
+        <!-- Track Parameters Tab -->
+        <div id="queryTrackParamsTab" class="tab-content">
+          <h3>Boolean Filters</h3>
+          <div class="row row-4">
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryPopular"> Popular</label>
+            </div>
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryTrending"> Trending</label>
+            </div>
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryNewOnHoopr"> New on Hoopr</label>
+            </div>
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryCampaign"> Campaign</label>
+            </div>
+          </div>
+
+          <div class="row row-3" style="margin-top: 15px;">
+            <div>
+              <label for="queryMovie">Movie Filter</label>
+              <select id="queryMovie">
+                <option value="">-- Not Set --</option>
+                <option value="true">Movie tracks only</option>
+                <option value="false">Exclude movie tracks</option>
+              </select>
+            </div>
+            <div>
+              <label for="queryReleaseYearFrom">Release Year From</label>
+              <input type="number" id="queryReleaseYearFrom" placeholder="e.g., 2020">
+            </div>
+            <div>
+              <label for="queryReleaseYearTo">Release Year To</label>
+              <input type="number" id="queryReleaseYearTo" placeholder="e.g., 2024">
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 15px;">
+            <div>
+              <label for="queryType">Owner Type (comma-separated)</label>
+              <input type="text" id="queryType" placeholder="e.g., label,indie">
+              <p class="help">Filter by owner type</p>
+            </div>
+            <div>
+              <label for="queryOwnerCode">Owner Code (comma-separated)</label>
+              <input type="text" id="queryOwnerCode" placeholder="e.g., SONY,WARNER">
+              <p class="help">Filter by owner code</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Tab -->
+        <div id="queryAdvancedTab" class="tab-content">
+          <div class="row">
+            <div>
+              <label for="queryOwnerIds">Owner IDs (comma-separated)</label>
+              <input type="text" id="queryOwnerIds" placeholder="Include only these owner IDs">
+            </div>
+            <div>
+              <label for="queryExcludeOwnerIds">Exclude Owner IDs (comma-separated)</label>
+              <input type="text" id="queryExcludeOwnerIds" placeholder="Exclude these owner IDs">
+            </div>
+          </div>
+          <div class="row" style="margin-top: 15px;">
+            <div>
+              <label for="queryExcludeTiers">Exclude Tiers (comma-separated)</label>
+              <input type="text" id="queryExcludeTiers" placeholder="e.g., tier1,tier2">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI_QUERY fields -->
+    <div id="aiQueryFields" style="display:none;" class="filter-group">
+      <div class="filter-group-title">AI_QUERY Source</div>
+      <label for="postRailAiUrl">AI Query URL *</label>
+      <input type="text" id="postRailAiUrl" placeholder="https://ai-service.example.com/recommend">
+      <p class="help">URL to POST for track recommendations</p>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <button onclick="createRail()">Create/Update Rail</button>
+      <button class="secondary" onclick="fillSampleManual()">Sample: Manual</button>
+      <button class="secondary" onclick="fillSampleQueryFilter()">Sample: Query (Filters)</button>
+      <button class="secondary" onclick="fillSampleQueryNewOnHoopr()">Sample: Query (New on Hoopr)</button>
+      <button class="secondary" onclick="fillSampleQueryPopular()">Sample: Query (Popular)</button>
+    </div>
+    <div id="postRailResponse"></div>
+  </div>
+
+  <!-- Raw JSON Request -->
+  <div class="section">
+    <h2>POST /rails - Raw JSON Request</h2>
+    <p class="help">For advanced testing, paste the full JSON body below.</p>
+    <label for="rawJson">JSON Body</label>
+    <textarea id="rawJson" rows="12">{
+  "key": "test-rail",
+  "title": "Test Rail",
+  "type": "TRACKS",
+  "sourceType": "QUERY",
+  "limit": 10,
+  "query": {
+    "newOnHoopr": true
+  }
+}</textarea>
+    <button onclick="createRailRaw()">Send Raw Request</button>
+    <button class="success" onclick="previewJson()">Preview JSON from Form</button>
+    <div id="rawJsonResponse"></div>
+  </div>
+
+  <script>
+    function getBaseUrl() {
+      return document.getElementById('baseUrl').value.replace(/\/$/, '');
+    }
+
+    function getAuthHeaders() {
+      const token = document.getElementById('authToken').value;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+      return headers;
+    }
+
+    function displayResponse(containerId, status, data) {
+      const container = document.getElementById(containerId);
+      const isSuccess = status >= 200 && status < 300;
+      container.innerHTML = `
+        <div class="status ${isSuccess ? 'success' : 'error'}">Status: ${status}</div>
+        <div class="response"><pre>${JSON.stringify(data, null, 2)}</pre></div>
+      `;
+    }
+
+    async function fetchRails() {
+      const brandId = document.getElementById('getRailsBrandId').value;
+      let url = `${getBaseUrl()}/rails`;
+      if (brandId) url += `?brandId=${brandId}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        displayResponse('getRailsResponse', res.status, data);
+      } catch (err) {
+        displayResponse('getRailsResponse', 0, { error: err.message });
+      }
+    }
+
+    async function fetchRailByKey() {
+      const key = document.getElementById('getRailKey').value;
+      if (!key) {
+        alert('Rail Key is required');
+        return;
+      }
+      const brandId = document.getElementById('getRailKeyBrandId').value;
+      let url = `${getBaseUrl()}/rails/${encodeURIComponent(key)}`;
+      if (brandId) url += `?brandId=${brandId}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        displayResponse('getRailKeyResponse', res.status, data);
+      } catch (err) {
+        displayResponse('getRailKeyResponse', 0, { error: err.message });
+      }
+    }
+
+    function toggleSourceFields() {
+      const sourceType = document.getElementById('postRailSourceType').value;
+      document.getElementById('manualFields').style.display = sourceType === 'MANUAL' ? 'block' : 'none';
+      document.getElementById('queryFields').style.display = sourceType === 'QUERY' ? 'block' : 'none';
+      document.getElementById('aiQueryFields').style.display = sourceType === 'AI_QUERY' ? 'block' : 'none';
+    }
+
+    function switchQueryTab(tabName) {
+      // Remove active from all tabs and contents
+      document.querySelectorAll('#queryFields .tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('#queryFields .tab-content').forEach(c => c.classList.remove('active'));
+
+      // Add active to selected
+      if (tabName === 'filters') {
+        document.querySelector('#queryFields .tab:nth-child(1)').classList.add('active');
+        document.getElementById('queryFiltersTab').classList.add('active');
+      } else if (tabName === 'trackParams') {
+        document.querySelector('#queryFields .tab:nth-child(2)').classList.add('active');
+        document.getElementById('queryTrackParamsTab').classList.add('active');
+      } else if (tabName === 'advanced') {
+        document.querySelector('#queryFields .tab:nth-child(3)').classList.add('active');
+        document.getElementById('queryAdvancedTab').classList.add('active');
+      }
+    }
+
+    function buildRequestBody() {
+      const key = document.getElementById('postRailKey').value;
+      const title = document.getElementById('postRailTitle').value;
+      const type = document.getElementById('postRailType').value;
+      const sourceType = document.getElementById('postRailSourceType').value;
+
+      const body = { key, title, type, sourceType };
+
+      // Optional fields
+      const subtitle = document.getElementById('postRailSubtitle').value;
+      const brandId = document.getElementById('postRailBrandId').value;
+      const order = document.getElementById('postRailOrder').value;
+      const limit = document.getElementById('postRailLimit').value;
+      const isVisible = document.getElementById('postRailIsVisible').checked;
+
+      if (subtitle) body.subtitle = subtitle;
+      if (brandId) body.brandId = parseInt(brandId);
+      if (order) body.order = parseInt(order);
+      if (limit) body.limit = parseInt(limit);
+      body.isVisible = isVisible;
+
+      // Source-specific fields
+      if (sourceType === 'MANUAL') {
+        const itemCodes = document.getElementById('postRailItemCodes').value;
+        body.itemCodes = itemCodes.split(',').map(s => s.trim()).filter(Boolean);
+      } else if (sourceType === 'QUERY') {
+        const query = {};
+
+        // Filter IDs
+        const filterIds = document.getElementById('postRailFilterIds').value;
+        if (filterIds.trim()) {
+          query.filterIds = filterIds.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        // Boolean filters
+        if (document.getElementById('queryPopular').checked) query.popular = true;
+        if (document.getElementById('queryTrending').checked) query.trending = true;
+        if (document.getElementById('queryNewOnHoopr').checked) query.newOnHoopr = true;
+        if (document.getElementById('queryCampaign').checked) query.campaign = true;
+
+        // Movie filter
+        const movieVal = document.getElementById('queryMovie').value;
+        if (movieVal === 'true') query.movie = true;
+        else if (movieVal === 'false') query.movie = false;
+
+        // Release year
+        const releaseYearFrom = document.getElementById('queryReleaseYearFrom').value;
+        const releaseYearTo = document.getElementById('queryReleaseYearTo').value;
+        if (releaseYearFrom) query.releaseYearFrom = parseInt(releaseYearFrom);
+        if (releaseYearTo) query.releaseYearTo = parseInt(releaseYearTo);
+
+        // Type and owner code
+        const typeVal = document.getElementById('queryType').value;
+        if (typeVal.trim()) {
+          query.type = typeVal.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        const ownerCodeVal = document.getElementById('queryOwnerCode').value;
+        if (ownerCodeVal.trim()) {
+          query.ownerCode = ownerCodeVal.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        // Advanced: owner IDs
+        const ownerIds = document.getElementById('queryOwnerIds').value;
+        if (ownerIds.trim()) {
+          query.ownerIds = ownerIds.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        const excludeOwnerIds = document.getElementById('queryExcludeOwnerIds').value;
+        if (excludeOwnerIds.trim()) {
+          query.excludeOwnerIds = excludeOwnerIds.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        const excludeTiers = document.getElementById('queryExcludeTiers').value;
+        if (excludeTiers.trim()) {
+          query.excludeTiers = excludeTiers.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        body.query = query;
+      } else if (sourceType === 'AI_QUERY') {
+        const aiUrl = document.getElementById('postRailAiUrl').value;
+        body.aiQuery = { url: aiUrl };
+      }
+
+      return body;
+    }
+
+    async function createRail() {
+      const body = buildRequestBody();
+
+      if (!body.key || !body.title) {
+        alert('Key and Title are required');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResponse('postRailResponse', res.status, data);
+      } catch (err) {
+        displayResponse('postRailResponse', 0, { error: err.message });
+      }
+    }
+
+    async function createRailRaw() {
+      const jsonStr = document.getElementById('rawJson').value;
+      let body;
+      try {
+        body = JSON.parse(jsonStr);
+      } catch (err) {
+        alert('Invalid JSON: ' + err.message);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResponse('rawJsonResponse', res.status, data);
+      } catch (err) {
+        displayResponse('rawJsonResponse', 0, { error: err.message });
+      }
+    }
+
+    function previewJson() {
+      const body = buildRequestBody();
+      document.getElementById('rawJson').value = JSON.stringify(body, null, 2);
+    }
+
+    function clearForm() {
+      document.getElementById('postRailKey').value = '';
+      document.getElementById('postRailTitle').value = '';
+      document.getElementById('postRailSubtitle').value = '';
+      document.getElementById('postRailBrandId').value = '';
+      document.getElementById('postRailOrder').value = '';
+      document.getElementById('postRailLimit').value = '10';
+      document.getElementById('postRailIsVisible').checked = true;
+      document.getElementById('postRailItemCodes').value = '';
+      document.getElementById('postRailFilterIds').value = '';
+      document.getElementById('queryPopular').checked = false;
+      document.getElementById('queryTrending').checked = false;
+      document.getElementById('queryNewOnHoopr').checked = false;
+      document.getElementById('queryCampaign').checked = false;
+      document.getElementById('queryMovie').value = '';
+      document.getElementById('queryReleaseYearFrom').value = '';
+      document.getElementById('queryReleaseYearTo').value = '';
+      document.getElementById('queryType').value = '';
+      document.getElementById('queryOwnerCode').value = '';
+      document.getElementById('queryOwnerIds').value = '';
+      document.getElementById('queryExcludeOwnerIds').value = '';
+      document.getElementById('queryExcludeTiers').value = '';
+      document.getElementById('postRailAiUrl').value = '';
+    }
+
+    function fillSampleManual() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'test-manual-rail';
+      document.getElementById('postRailTitle').value = 'Manual Track Selection';
+      document.getElementById('postRailSubtitle').value = 'Hand-picked tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'MANUAL';
+      document.getElementById('postRailItemCodes').value = 'TRACK001,TRACK002,TRACK003';
+      toggleSourceFields();
+    }
+
+    function fillSampleQueryFilter() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'test-filter-rail';
+      document.getElementById('postRailTitle').value = 'Tracks by Filter';
+      document.getElementById('postRailSubtitle').value = 'Filtered by genre/mood';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'QUERY';
+      document.getElementById('postRailFilterIds').value = 'genre-123,mood-456';
+      toggleSourceFields();
+      switchQueryTab('filters');
+    }
+
+    function fillSampleQueryNewOnHoopr() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'new-on-hoopr';
+      document.getElementById('postRailTitle').value = 'New on Hoopr';
+      document.getElementById('postRailSubtitle').value = 'Fresh tracks from this week';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'QUERY';
+      document.getElementById('postRailLimit').value = '20';
+      document.getElementById('queryNewOnHoopr').checked = true;
+      toggleSourceFields();
+      switchQueryTab('trackParams');
+    }
+
+    function fillSampleQueryPopular() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'popular-tracks';
+      document.getElementById('postRailTitle').value = 'Popular Tracks';
+      document.getElementById('postRailSubtitle').value = 'Most streamed tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'QUERY';
+      document.getElementById('postRailLimit').value = '15';
+      document.getElementById('queryPopular').checked = true;
+      document.getElementById('queryMovie').value = 'false';
+      toggleSourceFields();
+      switchQueryTab('trackParams');
+    }
+  </script>
+</body>
+</html>

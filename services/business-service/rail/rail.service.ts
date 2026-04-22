@@ -6,6 +6,7 @@ import {
   RailResponse,
   RailItemResponse,
   RailSeeMoreDescriptor,
+  UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
 } from "../../dto-service/modules.export";
 import {
   RailModel,
@@ -19,10 +20,15 @@ import {
   upsertRailWithItems,
   findTracksByTrackCodes,
   findTracksByFilter,
+  findAllTracks,
+  findTrackIdsByAlbumType,
   FilterModel,
   PlaylistModel,
   getRestrictedOwnersByBrandId,
+  getOwnerIdsByNames,
 } from "../../persistence-service/exports";
+import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { transformRawTracksToDto } from "../track/track.service";
 
@@ -58,9 +64,13 @@ const hydrateTracks = async (
   const out = new Map<string, unknown>();
   if (trackCodes.length === 0) return out;
 
-  const excludeOwnerIds = brandId
-    ? await getRestrictedOwnersByBrandId(brandId)
-    : undefined;
+  let excludeOwnerIds: string[] | undefined;
+  if (brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
 
   let likedTrackCodes: Set<string> | undefined;
   if (userId) {
@@ -268,10 +278,20 @@ export interface UpsertRailRequest {
   itemCodes?: string[];
   // QUERY (tracks only): filter spec to snapshot
   query?: {
-    filterIds: string[];
+    filterIds?: string[];
     ownerIds?: string[];
     excludeOwnerIds?: string[];
     excludeTiers?: string[];
+    // Track filter parameters
+    popular?: boolean;
+    trending?: boolean;
+    newOnHoopr?: boolean;
+    movie?: boolean;
+    type?: string[];       // owner type filter
+    ownerCode?: string[];  // owner code filter
+    campaign?: boolean;
+    releaseYearFrom?: number;
+    releaseYearTo?: number;
   };
   // AI_QUERY (tracks only): external AI call to snapshot
   aiQuery?: {
@@ -295,38 +315,179 @@ const RAIL_TYPE_TO_ITEM_TYPE: Record<RailType, RailItemType> = {
   [RailType.PLAYLISTS]: RailItemType.PLAYLIST,
 };
 
-// QUERY path: call findTracksByFilter and snapshot trackCodes
+// Resolve owner IDs from type filter
+const resolveOwnerIdsByType = async (
+  types?: string[],
+): Promise<string[] | undefined> => {
+  if (!types || types.length === 0) return undefined;
+  const filteredTypes = types.filter((t) => t.trim() !== "");
+  if (filteredTypes.length === 0) return undefined;
+
+  const normalize = (str: string) =>
+    str.trim().replace(/[\s_]+/g, "").toLowerCase();
+  const normalizedTypes = new Set(filteredTypes.map(normalize));
+  const allOwners = await OwnerModel.findAll({
+    where: { type: { [Op.ne]: null } } as any,
+    attributes: ["id", "type"],
+  });
+  const matchedOwners = allOwners.filter((o) =>
+    normalizedTypes.has(normalize(o.type!)),
+  );
+  const ownerIds = matchedOwners.map((o) => o.id);
+  return ownerIds.length > 0 ? ownerIds : [];
+};
+
+// Resolve owner IDs from ownerCode filter
+const resolveOwnerIdsByOwnerCode = async (
+  ownerCodes?: string[],
+): Promise<string[] | undefined> => {
+  if (!ownerCodes || ownerCodes.length === 0) return undefined;
+  const filteredCodes = ownerCodes.map((c) => c.trim()).filter((c) => c !== "");
+  if (filteredCodes.length === 0) return undefined;
+
+  const lowerCodes = filteredCodes.map((c) => c.toLowerCase());
+  const owners = await OwnerModel.findAll({
+    where: where(fn("LOWER", col("ownerCode")), { [Op.in]: lowerCodes }) as any,
+    attributes: ["id"],
+  });
+  const ownerIds = owners.map((o) => o.id);
+  return ownerIds.length > 0 ? ownerIds : [];
+};
+
+// Intersect two owner ID arrays
+const intersectOwnerIds = (
+  a: string[] | undefined,
+  b: string[] | undefined,
+): string[] | undefined => {
+  if (!a && !b) return undefined;
+  if (!a) return b;
+  if (!b) return a;
+  const setB = new Set(b);
+  return a.filter((id) => setB.has(id));
+};
+
+// QUERY path: use findAllTracks with all query parameters or findTracksByFilter
 const resolveQueryTracks = async (
   req: UpsertRailRequest,
 ): Promise<string[]> => {
-  if (!req.query || !Array.isArray(req.query.filterIds) || req.query.filterIds.length === 0) {
-    throw new Error("query.filterIds is required for QUERY source rails");
+  if (!req.query) {
+    throw new Error("query is required for QUERY source rails");
   }
+
   const limit = req.limit ?? 10;
   if (limit <= 0 || limit > 200) {
     throw new Error("limit must be between 1 and 200");
   }
 
-  const excludeOwnerIds = req.brandId
-    ? await getRestrictedOwnersByBrandId(req.brandId)
-    : req.query.excludeOwnerIds;
+  const query = req.query;
+  const hasFilterIds = Array.isArray(query.filterIds) && query.filterIds.length > 0;
+  const hasTrackFilters = query.popular || query.trending || query.newOnHoopr ||
+    query.movie !== undefined || query.campaign || query.type || query.ownerCode ||
+    query.releaseYearFrom || query.releaseYearTo;
 
-  const result = await findTracksByFilter({
-    filterIds: req.query.filterIds,
-    page: 1,
-    limit,
-    ownerIds: req.query.ownerIds,
-    excludeOwnerIds,
-    excludeTiers: req.query.excludeTiers,
-  });
-
-  const codes: string[] = [];
-  for (const row of result.rows ?? []) {
-    const track = (row as unknown as { track?: { trackCode?: string } }).track;
-    const code = track?.trackCode;
-    if (code && !codes.includes(code)) codes.push(code);
+  // Get excluded owners from brand or from login restrictions
+  let excludeOwnerIds: string[] | undefined;
+  if (req.brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(req.brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
-  return codes;
+  // Merge with query.excludeOwnerIds if provided
+  if (query.excludeOwnerIds && query.excludeOwnerIds.length > 0) {
+    excludeOwnerIds = excludeOwnerIds
+      ? [...new Set([...excludeOwnerIds, ...query.excludeOwnerIds])]
+      : query.excludeOwnerIds;
+  }
+
+  // If filterIds are provided, use findTracksByFilter
+  if (hasFilterIds) {
+    const result = await findTracksByFilter({
+      filterIds: query.filterIds!,
+      page: 1,
+      limit,
+      ownerIds: query.ownerIds,
+      excludeOwnerIds,
+      excludeTiers: query.excludeTiers,
+    });
+
+    const codes: string[] = [];
+    for (const row of result.rows ?? []) {
+      const track = (row as unknown as { track?: { trackCode?: string } }).track;
+      const code = track?.trackCode;
+      if (code && !codes.includes(code)) codes.push(code);
+    }
+    return codes;
+  }
+
+  // If no filterIds but has track filters, use findAllTracks
+  if (hasTrackFilters) {
+    const whereClause: Record<string, unknown> = {};
+
+    if (query.trending === true) {
+      whereClause.trending = true;
+    }
+
+    if (query.popular === true) {
+      whereClause[Op.or as any] = [
+        { jioSaavanStream: { [Op.gt]: "0" } },
+        { jioSaavanStream: null },
+      ];
+
+      // Filter by album type based on movie parameter
+      const movieTrackIds = await findTrackIdsByAlbumType("movie");
+      if (query.movie === true) {
+        if (movieTrackIds.length === 0) return [];
+        whereClause.id = { [Op.in]: movieTrackIds };
+      } else if (query.movie === false) {
+        if (movieTrackIds.length > 0) {
+          whereClause.id = { [Op.notIn]: movieTrackIds };
+        }
+      }
+    }
+
+    if (query.newOnHoopr === true) {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      whereClause.createdAt = { [Op.gte]: oneWeekAgo };
+    }
+
+    if (query.releaseYearFrom || query.releaseYearTo) {
+      const releaseDateCondition: any = {};
+      if (query.releaseYearFrom) {
+        releaseDateCondition[Op.gte] = new Date(`${query.releaseYearFrom}-01-01`);
+      }
+      if (query.releaseYearTo) {
+        releaseDateCondition[Op.lt] = new Date(`${query.releaseYearTo + 1}-01-01`);
+      }
+      whereClause.releaseDate = releaseDateCondition;
+    }
+
+    // Resolve owner IDs from type and ownerCode filters
+    const [ownerIdsByType, ownerIdsByCode] = await Promise.all([
+      resolveOwnerIdsByType(query.type),
+      resolveOwnerIdsByOwnerCode(query.ownerCode),
+    ]);
+    const ownerIds = intersectOwnerIds(ownerIdsByType, ownerIdsByCode);
+    if (ownerIds && ownerIds.length === 0) {
+      return [];
+    }
+
+    const rawData = await findAllTracks(
+      1,
+      limit,
+      whereClause,
+      ownerIds,
+      excludeOwnerIds,
+      query.popular === true,
+      query.campaign === true,
+      query.excludeTiers,
+    );
+
+    return rawData.rows.map((track) => track.trackCode);
+  }
+
+  throw new Error("query must have either filterIds or track filter parameters (popular, trending, newOnHoopr, etc.)");
 };
 
 // AI_QUERY path: POST to aiQuery.url, extract data.tracks[].trackCode
