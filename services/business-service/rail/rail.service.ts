@@ -58,6 +58,7 @@ interface HydrationMaps {
   tracks: Map<string, unknown>;
   filters: Map<string, unknown>;
   playlists: Map<string, unknown>;
+  labels: Map<string, unknown>;
 }
 
 const hydrateTracks = async (
@@ -148,21 +149,50 @@ const hydratePlaylists = async (
   return out;
 };
 
+const hydrateLabels = async (
+  itemCodes: string[],
+): Promise<Map<string, unknown>> => {
+  const out = new Map<string, unknown>();
+  if (itemCodes.length === 0) return out;
+
+  const rows = await OwnerModel.findAll({
+    where: {
+      ownerCode: { [Op.in]: itemCodes },
+    },
+    attributes: ["id", "ownerCode", "username", "type", "subType", "category"],
+  });
+
+  for (const row of rows) {
+    const json = row.toJSON() as unknown as Record<string, unknown>;
+    const code = json.ownerCode as string | undefined;
+    // Map username to name for consistency
+    if (json.username) {
+      json.name = json.username;
+      delete json.username;
+    }
+    if (code) out.set(code, json);
+  }
+  return out;
+};
+
 const collectItemCodes = (
   rails: RailModel[],
 ): {
   trackCodes: string[];
   filterCodes: string[];
   playlistCodes: string[];
+  labelCodes: string[];
 } => {
   const tracks = new Set<string>();
   const filters = new Set<string>();
   const playlists = new Set<string>();
+  const labels = new Set<string>();
   for (const rail of rails) {
     const items = rail.items ?? [];
     for (const item of items) {
       if (item.itemType === RailItemType.TRACK) tracks.add(item.itemCode);
       else if (item.itemType === RailItemType.PLAYLIST) playlists.add(item.itemCode);
+      else if (item.itemType === RailItemType.LABEL) labels.add(item.itemCode);
       else filters.add(item.itemCode);
     }
   }
@@ -170,6 +200,7 @@ const collectItemCodes = (
     trackCodes: Array.from(tracks),
     filterCodes: Array.from(filters),
     playlistCodes: Array.from(playlists),
+    labelCodes: Array.from(labels),
   };
 };
 
@@ -178,13 +209,14 @@ const buildHydrationMaps = async (
   userId?: number,
   brandId?: number,
 ): Promise<HydrationMaps> => {
-  const { trackCodes, filterCodes, playlistCodes } = collectItemCodes(rails);
-  const [tracks, filters, playlists] = await Promise.all([
+  const { trackCodes, filterCodes, playlistCodes, labelCodes } = collectItemCodes(rails);
+  const [tracks, filters, playlists, labels] = await Promise.all([
     hydrateTracks(trackCodes, userId, brandId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
+    hydrateLabels(labelCodes),
   ]);
-  return { tracks, filters, playlists };
+  return { tracks, filters, playlists, labels };
 };
 
 const resolveItem = (
@@ -196,6 +228,9 @@ const resolveItem = (
   }
   if (item.itemType === RailItemType.PLAYLIST) {
     return maps.playlists.get(item.itemCode) ?? null;
+  }
+  if (item.itemType === RailItemType.LABEL) {
+    return maps.labels.get(item.itemCode) ?? null;
   }
   return maps.filters.get(item.itemCode) ?? null;
 };
