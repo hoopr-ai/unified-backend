@@ -36,6 +36,8 @@ export const getAllFiltersService =
     for (const filter of filters) {
       const type = filter.type?.toLowerCase() || "other";
 
+      if (type === "theme") continue;
+
       if (!groupedFilters[type]) {
         groupedFilters[type] = [];
       }
