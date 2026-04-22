@@ -6,6 +6,7 @@ import {
   RailResponse,
   RailItemResponse,
   RailSeeMoreDescriptor,
+  PaginatedRailsResponse,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
 } from "../../dto-service/modules.export";
 import {
@@ -14,6 +15,7 @@ import {
   RailDetails,
   RailItemDetails,
   findRailsForBrand,
+  findRailsForBrandPaginated,
   findRailByKey,
   findRailByKeyAndBrand,
   findRailById,
@@ -282,6 +284,37 @@ export const getRailsService = async (
   const resolved = resolveBrandOverrides(raw);
   const maps = await buildHydrationMaps(resolved, userId, brandId);
   return resolved.map((rail) => buildRailResponse(rail, maps));
+};
+
+export const getRailsPaginatedService = async (
+  brandId?: number,
+  userId?: number,
+  pageName?: string,
+  page: number = 1,
+  limit: number = 10,
+): Promise<PaginatedRailsResponse> => {
+  const { rows: raw, count: total } = await findRailsForBrandPaginated(
+    brandId,
+    pageName,
+    page,
+    limit,
+  );
+  const resolved = resolveBrandOverrides(raw);
+  const maps = await buildHydrationMaps(resolved, userId, brandId);
+  const rails = resolved.map((rail) => buildRailResponse(rail, maps));
+
+  const totalPages = Math.ceil(total / limit);
+
+  return {
+    rails,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasMore: page < totalPages,
+    },
+  };
 };
 
 export const getRailByKeyService = async (

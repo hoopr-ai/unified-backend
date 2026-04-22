@@ -37,6 +37,49 @@ export const findRailsForBrand = async (
   });
 };
 
+// Returns paginated rails visible to the given brand with total count.
+// Fetches rails in batches for better performance.
+export const findRailsForBrandPaginated = async (
+  brandId?: number,
+  pageName?: string,
+  page: number = 1,
+  limit: number = 10,
+): Promise<{ rows: RailModel[]; count: number }> => {
+  const brandClause = brandId
+    ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
+    : { brandId: null as number | null };
+
+  const pageClause = pageName
+    ? { pageName }
+    : {};
+
+  const offset = (page - 1) * limit;
+
+  const { rows, count } = await RailModel.findAndCountAll({
+    where: {
+      isVisible: true,
+      ...brandClause,
+      ...pageClause,
+    },
+    include: [
+      {
+        model: RailItemModel,
+        as: "items",
+        required: false,
+      },
+    ],
+    order: [
+      ["order", "ASC"],
+      [{ model: RailItemModel, as: "items" }, "order", "ASC"],
+    ],
+    limit,
+    offset,
+    distinct: true, // Ensures count is accurate with includes
+  });
+
+  return { rows, count };
+};
+
 export const findRailByKey = async (
   key: string,
   brandId?: number,

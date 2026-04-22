@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getRails,
+  getRailsBatch,
   getRailByKey,
   upsertRail,
   deleteRail,
@@ -15,6 +16,9 @@ const router = Router();
 
 // GET /rails - resolved homepage rails for brand (public, user-aware if authenticated)
 router.get("/", optionalAuthenticate, getRails);
+
+// GET /rails/batch - get rails in batches (paginated)
+router.get("/batch", optionalAuthenticate, getRailsBatch);
 
 // GET /rails/:key - single rail by key
 router.get("/:key", optionalAuthenticate, getRailByKey);

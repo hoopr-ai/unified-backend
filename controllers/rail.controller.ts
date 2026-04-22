@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import {
   getRailsService,
+  getRailsPaginatedService,
   getRailByKeyService,
   upsertRailService,
   UpsertRailRequest,
@@ -42,6 +43,25 @@ export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: rails,
+    message: ResponseMessages.GetRailsSuccess,
+  });
+});
+
+// GET /rails/batch?brandId=123&pageName=home&page=1&limit=5 - Get rails in batches (paginated)
+export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) => {
+  const brandId = parseBrandId(req.query.brandId);
+  const userId = req.session?.userId;
+  const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
+
+  // Parse pagination params with defaults
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+
+  const result = await getRailsPaginatedService(brandId, userId, pageName, page, limit);
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: result,
     message: ResponseMessages.GetRailsSuccess,
   });
 });

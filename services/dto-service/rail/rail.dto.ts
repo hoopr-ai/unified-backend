@@ -31,3 +31,14 @@ export interface RailResponse {
   items: RailItemResponse[];
   seeMore?: RailSeeMoreDescriptor | null;
 }
+
+export interface PaginatedRailsResponse {
+  rails: RailResponse[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
