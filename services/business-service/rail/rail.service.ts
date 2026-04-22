@@ -288,7 +288,7 @@ const buildRailResponse = (
 // -----------------------------------------------------------------------------
 
 const BRAND_RECOMMENDED_RAIL_KEY_PREFIX = "brand_recommended_";
-const AI_SERVICE_BRAND_RECOMMEND_URL = `${process.env.AI_SERVICE_BASE_URL}/smash/brandRecommend`;
+const AI_SERVICE_BRAND_RECOMMEND_URL = `${process.env.AI_SERVICE_URL}/smash/brandRecommend`;
 
 interface BrandRecommendTrack {
   id: string;
@@ -315,6 +315,8 @@ const fetchBrandRecommendations = async (
   page: number = 1,
 ): Promise<string[]> => {
   try {
+    console.log(`[BrandRecommend] Calling AI API: ${AI_SERVICE_BRAND_RECOMMEND_URL} with brand_id=${brandId}`);
+
     const response = await fetch(AI_SERVICE_BRAND_RECOMMEND_URL, {
       method: "POST",
       headers: {
@@ -328,13 +330,16 @@ const fetchBrandRecommendations = async (
       }),
     });
 
+    console.log(`[BrandRecommend] AI API response status: ${response.status}`);
+
     if (!response.ok) {
-      console.error(`Brand recommend API responded with status ${response.status}`);
+      console.error(`[BrandRecommend] API error - status ${response.status}`);
       return [];
     }
 
     const json = (await response.json()) as BrandRecommendResponse;
     const tracks = json?.data?.tracks ?? [];
+    console.log(`[BrandRecommend] Received ${tracks.length} tracks from API`);
 
     // Extract track codes from the response
     const trackCodes: string[] = [];
@@ -343,9 +348,10 @@ const fetchBrandRecommendations = async (
         trackCodes.push(track.trackCode);
       }
     }
+    console.log(`[BrandRecommend] Extracted ${trackCodes.length} valid trackCodes`);
     return trackCodes;
   } catch (error) {
-    console.error("Error fetching brand recommendations:", error);
+    console.error("[BrandRecommend] Error fetching brand recommendations:", error);
     return [];
   }
 };
@@ -355,18 +361,23 @@ const ensureBrandRecommendedRail = async (
   pageName: string = "HOME",
 ): Promise<void> => {
   const railKey = `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}`;
+  console.log(`[BrandRecommend] Checking rail for brandId=${userBrandId}, key=${railKey}`);
 
   // Check if the rail already exists for this brand
   const existingRail = await findRailByKeyAndBrand(railKey, userBrandId);
   if (existingRail) {
-    // Rail already exists, nothing to do
+    console.log(`[BrandRecommend] Rail already exists, skipping creation`);
     return;
   }
 
+  console.log(`[BrandRecommend] Rail not found, fetching from AI server: ${AI_SERVICE_BRAND_RECOMMEND_URL}`);
+
   // Fetch recommendations from AI server
   const trackCodes = await fetchBrandRecommendations(userBrandId);
+  console.log(`[BrandRecommend] AI server returned ${trackCodes.length} tracks`);
+
   if (trackCodes.length === 0) {
-    // No recommendations available, skip creating the rail
+    console.log(`[BrandRecommend] No tracks returned, skipping rail creation`);
     return;
   }
 
@@ -381,25 +392,31 @@ const ensureBrandRecommendedRail = async (
     order: idx,
   }));
 
-  await upsertRailWithItems(
-    {
-      key: railKey,
-      title: "Recommended For You",
-      subtitle: null,
-      type: RailType.TRACKS,
-      subType: null,
-      brandId: userBrandId,
-      pageNames: [pageName as PageName],
-      sourceType: RailSourceType.MANUAL,
-      sourceConfig: {
-        source: "brand_recommend_ai",
-        createdAt: new Date().toISOString(),
+  try {
+    console.log(`[BrandRecommend] Creating rail with key=${railKey}, brandId=${userBrandId}, pageNames=[${pageName}], order=${newOrder}, items=${items.length}`);
+    const result = await upsertRailWithItems(
+      {
+        key: railKey,
+        title: "Recommended For You",
+        subtitle: null,
+        type: RailType.TRACKS,
+        subType: null,
+        brandId: userBrandId,
+        pageNames: [pageName as PageName],
+        sourceType: RailSourceType.MANUAL,
+        sourceConfig: {
+          source: "brand_recommend_ai",
+          createdAt: new Date().toISOString(),
+        },
+        order: newOrder,
+        isVisible: true,
       },
-      order: newOrder,
-      isVisible: true,
-    },
-    items,
-  );
+      items,
+    );
+    console.log(`[BrandRecommend] Rail created successfully! railId=${result.rail.id}, itemsCreated=${result.items.length}`);
+  } catch (error) {
+    console.error(`[BrandRecommend] Error creating rail:`, error);
+  }
 };
 
 export const getRailsService = async (
@@ -413,7 +430,10 @@ export const getRailsService = async (
     await ensureBrandRecommendedRail(userBrandId, pageName ?? "HOME");
   }
 
-  const raw = await findRailsForBrand(brandId, pageName);
+  // Use the user's brandId for fetching rails (not URL brandId)
+  const effectiveBrandId = userBrandId ?? brandId;
+
+  const raw = await findRailsForBrand(effectiveBrandId, pageName);
   const resolved = resolveBrandOverrides(raw);
   const maps = await buildHydrationMaps(resolved, userId, brandId);
   return resolved.map((rail) => buildRailResponse(rail, maps));
@@ -429,12 +449,17 @@ export const getRailsPaginatedService = async (
   userBrandId?: number,
 ): Promise<PaginatedRailsResponse> => {
   // Ensure brand recommended rail exists for the logged-in user's brand
+  // Use the user's brandId from their profile, not from URL query
   if (userBrandId) {
     await ensureBrandRecommendedRail(userBrandId, pageName ?? "HOME");
   }
 
+  // Use the user's brandId for fetching rails (not URL brandId)
+  // This ensures brand_recommended rail created for userBrandId is included
+  const effectiveBrandId = userBrandId ?? brandId;
+
   const { rows: raw, count: total } = await findRailsForBrandPaginated(
-    brandId,
+    effectiveBrandId,
     pageName,
     page,
     limit,

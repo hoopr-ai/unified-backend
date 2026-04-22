@@ -71,6 +71,7 @@ export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) 
   // Get the logged-in user's brandId for brand-specific recommendations
   const user = userId ? await findUserById(userId) : null;
   const userBrandId = user?.brandId;
+  console.log(`[RailsBatch] userId=${userId}, userBrandId=${userBrandId}, queryBrandId=${brandId}`);
 
   const result = await getRailsPaginatedService(brandId, userId, pageName, page, limit, railItemLimit, userBrandId);
 
