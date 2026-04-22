@@ -353,6 +353,38 @@
       color: #333;
     }
     .form-actions button.secondary:hover { background: #e0e0e0; }
+    /* Multi-select filter styles */
+    .filter-select {
+      width: 100%;
+      min-height: 100px;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .filter-select option { padding: 3px 6px; }
+    .filter-select option:checked { background: #e91e63; color: white; }
+    .selected-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+      min-height: 24px;
+    }
+    .selected-tag {
+      background: #e91e63;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .selected-tag .remove {
+      cursor: pointer;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -459,30 +491,36 @@
               <input id="aiUserId" placeholder="e.g., 24" />
             </div>
           </div>
+          <div id="filtersLoadingMsg" style="color: #888; font-size: 12px; padding: 8px 0; display: none;">Loading filters...</div>
           <div class="form-row">
             <div class="form-group">
-              <label>Genres (comma-separated)</label>
-              <input id="aiGenres" placeholder="Indian Contemporary, Ambient" />
+              <label>Genres</label>
+              <select id="aiGenres" class="filter-select" multiple onchange="updateTags('aiGenres')"></select>
+              <div id="aiGenresTags" class="selected-tags"></div>
             </div>
             <div class="form-group">
-              <label>Moods (comma-separated)</label>
-              <input id="aiMoods" placeholder="Action, Motivational" />
+              <label>Moods</label>
+              <select id="aiMoods" class="filter-select" multiple onchange="updateTags('aiMoods')"></select>
+              <div id="aiMoodsTags" class="selected-tags"></div>
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Languages (comma-separated)</label>
-              <input id="aiLanguages" placeholder="English, Hindi" />
+              <label>Languages</label>
+              <select id="aiLanguages" class="filter-select" multiple onchange="updateTags('aiLanguages')"></select>
+              <div id="aiLanguagesTags" class="selected-tags"></div>
             </div>
             <div class="form-group">
-              <label>Use Cases (comma-separated)</label>
-              <input id="aiUsecases" placeholder="Automobile, Bumpers" />
+              <label>Use Cases</label>
+              <select id="aiUsecases" class="filter-select" multiple onchange="updateTags('aiUsecases')"></select>
+              <div id="aiUsecasesTags" class="selected-tags"></div>
             </div>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>Assortment (comma-separated)</label>
-              <input id="aiAssortment" placeholder="chartbusters" />
+              <label>Assortment</label>
+              <select id="aiAssortment" class="filter-select" multiple onchange="updateTags('aiAssortment')"></select>
+              <div id="aiAssortmentTags" class="selected-tags"></div>
             </div>
           </div>
         </div>
@@ -621,6 +659,92 @@
         setTimeout(() => { el.className = 'status'; }, 2500);
       }
     }
+
+    // Filter data storage and loading
+    let filtersData = null;
+
+    async function loadFiltersData() {
+      const msgEl = document.getElementById('filtersLoadingMsg');
+      if (msgEl) msgEl.style.display = 'block';
+
+      try {
+        const base = document.getElementById('apiBase').value.trim();
+        const res = await fetch(`${base}/filters`);
+        const json = await res.json();
+
+        if (json.data && json.data.filters) {
+          filtersData = json.data.filters;
+          populateFilterDropdowns();
+        }
+        if (msgEl) msgEl.style.display = 'none';
+      } catch (e) {
+        if (msgEl) {
+          msgEl.textContent = 'Failed to load filters';
+          msgEl.style.color = '#dc3545';
+        }
+      }
+    }
+
+    function populateFilterDropdowns() {
+      if (!filtersData) return;
+
+      const mappings = [
+        { id: 'aiGenres', key: 'genre' },
+        { id: 'aiMoods', key: 'mood' },
+        { id: 'aiLanguages', key: 'language' },
+        { id: 'aiUsecases', key: 'usecase' },
+        { id: 'aiAssortment', key: 'assortment' }
+      ];
+
+      mappings.forEach(({ id, key }) => {
+        const select = document.getElementById(id);
+        if (!select) return;
+
+        const items = filtersData[key] || [];
+        select.innerHTML = '';
+        items.sort((a, b) => (a.rank || 999) - (b.rank || 999));
+
+        items.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = item.id;
+          opt.textContent = item.name;
+          opt.dataset.name = item.name;
+          select.appendChild(opt);
+        });
+      });
+    }
+
+    function updateTags(selectId) {
+      const select = document.getElementById(selectId);
+      const container = document.getElementById(selectId + 'Tags');
+      if (!container) return;
+
+      container.innerHTML = '';
+      Array.from(select.selectedOptions).forEach(opt => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${opt.dataset.name || opt.textContent} <span class="remove" onclick="deselectOption('${selectId}', '${opt.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function deselectOption(selectId, value) {
+      const select = document.getElementById(selectId);
+      const opt = select.querySelector(`option[value="${value}"]`);
+      if (opt) opt.selected = false;
+      updateTags(selectId);
+    }
+
+    function getSelectedNames(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return [];
+      return Array.from(select.selectedOptions).map(opt => opt.dataset.name || opt.textContent);
+    }
+
+    // Load filters when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(loadFiltersData, 500);
+    });
 
     function updateUrlPreview() {
       const base = document.getElementById('apiBase').value.trim();
@@ -837,12 +961,13 @@
           aiQuery.brandName = document.getElementById('aiBrandName').value.trim() || '';
           aiQuery.userId = document.getElementById('aiUserId').value.trim() || '';
 
+          // Build filters from multi-select dropdowns
           const filters = [];
-          const genres = parseCommaSeparated(document.getElementById('aiGenres').value);
-          const moods = parseCommaSeparated(document.getElementById('aiMoods').value);
-          const languages = parseCommaSeparated(document.getElementById('aiLanguages').value);
-          const usecases = parseCommaSeparated(document.getElementById('aiUsecases').value);
-          const assortment = parseCommaSeparated(document.getElementById('aiAssortment').value);
+          const genres = getSelectedNames('aiGenres');
+          const moods = getSelectedNames('aiMoods');
+          const languages = getSelectedNames('aiLanguages');
+          const usecases = getSelectedNames('aiUsecases');
+          const assortment = getSelectedNames('aiAssortment');
 
           if (genres.length) filters.push({ type: 'genre', value: genres });
           if (moods.length) filters.push({ type: 'mood', value: moods });

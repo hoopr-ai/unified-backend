@@ -106,6 +106,44 @@
     }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
+    /* Multi-select filter styles */
+    .filter-select {
+      width: 100%;
+      min-height: 120px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .filter-select option { padding: 4px 8px; }
+    .filter-select option:checked { background: #007bff; color: white; }
+    .selected-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 8px;
+      min-height: 28px;
+    }
+    .selected-tag {
+      background: #007bff;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .selected-tag .remove {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .filter-loading {
+      color: #666;
+      font-style: italic;
+      padding: 10px;
+    }
   </style>
 </head>
 <body>
@@ -355,31 +393,37 @@
           </div>
         </div>
 
-        <h3 style="margin-top: 15px;">Filters</h3>
+        <h3 style="margin-top: 15px;">Filters <button type="button" class="secondary" style="padding: 5px 10px; font-size: 11px; margin: 0;" onclick="loadFilters()">Reload Filters</button></h3>
+        <div id="filtersLoadingStatus" class="filter-loading" style="display: none;">Loading filters...</div>
         <div class="row">
           <div>
-            <label for="aiGenres">Genres (comma-separated)</label>
-            <input type="text" id="aiGenres" placeholder="Indian Contemporary, Ambient, Devotional">
+            <label>Genres (multi-select)</label>
+            <select id="aiGenres" class="filter-select" multiple></select>
+            <div id="aiGenresSelected" class="selected-filters"></div>
           </div>
           <div>
-            <label for="aiMoods">Moods (comma-separated)</label>
-            <input type="text" id="aiMoods" placeholder="Action, Motivational, Romantic">
-          </div>
-        </div>
-        <div class="row" style="margin-top: 10px;">
-          <div>
-            <label for="aiLanguages">Languages (comma-separated)</label>
-            <input type="text" id="aiLanguages" placeholder="English, Hindi, Tamil">
-          </div>
-          <div>
-            <label for="aiUsecases">Use Cases (comma-separated)</label>
-            <input type="text" id="aiUsecases" placeholder="Automobile, Bumpers, Podcast">
+            <label>Moods (multi-select)</label>
+            <select id="aiMoods" class="filter-select" multiple></select>
+            <div id="aiMoodsSelected" class="selected-filters"></div>
           </div>
         </div>
         <div class="row" style="margin-top: 10px;">
           <div>
-            <label for="aiAssortment">Assortment (comma-separated)</label>
-            <input type="text" id="aiAssortment" placeholder="chartbusters, indie">
+            <label>Languages (multi-select)</label>
+            <select id="aiLanguages" class="filter-select" multiple></select>
+            <div id="aiLanguagesSelected" class="selected-filters"></div>
+          </div>
+          <div>
+            <label>Use Cases (multi-select)</label>
+            <select id="aiUsecases" class="filter-select" multiple></select>
+            <div id="aiUsecasesSelected" class="selected-filters"></div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <div>
+            <label>Assortment (multi-select)</label>
+            <select id="aiAssortment" class="filter-select" multiple></select>
+            <div id="aiAssortmentSelected" class="selected-filters"></div>
           </div>
           <div>
             <label for="aiPage">Page</label>
@@ -493,6 +537,105 @@
       }
       return headers;
     }
+
+    // Filter data storage
+    let filtersData = null;
+
+    // Load filters from API
+    async function loadFilters() {
+      const statusEl = document.getElementById('filtersLoadingStatus');
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'Loading filters...';
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/filters`);
+        const json = await res.json();
+
+        if (json.data && json.data.filters) {
+          filtersData = json.data.filters;
+          populateFilterSelects();
+          statusEl.style.display = 'none';
+        } else {
+          statusEl.textContent = 'Failed to load filters';
+          statusEl.style.color = '#dc3545';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Error loading filters: ' + err.message;
+        statusEl.style.color = '#dc3545';
+      }
+    }
+
+    // Populate filter select elements
+    function populateFilterSelects() {
+      if (!filtersData) return;
+
+      const filterMappings = [
+        { selectId: 'aiGenres', dataKey: 'genre' },
+        { selectId: 'aiMoods', dataKey: 'mood' },
+        { selectId: 'aiLanguages', dataKey: 'language' },
+        { selectId: 'aiUsecases', dataKey: 'usecase' },
+        { selectId: 'aiAssortment', dataKey: 'assortment' }
+      ];
+
+      filterMappings.forEach(({ selectId, dataKey }) => {
+        const select = document.getElementById(selectId);
+        const items = filtersData[dataKey] || [];
+
+        select.innerHTML = '';
+        items.sort((a, b) => (a.rank || 999) - (b.rank || 999));
+
+        items.forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = item.name;
+          option.dataset.name = item.name;
+          select.appendChild(option);
+        });
+
+        // Add change handler for selected tags display
+        select.removeEventListener('change', updateSelectedTags);
+        select.addEventListener('change', updateSelectedTags);
+      });
+    }
+
+    // Update selected tags display
+    function updateSelectedTags(event) {
+      const select = event.target;
+      const containerId = select.id + 'Selected';
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      container.innerHTML = '';
+      const selectedOptions = Array.from(select.selectedOptions);
+
+      selectedOptions.forEach(option => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${option.dataset.name || option.textContent} <span class="remove" onclick="removeFilterSelection('${select.id}', '${option.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    // Remove a filter selection
+    function removeFilterSelection(selectId, value) {
+      const select = document.getElementById(selectId);
+      const option = select.querySelector(`option[value="${value}"]`);
+      if (option) {
+        option.selected = false;
+        select.dispatchEvent(new Event('change'));
+      }
+    }
+
+    // Get selected filter names for a select element
+    function getSelectedFilterNames(selectId) {
+      const select = document.getElementById(selectId);
+      return Array.from(select.selectedOptions).map(opt => opt.dataset.name || opt.textContent);
+    }
+
+    // Load filters on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(loadFilters, 500);
+    });
 
     function displayResponse(containerId, status, data) {
       const container = document.getElementById(containerId);
@@ -667,19 +810,19 @@
           const page = document.getElementById('aiPage').value;
           if (page) aiQuery.page = parseInt(page);
 
-          // Build filters array
+          // Build filters array from multi-select dropdowns
           const filters = [];
-          const genres = document.getElementById('aiGenres').value.trim();
-          const moods = document.getElementById('aiMoods').value.trim();
-          const languages = document.getElementById('aiLanguages').value.trim();
-          const usecases = document.getElementById('aiUsecases').value.trim();
-          const assortment = document.getElementById('aiAssortment').value.trim();
+          const genres = getSelectedFilterNames('aiGenres');
+          const moods = getSelectedFilterNames('aiMoods');
+          const languages = getSelectedFilterNames('aiLanguages');
+          const usecases = getSelectedFilterNames('aiUsecases');
+          const assortment = getSelectedFilterNames('aiAssortment');
 
-          if (genres) filters.push({ type: 'genre', value: genres.split(',').map(s => s.trim()).filter(Boolean) });
-          if (moods) filters.push({ type: 'mood', value: moods.split(',').map(s => s.trim()).filter(Boolean) });
-          if (languages) filters.push({ type: 'language', value: languages.split(',').map(s => s.trim()).filter(Boolean) });
-          if (usecases) filters.push({ type: 'usecase', value: usecases.split(',').map(s => s.trim()).filter(Boolean) });
-          if (assortment) filters.push({ type: 'assortment', value: assortment.split(',').map(s => s.trim()).filter(Boolean) });
+          if (genres.length) filters.push({ type: 'genre', value: genres });
+          if (moods.length) filters.push({ type: 'mood', value: moods });
+          if (languages.length) filters.push({ type: 'language', value: languages });
+          if (usecases.length) filters.push({ type: 'usecase', value: usecases });
+          if (assortment.length) filters.push({ type: 'assortment', value: assortment });
 
           aiQuery.filters = filters;
         }
@@ -774,11 +917,13 @@
       document.getElementById('aiSearchQuery').value = '';
       document.getElementById('aiBrandName').value = '';
       document.getElementById('aiUserId').value = '';
-      document.getElementById('aiGenres').value = '';
-      document.getElementById('aiMoods').value = '';
-      document.getElementById('aiLanguages').value = '';
-      document.getElementById('aiUsecases').value = '';
-      document.getElementById('aiAssortment').value = '';
+      // Clear multi-select filter selections
+      ['aiGenres', 'aiMoods', 'aiLanguages', 'aiUsecases', 'aiAssortment'].forEach(id => {
+        const select = document.getElementById(id);
+        Array.from(select.options).forEach(opt => opt.selected = false);
+        const container = document.getElementById(id + 'Selected');
+        if (container) container.innerHTML = '';
+      });
       document.getElementById('aiPage').value = '1';
     }
 
