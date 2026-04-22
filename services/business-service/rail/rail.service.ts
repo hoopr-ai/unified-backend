@@ -276,8 +276,9 @@ const buildRailResponse = (
 export const getRailsService = async (
   brandId?: number,
   userId?: number,
+  pageName?: string,
 ): Promise<RailResponse[]> => {
-  const raw = await findRailsForBrand(brandId);
+  const raw = await findRailsForBrand(brandId, pageName);
   const resolved = resolveBrandOverrides(raw);
   const maps = await buildHydrationMaps(resolved, userId, brandId);
   return resolved.map((rail) => buildRailResponse(rail, maps));
@@ -309,6 +310,7 @@ export interface UpsertRailRequest {
   subType?: string | null;
   sourceType: RailSourceType;
   brandId?: number | null;
+  pageName?: string | null;
   order?: number;
   isVisible?: boolean;
   limit?: number;
@@ -717,6 +719,7 @@ export const upsertRailService = async (
       type: req.type,
       subType: req.subType ?? null,
       brandId,
+      pageName: req.pageName ?? null,
       sourceType: req.sourceType,
       sourceConfig: Object.keys(sourceConfig).length ? sourceConfig : null,
       order,

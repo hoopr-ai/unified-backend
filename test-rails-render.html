@@ -447,6 +447,10 @@
           </select>
         </div>
         <div class="form-group">
+          <label>Page Name</label>
+          <input id="railPageName" type="text" placeholder="e.g., home" />
+        </div>
+        <div class="form-group">
           <label>Order</label>
           <input id="railOrder" type="number" placeholder="Auto" />
         </div>
@@ -1102,6 +1106,7 @@
       const subtitle = document.getElementById('railSubtitle').value.trim() || null;
       const type = document.getElementById('railType').value;
       const sourceType = document.getElementById('railSourceType').value;
+      const pageNameValue = document.getElementById('railPageName').value.trim();
       const orderValue = document.getElementById('railOrder').value.trim();
       const limitValue = document.getElementById('railLimit').value.trim();
 
@@ -1117,6 +1122,7 @@
         type,
         sourceType,
         brandId: brandIdValue ? parseInt(brandIdValue) : null,
+        pageName: pageNameValue || null,
         order: orderValue ? parseInt(orderValue) : undefined,
         limit: limitValue ? parseInt(limitValue) : 40,
       };

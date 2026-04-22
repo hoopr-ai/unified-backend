@@ -7,15 +7,21 @@ import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
 // Caller dedupes by key (brand row wins).
 export const findRailsForBrand = async (
   brandId?: number,
+  pageName?: string,
 ): Promise<RailModel[]> => {
   const brandClause = brandId
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
     : { brandId: null as number | null };
 
+  const pageClause = pageName
+    ? { pageName }
+    : {};
+
   return RailModel.findAll({
     where: {
       isVisible: true,
       ...brandClause,
+      ...pageClause,
     },
     include: [
       {
@@ -83,6 +89,7 @@ export interface UpsertRailInput {
   type: string;
   subType?: string | null;
   brandId: number | null;
+  pageName?: string | null;
   sourceType: string;
   sourceConfig?: Record<string, unknown> | null;
   order: number;
@@ -228,7 +235,7 @@ export const upsertRailWithItems = async (
   try {
     const [rail] = await RailModel.upsert(input as unknown as RailDetails, {
       transaction,
-      conflictFields: ["key", "brandId"],
+      conflictFields: ["key", "brandId", "pageName"],
     });
 
     await RailItemModel.destroy({

@@ -31,12 +31,13 @@ const parseBrandId = (raw: unknown): number | undefined => {
   return Number.isFinite(num) && num > 0 ? num : undefined;
 };
 
-// GET /rails?brandId=123 - Get all visible rails for a brand (or defaults)
+// GET /rails?brandId=123&pageName=home - Get all visible rails for a brand (or defaults)
 export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   const brandId = parseBrandId(req.query.brandId);
   const userId = req.session?.userId;
+  const pageName = typeof req.query.pageName === "string" ? req.query.pageName : undefined;
 
-  const rails = await getRailsService(brandId, userId);
+  const rails = await getRailsService(brandId, userId, pageName);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
