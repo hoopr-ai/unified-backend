@@ -295,7 +295,7 @@ export interface UpsertRailRequest {
   };
   // AI_QUERY (tracks only): external AI call to snapshot
   aiQuery?: {
-    queryType: 'TRENDING' | 'POPULAR' | 'FILTERED';
+    queryType: 'TRENDING' | 'POPULAR' | 'FILTERED' | 'NEW_AGE_ICONS';
     // For TRENDING/POPULAR: limit and brandId are used
     limit?: number;
     // For FILTERED: additional search parameters
@@ -559,6 +559,19 @@ const resolveAiQueryTracks = async (
     };
     body = JSON.stringify(requestBody);
     url = `${aiServiceUrl}/smash/aienterpriseSearch`;
+  } else if (aiQuery.queryType === 'NEW_AGE_ICONS') {
+    // POST /smash/curatedArtistTracks - New Age Icons (auth optional)
+    method = "POST";
+    headers["Content-Type"] = "application/json";
+    headers["Accept"] = "application/json, text/plain, */*";
+    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
+
+    const requestBody: Record<string, unknown> = {
+      limit: aiQuery.limit ?? 40,
+      page: aiQuery.page ?? 1,
+    };
+    body = JSON.stringify(requestBody);
+    url = `${aiServiceUrl}/smash/curatedArtistTracks`;
   } else if (aiQuery.url) {
     // Legacy: direct URL provided
     url = aiQuery.url;

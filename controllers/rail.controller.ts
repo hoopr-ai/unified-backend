@@ -125,11 +125,11 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
     if (!a) {
       return "aiQuery is required for AI_QUERY";
     }
-    const validQueryTypes = ['TRENDING', 'POPULAR', 'FILTERED'];
+    const validQueryTypes = ['TRENDING', 'POPULAR', 'FILTERED', 'NEW_AGE_ICONS'];
     const hasQueryType = typeof a.queryType === 'string' && validQueryTypes.includes(a.queryType);
     const hasLegacyUrl = typeof a.url === 'string' && a.url.length > 0;
     if (!hasQueryType && !hasLegacyUrl) {
-      return "aiQuery.queryType (TRENDING, POPULAR, or FILTERED) or aiQuery.url is required for AI_QUERY";
+      return "aiQuery.queryType (TRENDING, POPULAR, FILTERED, or NEW_AGE_ICONS) or aiQuery.url is required for AI_QUERY";
     }
   }
 
