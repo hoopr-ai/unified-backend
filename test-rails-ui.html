@@ -289,12 +289,24 @@
         <p class="help">Select languages to include in this rail</p>
       </div>
 
-      <!-- Filter dropdown for LABELS (usecases) -->
+      <!-- Owner/Category dropdowns for LABELS -->
       <div id="manualLabelsSelect" style="display: none;">
-        <label>Select Use Cases (multi-select) *</label>
-        <select id="manualUsecases" class="filter-select" multiple onchange="updateManualSelectedTags('manualUsecases')"></select>
-        <div id="manualUsecasesSelected" class="selected-filters"></div>
-        <p class="help">Select use cases to include in this rail</p>
+        <div id="ownersLoadingStatus" class="filter-loading" style="display: none;">Loading owners...</div>
+        <div class="row">
+          <div>
+            <label>Select Owners (multi-select)</label>
+            <select id="manualOwners" class="filter-select" multiple onchange="updateManualSelectedTags('manualOwners')"></select>
+            <div id="manualOwnersSelected" class="selected-filters"></div>
+            <p class="help">Select owners to include in this rail</p>
+          </div>
+          <div>
+            <label>Select Categories (multi-select)</label>
+            <select id="manualCategories" class="filter-select" multiple onchange="updateManualSelectedTags('manualCategories')"></select>
+            <div id="manualCategoriesSelected" class="selected-filters"></div>
+            <p class="help">Select categories to include (filters owners by category)</p>
+          </div>
+        </div>
+        <button type="button" class="secondary" style="padding: 5px 10px; font-size: 11px; margin-top: 10px;" onclick="loadOwners()">Reload Owners</button>
       </div>
     </div>
 
@@ -576,6 +588,101 @@
 
     // Filter data storage
     let filtersData = null;
+    // Owner data storage
+    let ownersData = null;
+
+    // Load owners from API
+    async function loadOwners() {
+      const statusEl = document.getElementById('ownersLoadingStatus');
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Loading owners...';
+        statusEl.style.color = '#666';
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/owners?limit=200`);
+        const json = await res.json();
+
+        if (json.data && json.data.owners) {
+          ownersData = json.data.owners;
+          populateOwnerSelects();
+          if (statusEl) statusEl.style.display = 'none';
+        } else {
+          if (statusEl) {
+            statusEl.textContent = 'Failed to load owners';
+            statusEl.style.color = '#dc3545';
+          }
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = 'Error loading owners: ' + err.message;
+          statusEl.style.color = '#dc3545';
+        }
+      }
+    }
+
+    // Populate owner and category select elements
+    function populateOwnerSelects() {
+      if (!ownersData) return;
+
+      // Populate owners dropdown
+      const ownersSelect = document.getElementById('manualOwners');
+      if (ownersSelect) {
+        ownersSelect.innerHTML = '';
+        ownersData.forEach(owner => {
+          const option = document.createElement('option');
+          option.value = owner.ownerCode;
+          option.textContent = owner.name || owner.ownerCode;
+          option.dataset.name = owner.name || owner.ownerCode;
+          option.dataset.category = owner.category || '';
+          ownersSelect.appendChild(option);
+        });
+
+        // Add click handler for toggle selection
+        ownersSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        ownersSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+
+      // Extract unique categories and populate categories dropdown
+      const categoriesSelect = document.getElementById('manualCategories');
+      if (categoriesSelect) {
+        categoriesSelect.innerHTML = '';
+        const uniqueCategories = [...new Set(ownersData.map(o => o.category).filter(Boolean))].sort();
+        uniqueCategories.forEach(category => {
+          const option = document.createElement('option');
+          option.value = category;
+          option.textContent = category;
+          option.dataset.name = category;
+          categoriesSelect.appendChild(option);
+        });
+
+        // Add click handler for toggle selection
+        categoriesSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        categoriesSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+    }
+
+    // Get selected owner codes
+    function getSelectedOwnerCodes() {
+      const ownersSelect = document.getElementById('manualOwners');
+      const categoriesSelect = document.getElementById('manualCategories');
+
+      const selectedOwnerCodes = Array.from(ownersSelect?.selectedOptions || []).map(opt => opt.value);
+      const selectedCategories = Array.from(categoriesSelect?.selectedOptions || []).map(opt => opt.value);
+
+      // If categories selected, get all owner codes from those categories
+      if (selectedCategories.length > 0 && ownersData) {
+        const categoryOwnerCodes = ownersData
+          .filter(o => selectedCategories.includes(o.category))
+          .map(o => o.ownerCode);
+
+        // Merge with directly selected owners (unique)
+        return [...new Set([...selectedOwnerCodes, ...categoryOwnerCodes])];
+      }
+
+      return selectedOwnerCodes;
+    }
 
     // Load filters from API
     async function loadFilters() {
@@ -691,9 +798,10 @@
       return Array.from(select.selectedOptions).map(opt => opt.dataset.name || opt.textContent);
     }
 
-    // Load filters on page load
+    // Load filters and owners on page load
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(loadFilters, 500);
+      setTimeout(loadOwners, 600);
     });
 
     function displayResponse(containerId, status, data) {
@@ -866,7 +974,8 @@
         } else if (type === 'LANGUAGES') {
           body.itemCodes = getManualSelectedIds('manualLanguages');
         } else if (type === 'LABELS') {
-          body.itemCodes = getManualSelectedIds('manualUsecases');
+          // For LABELS, use owner codes (from owners and/or categories selection)
+          body.itemCodes = getSelectedOwnerCodes();
         } else {
           // TRACKS or PLAYLISTS - use text input
           const itemCodes = document.getElementById('postRailItemCodes').value;
@@ -1060,7 +1169,7 @@
         if (container) container.innerHTML = '';
       });
       // Clear manual filter selections
-      ['manualGenres', 'manualMoods', 'manualLanguages', 'manualUsecases'].forEach(id => {
+      ['manualGenres', 'manualMoods', 'manualLanguages', 'manualOwners', 'manualCategories'].forEach(id => {
         const select = document.getElementById(id);
         if (select) {
           Array.from(select.options).forEach(opt => opt.selected = false);

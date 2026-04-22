@@ -552,11 +552,22 @@
           <select id="manualLanguages" class="filter-select" multiple onchange="updateTags('manualLanguages')"></select>
           <div id="manualLanguagesTags" class="selected-tags"></div>
         </div>
-        <!-- Filter dropdown for LABELS (usecases) -->
+        <!-- Owner/Category dropdowns for LABELS -->
         <div id="manualLabelsSelect" class="form-group" style="display: none;">
-          <label>Select Use Cases</label>
-          <select id="manualUsecases" class="filter-select" multiple onchange="updateTags('manualUsecases')"></select>
-          <div id="manualUsecasesTags" class="selected-tags"></div>
+          <div id="ownersLoadingMsg" style="color: #888; font-size: 12px; padding: 8px 0; display: none;">Loading owners...</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Select Owners</label>
+              <select id="manualOwners" class="filter-select" multiple onchange="updateTags('manualOwners')"></select>
+              <div id="manualOwnersTags" class="selected-tags"></div>
+            </div>
+            <div class="form-group">
+              <label>Select Categories</label>
+              <select id="manualCategories" class="filter-select" multiple onchange="updateTags('manualCategories')"></select>
+              <div id="manualCategoriesTags" class="selected-tags"></div>
+            </div>
+          </div>
+          <button type="button" onclick="loadOwnersData()" style="background: #6c757d; margin-top: 8px; padding: 6px 12px; font-size: 11px;">Reload Owners</button>
         </div>
       </div>
 
@@ -730,11 +741,10 @@
         { id: 'aiLanguages', key: 'language' },
         { id: 'aiUsecases', key: 'usecase' },
         { id: 'aiAssortment', key: 'assortment' },
-        // Manual source filters
+        // Manual source filters (LABELS uses owner dropdowns instead)
         { id: 'manualGenres', key: 'genre' },
         { id: 'manualMoods', key: 'mood' },
-        { id: 'manualLanguages', key: 'language' },
-        { id: 'manualUsecases', key: 'usecase' }
+        { id: 'manualLanguages', key: 'language' }
       ];
 
       mappings.forEach(({ id, key }) => {
@@ -786,9 +796,97 @@
       return Array.from(select.selectedOptions).map(opt => opt.dataset.name || opt.textContent);
     }
 
-    // Load filters when page loads
+    // Owner data storage and loading
+    let ownersData = null;
+
+    async function loadOwnersData() {
+      const msgEl = document.getElementById('ownersLoadingMsg');
+      if (msgEl) {
+        msgEl.style.display = 'block';
+        msgEl.textContent = 'Loading owners...';
+        msgEl.style.color = '#888';
+      }
+
+      try {
+        const base = document.getElementById('apiBase').value.trim();
+        const res = await fetch(`${base}/owners?limit=200`);
+        const json = await res.json();
+
+        if (json.data && json.data.owners) {
+          ownersData = json.data.owners;
+          populateOwnerDropdowns();
+        }
+        if (msgEl) msgEl.style.display = 'none';
+      } catch (e) {
+        if (msgEl) {
+          msgEl.textContent = 'Failed to load owners';
+          msgEl.style.color = '#dc3545';
+        }
+      }
+    }
+
+    function populateOwnerDropdowns() {
+      if (!ownersData) return;
+
+      // Populate owners dropdown
+      const ownersSelect = document.getElementById('manualOwners');
+      if (ownersSelect) {
+        ownersSelect.innerHTML = '';
+        ownersData.forEach(owner => {
+          const opt = document.createElement('option');
+          opt.value = owner.ownerCode;
+          opt.textContent = owner.name || owner.ownerCode;
+          opt.dataset.name = owner.name || owner.ownerCode;
+          opt.dataset.category = owner.category || '';
+          ownersSelect.appendChild(opt);
+        });
+
+        ownersSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        ownersSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+
+      // Extract unique categories and populate categories dropdown
+      const categoriesSelect = document.getElementById('manualCategories');
+      if (categoriesSelect) {
+        categoriesSelect.innerHTML = '';
+        const uniqueCategories = [...new Set(ownersData.map(o => o.category).filter(Boolean))].sort();
+        uniqueCategories.forEach(category => {
+          const opt = document.createElement('option');
+          opt.value = category;
+          opt.textContent = category;
+          opt.dataset.name = category;
+          categoriesSelect.appendChild(opt);
+        });
+
+        categoriesSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        categoriesSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+    }
+
+    function getSelectedOwnerCodes() {
+      const ownersSelect = document.getElementById('manualOwners');
+      const categoriesSelect = document.getElementById('manualCategories');
+
+      const selectedOwnerCodes = Array.from(ownersSelect?.selectedOptions || []).map(opt => opt.value);
+      const selectedCategories = Array.from(categoriesSelect?.selectedOptions || []).map(opt => opt.value);
+
+      // If categories selected, get all owner codes from those categories
+      if (selectedCategories.length > 0 && ownersData) {
+        const categoryOwnerCodes = ownersData
+          .filter(o => selectedCategories.includes(o.category))
+          .map(o => o.ownerCode);
+
+        // Merge with directly selected owners (unique)
+        return [...new Set([...selectedOwnerCodes, ...categoryOwnerCodes])];
+      }
+
+      return selectedOwnerCodes;
+    }
+
+    // Load filters and owners when page loads
     document.addEventListener('DOMContentLoaded', () => {
       setTimeout(loadFiltersData, 500);
+      setTimeout(loadOwnersData, 600);
     });
 
     function updateUrlPreview() {
@@ -1070,7 +1168,8 @@
         } else if (type === 'LANGUAGES') {
           itemCodes = getSelectedIds('manualLanguages');
         } else if (type === 'LABELS') {
-          itemCodes = getSelectedIds('manualUsecases');
+          // For LABELS, use owner codes (from owners and/or categories selection)
+          itemCodes = getSelectedOwnerCodes();
         } else {
           // TRACKS or PLAYLISTS - use text input
           const itemCodesStr = document.getElementById('manualItemCodes').value.trim();
