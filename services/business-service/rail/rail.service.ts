@@ -20,6 +20,7 @@ import {
   findRailByKeyAndBrand,
   findRailById,
   getMaxRailOrder,
+  getMinRailOrder,
   upsertRailWithItems,
   deleteRailById,
   updateRailItems,
@@ -281,11 +282,136 @@ const buildRailResponse = (
   };
 };
 
+// -----------------------------------------------------------------------------
+// Brand Recommended Rail - AI-powered personalized recommendations per brand
+// -----------------------------------------------------------------------------
+
+const BRAND_RECOMMENDED_RAIL_KEY_PREFIX = "brand_recommended_";
+const AI_SERVICE_BRAND_RECOMMEND_URL = "https://enterprise.hoopr.ai/smash/brandRecommend";
+
+interface BrandRecommendTrack {
+  id: string;
+  trackCode: string;
+  name: string;
+}
+
+interface BrandRecommendResponse {
+  data?: {
+    brand_id: number;
+    brand_name: string;
+    tracks?: BrandRecommendTrack[];
+    pagination?: {
+      has_more: boolean;
+      limit: number;
+      page: number;
+    };
+  };
+}
+
+const fetchBrandRecommendations = async (
+  brandId: number,
+  limit: number = 40,
+  page: number = 1,
+): Promise<string[]> => {
+  try {
+    const response = await fetch(AI_SERVICE_BRAND_RECOMMEND_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/plain, */*",
+      },
+      body: JSON.stringify({
+        brand_id: String(brandId),
+        limit,
+        page,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Brand recommend API responded with status ${response.status}`);
+      return [];
+    }
+
+    const json = (await response.json()) as BrandRecommendResponse;
+    const tracks = json?.data?.tracks ?? [];
+
+    // Extract track codes from the response
+    const trackCodes: string[] = [];
+    for (const track of tracks) {
+      if (track?.trackCode && !trackCodes.includes(track.trackCode)) {
+        trackCodes.push(track.trackCode);
+      }
+    }
+    return trackCodes;
+  } catch (error) {
+    console.error("Error fetching brand recommendations:", error);
+    return [];
+  }
+};
+
+const ensureBrandRecommendedRail = async (
+  userBrandId: number,
+  pageName: string = "HOME",
+): Promise<void> => {
+  const railKey = `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}`;
+
+  // Check if the rail already exists for this brand
+  const existingRail = await findRailByKeyAndBrand(railKey, userBrandId);
+  if (existingRail) {
+    // Rail already exists, nothing to do
+    return;
+  }
+
+  // Fetch recommendations from AI server
+  const trackCodes = await fetchBrandRecommendations(userBrandId);
+  if (trackCodes.length === 0) {
+    // No recommendations available, skip creating the rail
+    return;
+  }
+
+  // Get the minimum order to place this rail at the top
+  const minOrder = await getMinRailOrder(userBrandId);
+  const newOrder = minOrder - 1; // Place it above the current top rail
+
+  // Create the rail with items
+  const items = trackCodes.map((trackCode, idx) => ({
+    itemType: RailItemType.TRACK,
+    itemCode: trackCode,
+    order: idx,
+  }));
+
+  await upsertRailWithItems(
+    {
+      key: railKey,
+      title: "Recommended For You",
+      subtitle: null,
+      type: RailType.TRACKS,
+      subType: null,
+      brandId: userBrandId,
+      pageName,
+      sourceType: RailSourceType.MANUAL,
+      sourceConfig: {
+        source: "brand_recommend_ai",
+        createdAt: new Date().toISOString(),
+      },
+      order: newOrder,
+      isVisible: true,
+    },
+    items,
+  );
+};
+
 export const getRailsService = async (
   brandId?: number,
   userId?: number,
   pageName?: string,
+  userBrandId?: number,
 ): Promise<RailResponse[]> => {
+  // Ensure brand recommended rail exists for the logged-in user's brand
+  if (userBrandId) {
+    await ensureBrandRecommendedRail(userBrandId, pageName ?? "HOME");
+  }
+
   const raw = await findRailsForBrand(brandId, pageName);
   const resolved = resolveBrandOverrides(raw);
   const maps = await buildHydrationMaps(resolved, userId, brandId);
@@ -299,7 +425,13 @@ export const getRailsPaginatedService = async (
   page: number = 1,
   limit: number = 10,
   railItemLimit?: number,
+  userBrandId?: number,
 ): Promise<PaginatedRailsResponse> => {
+  // Ensure brand recommended rail exists for the logged-in user's brand
+  if (userBrandId) {
+    await ensureBrandRecommendedRail(userBrandId, pageName ?? "HOME");
+  }
+
   const { rows: raw, count: total } = await findRailsForBrandPaginated(
     brandId,
     pageName,

@@ -125,6 +125,17 @@ export const getMaxRailOrder = async (
   return row?.order ?? -1;
 };
 
+export const getMinRailOrder = async (
+  brandId: number | null,
+): Promise<number> => {
+  const row = await RailModel.findOne({
+    where: { brandId: brandId ?? (null as number | null) },
+    order: [["order", "ASC"]],
+    attributes: ["order"],
+  });
+  return row?.order ?? 0;
+};
+
 export interface UpsertRailInput {
   key: string;
   title: string;

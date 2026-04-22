@@ -20,6 +20,7 @@ import {
   RailSourceType,
 } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
+import { findUserById } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -38,7 +39,11 @@ export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
   const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
 
-  const rails = await getRailsService(brandId, userId, pageName);
+  // Get the logged-in user's brandId for brand-specific recommendations
+  const user = userId ? await findUserById(userId) : null;
+  const userBrandId = user?.brandId;
+
+  const rails = await getRailsService(brandId, userId, pageName, userBrandId);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
@@ -62,7 +67,11 @@ export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) 
     ? Math.min(200, railItemLimitRaw)
     : undefined;
 
-  const result = await getRailsPaginatedService(brandId, userId, pageName, page, limit, railItemLimit);
+  // Get the logged-in user's brandId for brand-specific recommendations
+  const user = userId ? await findUserById(userId) : null;
+  const userBrandId = user?.brandId;
+
+  const result = await getRailsPaginatedService(brandId, userId, pageName, page, limit, railItemLimit, userBrandId);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
