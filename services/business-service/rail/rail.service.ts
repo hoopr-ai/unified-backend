@@ -249,8 +249,9 @@ const extractSeeMore = (
 const buildRailResponse = (
   rail: RailModel,
   maps: HydrationMaps,
+  itemLimit?: number,
 ): RailResponse => {
-  const items = (rail.items ?? [])
+  let items = (rail.items ?? [])
     .slice()
     .sort((a, b) => a.order - b.order)
     .map<RailItemResponse>((item) => ({
@@ -260,6 +261,11 @@ const buildRailResponse = (
       data: resolveItem(item, maps),
     }))
     .filter((entry) => entry.data !== null);
+
+  // Apply item limit if specified
+  if (itemLimit && itemLimit > 0 && items.length > itemLimit) {
+    items = items.slice(0, itemLimit);
+  }
 
   return {
     id: rail.id,
@@ -292,6 +298,7 @@ export const getRailsPaginatedService = async (
   pageName?: string,
   page: number = 1,
   limit: number = 10,
+  railItemLimit?: number,
 ): Promise<PaginatedRailsResponse> => {
   const { rows: raw, count: total } = await findRailsForBrandPaginated(
     brandId,
@@ -301,7 +308,7 @@ export const getRailsPaginatedService = async (
   );
   const resolved = resolveBrandOverrides(raw);
   const maps = await buildHydrationMaps(resolved, userId, brandId);
-  const rails = resolved.map((rail) => buildRailResponse(rail, maps));
+  const rails = resolved.map((rail) => buildRailResponse(rail, maps, railItemLimit));
 
   const totalPages = Math.ceil(total / limit);
 

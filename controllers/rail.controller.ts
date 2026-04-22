@@ -47,7 +47,7 @@ export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   });
 });
 
-// GET /rails/batch?brandId=123&pageName=home&page=1&limit=5 - Get rails in batches (paginated)
+// GET /rails/batch?brandId=123&pageName=home&page=1&limit=5&railItemLimit=10 - Get rails in batches (paginated)
 export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) => {
   const brandId = parseBrandId(req.query.brandId);
   const userId = req.session?.userId;
@@ -56,8 +56,13 @@ export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) 
   // Parse pagination params with defaults
   const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+  // Parse rail item limit (max items per rail, 0 or undefined means no limit)
+  const railItemLimitRaw = parseInt(req.query.railItemLimit as string, 10);
+  const railItemLimit = Number.isFinite(railItemLimitRaw) && railItemLimitRaw > 0
+    ? Math.min(200, railItemLimitRaw)
+    : undefined;
 
-  const result = await getRailsPaginatedService(brandId, userId, pageName, page, limit);
+  const result = await getRailsPaginatedService(brandId, userId, pageName, page, limit, railItemLimit);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
