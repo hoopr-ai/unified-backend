@@ -169,6 +169,7 @@ export interface GetAllTracksRequestData {
   movie?: boolean;
   type?: string[];
   ownerCode?: string[];
+  subType?: string[];
   campaign?: boolean;
   releaseYearFrom?: number;
   releaseYearTo?: number;
