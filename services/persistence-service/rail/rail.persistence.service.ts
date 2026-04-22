@@ -96,6 +96,130 @@ export interface RailItemInput {
   isLocked?: boolean;
 }
 
+// Find a rail by ID (with items)
+export const findRailById = async (
+  railId: number,
+): Promise<RailModel | null> => {
+  return RailModel.findOne({
+    where: { id: railId },
+    include: [
+      {
+        model: RailItemModel,
+        as: "items",
+        required: false,
+      },
+    ],
+    order: [[{ model: RailItemModel, as: "items" }, "order", "ASC"]],
+  });
+};
+
+// Hard delete a rail and its items
+export const deleteRailById = async (
+  railId: number,
+): Promise<boolean> => {
+  const transaction = await sequelize.transaction();
+  try {
+    // Delete all items first
+    await RailItemModel.destroy({
+      where: { railId },
+      transaction,
+    });
+
+    // Delete the rail
+    const deleted = await RailModel.destroy({
+      where: { id: railId },
+      transaction,
+    });
+
+    await transaction.commit();
+    return deleted > 0;
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+};
+
+// Update rail items (handles delete, freeze/unfreeze, reorder, add)
+export interface UpdateRailItemInput {
+  id?: number;           // Existing item ID (for update/delete)
+  itemType: string;
+  itemCode: string;
+  order: number;
+  isLocked?: boolean;
+}
+
+export const updateRailItems = async (
+  railId: number,
+  items: UpdateRailItemInput[],
+): Promise<RailItemDetails[]> => {
+  const transaction = await sequelize.transaction();
+  try {
+    // Get current items
+    const currentItems = await RailItemModel.findAll({
+      where: { railId },
+      transaction,
+    });
+    const currentItemIds = new Set(currentItems.map((i) => i.id));
+
+    // Separate items into updates and creates
+    const itemsWithId = items.filter((i) => i.id != null);
+    const itemsToCreate = items.filter((i) => i.id == null);
+
+    // Find items to delete (current items not in the new list)
+    const newItemIds = new Set(itemsWithId.map((i) => i.id));
+    const itemsToDelete = Array.from(currentItemIds).filter((id) => !newItemIds.has(id));
+
+    // Delete removed items
+    if (itemsToDelete.length > 0) {
+      await RailItemModel.destroy({
+        where: { id: { [Op.in]: itemsToDelete } },
+        transaction,
+      });
+    }
+
+    // Update existing items
+    for (const item of itemsWithId) {
+      await RailItemModel.update(
+        {
+          order: item.order,
+          isLocked: item.isLocked ?? false,
+        },
+        {
+          where: { id: item.id, railId },
+          transaction,
+        },
+      );
+    }
+
+    // Create new items
+    if (itemsToCreate.length > 0) {
+      await RailItemModel.bulkCreate(
+        itemsToCreate.map((item) => ({
+          railId,
+          itemType: item.itemType,
+          itemCode: item.itemCode,
+          order: item.order,
+          isLocked: item.isLocked ?? false,
+        })) as unknown as RailItemDetails[],
+        { transaction },
+      );
+    }
+
+    await transaction.commit();
+
+    // Fetch and return updated items
+    const updatedItems = await RailItemModel.findAll({
+      where: { railId },
+      order: [["order", "ASC"]],
+    });
+
+    return updatedItems.map((i) => i.toJSON() as RailItemDetails);
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+};
+
 export const upsertRailWithItems = async (
   input: UpsertRailInput,
   items: RailItemInput[],

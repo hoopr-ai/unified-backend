@@ -16,8 +16,12 @@ import {
   findRailsForBrand,
   findRailByKey,
   findRailByKeyAndBrand,
+  findRailById,
   getMaxRailOrder,
   upsertRailWithItems,
+  deleteRailById,
+  updateRailItems,
+  UpdateRailItemInput,
   findTracksByTrackCodes,
   findTracksByFilter,
   findAllTracks,
@@ -685,4 +689,69 @@ export const upsertRailService = async (
     },
     items,
   );
+};
+
+// -----------------------------------------------------------------------------
+// Delete a rail by ID (hard delete)
+// -----------------------------------------------------------------------------
+
+export const deleteRailService = async (
+  railId: number,
+): Promise<boolean> => {
+  const rail = await findRailById(railId);
+  if (!rail) {
+    return false;
+  }
+  return deleteRailById(railId);
+};
+
+// -----------------------------------------------------------------------------
+// Edit rail items (delete, freeze/unfreeze, reorder, add new items)
+// -----------------------------------------------------------------------------
+
+export interface EditRailItemsRequest {
+  items: Array<{
+    id?: number;           // Existing item ID (omit for new items)
+    itemCode: string;      // Track code, filter ID, playlist code, etc.
+    order: number;         // New order position
+    isLocked?: boolean;    // Freeze/unfreeze the item
+  }>;
+}
+
+export interface EditRailItemsResult {
+  railId: number;
+  items: RailItemDetails[];
+}
+
+export const editRailItemsService = async (
+  railId: number,
+  req: EditRailItemsRequest,
+): Promise<EditRailItemsResult | null> => {
+  // Verify rail exists
+  const rail = await findRailById(railId);
+  if (!rail) {
+    return null;
+  }
+
+  // Get the item type from the rail type
+  const itemType = RAIL_TYPE_TO_ITEM_TYPE[rail.type as RailType];
+  if (!itemType) {
+    throw new Error(`Unknown rail type: ${rail.type}`);
+  }
+
+  // Build items for update
+  const itemsToUpdate: UpdateRailItemInput[] = req.items.map((item) => ({
+    id: item.id,
+    itemType,
+    itemCode: item.itemCode,
+    order: item.order,
+    isLocked: item.isLocked ?? false,
+  }));
+
+  const updatedItems = await updateRailItems(railId, itemsToUpdate);
+
+  return {
+    railId,
+    items: updatedItems,
+  };
 };

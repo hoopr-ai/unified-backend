@@ -431,6 +431,55 @@
     <div id="rawJsonResponse"></div>
   </div>
 
+  <!-- DELETE /rails/:railId -->
+  <div class="section">
+    <h2>DELETE /rails/:railId - Delete Rail</h2>
+    <p class="help">Permanently delete a rail and all its items. This action cannot be undone.</p>
+    <div class="row">
+      <div>
+        <label for="deleteRailId">Rail ID *</label>
+        <input type="number" id="deleteRailId" placeholder="e.g., 123">
+      </div>
+    </div>
+    <button style="background: #dc3545;" onclick="deleteRail()">Delete Rail</button>
+    <div id="deleteRailResponse"></div>
+  </div>
+
+  <!-- PATCH /rails/:railId/items - Edit Rail Items -->
+  <div class="section">
+    <h2>PATCH /rails/:railId/items - Edit Rail Items</h2>
+    <p class="help">Edit rail items: delete, freeze/unfreeze, reorder, or add new items. Send the complete list of items you want the rail to have.</p>
+
+    <div class="row">
+      <div>
+        <label for="editRailId">Rail ID *</label>
+        <input type="number" id="editRailId" placeholder="e.g., 123">
+      </div>
+      <div>
+        <button class="secondary" style="margin-top: 32px;" onclick="loadRailItems()">Load Current Items</button>
+      </div>
+    </div>
+
+    <div id="railItemsEditor" style="margin-top: 20px;">
+      <div class="filter-group">
+        <div class="filter-group-title">Rail Items</div>
+        <p class="help">Each row represents an item. Remove items to delete them. Toggle "Locked" to freeze/unfreeze. Drag or change order numbers to reorder. Add new rows for new items.</p>
+
+        <div id="itemsList"></div>
+
+        <div style="margin-top: 15px;">
+          <button class="success" onclick="addItemRow()">+ Add Item</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <button onclick="saveRailItems()">Save Changes</button>
+      <button class="secondary" onclick="clearItemsEditor()">Clear</button>
+    </div>
+    <div id="editRailItemsResponse"></div>
+  </div>
+
   <script>
     function getBaseUrl() {
       return document.getElementById('baseUrl').value.replace(/\/$/, '');
@@ -828,6 +877,170 @@
       document.getElementById('aiUsecases').value = 'Automobile, Bumpers';
       document.getElementById('aiAssortment').value = 'chartbusters';
       toggleSourceFields();
+    }
+
+    // DELETE Rail
+    async function deleteRail() {
+      const railId = document.getElementById('deleteRailId').value;
+      if (!railId) {
+        alert('Rail ID is required');
+        return;
+      }
+      if (!confirm(`Are you sure you want to permanently delete rail ${railId}? This cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails/${railId}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        const data = await res.json();
+        displayResponse('deleteRailResponse', res.status, data);
+      } catch (err) {
+        displayResponse('deleteRailResponse', 0, { error: err.message });
+      }
+    }
+
+    // Edit Rail Items
+    let currentRailItems = [];
+    let itemRowCounter = 0;
+
+    function createItemRow(item = null) {
+      const rowId = itemRowCounter++;
+      const div = document.createElement('div');
+      div.className = 'item-row';
+      div.id = `item-row-${rowId}`;
+      div.style.cssText = 'display: flex; gap: 10px; align-items: center; padding: 10px; background: white; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;';
+
+      div.innerHTML = `
+        <input type="hidden" class="item-id" value="${item?.id || ''}">
+        <div style="flex: 0 0 60px;">
+          <label style="font-size: 11px; margin: 0;">Order</label>
+          <input type="number" class="item-order" value="${item?.order ?? itemRowCounter - 1}" style="width: 50px; padding: 5px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 11px; margin: 0;">Item Code *</label>
+          <input type="text" class="item-code" value="${item?.itemCode || ''}" placeholder="e.g., TRACK001" style="padding: 5px;">
+        </div>
+        <div style="flex: 0 0 80px; text-align: center;">
+          <label style="font-size: 11px; margin: 0;">Locked</label>
+          <div><input type="checkbox" class="item-locked" ${item?.isLocked ? 'checked' : ''}></div>
+        </div>
+        <div style="flex: 0 0 80px;">
+          <button onclick="removeItemRow(${rowId})" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">Remove</button>
+        </div>
+      `;
+
+      return div;
+    }
+
+    function addItemRow(item = null) {
+      const container = document.getElementById('itemsList');
+      container.appendChild(createItemRow(item));
+    }
+
+    function removeItemRow(rowId) {
+      const row = document.getElementById(`item-row-${rowId}`);
+      if (row) row.remove();
+    }
+
+    function clearItemsEditor() {
+      document.getElementById('itemsList').innerHTML = '';
+      currentRailItems = [];
+      itemRowCounter = 0;
+    }
+
+    async function loadRailItems() {
+      const railId = document.getElementById('editRailId').value;
+      if (!railId) {
+        alert('Rail ID is required');
+        return;
+      }
+
+      clearItemsEditor();
+
+      try {
+        // First fetch all rails to find this one by ID
+        const res = await fetch(`${getBaseUrl()}/rails`);
+        const data = await res.json();
+
+        if (data.data && Array.isArray(data.data)) {
+          const rail = data.data.find(r => r.id == railId);
+          if (rail && rail.items) {
+            rail.items.forEach(item => {
+              addItemRow({
+                id: item.id,
+                itemCode: item.itemCode,
+                order: item.order,
+                isLocked: item.isLocked || false
+              });
+            });
+            displayResponse('editRailItemsResponse', 200, { message: `Loaded ${rail.items.length} items from rail "${rail.title}"` });
+          } else {
+            displayResponse('editRailItemsResponse', 404, { message: 'Rail not found or has no items' });
+          }
+        }
+      } catch (err) {
+        displayResponse('editRailItemsResponse', 0, { error: err.message });
+      }
+    }
+
+    function collectItemsFromEditor() {
+      const rows = document.querySelectorAll('.item-row');
+      const items = [];
+
+      rows.forEach(row => {
+        const id = row.querySelector('.item-id').value;
+        const order = parseInt(row.querySelector('.item-order').value) || 0;
+        const itemCode = row.querySelector('.item-code').value.trim();
+        const isLocked = row.querySelector('.item-locked').checked;
+
+        if (itemCode) {
+          const item = { itemCode, order, isLocked };
+          if (id) item.id = parseInt(id);
+          items.push(item);
+        }
+      });
+
+      // Sort by order
+      items.sort((a, b) => a.order - b.order);
+
+      return items;
+    }
+
+    async function saveRailItems() {
+      const railId = document.getElementById('editRailId').value;
+      if (!railId) {
+        alert('Rail ID is required');
+        return;
+      }
+
+      const items = collectItemsFromEditor();
+      if (items.length === 0) {
+        if (!confirm('No items found. This will remove all items from the rail. Continue?')) {
+          return;
+        }
+      }
+
+      const body = { items };
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails/${railId}/items`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResponse('editRailItemsResponse', res.status, data);
+
+        // Reload items after save
+        if (res.ok) {
+          setTimeout(() => loadRailItems(), 500);
+        }
+      } catch (err) {
+        displayResponse('editRailItemsResponse', 0, { error: err.message });
+      }
     }
   </script>
 </body>

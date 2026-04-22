@@ -365,7 +365,9 @@
       <input id="brandId" placeholder="(optional)" style="width: 80px;" />
       <button onclick="loadRails()">Reload</button>
       <button class="secondary" onclick="togglePeek()">Raw</button>
-      <button class="secondary" onclick="toggleCreateForm()" style="background: #28a745;">+ Create Rail</button>
+      <button class="secondary" onclick="toggleCreateForm()" style="background: #28a745;">+ Create</button>
+      <button class="secondary" onclick="toggleEditItemsForm()" style="background: #17a2b8;">Edit Items</button>
+      <button class="secondary" onclick="toggleDeleteForm()" style="background: #dc3545; color: white;">Delete</button>
     </div>
   </div>
 
@@ -523,6 +525,53 @@
       <div class="form-actions">
         <button onclick="createRail()" class="primary">Create Rail</button>
         <button onclick="toggleCreateForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Rail Form -->
+  <div id="deleteForm" class="create-overlay" style="display: none;">
+    <div class="create-form">
+      <h2>Delete Rail</h2>
+      <p style="color: #666; margin-bottom: 16px;">Permanently delete a rail and all its items. This action cannot be undone.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Rail ID *</label>
+          <input id="deleteRailId" type="number" placeholder="e.g., 123" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button onclick="deleteRail()" style="background: #dc3545;">Delete Rail</button>
+        <button onclick="toggleDeleteForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Rail Items Form -->
+  <div id="editItemsForm" class="create-overlay" style="display: none;">
+    <div class="create-form" style="max-width: 800px;">
+      <h2>Edit Rail Items</h2>
+      <p style="color: #666; margin-bottom: 16px;">Edit rail items: delete, freeze/unfreeze, reorder, or add new items.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Rail ID *</label>
+          <input id="editItemsRailId" type="number" placeholder="e.g., 123" />
+        </div>
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button onclick="loadRailItemsForEdit()" class="secondary">Load Items</button>
+        </div>
+      </div>
+
+      <div id="itemsEditorContainer" style="margin-top: 16px; display: none;">
+        <h3 style="margin-bottom: 12px;">Rail Items</h3>
+        <p style="color: #888; font-size: 12px; margin-bottom: 12px;">Remove items to delete. Toggle "Locked" to freeze. Change order numbers to reorder. Add new items below.</p>
+        <div id="editItemsList" style="max-height: 400px; overflow-y: auto;"></div>
+        <button onclick="addEditItemRow()" style="margin-top: 12px; background: #28a745;">+ Add Item</button>
+      </div>
+
+      <div class="form-actions">
+        <button onclick="saveRailItemsEdit()" class="primary">Save Changes</button>
+        <button onclick="toggleEditItemsForm()" class="secondary">Cancel</button>
       </div>
     </div>
   </div>
@@ -847,6 +896,191 @@
         loadRails();
       } catch (e) {
         setStatus('Failed to create rail: ' + e.message, 'error');
+      }
+    }
+
+    // Delete Rail Functions
+    function toggleDeleteForm() {
+      const form = document.getElementById('deleteForm');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    async function deleteRail() {
+      const railId = document.getElementById('deleteRailId').value;
+      if (!railId) {
+        setStatus('Rail ID is required', 'error');
+        return;
+      }
+      if (!confirm(`Are you sure you want to permanently delete rail ${railId}? This cannot be undone.`)) {
+        return;
+      }
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Deleting rail...', '');
+
+      try {
+        const res = await fetch(`${base}/rails/${railId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rail deleted successfully!', 'success');
+        toggleDeleteForm();
+        document.getElementById('deleteRailId').value = '';
+        loadRails();
+      } catch (e) {
+        setStatus('Failed to delete rail: ' + e.message, 'error');
+      }
+    }
+
+    // Edit Rail Items Functions
+    let editItemRowCounter = 0;
+
+    function toggleEditItemsForm() {
+      const form = document.getElementById('editItemsForm');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+      if (form.style.display === 'none') {
+        document.getElementById('editItemsList').innerHTML = '';
+        document.getElementById('itemsEditorContainer').style.display = 'none';
+        editItemRowCounter = 0;
+      }
+    }
+
+    function createEditItemRow(item = null) {
+      const rowId = editItemRowCounter++;
+      const div = document.createElement('div');
+      div.id = `edit-item-row-${rowId}`;
+      div.style.cssText = 'display: flex; gap: 10px; align-items: center; padding: 10px; background: #f8f9fa; border-radius: 4px; margin-bottom: 8px; border: 1px solid #e9ecef;';
+
+      div.innerHTML = `
+        <input type="hidden" class="item-id" value="${item?.id || ''}">
+        <div style="flex: 0 0 60px;">
+          <label style="font-size: 10px; color: #888;">Order</label>
+          <input type="number" class="item-order" value="${item?.order ?? editItemRowCounter - 1}" style="width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 10px; color: #888;">Item Code</label>
+          <input type="text" class="item-code" value="${item?.itemCode || ''}" placeholder="e.g., TRACK001" style="padding: 4px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+        </div>
+        <div style="flex: 0 0 70px; text-align: center;">
+          <label style="font-size: 10px; color: #888;">Locked</label>
+          <div><input type="checkbox" class="item-locked" ${item?.isLocked ? 'checked' : ''}></div>
+        </div>
+        <div style="flex: 0 0 70px;">
+          <button onclick="removeEditItemRow(${rowId})" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Remove</button>
+        </div>
+      `;
+
+      return div;
+    }
+
+    function addEditItemRow(item = null) {
+      const container = document.getElementById('editItemsList');
+      container.appendChild(createEditItemRow(item));
+    }
+
+    function removeEditItemRow(rowId) {
+      const row = document.getElementById(`edit-item-row-${rowId}`);
+      if (row) row.remove();
+    }
+
+    async function loadRailItemsForEdit() {
+      const railId = document.getElementById('editItemsRailId').value;
+      if (!railId) {
+        setStatus('Rail ID is required', 'error');
+        return;
+      }
+
+      document.getElementById('editItemsList').innerHTML = '';
+      editItemRowCounter = 0;
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Loading rail items...', '');
+
+      try {
+        const res = await fetch(`${base}/rails`);
+        const json = await res.json();
+
+        if (json.data && Array.isArray(json.data)) {
+          const rail = json.data.find(r => r.id == railId);
+          if (rail && rail.items) {
+            rail.items.forEach(item => {
+              addEditItemRow({
+                id: item.id,
+                itemCode: item.itemCode,
+                order: item.order,
+                isLocked: item.isLocked || false
+              });
+            });
+            document.getElementById('itemsEditorContainer').style.display = 'block';
+            setStatus(`Loaded ${rail.items.length} items from "${rail.title}"`, 'success');
+          } else {
+            setStatus('Rail not found or has no items', 'error');
+          }
+        }
+      } catch (e) {
+        setStatus('Failed to load rail items: ' + e.message, 'error');
+      }
+    }
+
+    function collectEditItems() {
+      const rows = document.querySelectorAll('#editItemsList > div');
+      const items = [];
+
+      rows.forEach(row => {
+        const id = row.querySelector('.item-id').value;
+        const order = parseInt(row.querySelector('.item-order').value) || 0;
+        const itemCode = row.querySelector('.item-code').value.trim();
+        const isLocked = row.querySelector('.item-locked').checked;
+
+        if (itemCode) {
+          const item = { itemCode, order, isLocked };
+          if (id) item.id = parseInt(id);
+          items.push(item);
+        }
+      });
+
+      items.sort((a, b) => a.order - b.order);
+      return items;
+    }
+
+    async function saveRailItemsEdit() {
+      const railId = document.getElementById('editItemsRailId').value;
+      if (!railId) {
+        setStatus('Rail ID is required', 'error');
+        return;
+      }
+
+      const items = collectEditItems();
+      if (items.length === 0) {
+        if (!confirm('No items found. This will remove all items from the rail. Continue?')) {
+          return;
+        }
+      }
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Saving rail items...', '');
+
+      try {
+        const res = await fetch(`${base}/rails/${railId}/items`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rail items updated successfully!', 'success');
+        loadRails();
+        setTimeout(() => loadRailItemsForEdit(), 500);
+      } catch (e) {
+        setStatus('Failed to save rail items: ' + e.message, 'error');
       }
     }
   </script>

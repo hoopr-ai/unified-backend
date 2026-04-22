@@ -60,4 +60,6 @@ export const enum ResponseMessages {
   GetRailSuccess = "Rail fetched successfully",
   RailNotFound = "Rail not found",
   UpsertRailSuccess = "Rail saved successfully",
+  DeleteRailSuccess = "Rail deleted successfully",
+  EditRailItemsSuccess = "Rail items updated successfully",
 }

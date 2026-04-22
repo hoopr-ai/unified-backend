@@ -4,6 +4,9 @@ import {
   getRailByKeyService,
   upsertRailService,
   UpsertRailRequest,
+  deleteRailService,
+  editRailItemsService,
+  EditRailItemsRequest,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -157,6 +160,109 @@ export const upsertRail = catchAsync(
       status: HttpStatusCode.OK,
       data: result,
       message: ResponseMessages.UpsertRailSuccess,
+    });
+  },
+);
+
+// DELETE /rails/:railId - Hard delete a rail and its items
+export const deleteRail = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const railId = Number(req.params.railId);
+    if (!Number.isFinite(railId) || railId <= 0) {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: "Invalid railId",
+      });
+      return;
+    }
+
+    const deleted = await deleteRailService(railId);
+
+    if (!deleted) {
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: ResponseMessages.RailNotFound,
+      });
+      return;
+    }
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: { railId },
+      message: ResponseMessages.DeleteRailSuccess,
+    });
+  },
+);
+
+// Validate edit rail items request body
+const validateEditRailItemsBody = (body: unknown): EditRailItemsRequest | string => {
+  if (!body || typeof body !== "object") return "Request body is required";
+  const b = body as Record<string, unknown>;
+
+  if (!Array.isArray(b.items)) return "items array is required";
+
+  for (let i = 0; i < b.items.length; i++) {
+    const item = b.items[i] as Record<string, unknown>;
+    if (!item || typeof item !== "object") {
+      return `items[${i}] must be an object`;
+    }
+    if (typeof item.itemCode !== "string" || !item.itemCode.trim()) {
+      return `items[${i}].itemCode is required`;
+    }
+    if (typeof item.order !== "number" || !Number.isFinite(item.order)) {
+      return `items[${i}].order must be a number`;
+    }
+    if (item.id !== undefined && (typeof item.id !== "number" || !Number.isFinite(item.id))) {
+      return `items[${i}].id must be a number if provided`;
+    }
+    if (item.isLocked !== undefined && typeof item.isLocked !== "boolean") {
+      return `items[${i}].isLocked must be a boolean if provided`;
+    }
+  }
+
+  return b as unknown as EditRailItemsRequest;
+};
+
+// PATCH /rails/:railId/items - Edit rail items (delete, freeze, reorder, add)
+export const editRailItems = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const railId = Number(req.params.railId);
+    if (!Number.isFinite(railId) || railId <= 0) {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: "Invalid railId",
+      });
+      return;
+    }
+
+    const parsed = validateEditRailItemsBody(req.body);
+    if (typeof parsed === "string") {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: parsed,
+      });
+      return;
+    }
+
+    const result = await editRailItemsService(railId, parsed);
+
+    if (!result) {
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: ResponseMessages.RailNotFound,
+      });
+      return;
+    }
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: ResponseMessages.EditRailItemsSuccess,
     });
   },
 );
