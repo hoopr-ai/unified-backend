@@ -34,7 +34,7 @@ export interface RailDetails {
   type: RailType;
   subType?: string | null;
   brandId?: number | null;
-  pageName?: string | null;
+  pageName?: string;
   sourceType: RailSourceType;
   sourceConfig?: RailSourceConfig | null;
   order: number;
@@ -95,11 +95,12 @@ export class RailModel extends Model<RailModel, RailDetails> {
   brandId?: number | null;
 
   @Index
+  @Default("HOME")
   @Column({
     type: DataType.STRING(100),
-    allowNull: true,
+    allowNull: false,
   })
-  pageName?: string | null;
+  pageName!: string;
 
   @Default(RailSourceType.MANUAL)
   @Column({

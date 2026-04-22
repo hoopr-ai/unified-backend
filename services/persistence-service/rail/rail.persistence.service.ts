@@ -89,7 +89,7 @@ export interface UpsertRailInput {
   type: string;
   subType?: string | null;
   brandId: number | null;
-  pageName?: string | null;
+  pageName: string;
   sourceType: string;
   sourceConfig?: Record<string, unknown> | null;
   order: number;

@@ -35,7 +35,7 @@ const parseBrandId = (raw: unknown): number | undefined => {
 export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   const brandId = parseBrandId(req.query.brandId);
   const userId = req.session?.userId;
-  const pageName = typeof req.query.pageName === "string" ? req.query.pageName : undefined;
+  const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
 
   const rails = await getRailsService(brandId, userId, pageName);
 

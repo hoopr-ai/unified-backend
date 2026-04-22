@@ -719,7 +719,7 @@ export const upsertRailService = async (
       type: req.type,
       subType: req.subType ?? null,
       brandId,
-      pageName: req.pageName ?? null,
+      pageName: req.pageName || "HOME",
       sourceType: req.sourceType,
       sourceConfig: Object.keys(sourceConfig).length ? sourceConfig : null,
       order,
