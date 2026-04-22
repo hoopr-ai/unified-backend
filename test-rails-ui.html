@@ -217,7 +217,7 @@
     <div class="row row-4">
       <div>
         <label for="postRailType">Type *</label>
-        <select id="postRailType">
+        <select id="postRailType" onchange="toggleSourceFields()">
           <option value="TRACKS">TRACKS</option>
           <option value="GENRES">GENRES</option>
           <option value="LANGUAGES">LANGUAGES</option>
@@ -257,9 +257,45 @@
     <!-- MANUAL fields -->
     <div id="manualFields" class="filter-group">
       <div class="filter-group-title">MANUAL Source - Item Codes</div>
-      <label for="postRailItemCodes">Item Codes (comma-separated) *</label>
-      <input type="text" id="postRailItemCodes" placeholder="e.g., TRACK001,TRACK002,TRACK003">
-      <p class="help">Enter track codes, genre IDs, playlist codes, etc.</p>
+
+      <!-- Text input for TRACKS/LABELS/PLAYLISTS -->
+      <div id="manualTextInput">
+        <label for="postRailItemCodes">Item Codes (comma-separated) *</label>
+        <input type="text" id="postRailItemCodes" placeholder="e.g., TRACK001,TRACK002,TRACK003">
+        <p class="help">Enter track codes, genre IDs, playlist codes, etc.</p>
+      </div>
+
+      <!-- Filter dropdown for GENRES -->
+      <div id="manualGenresSelect" style="display: none;">
+        <label>Select Genres (multi-select) *</label>
+        <select id="manualGenres" class="filter-select" multiple onchange="updateManualSelectedTags('manualGenres')"></select>
+        <div id="manualGenresSelected" class="selected-filters"></div>
+        <p class="help">Select genres to include in this rail</p>
+      </div>
+
+      <!-- Filter dropdown for MOODS -->
+      <div id="manualMoodsSelect" style="display: none;">
+        <label>Select Moods (multi-select) *</label>
+        <select id="manualMoods" class="filter-select" multiple onchange="updateManualSelectedTags('manualMoods')"></select>
+        <div id="manualMoodsSelected" class="selected-filters"></div>
+        <p class="help">Select moods to include in this rail</p>
+      </div>
+
+      <!-- Filter dropdown for LANGUAGES -->
+      <div id="manualLanguagesSelect" style="display: none;">
+        <label>Select Languages (multi-select) *</label>
+        <select id="manualLanguages" class="filter-select" multiple onchange="updateManualSelectedTags('manualLanguages')"></select>
+        <div id="manualLanguagesSelected" class="selected-filters"></div>
+        <p class="help">Select languages to include in this rail</p>
+      </div>
+
+      <!-- Filter dropdown for LABELS (usecases) -->
+      <div id="manualLabelsSelect" style="display: none;">
+        <label>Select Use Cases (multi-select) *</label>
+        <select id="manualUsecases" class="filter-select" multiple onchange="updateManualSelectedTags('manualUsecases')"></select>
+        <div id="manualUsecasesSelected" class="selected-filters"></div>
+        <p class="help">Select use cases to include in this rail</p>
+      </div>
     </div>
 
     <!-- QUERY fields -->
@@ -570,11 +606,17 @@
       if (!filtersData) return;
 
       const filterMappings = [
+        // AI Query filters
         { selectId: 'aiGenres', dataKey: 'genre' },
         { selectId: 'aiMoods', dataKey: 'mood' },
         { selectId: 'aiLanguages', dataKey: 'language' },
         { selectId: 'aiUsecases', dataKey: 'usecase' },
-        { selectId: 'aiAssortment', dataKey: 'assortment' }
+        { selectId: 'aiAssortment', dataKey: 'assortment' },
+        // Manual source filters
+        { selectId: 'manualGenres', dataKey: 'genre' },
+        { selectId: 'manualMoods', dataKey: 'mood' },
+        { selectId: 'manualLanguages', dataKey: 'language' },
+        { selectId: 'manualUsecases', dataKey: 'usecase' }
       ];
 
       filterMappings.forEach(({ selectId, dataKey }) => {
@@ -681,12 +723,76 @@
 
     function toggleSourceFields() {
       const sourceType = document.getElementById('postRailSourceType').value;
+      const railType = document.getElementById('postRailType').value;
+
       document.getElementById('manualFields').style.display = sourceType === 'MANUAL' ? 'block' : 'none';
       document.getElementById('queryFields').style.display = sourceType === 'QUERY' ? 'block' : 'none';
       document.getElementById('aiQueryFields').style.display = sourceType === 'AI_QUERY' ? 'block' : 'none';
+
       if (sourceType === 'AI_QUERY') {
         toggleAiQueryType();
       }
+
+      // Toggle manual input type based on rail type
+      if (sourceType === 'MANUAL') {
+        toggleManualInputType(railType);
+      }
+    }
+
+    function toggleManualInputType(railType) {
+      // Hide all manual input options first
+      document.getElementById('manualTextInput').style.display = 'none';
+      document.getElementById('manualGenresSelect').style.display = 'none';
+      document.getElementById('manualMoodsSelect').style.display = 'none';
+      document.getElementById('manualLanguagesSelect').style.display = 'none';
+      document.getElementById('manualLabelsSelect').style.display = 'none';
+
+      // Show appropriate input based on rail type
+      if (railType === 'GENRES') {
+        document.getElementById('manualGenresSelect').style.display = 'block';
+      } else if (railType === 'MOODS') {
+        document.getElementById('manualMoodsSelect').style.display = 'block';
+      } else if (railType === 'LANGUAGES') {
+        document.getElementById('manualLanguagesSelect').style.display = 'block';
+      } else if (railType === 'LABELS') {
+        document.getElementById('manualLabelsSelect').style.display = 'block';
+      } else {
+        // TRACKS or PLAYLISTS - use text input
+        document.getElementById('manualTextInput').style.display = 'block';
+      }
+    }
+
+    // Update selected tags for manual filter selects
+    function updateManualSelectedTags(selectId) {
+      const select = document.getElementById(selectId);
+      const containerId = selectId + 'Selected';
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      container.innerHTML = '';
+      const selectedOptions = Array.from(select.selectedOptions);
+
+      selectedOptions.forEach(option => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${option.dataset.name || option.textContent} <span class="remove" onclick="removeManualFilterSelection('${selectId}', '${option.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function removeManualFilterSelection(selectId, value) {
+      const select = document.getElementById(selectId);
+      const option = select.querySelector(`option[value="${value}"]`);
+      if (option) {
+        option.selected = false;
+        updateManualSelectedTags(selectId);
+      }
+    }
+
+    // Get selected filter IDs for manual source
+    function getManualSelectedIds(selectId) {
+      const select = document.getElementById(selectId);
+      return Array.from(select.selectedOptions).map(opt => opt.value);
     }
 
     function toggleAiQueryType() {
@@ -735,8 +841,20 @@
 
       // Source-specific fields
       if (sourceType === 'MANUAL') {
-        const itemCodes = document.getElementById('postRailItemCodes').value;
-        body.itemCodes = itemCodes.split(',').map(s => s.trim()).filter(Boolean);
+        // Check if using filter dropdown based on type
+        if (type === 'GENRES') {
+          body.itemCodes = getManualSelectedIds('manualGenres');
+        } else if (type === 'MOODS') {
+          body.itemCodes = getManualSelectedIds('manualMoods');
+        } else if (type === 'LANGUAGES') {
+          body.itemCodes = getManualSelectedIds('manualLanguages');
+        } else if (type === 'LABELS') {
+          body.itemCodes = getManualSelectedIds('manualUsecases');
+        } else {
+          // TRACKS or PLAYLISTS - use text input
+          const itemCodes = document.getElementById('postRailItemCodes').value;
+          body.itemCodes = itemCodes.split(',').map(s => s.trim()).filter(Boolean);
+        }
       } else if (sourceType === 'QUERY') {
         const query = {};
 
@@ -917,12 +1035,21 @@
       document.getElementById('aiSearchQuery').value = '';
       document.getElementById('aiBrandName').value = '';
       document.getElementById('aiUserId').value = '';
-      // Clear multi-select filter selections
+      // Clear multi-select filter selections (AI Query)
       ['aiGenres', 'aiMoods', 'aiLanguages', 'aiUsecases', 'aiAssortment'].forEach(id => {
         const select = document.getElementById(id);
         Array.from(select.options).forEach(opt => opt.selected = false);
         const container = document.getElementById(id + 'Selected');
         if (container) container.innerHTML = '';
+      });
+      // Clear manual filter selections
+      ['manualGenres', 'manualMoods', 'manualLanguages', 'manualUsecases'].forEach(id => {
+        const select = document.getElementById(id);
+        if (select) {
+          Array.from(select.options).forEach(opt => opt.selected = false);
+          const container = document.getElementById(id + 'Selected');
+          if (container) container.innerHTML = '';
+        }
       });
       document.getElementById('aiPage').value = '1';
     }

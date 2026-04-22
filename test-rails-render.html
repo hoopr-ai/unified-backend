@@ -429,7 +429,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Type *</label>
-          <select id="railType">
+          <select id="railType" onchange="handleSourceTypeChange()">
             <option value="TRACKS">TRACKS</option>
             <option value="GENRES">GENRES</option>
             <option value="MOODS">MOODS</option>
@@ -529,9 +529,34 @@
       <!-- Manual Section -->
       <div id="manualSection" class="form-section" style="display: none;">
         <h3>Manual Item Codes</h3>
-        <div class="form-group">
+        <!-- Text input for TRACKS/PLAYLISTS -->
+        <div id="manualTextInput" class="form-group">
           <label>Item Codes (comma-separated)</label>
           <textarea id="manualItemCodes" rows="3" placeholder="TRACK001, TRACK002, TRACK003"></textarea>
+        </div>
+        <!-- Filter dropdown for GENRES -->
+        <div id="manualGenresSelect" class="form-group" style="display: none;">
+          <label>Select Genres</label>
+          <select id="manualGenres" class="filter-select" multiple onchange="updateTags('manualGenres')"></select>
+          <div id="manualGenresTags" class="selected-tags"></div>
+        </div>
+        <!-- Filter dropdown for MOODS -->
+        <div id="manualMoodsSelect" class="form-group" style="display: none;">
+          <label>Select Moods</label>
+          <select id="manualMoods" class="filter-select" multiple onchange="updateTags('manualMoods')"></select>
+          <div id="manualMoodsTags" class="selected-tags"></div>
+        </div>
+        <!-- Filter dropdown for LANGUAGES -->
+        <div id="manualLanguagesSelect" class="form-group" style="display: none;">
+          <label>Select Languages</label>
+          <select id="manualLanguages" class="filter-select" multiple onchange="updateTags('manualLanguages')"></select>
+          <div id="manualLanguagesTags" class="selected-tags"></div>
+        </div>
+        <!-- Filter dropdown for LABELS (usecases) -->
+        <div id="manualLabelsSelect" class="form-group" style="display: none;">
+          <label>Select Use Cases</label>
+          <select id="manualUsecases" class="filter-select" multiple onchange="updateTags('manualUsecases')"></select>
+          <div id="manualUsecasesTags" class="selected-tags"></div>
         </div>
       </div>
 
@@ -689,11 +714,17 @@
       if (!filtersData) return;
 
       const mappings = [
+        // AI Query filters
         { id: 'aiGenres', key: 'genre' },
         { id: 'aiMoods', key: 'mood' },
         { id: 'aiLanguages', key: 'language' },
         { id: 'aiUsecases', key: 'usecase' },
-        { id: 'aiAssortment', key: 'assortment' }
+        { id: 'aiAssortment', key: 'assortment' },
+        // Manual source filters
+        { id: 'manualGenres', key: 'genre' },
+        { id: 'manualMoods', key: 'mood' },
+        { id: 'manualLanguages', key: 'language' },
+        { id: 'manualUsecases', key: 'usecase' }
       ];
 
       mappings.forEach(({ id, key }) => {
@@ -899,9 +930,45 @@
 
     function handleSourceTypeChange() {
       const sourceType = document.getElementById('railSourceType').value;
+      const railType = document.getElementById('railType').value;
+
       document.getElementById('aiQuerySection').style.display = sourceType === 'AI_QUERY' ? 'block' : 'none';
       document.getElementById('manualSection').style.display = sourceType === 'MANUAL' ? 'block' : 'none';
       document.getElementById('querySection').style.display = sourceType === 'QUERY' ? 'block' : 'none';
+
+      // Toggle manual input type based on rail type
+      if (sourceType === 'MANUAL') {
+        toggleManualInputType(railType);
+      }
+    }
+
+    function toggleManualInputType(railType) {
+      // Hide all manual input options
+      document.getElementById('manualTextInput').style.display = 'none';
+      document.getElementById('manualGenresSelect').style.display = 'none';
+      document.getElementById('manualMoodsSelect').style.display = 'none';
+      document.getElementById('manualLanguagesSelect').style.display = 'none';
+      document.getElementById('manualLabelsSelect').style.display = 'none';
+
+      // Show appropriate input based on rail type
+      if (railType === 'GENRES') {
+        document.getElementById('manualGenresSelect').style.display = 'block';
+      } else if (railType === 'MOODS') {
+        document.getElementById('manualMoodsSelect').style.display = 'block';
+      } else if (railType === 'LANGUAGES') {
+        document.getElementById('manualLanguagesSelect').style.display = 'block';
+      } else if (railType === 'LABELS') {
+        document.getElementById('manualLabelsSelect').style.display = 'block';
+      } else {
+        // TRACKS or PLAYLISTS - use text input
+        document.getElementById('manualTextInput').style.display = 'block';
+      }
+    }
+
+    function getSelectedIds(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return [];
+      return Array.from(select.selectedOptions).map(opt => opt.value);
     }
 
     function handleAiQueryTypeChange() {
@@ -980,8 +1047,21 @@
 
         payload.aiQuery = aiQuery;
       } else if (sourceType === 'MANUAL') {
-        const itemCodesStr = document.getElementById('manualItemCodes').value.trim();
-        const itemCodes = parseCommaSeparated(itemCodesStr);
+        let itemCodes = [];
+        // Check if using filter dropdown based on type
+        if (type === 'GENRES') {
+          itemCodes = getSelectedIds('manualGenres');
+        } else if (type === 'MOODS') {
+          itemCodes = getSelectedIds('manualMoods');
+        } else if (type === 'LANGUAGES') {
+          itemCodes = getSelectedIds('manualLanguages');
+        } else if (type === 'LABELS') {
+          itemCodes = getSelectedIds('manualUsecases');
+        } else {
+          // TRACKS or PLAYLISTS - use text input
+          const itemCodesStr = document.getElementById('manualItemCodes').value.trim();
+          itemCodes = parseCommaSeparated(itemCodesStr);
+        }
         if (itemCodes.length === 0) {
           setStatus('Item codes are required for MANUAL source', 'error');
           return;
