@@ -18,6 +18,7 @@ import {
   HttpStatusCode,
   RailType,
   RailSourceType,
+  PageName,
 } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 import { findUserById } from "../services/persistence-service/exports";
@@ -108,6 +109,7 @@ export const getRailByKey = catchAsync(
 
 const VALID_RAIL_TYPES = new Set<string>(Object.values(RailType));
 const VALID_SOURCE_TYPES = new Set<string>(Object.values(RailSourceType));
+const VALID_PAGE_NAMES = new Set<string>(Object.values(PageName));
 
 const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
   if (!body || typeof body !== "object") return "Request body is required";
@@ -120,6 +122,18 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
   }
   if (typeof b.sourceType !== "string" || !VALID_SOURCE_TYPES.has(b.sourceType)) {
     return `sourceType must be one of ${Array.from(VALID_SOURCE_TYPES).join(", ")}`;
+  }
+
+  // Validate pageNames if provided (optional, defaults to [HOME])
+  if (b.pageNames !== undefined) {
+    if (!Array.isArray(b.pageNames)) {
+      return "pageNames must be an array";
+    }
+    for (const pn of b.pageNames) {
+      if (typeof pn !== "string" || !VALID_PAGE_NAMES.has(pn)) {
+        return `pageNames must contain valid values: ${Array.from(VALID_PAGE_NAMES).join(", ")}`;
+      }
+    }
   }
 
   const type = b.type as RailType;

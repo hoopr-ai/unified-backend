@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import { sequelize } from "../database";
 import { RailModel, RailDetails } from "./schemas/rail.schema";
 import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
+import { PageName } from "../../dto-service/modules.export";
 
 // Returns all rails visible to the given brand: brand-specific rows + defaults.
 // Caller dedupes by key (brand row wins).
@@ -13,8 +14,9 @@ export const findRailsForBrand = async (
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
     : { brandId: null as number | null };
 
+  // Check if any of the pageNames array contains the requested pageName
   const pageClause = pageName
-    ? { pageName }
+    ? { pageNames: { [Op.contains]: [pageName] } }
     : {};
 
   return RailModel.findAll({
@@ -49,8 +51,9 @@ export const findRailsForBrandPaginated = async (
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
     : { brandId: null as number | null };
 
+  // Check if any of the pageNames array contains the requested pageName
   const pageClause = pageName
-    ? { pageName }
+    ? { pageNames: { [Op.contains]: [pageName] } }
     : {};
 
   const offset = (page - 1) * limit;
@@ -143,7 +146,7 @@ export interface UpsertRailInput {
   type: string;
   subType?: string | null;
   brandId: number | null;
-  pageName: string;
+  pageNames: PageName[];
   sourceType: string;
   sourceConfig?: Record<string, unknown> | null;
   order: number;
@@ -289,7 +292,7 @@ export const upsertRailWithItems = async (
   try {
     const [rail] = await RailModel.upsert(input as unknown as RailDetails, {
       transaction,
-      conflictFields: ["key", "brandId", "pageName"],
+      conflictFields: ["key", "brandId"],
     });
 
     await RailItemModel.destroy({

@@ -11,7 +11,7 @@ import {
   Index,
   HasMany,
 } from "sequelize-typescript";
-import { RailType, RailSourceType } from "../../../dto-service/modules.export";
+import { RailType, RailSourceType, PageName } from "../../../dto-service/modules.export";
 import { RailItemModel } from "./rail-item.schema";
 
 export interface RailSeeMoreDescriptor {
@@ -34,7 +34,7 @@ export interface RailDetails {
   type: RailType;
   subType?: string | null;
   brandId?: number | null;
-  pageName?: string;
+  pageNames?: PageName[];
   sourceType: RailSourceType;
   sourceConfig?: RailSourceConfig | null;
   order: number;
@@ -47,8 +47,8 @@ export interface RailDetails {
   tableName: "rails",
   timestamps: true,
   indexes: [
-    { name: "rails_key_brand_page_unique", unique: true, fields: ["key", "brandId", "pageName"] },
-    { name: "rails_brand_page_visible_order_idx", fields: ["brandId", "pageName", "isVisible", "order"] },
+    { name: "rails_key_brand_unique", unique: true, fields: ["key", "brandId"] },
+    { name: "rails_brand_visible_order_idx", fields: ["brandId", "isVisible", "order"] },
   ],
 })
 export class RailModel extends Model<RailModel, RailDetails> {
@@ -94,13 +94,12 @@ export class RailModel extends Model<RailModel, RailDetails> {
   })
   brandId?: number | null;
 
-  @Index
-  @Default("HOME")
+  @Default(["HOME"])
   @Column({
-    type: DataType.STRING(100),
+    type: DataType.ARRAY(DataType.STRING(50)),
     allowNull: false,
   })
-  pageName!: string;
+  pageNames!: PageName[];
 
   @Default(RailSourceType.MANUAL)
   @Column({

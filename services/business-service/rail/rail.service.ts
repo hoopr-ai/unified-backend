@@ -8,6 +8,7 @@ import {
   RailSeeMoreDescriptor,
   PaginatedRailsResponse,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
+  PageName,
 } from "../../dto-service/modules.export";
 import {
   RailModel,
@@ -287,7 +288,7 @@ const buildRailResponse = (
 // -----------------------------------------------------------------------------
 
 const BRAND_RECOMMENDED_RAIL_KEY_PREFIX = "brand_recommended_";
-const AI_SERVICE_BRAND_RECOMMEND_URL = "https://enterprise.hoopr.ai/smash/brandRecommend";
+const AI_SERVICE_BRAND_RECOMMEND_URL = `${process.env.AI_SERVICE_BASE_URL}/smash/brandRecommend`;
 
 interface BrandRecommendTrack {
   id: string;
@@ -388,7 +389,7 @@ const ensureBrandRecommendedRail = async (
       type: RailType.TRACKS,
       subType: null,
       brandId: userBrandId,
-      pageName,
+      pageNames: [pageName as PageName],
       sourceType: RailSourceType.MANUAL,
       sourceConfig: {
         source: "brand_recommend_ai",
@@ -482,7 +483,7 @@ export interface UpsertRailRequest {
   subType?: string | null;
   sourceType: RailSourceType;
   brandId?: number | null;
-  pageName?: string | null;
+  pageNames?: PageName[];
   order?: number;
   isVisible?: boolean;
   limit?: number;
@@ -891,7 +892,7 @@ export const upsertRailService = async (
       type: req.type,
       subType: req.subType ?? null,
       brandId,
-      pageName: req.pageName || "HOME",
+      pageNames: req.pageNames ?? [PageName.HOME],
       sourceType: req.sourceType,
       sourceConfig: Object.keys(sourceConfig).length ? sourceConfig : null,
       order,
