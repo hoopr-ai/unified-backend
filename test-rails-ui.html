@@ -239,8 +239,15 @@
         <input type="number" id="postRailBrandId" placeholder="Optional">
       </div>
       <div>
-        <label for="postRailPageName">Page Name</label>
-        <input type="text" id="postRailPageName" placeholder="e.g., home, discover">
+        <label for="postRailPageNames">Page Names (multi-select)</label>
+        <select id="postRailPageNames" class="filter-select" multiple style="min-height: 90px;">
+          <option value="HOME" selected>HOME</option>
+          <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+          <option value="INTERNATIONAL">INTERNATIONAL</option>
+          <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+          <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+        </select>
+        <div id="postRailPageNamesSelected" class="selected-filters"></div>
       </div>
       <div>
         <label for="postRailOrder">Order</label>
@@ -802,10 +809,45 @@
       return Array.from(select.selectedOptions).map(opt => opt.dataset.name || opt.textContent);
     }
 
+    // Page Names multi-select helpers
+    function updatePageNamesSelectedTags() {
+      const select = document.getElementById('postRailPageNames');
+      const container = document.getElementById('postRailPageNamesSelected');
+      if (!container) return;
+
+      container.innerHTML = '';
+      Array.from(select.selectedOptions).forEach(option => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${option.textContent} <span class="remove" onclick="removePageNameSelection('${option.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function removePageNameSelection(value) {
+      const select = document.getElementById('postRailPageNames');
+      const option = select.querySelector(`option[value="${value}"]`);
+      if (option) {
+        option.selected = false;
+        updatePageNamesSelectedTags();
+      }
+    }
+
+    function initPageNamesMultiSelect() {
+      const select = document.getElementById('postRailPageNames');
+      if (!select) return;
+
+      select.addEventListener('mousedown', handleMultiSelectClick);
+      select.addEventListener('change', updatePageNamesSelectedTags);
+      // Initialize tags
+      updatePageNamesSelectedTags();
+    }
+
     // Load filters and owners on page load
     document.addEventListener('DOMContentLoaded', function() {
       setTimeout(loadFilters, 500);
       setTimeout(loadOwners, 600);
+      initPageNamesMultiSelect();
     });
 
     function displayResponse(containerId, status, data) {
@@ -958,14 +1000,15 @@
       // Optional fields
       const subtitle = document.getElementById('postRailSubtitle').value;
       const brandId = document.getElementById('postRailBrandId').value;
-      const pageName = document.getElementById('postRailPageName').value.trim();
+      const pageNamesSelect = document.getElementById('postRailPageNames');
+      const pageNames = Array.from(pageNamesSelect.selectedOptions).map(opt => opt.value);
       const order = document.getElementById('postRailOrder').value;
       const limit = document.getElementById('postRailLimit').value;
       const isVisible = document.getElementById('postRailIsVisible').checked;
 
       if (subtitle) body.subtitle = subtitle;
       if (brandId) body.brandId = parseInt(brandId);
-      if (pageName) body.pageName = pageName;
+      if (pageNames.length > 0) body.pageNames = pageNames;
       if (order) body.order = parseInt(order);
       if (limit) body.limit = parseInt(limit);
       body.isVisible = isVisible;
@@ -1143,7 +1186,10 @@
       document.getElementById('postRailTitle').value = '';
       document.getElementById('postRailSubtitle').value = '';
       document.getElementById('postRailBrandId').value = '';
-      document.getElementById('postRailPageName').value = '';
+      // Reset page names to default (HOME selected)
+      const pageNamesSelect = document.getElementById('postRailPageNames');
+      Array.from(pageNamesSelect.options).forEach(opt => opt.selected = (opt.value === 'HOME'));
+      updatePageNamesSelectedTags();
       document.getElementById('postRailOrder').value = '';
       document.getElementById('postRailLimit').value = '10';
       document.getElementById('postRailIsVisible').checked = true;
