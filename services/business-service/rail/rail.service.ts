@@ -295,7 +295,20 @@ export interface UpsertRailRequest {
   };
   // AI_QUERY (tracks only): external AI call to snapshot
   aiQuery?: {
-    url: string;
+    queryType: 'TRENDING' | 'POPULAR' | 'FILTERED';
+    // For TRENDING/POPULAR: limit and brandId are used
+    limit?: number;
+    // For FILTERED: additional search parameters
+    q?: string;
+    brandName?: string;
+    userId?: string;
+    filters?: Array<{
+      type: 'genre' | 'mood' | 'language' | 'usecase' | 'assortment';
+      value: string[];
+    }>;
+    page?: number;
+    // Legacy support: direct url/body/headers
+    url?: string;
     body?: Record<string, unknown>;
     headers?: Record<string, string>;
   };
@@ -490,21 +503,77 @@ const resolveQueryTracks = async (
   throw new Error("query must have either filterIds or track filter parameters (popular, trending, newOnHoopr, etc.)");
 };
 
-// AI_QUERY path: POST to aiQuery.url, extract data.tracks[].trackCode
+// AI_QUERY path: call AI service based on queryType
 const resolveAiQueryTracks = async (
   req: UpsertRailRequest,
 ): Promise<string[]> => {
-  if (!req.aiQuery || !req.aiQuery.url) {
-    throw new Error("aiQuery.url is required for AI_QUERY source rails");
+  if (!req.aiQuery) {
+    throw new Error("aiQuery is required for AI_QUERY source rails");
   }
-  const res = await fetch(req.aiQuery.url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(req.aiQuery.headers ?? {}),
-    },
-    body: JSON.stringify(req.aiQuery.body ?? {}),
-  });
+
+  const aiServiceUrl = process.env.AI_SERVICE_URL;
+  const aiQuery = req.aiQuery;
+
+  let url: string;
+  let method: string = "GET";
+  let body: string | undefined;
+  let headers: Record<string, string> = {};
+
+  if (aiQuery.queryType === 'TRENDING') {
+    // GET /smash/trendingSongs?limit=X&brandId=Y
+    if (!aiServiceUrl) {
+      throw new Error("AI_SERVICE_URL environment variable is required for TRENDING query");
+    }
+    const params = new URLSearchParams();
+    params.set('limit', String(aiQuery.limit ?? 40));
+    if (req.brandId) params.set('brandId', String(req.brandId));
+    url = `${aiServiceUrl}/smash/trendingSongs?${params.toString()}`;
+    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
+  } else if (aiQuery.queryType === 'POPULAR') {
+    // GET /smash/popularSongs?limit=X&brandId=Y
+    if (!aiServiceUrl) {
+      throw new Error("AI_SERVICE_URL environment variable is required for POPULAR query");
+    }
+    const params = new URLSearchParams();
+    params.set('limit', String(aiQuery.limit ?? 40));
+    if (req.brandId) params.set('brandId', String(req.brandId));
+    url = `${aiServiceUrl}/smash/popularSongs?${params.toString()}`;
+    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
+  } else if (aiQuery.queryType === 'FILTERED') {
+    // POST /smash/aienterpriseSearch with body
+    if (!aiServiceUrl) {
+      throw new Error("AI_SERVICE_URL environment variable is required for FILTERED query");
+    }
+    method = "POST";
+    headers["Content-Type"] = "application/json";
+    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
+
+    const requestBody: Record<string, unknown> = {
+      q: aiQuery.q ?? "",
+      brandId: req.brandId ? String(req.brandId) : undefined,
+      brandName: aiQuery.brandName ?? "",
+      userId: aiQuery.userId ?? "",
+      filters: aiQuery.filters ?? [],
+      limit: aiQuery.limit ?? 200,
+      page: aiQuery.page ?? 1,
+    };
+    body = JSON.stringify(requestBody);
+    url = `${aiServiceUrl}/smash/aienterpriseSearch`;
+  } else if (aiQuery.url) {
+    // Legacy: direct URL provided
+    url = aiQuery.url;
+    method = "POST";
+    headers["Content-Type"] = "application/json";
+    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
+    body = JSON.stringify(aiQuery.body ?? {});
+  } else {
+    throw new Error("aiQuery.queryType or aiQuery.url is required for AI_QUERY source rails");
+  }
+
+  const fetchOptions: RequestInit = { method, headers };
+  if (body) fetchOptions.body = body;
+
+  const res = await fetch(url, fetchOptions);
   if (!res.ok) {
     throw new Error(`AI service responded ${res.status}`);
   }
@@ -573,11 +642,19 @@ export const upsertRailService = async (
   if (req.seeMore) sourceConfig.seeMore = req.seeMore;
   if (req.query) sourceConfig.query = req.query;
   if (req.aiQuery) {
-    // Persist url + body for later refresh; headers intentionally omitted (may contain secrets)
-    sourceConfig.aiQuery = {
-      url: req.aiQuery.url,
-      body: req.aiQuery.body ?? {},
-    };
+    // Persist aiQuery config for later refresh; headers intentionally omitted (may contain secrets)
+    const aiQueryConfig: Record<string, unknown> = {};
+    if (req.aiQuery.queryType) aiQueryConfig.queryType = req.aiQuery.queryType;
+    if (req.aiQuery.limit) aiQueryConfig.limit = req.aiQuery.limit;
+    if (req.aiQuery.q) aiQueryConfig.q = req.aiQuery.q;
+    if (req.aiQuery.brandName) aiQueryConfig.brandName = req.aiQuery.brandName;
+    if (req.aiQuery.userId) aiQueryConfig.userId = req.aiQuery.userId;
+    if (req.aiQuery.filters) aiQueryConfig.filters = req.aiQuery.filters;
+    if (req.aiQuery.page) aiQueryConfig.page = req.aiQuery.page;
+    // Legacy support
+    if (req.aiQuery.url) aiQueryConfig.url = req.aiQuery.url;
+    if (req.aiQuery.body) aiQueryConfig.body = req.aiQuery.body;
+    sourceConfig.aiQuery = aiQueryConfig;
   }
 
   return upsertRailWithItems(

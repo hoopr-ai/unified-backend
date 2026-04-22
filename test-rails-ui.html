@@ -319,17 +319,93 @@
     <!-- AI_QUERY fields -->
     <div id="aiQueryFields" style="display:none;" class="filter-group">
       <div class="filter-group-title">AI_QUERY Source</div>
-      <label for="postRailAiUrl">AI Query URL *</label>
-      <input type="text" id="postRailAiUrl" placeholder="https://ai-service.example.com/recommend">
-      <p class="help">URL to POST for track recommendations</p>
+
+      <div class="row">
+        <div>
+          <label for="aiQueryType">Query Type *</label>
+          <select id="aiQueryType" onchange="toggleAiQueryType()">
+            <option value="TRENDING">Trending Songs</option>
+            <option value="POPULAR">Popular Songs</option>
+            <option value="FILTERED">AI Search with Filters</option>
+          </select>
+          <p class="help">Select the type of AI-powered search</p>
+        </div>
+        <div>
+          <label for="aiQueryToken">AI Service Token (optional)</label>
+          <input type="text" id="aiQueryToken" placeholder="Bearer token for AI service">
+          <p class="help">Authorization token for the AI service API (optional)</p>
+        </div>
+      </div>
+
+      <!-- Filtered Search Options -->
+      <div id="aiFilteredOptions" style="display:none; margin-top: 15px;">
+        <div class="row">
+          <div style="flex: 2;">
+            <label for="aiSearchQuery">Search Query (q)</label>
+            <input type="text" id="aiSearchQuery" placeholder="e.g., woman power, happy vibes">
+          </div>
+          <div>
+            <label for="aiBrandName">Brand Name</label>
+            <input type="text" id="aiBrandName" placeholder="e.g., Hoopr">
+          </div>
+          <div>
+            <label for="aiUserId">User ID</label>
+            <input type="text" id="aiUserId" placeholder="e.g., 24">
+          </div>
+        </div>
+
+        <h3 style="margin-top: 15px;">Filters</h3>
+        <div class="row">
+          <div>
+            <label for="aiGenres">Genres (comma-separated)</label>
+            <input type="text" id="aiGenres" placeholder="Indian Contemporary, Ambient, Devotional">
+          </div>
+          <div>
+            <label for="aiMoods">Moods (comma-separated)</label>
+            <input type="text" id="aiMoods" placeholder="Action, Motivational, Romantic">
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <div>
+            <label for="aiLanguages">Languages (comma-separated)</label>
+            <input type="text" id="aiLanguages" placeholder="English, Hindi, Tamil">
+          </div>
+          <div>
+            <label for="aiUsecases">Use Cases (comma-separated)</label>
+            <input type="text" id="aiUsecases" placeholder="Automobile, Bumpers, Podcast">
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <div>
+            <label for="aiAssortment">Assortment (comma-separated)</label>
+            <input type="text" id="aiAssortment" placeholder="chartbusters, indie">
+          </div>
+          <div>
+            <label for="aiPage">Page</label>
+            <input type="number" id="aiPage" value="1" placeholder="1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Legacy URL Option -->
+      <div id="aiLegacyOption" style="margin-top: 15px; display: none;">
+        <label for="postRailAiUrl">Custom AI Query URL</label>
+        <input type="text" id="postRailAiUrl" placeholder="https://ai-service.example.com/recommend">
+        <p class="help">Direct URL for custom AI endpoint (legacy)</p>
+      </div>
     </div>
 
     <div style="margin-top: 20px;">
       <button onclick="createRail()">Create/Update Rail</button>
       <button class="secondary" onclick="fillSampleManual()">Sample: Manual</button>
       <button class="secondary" onclick="fillSampleQueryFilter()">Sample: Query (Filters)</button>
-      <button class="secondary" onclick="fillSampleQueryNewOnHoopr()">Sample: Query (New on Hoopr)</button>
+      <button class="secondary" onclick="fillSampleQueryNewOnHoopr()">Sample: Query (New)</button>
       <button class="secondary" onclick="fillSampleQueryPopular()">Sample: Query (Popular)</button>
+    </div>
+    <div style="margin-top: 10px;">
+      <button class="success" onclick="fillSampleAiTrending()">Sample: AI Trending</button>
+      <button class="success" onclick="fillSampleAiPopular()">Sample: AI Popular</button>
+      <button class="success" onclick="fillSampleAiFiltered()">Sample: AI Filtered</button>
     </div>
     <div id="postRailResponse"></div>
   </div>
@@ -415,6 +491,14 @@
       document.getElementById('manualFields').style.display = sourceType === 'MANUAL' ? 'block' : 'none';
       document.getElementById('queryFields').style.display = sourceType === 'QUERY' ? 'block' : 'none';
       document.getElementById('aiQueryFields').style.display = sourceType === 'AI_QUERY' ? 'block' : 'none';
+      if (sourceType === 'AI_QUERY') {
+        toggleAiQueryType();
+      }
+    }
+
+    function toggleAiQueryType() {
+      const queryType = document.getElementById('aiQueryType').value;
+      document.getElementById('aiFilteredOptions').style.display = queryType === 'FILTERED' ? 'block' : 'none';
     }
 
     function switchQueryTab(tabName) {
@@ -512,8 +596,51 @@
 
         body.query = query;
       } else if (sourceType === 'AI_QUERY') {
-        const aiUrl = document.getElementById('postRailAiUrl').value;
-        body.aiQuery = { url: aiUrl };
+        const queryType = document.getElementById('aiQueryType').value;
+        const token = document.getElementById('aiQueryToken').value.trim();
+
+        const aiQuery = {
+          queryType,
+          limit: body.limit || 40,
+        };
+
+        // Add token as headers if provided
+        if (token) {
+          aiQuery.headers = { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` };
+        }
+
+        if (queryType === 'FILTERED') {
+          aiQuery.q = document.getElementById('aiSearchQuery').value.trim() || '';
+          aiQuery.brandName = document.getElementById('aiBrandName').value.trim() || '';
+          aiQuery.userId = document.getElementById('aiUserId').value.trim() || '';
+
+          const page = document.getElementById('aiPage').value;
+          if (page) aiQuery.page = parseInt(page);
+
+          // Build filters array
+          const filters = [];
+          const genres = document.getElementById('aiGenres').value.trim();
+          const moods = document.getElementById('aiMoods').value.trim();
+          const languages = document.getElementById('aiLanguages').value.trim();
+          const usecases = document.getElementById('aiUsecases').value.trim();
+          const assortment = document.getElementById('aiAssortment').value.trim();
+
+          if (genres) filters.push({ type: 'genre', value: genres.split(',').map(s => s.trim()).filter(Boolean) });
+          if (moods) filters.push({ type: 'mood', value: moods.split(',').map(s => s.trim()).filter(Boolean) });
+          if (languages) filters.push({ type: 'language', value: languages.split(',').map(s => s.trim()).filter(Boolean) });
+          if (usecases) filters.push({ type: 'usecase', value: usecases.split(',').map(s => s.trim()).filter(Boolean) });
+          if (assortment) filters.push({ type: 'assortment', value: assortment.split(',').map(s => s.trim()).filter(Boolean) });
+
+          aiQuery.filters = filters;
+        }
+
+        // Legacy URL support
+        const legacyUrl = document.getElementById('postRailAiUrl').value.trim();
+        if (legacyUrl && !queryType) {
+          aiQuery.url = legacyUrl;
+        }
+
+        body.aiQuery = aiQuery;
       }
 
       return body;
@@ -591,6 +718,18 @@
       document.getElementById('queryExcludeOwnerIds').value = '';
       document.getElementById('queryExcludeTiers').value = '';
       document.getElementById('postRailAiUrl').value = '';
+      // AI Query fields
+      document.getElementById('aiQueryType').value = 'TRENDING';
+      document.getElementById('aiQueryToken').value = '';
+      document.getElementById('aiSearchQuery').value = '';
+      document.getElementById('aiBrandName').value = '';
+      document.getElementById('aiUserId').value = '';
+      document.getElementById('aiGenres').value = '';
+      document.getElementById('aiMoods').value = '';
+      document.getElementById('aiLanguages').value = '';
+      document.getElementById('aiUsecases').value = '';
+      document.getElementById('aiAssortment').value = '';
+      document.getElementById('aiPage').value = '1';
     }
 
     function fillSampleManual() {
@@ -641,6 +780,53 @@
       document.getElementById('queryMovie').value = 'false';
       toggleSourceFields();
       switchQueryTab('trackParams');
+    }
+
+    function fillSampleAiTrending() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'ai-trending-songs';
+      document.getElementById('postRailTitle').value = 'Trending Now';
+      document.getElementById('postRailSubtitle').value = 'AI-powered trending tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'AI_QUERY';
+      document.getElementById('postRailLimit').value = '40';
+      document.getElementById('postRailBrandId').value = '13';
+      document.getElementById('aiQueryType').value = 'TRENDING';
+      toggleSourceFields();
+    }
+
+    function fillSampleAiPopular() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'ai-popular-songs';
+      document.getElementById('postRailTitle').value = 'Popular Hits';
+      document.getElementById('postRailSubtitle').value = 'AI-powered popular tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'AI_QUERY';
+      document.getElementById('postRailLimit').value = '40';
+      document.getElementById('postRailBrandId').value = '13';
+      document.getElementById('aiQueryType').value = 'POPULAR';
+      toggleSourceFields();
+    }
+
+    function fillSampleAiFiltered() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'ai-filtered-search';
+      document.getElementById('postRailTitle').value = 'AI Curated Mix';
+      document.getElementById('postRailSubtitle').value = 'Personalized track selection';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'AI_QUERY';
+      document.getElementById('postRailLimit').value = '200';
+      document.getElementById('postRailBrandId').value = '20';
+      document.getElementById('aiQueryType').value = 'FILTERED';
+      document.getElementById('aiSearchQuery').value = 'woman power';
+      document.getElementById('aiBrandName').value = 'Hoopr';
+      document.getElementById('aiUserId').value = '24';
+      document.getElementById('aiGenres').value = 'Indian Contemporary, Ambient, Devotional';
+      document.getElementById('aiMoods').value = 'Action, Motivational';
+      document.getElementById('aiLanguages').value = 'English, Hindi';
+      document.getElementById('aiUsecases').value = 'Automobile, Bumpers';
+      document.getElementById('aiAssortment').value = 'chartbusters';
+      toggleSourceFields();
     }
   </script>
 </body>

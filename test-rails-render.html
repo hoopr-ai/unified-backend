@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rails Renderer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #fafafa;
+      color: #1a1a1a;
+      padding-bottom: 80px;
+    }
+
+    /* Top bar */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar h1 { font-size: 18px; font-weight: 700; color: #e91e63; }
+    .controls {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .controls input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      width: 120px;
+    }
+    .controls button {
+      padding: 8px 16px;
+      background: #e91e63;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .controls button:hover { background: #c2185b; }
+    .controls button.secondary { background: #6c757d; }
+
+    /* Status bar */
+    .status {
+      padding: 10px 28px;
+      font-size: 13px;
+      background: #fff3cd;
+      border-bottom: 1px solid #ffeaa7;
+      display: none;
+    }
+    .status.visible { display: block; }
+    .status.error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+    .status.success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+
+    /* Rails container */
+    .rails { padding: 20px 28px; }
+
+    .rail { margin-bottom: 32px; }
+    .rail-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .rail-title-group { display: flex; align-items: baseline; gap: 12px; }
+    .rail-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+    .rail-subtitle {
+      font-size: 13px;
+      color: #888;
+    }
+    .rail-meta {
+      font-size: 11px;
+      color: #aaa;
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .rail-see-all {
+      font-size: 13px;
+      color: #e91e63;
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Horizontal scroll strip */
+    .rail-strip {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      padding-bottom: 8px;
+    }
+    .rail-strip::-webkit-scrollbar { height: 6px; }
+    .rail-strip::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+
+    /* Card */
+    .card {
+      flex: 0 0 auto;
+      width: 140px;
+      scroll-snap-align: start;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .card:hover { transform: translateY(-2px); }
+    .card-art {
+      width: 140px;
+      height: 140px;
+      border-radius: 8px;
+      display: flex;
+      align-items: flex-end;
+      padding: 8px;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .card-art.wide {
+      width: 220px;
+    }
+    .card-art .badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .card-art .play-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .card:hover .card-art .play-overlay { opacity: 1; }
+    .card-art .play-overlay::after {
+      content: '';
+      border-style: solid;
+      border-width: 8px 0 8px 12px;
+      border-color: transparent transparent transparent #e91e63;
+      margin-left: 3px;
+    }
+
+    .card-art .art-title {
+      z-index: 2;
+      line-height: 1.2;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    }
+    .card-info { padding: 6px 2px 0; }
+    .card-tag {
+      font-size: 10px;
+      color: #e91e63;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a1a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .card-sub {
+      font-size: 12px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+
+    /* Mood/Genre pill-style cards */
+    .card-pill .card-art {
+      width: 180px;
+      height: 90px;
+      border-radius: 10px;
+    }
+    .card-pill { width: 180px; }
+
+    /* Empty / skeleton */
+    .empty {
+      padding: 60px 20px;
+      text-align: center;
+      color: #888;
+    }
+    .empty h3 { color: #555; margin-bottom: 8px; }
+    .empty code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    /* Item count pill */
+    .item-count {
+      font-size: 11px;
+      color: #aaa;
+      margin-left: 8px;
+    }
+
+    /* Modal for raw data peek */
+    .peek {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1a1a1a;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      max-width: 400px;
+      max-height: 300px;
+      overflow: auto;
+      display: none;
+      z-index: 100;
+    }
+    .peek.visible { display: block; }
+    .peek pre { white-space: pre-wrap; word-break: break-all; }
+
+    /* Create Rail Form */
+    .create-form {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin: 20px 28px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .form-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #eee;
+      background: #f8f9fa;
+      border-radius: 8px 8px 0 0;
+    }
+    .form-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+      line-height: 1;
+    }
+    .close-btn:hover { color: #333; }
+    .form-body { padding: 20px; }
+    .form-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .form-group {
+      flex: 1;
+      min-width: 150px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #e91e63;
+    }
+    .form-section {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .form-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: #333;
+    }
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+    .form-actions button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .form-actions button.primary {
+      background: #e91e63;
+      color: white;
+    }
+    .form-actions button.primary:hover { background: #c2185b; }
+    .form-actions button.secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    .form-actions button.secondary:hover { background: #e0e0e0; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Rails Preview</h1>
+    <div class="controls">
+      <label style="font-size: 12px; color: #666;">API:</label>
+      <input id="apiBase" value="http://localhost:3002" placeholder="http://localhost:3002" style="width: 220px;" />
+      <label style="font-size: 12px; color: #666;">brandId:</label>
+      <input id="brandId" placeholder="(optional)" style="width: 80px;" />
+      <button onclick="loadRails()">Reload</button>
+      <button class="secondary" onclick="togglePeek()">Raw</button>
+      <button class="secondary" onclick="toggleCreateForm()" style="background: #28a745;">+ Create Rail</button>
+    </div>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <!-- Create Rail Form -->
+  <div id="createForm" class="create-form" style="display: none;">
+    <div class="form-header">
+      <h2>Create Rail</h2>
+      <button onclick="toggleCreateForm()" class="close-btn">&times;</button>
+    </div>
+    <div class="form-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Key *</label>
+          <input id="railKey" placeholder="unique-rail-key" />
+        </div>
+        <div class="form-group">
+          <label>Title *</label>
+          <input id="railTitle" placeholder="Rail Title" />
+        </div>
+        <div class="form-group">
+          <label>Subtitle</label>
+          <input id="railSubtitle" placeholder="Optional subtitle" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type *</label>
+          <select id="railType">
+            <option value="TRACKS">TRACKS</option>
+            <option value="GENRES">GENRES</option>
+            <option value="MOODS">MOODS</option>
+            <option value="LANGUAGES">LANGUAGES</option>
+            <option value="LABELS">LABELS</option>
+            <option value="PLAYLISTS">PLAYLISTS</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Source Type *</label>
+          <select id="railSourceType" onchange="handleSourceTypeChange()">
+            <option value="AI_QUERY">AI_QUERY</option>
+            <option value="MANUAL">MANUAL</option>
+            <option value="QUERY">QUERY</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Order</label>
+          <input id="railOrder" type="number" placeholder="Auto" />
+        </div>
+        <div class="form-group">
+          <label>Limit</label>
+          <input id="railLimit" type="number" value="40" />
+        </div>
+      </div>
+
+      <!-- AI Query Section -->
+      <div id="aiQuerySection" class="form-section">
+        <h3>AI Query Configuration</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Query Type *</label>
+            <select id="aiQueryType" onchange="handleAiQueryTypeChange()">
+              <option value="TRENDING">Trending Songs</option>
+              <option value="POPULAR">Popular Songs</option>
+              <option value="FILTERED">AI Search with Filters</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Auth Token (optional)</label>
+            <input id="aiToken" placeholder="Bearer token" style="width: 300px;" />
+          </div>
+        </div>
+
+        <!-- Filtered Search Options -->
+        <div id="filteredOptions" style="display: none;">
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label>Search Query (q)</label>
+              <input id="aiSearchQ" placeholder="e.g., woman power" />
+            </div>
+            <div class="form-group">
+              <label>Brand Name</label>
+              <input id="aiBrandName" placeholder="e.g., Hoopr" />
+            </div>
+            <div class="form-group">
+              <label>User ID</label>
+              <input id="aiUserId" placeholder="e.g., 24" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Genres (comma-separated)</label>
+              <input id="aiGenres" placeholder="Indian Contemporary, Ambient" />
+            </div>
+            <div class="form-group">
+              <label>Moods (comma-separated)</label>
+              <input id="aiMoods" placeholder="Action, Motivational" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Languages (comma-separated)</label>
+              <input id="aiLanguages" placeholder="English, Hindi" />
+            </div>
+            <div class="form-group">
+              <label>Use Cases (comma-separated)</label>
+              <input id="aiUsecases" placeholder="Automobile, Bumpers" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Assortment (comma-separated)</label>
+              <input id="aiAssortment" placeholder="chartbusters" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Section -->
+      <div id="manualSection" class="form-section" style="display: none;">
+        <h3>Manual Item Codes</h3>
+        <div class="form-group">
+          <label>Item Codes (comma-separated)</label>
+          <textarea id="manualItemCodes" rows="3" placeholder="TRACK001, TRACK002, TRACK003"></textarea>
+        </div>
+      </div>
+
+      <!-- Query Section -->
+      <div id="querySection" class="form-section" style="display: none;">
+        <h3>Query Configuration</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label><input type="checkbox" id="queryPopular" /> Popular</label>
+          </div>
+          <div class="form-group">
+            <label><input type="checkbox" id="queryTrending" /> Trending</label>
+          </div>
+          <div class="form-group">
+            <label><input type="checkbox" id="queryNewOnHoopr" /> New on Hoopr</label>
+          </div>
+          <div class="form-group">
+            <label><input type="checkbox" id="queryCampaign" /> Campaign</label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Filter IDs (comma-separated)</label>
+            <input id="queryFilterIds" placeholder="filter-id-1, filter-id-2" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button onclick="createRail()" class="primary">Create Rail</button>
+        <button onclick="toggleCreateForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rails" class="rails">
+    <div class="empty">
+      <h3>Loading rails...</h3>
+      <p>Fetching from <code id="urlPreview"></code></p>
+    </div>
+  </div>
+
+  <div id="peek" class="peek"><pre id="peekContent"></pre></div>
+
+  <script>
+    const ARTWORK_GRADIENTS = [
+      ['#667eea', '#764ba2'], ['#f093fb', '#f5576c'], ['#4facfe', '#00f2fe'],
+      ['#fa709a', '#fee140'], ['#30cfd0', '#330867'], ['#a8edea', '#fed6e3'],
+      ['#ff9a9e', '#fecfef'], ['#ffecd2', '#fcb69f'], ['#ff6e7f', '#bfe9ff'],
+      ['#e0c3fc', '#8ec5fc'], ['#f6d365', '#fda085'], ['#5ee7df', '#b490ca'],
+      ['#c471f5', '#fa71cd'], ['#48c6ef', '#6f86d6'], ['#f77062', '#fe5196'],
+      ['#43cea2', '#185a9d'], ['#ff5858', '#f09819'], ['#1a2980', '#26d0ce'],
+    ];
+
+    function hashString(s) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+
+    function gradientFor(seed) {
+      const [a, b] = ARTWORK_GRADIENTS[hashString(seed) % ARTWORK_GRADIENTS.length];
+      return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[c]);
+    }
+
+    function setStatus(msg, type) {
+      const el = document.getElementById('status');
+      el.className = 'status visible ' + (type || '');
+      el.textContent = msg;
+      if (type === 'success') {
+        setTimeout(() => { el.className = 'status'; }, 2500);
+      }
+    }
+
+    function updateUrlPreview() {
+      const base = document.getElementById('apiBase').value.trim();
+      const brand = document.getElementById('brandId').value.trim();
+      const url = `${base}/rails${brand ? `?brandId=${brand}` : ''}`;
+      const prev = document.getElementById('urlPreview');
+      if (prev) prev.textContent = url;
+      return url;
+    }
+
+    let lastRaw = null;
+
+    async function loadRails() {
+      const url = updateUrlPreview();
+      setStatus('Loading ' + url, '');
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+        lastRaw = json;
+        document.getElementById('peekContent').textContent = JSON.stringify(json, null, 2);
+        if (!res.ok) {
+          setStatus(`HTTP ${res.status}: ${json.message || 'error'}`, 'error');
+          return;
+        }
+        const rails = Array.isArray(json.data) ? json.data : [];
+        renderRails(rails);
+        setStatus(`Loaded ${rails.length} rails`, 'success');
+      } catch (e) {
+        setStatus('Fetch failed: ' + e.message + ' (is the server running?)', 'error');
+        document.getElementById('rails').innerHTML = `
+          <div class="empty">
+            <h3>Couldn't reach the API</h3>
+            <p>${escapeHtml(e.message)}</p>
+            <p style="margin-top: 8px;">Check <code>apiBase</code> above and that your backend is running.</p>
+          </div>`;
+      }
+    }
+
+    function renderRails(rails) {
+      const host = document.getElementById('rails');
+      if (rails.length === 0) {
+        host.innerHTML = `<div class="empty"><h3>No rails</h3><p>The API returned an empty list.</p></div>`;
+        return;
+      }
+      rails.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      host.innerHTML = rails.map(renderRail).join('');
+    }
+
+    function renderRail(rail) {
+      const items = Array.isArray(rail.items) ? rail.items : [];
+      const isPillStyle = rail.type === 'GENRES' || rail.type === 'MOODS' || rail.type === 'LANGUAGES';
+      const stripItems = items.map(it => renderItem(it, rail.type, isPillStyle)).join('');
+
+      const seeAll = rail.seeMore
+        ? `<a class="rail-see-all" onclick="showSeeMore('${escapeHtml(rail.key)}')">See All</a>`
+        : '';
+
+      return `
+        <section class="rail" data-key="${escapeHtml(rail.key)}">
+          <div class="rail-header">
+            <div class="rail-title-group">
+              <h2 class="rail-title">${escapeHtml(rail.title)}</h2>
+              ${rail.subtitle ? `<span class="rail-subtitle">${escapeHtml(rail.subtitle)}</span>` : ''}
+              <span class="rail-meta">${escapeHtml(rail.type)}</span>
+              <span class="item-count">${items.length} items</span>
+            </div>
+            ${seeAll}
+          </div>
+          <div class="rail-strip">
+            ${stripItems || '<div class="empty" style="padding: 20px;">No items</div>'}
+          </div>
+        </section>`;
+    }
+
+    function renderItem(item, railType, isPillStyle) {
+      const data = item.data || {};
+      let title = '';
+      let subtitle = '';
+      let tag = '';
+      let seed = item.itemCode || '';
+
+      switch (item.itemType) {
+        case 'TRACK':
+          title = data.name || item.itemCode;
+          subtitle = (data.primaryArtists || []).map(a => a.name).join(', ') || data.ownerCode || '';
+          tag = data.trending ? 'Trending' : (data.ownerType || '');
+          seed = data.trackCode || item.itemCode;
+          break;
+        case 'GENRE':
+        case 'MOOD':
+        case 'LANGUAGE':
+        case 'LABEL':
+          title = data.name || item.itemCode;
+          subtitle = data.type || item.itemType;
+          seed = data.name_slug || data.id || item.itemCode;
+          break;
+        case 'PLAYLIST':
+          title = data.name || item.itemCode;
+          subtitle = data.description ? String(data.description).slice(0, 40) : 'Playlist';
+          seed = data.playlistCode || data.id || item.itemCode;
+          break;
+        default:
+          title = item.itemCode;
+          subtitle = item.itemType;
+      }
+
+      const bg = gradientFor(seed || String(Math.random()));
+      const artClass = isPillStyle ? 'card-art' : 'card-art';
+      const wrapClass = isPillStyle ? 'card card-pill' : 'card';
+      const initials = (title || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+
+      const missing = item.data == null;
+
+      return `
+        <div class="${wrapClass}" title="${escapeHtml(item.itemType)}: ${escapeHtml(item.itemCode)}">
+          <div class="${artClass}" style="background: ${bg};">
+            ${tag ? `<span class="badge">${escapeHtml(tag)}</span>` : ''}
+            ${missing ? `<span class="badge" style="background: rgba(220,53,69,0.85);">missing</span>` : ''}
+            <span class="art-title">${isPillStyle ? escapeHtml(title) : escapeHtml(initials)}</span>
+            ${item.itemType === 'TRACK' ? '<span class="play-overlay"></span>' : ''}
+          </div>
+          ${!isPillStyle ? `
+            <div class="card-info">
+              ${tag ? `<div class="card-tag">${escapeHtml(tag)}</div>` : ''}
+              <div class="card-title">${escapeHtml(title)}</div>
+              ${subtitle ? `<div class="card-sub">${escapeHtml(subtitle)}</div>` : ''}
+            </div>` : ''}
+        </div>`;
+    }
+
+    function showSeeMore(key) {
+      const rail = (lastRaw?.data || []).find(r => r.key === key);
+      if (!rail) return;
+      alert(`seeMore for "${rail.title}":\n\n${JSON.stringify(rail.seeMore, null, 2)}`);
+    }
+
+    function togglePeek() {
+      document.getElementById('peek').classList.toggle('visible');
+    }
+
+    document.getElementById('apiBase').addEventListener('input', updateUrlPreview);
+    document.getElementById('brandId').addEventListener('input', updateUrlPreview);
+
+    updateUrlPreview();
+    loadRails();
+
+    // Create Rail Form Functions
+    function toggleCreateForm() {
+      const form = document.getElementById('createForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function handleSourceTypeChange() {
+      const sourceType = document.getElementById('railSourceType').value;
+      document.getElementById('aiQuerySection').style.display = sourceType === 'AI_QUERY' ? 'block' : 'none';
+      document.getElementById('manualSection').style.display = sourceType === 'MANUAL' ? 'block' : 'none';
+      document.getElementById('querySection').style.display = sourceType === 'QUERY' ? 'block' : 'none';
+    }
+
+    function handleAiQueryTypeChange() {
+      const queryType = document.getElementById('aiQueryType').value;
+      document.getElementById('filteredOptions').style.display = queryType === 'FILTERED' ? 'block' : 'none';
+    }
+
+    function parseCommaSeparated(str) {
+      if (!str || !str.trim()) return [];
+      return str.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    async function createRail() {
+      const base = document.getElementById('apiBase').value.trim();
+      const brandIdValue = document.getElementById('brandId').value.trim();
+
+      const key = document.getElementById('railKey').value.trim();
+      const title = document.getElementById('railTitle').value.trim();
+      const subtitle = document.getElementById('railSubtitle').value.trim() || null;
+      const type = document.getElementById('railType').value;
+      const sourceType = document.getElementById('railSourceType').value;
+      const orderValue = document.getElementById('railOrder').value.trim();
+      const limitValue = document.getElementById('railLimit').value.trim();
+
+      if (!key || !title) {
+        setStatus('Key and Title are required', 'error');
+        return;
+      }
+
+      const payload = {
+        key,
+        title,
+        subtitle,
+        type,
+        sourceType,
+        brandId: brandIdValue ? parseInt(brandIdValue) : null,
+        order: orderValue ? parseInt(orderValue) : undefined,
+        limit: limitValue ? parseInt(limitValue) : 40,
+      };
+
+      if (sourceType === 'AI_QUERY') {
+        const queryType = document.getElementById('aiQueryType').value;
+        const token = document.getElementById('aiToken').value.trim();
+
+        const aiQuery = {
+          queryType,
+          limit: payload.limit,
+        };
+
+        // Add token if provided
+        if (token) {
+          aiQuery.headers = { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` };
+        }
+
+        if (queryType === 'FILTERED') {
+          aiQuery.q = document.getElementById('aiSearchQ').value.trim() || '';
+          aiQuery.brandName = document.getElementById('aiBrandName').value.trim() || '';
+          aiQuery.userId = document.getElementById('aiUserId').value.trim() || '';
+
+          const filters = [];
+          const genres = parseCommaSeparated(document.getElementById('aiGenres').value);
+          const moods = parseCommaSeparated(document.getElementById('aiMoods').value);
+          const languages = parseCommaSeparated(document.getElementById('aiLanguages').value);
+          const usecases = parseCommaSeparated(document.getElementById('aiUsecases').value);
+          const assortment = parseCommaSeparated(document.getElementById('aiAssortment').value);
+
+          if (genres.length) filters.push({ type: 'genre', value: genres });
+          if (moods.length) filters.push({ type: 'mood', value: moods });
+          if (languages.length) filters.push({ type: 'language', value: languages });
+          if (usecases.length) filters.push({ type: 'usecase', value: usecases });
+          if (assortment.length) filters.push({ type: 'assortment', value: assortment });
+
+          aiQuery.filters = filters;
+        }
+
+        payload.aiQuery = aiQuery;
+      } else if (sourceType === 'MANUAL') {
+        const itemCodesStr = document.getElementById('manualItemCodes').value.trim();
+        const itemCodes = parseCommaSeparated(itemCodesStr);
+        if (itemCodes.length === 0) {
+          setStatus('Item codes are required for MANUAL source', 'error');
+          return;
+        }
+        payload.itemCodes = itemCodes;
+      } else if (sourceType === 'QUERY') {
+        const query = {};
+        if (document.getElementById('queryPopular').checked) query.popular = true;
+        if (document.getElementById('queryTrending').checked) query.trending = true;
+        if (document.getElementById('queryNewOnHoopr').checked) query.newOnHoopr = true;
+        if (document.getElementById('queryCampaign').checked) query.campaign = true;
+        const filterIds = parseCommaSeparated(document.getElementById('queryFilterIds').value);
+        if (filterIds.length) query.filterIds = filterIds;
+
+        if (Object.keys(query).length === 0) {
+          setStatus('At least one query filter is required for QUERY source', 'error');
+          return;
+        }
+        payload.query = query;
+      }
+
+      setStatus('Creating rail...', '');
+
+      try {
+        const res = await fetch(`${base}/rails`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rail created successfully!', 'success');
+        toggleCreateForm();
+        loadRails();
+      } catch (e) {
+        setStatus('Failed to create rail: ' + e.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -116,9 +116,20 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
     }
   } else if (sourceType === RailSourceType.AI_QUERY) {
     if (type !== RailType.TRACKS) return "AI_QUERY sourceType is only valid for TRACKS";
-    const a = b.aiQuery as { url?: unknown } | undefined;
-    if (!a || typeof a.url !== "string" || !a.url) {
-      return "aiQuery.url is required for AI_QUERY";
+    const a = b.aiQuery as {
+      queryType?: unknown;
+      url?: unknown;
+      q?: unknown;
+      filters?: unknown;
+    } | undefined;
+    if (!a) {
+      return "aiQuery is required for AI_QUERY";
+    }
+    const validQueryTypes = ['TRENDING', 'POPULAR', 'FILTERED'];
+    const hasQueryType = typeof a.queryType === 'string' && validQueryTypes.includes(a.queryType);
+    const hasLegacyUrl = typeof a.url === 'string' && a.url.length > 0;
+    if (!hasQueryType && !hasLegacyUrl) {
+      return "aiQuery.queryType (TRENDING, POPULAR, or FILTERED) or aiQuery.url is required for AI_QUERY";
     }
   }
 
@@ -128,6 +139,8 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
 // POST /rails - Create or update a rail (upsert on key + brandId)
 export const upsertRail = catchAsync(
   async (req: AuthRequest, res: Response) => {
+    console.log("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh");
+    
     const parsed = validateUpsertBody(req.body);
     if (typeof parsed === "string") {
       sendResponse(res, {
