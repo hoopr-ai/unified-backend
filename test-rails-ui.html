@@ -621,6 +621,7 @@
 
       filterMappings.forEach(({ selectId, dataKey }) => {
         const select = document.getElementById(selectId);
+        if (!select) return;
         const items = filtersData[dataKey] || [];
 
         select.innerHTML = '';
@@ -634,10 +635,26 @@
           select.appendChild(option);
         });
 
+        // Add click handler for toggle selection (no Ctrl needed)
+        select.removeEventListener('mousedown', handleMultiSelectClick);
+        select.addEventListener('mousedown', handleMultiSelectClick);
+
         // Add change handler for selected tags display
         select.removeEventListener('change', updateSelectedTags);
         select.addEventListener('change', updateSelectedTags);
       });
+    }
+
+    // Handle multi-select click to toggle without Ctrl key
+    function handleMultiSelectClick(e) {
+      const select = e.currentTarget;
+      const option = e.target;
+
+      if (option.tagName !== 'OPTION') return;
+
+      e.preventDefault();
+      option.selected = !option.selected;
+      select.dispatchEvent(new Event('change'));
     }
 
     // Update selected tags display

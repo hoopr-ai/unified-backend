@@ -710,6 +710,16 @@
       }
     }
 
+    // Handle multi-select click to toggle selection without requiring Ctrl key
+    function handleMultiSelectClick(e) {
+      const select = e.currentTarget;
+      const option = e.target;
+      if (option.tagName !== 'OPTION') return;
+      e.preventDefault();
+      option.selected = !option.selected;
+      select.dispatchEvent(new Event('change'));
+    }
+
     function populateFilterDropdowns() {
       if (!filtersData) return;
 
@@ -742,6 +752,10 @@
           opt.dataset.name = item.name;
           select.appendChild(opt);
         });
+
+        // Add click handler for toggle selection without Ctrl key
+        select.removeEventListener('mousedown', handleMultiSelectClick);
+        select.addEventListener('mousedown', handleMultiSelectClick);
       });
     }
 
