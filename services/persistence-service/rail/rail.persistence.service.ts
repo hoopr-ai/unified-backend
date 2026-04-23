@@ -3,18 +3,26 @@ import { sequelize } from "../database";
 import { RailModel, RailDetails } from "./schemas/rail.schema";
 import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
 import { PageName } from "../../dto-service/modules.export";
-import { redisClient } from "../../helper-service/redis.client";
+// import { redisClient } from "../../helper-service/redis.client";
+
+// =============================================================================
+// REDIS CACHING - DISABLED FOR NOW
+// Uncomment the code below to enable Redis caching for rails
+// =============================================================================
 
 // Cache TTL in seconds (5 minutes for rails, can be invalidated on updates)
-const RAILS_CACHE_TTL = 300;
+// const RAILS_CACHE_TTL = 300;
 
 // Build cache key for rails query
-const buildRailsCacheKey = (brandId?: number, pageName?: string, page?: number, limit?: number): string => {
-  return `rails:${brandId ?? 'default'}:${pageName ?? 'all'}:${page ?? 0}:${limit ?? 0}`;
-};
+// const buildRailsCacheKey = (brandId?: number, pageName?: string, page?: number, limit?: number): string => {
+//   return `rails:${brandId ?? 'default'}:${pageName ?? 'all'}:${page ?? 0}:${limit ?? 0}`;
+// };
 
-// Invalidate rails cache for a brand/page
-export const invalidateRailsCache = async (brandId?: number | null, pageName?: string): Promise<void> => {
+// Invalidate rails cache for a brand/page (no-op when caching disabled)
+export const invalidateRailsCache = async (_brandId?: number | null, _pageName?: string): Promise<void> => {
+  // Redis caching disabled - no-op
+  // Uncomment below to enable cache invalidation:
+  /*
   try {
     const pattern = `rails:${brandId ?? 'default'}:${pageName ?? '*'}:*`;
     const keys = await redisClient.keys(pattern);
@@ -32,6 +40,7 @@ export const invalidateRailsCache = async (brandId?: number | null, pageName?: s
   } catch (err) {
     console.error('[RailsCache] Error invalidating cache:', err);
   }
+  */
 };
 
 // Returns all rails visible to the given brand: brand-specific rows + defaults.
@@ -40,28 +49,26 @@ export const invalidateRailsCache = async (brandId?: number | null, pageName?: s
 export const findRailsForBrand = async (
   brandId?: number,
   pageName?: string,
-  useCache: boolean = true,
 ): Promise<RailModel[]> => {
-  // Try cache first
-  if (useCache) {
-    const cacheKey = buildRailsCacheKey(brandId, pageName);
-    try {
-      const cached = await redisClient.get(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        // Reconstruct RailModel instances with items
-        return parsed.map((r: any) => {
-          const rail = RailModel.build(r, { isNewRecord: false });
-          if (r.items) {
-            rail.items = r.items.map((i: any) => RailItemModel.build(i, { isNewRecord: false }));
-          }
-          return rail;
-        });
-      }
-    } catch (err) {
-      console.error('[RailsCache] Error reading cache:', err);
+  // Redis caching disabled - uncomment to enable
+  /*
+  const cacheKey = buildRailsCacheKey(brandId, pageName);
+  try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      return parsed.map((r: any) => {
+        const rail = RailModel.build(r, { isNewRecord: false });
+        if (r.items) {
+          rail.items = r.items.map((i: any) => RailItemModel.build(i, { isNewRecord: false }));
+        }
+        return rail;
+      });
     }
+  } catch (err) {
+    console.error('[RailsCache] Error reading cache:', err);
   }
+  */
 
   const brandClause = brandId
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
@@ -106,20 +113,20 @@ export const findRailsForBrand = async (
     rail.items = itemsByRailId.get(rail.id) || [];
   }
 
-  // Cache the result
-  if (useCache) {
-    const cacheKey = buildRailsCacheKey(brandId, pageName);
-    try {
-      const toCache = rails.map(r => {
-        const json = r.toJSON() as any;
-        json.items = (r.items || []).map(i => i.toJSON());
-        return json;
-      });
-      await redisClient.setex(cacheKey, RAILS_CACHE_TTL, JSON.stringify(toCache));
-    } catch (err) {
-      console.error('[RailsCache] Error writing cache:', err);
-    }
+  // Redis caching disabled - uncomment to enable
+  /*
+  const cacheKey = buildRailsCacheKey(brandId, pageName);
+  try {
+    const toCache = rails.map(r => {
+      const json = r.toJSON() as any;
+      json.items = (r.items || []).map(i => i.toJSON());
+      return json;
+    });
+    await redisClient.setex(cacheKey, RAILS_CACHE_TTL, JSON.stringify(toCache));
+  } catch (err) {
+    console.error('[RailsCache] Error writing cache:', err);
   }
+  */
 
   return rails;
 };
@@ -131,29 +138,27 @@ export const findRailsForBrandPaginated = async (
   pageName?: string,
   page: number = 1,
   limit: number = 10,
-  useCache: boolean = true,
 ): Promise<{ rows: RailModel[]; count: number }> => {
-  // Try cache first
+  // Redis caching disabled - uncomment to enable
+  /*
   const cacheKey = buildRailsCacheKey(brandId, pageName, page, limit);
-  if (useCache) {
-    try {
-      const cached = await redisClient.get(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        // Reconstruct RailModel instances with items
-        const rows = parsed.rows.map((r: any) => {
-          const rail = RailModel.build(r, { isNewRecord: false });
-          if (r.items) {
-            rail.items = r.items.map((i: any) => RailItemModel.build(i, { isNewRecord: false }));
-          }
-          return rail;
-        });
-        return { rows, count: parsed.count };
-      }
-    } catch (err) {
-      console.error('[RailsCache] Error reading paginated cache:', err);
+  try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      const rows = parsed.rows.map((r: any) => {
+        const rail = RailModel.build(r, { isNewRecord: false });
+        if (r.items) {
+          rail.items = r.items.map((i: any) => RailItemModel.build(i, { isNewRecord: false }));
+        }
+        return rail;
+      });
+      return { rows, count: parsed.count };
     }
+  } catch (err) {
+    console.error('[RailsCache] Error reading paginated cache:', err);
   }
+  */
 
   const brandClause = brandId
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
@@ -212,22 +217,23 @@ export const findRailsForBrandPaginated = async (
     rail.items = itemsByRailId.get(rail.id) || [];
   }
 
-  // Cache the result
-  if (useCache) {
-    try {
-      const toCache = {
-        rows: rails.map(r => {
-          const json = r.toJSON() as any;
-          json.items = (r.items || []).map(i => i.toJSON());
-          return json;
-        }),
-        count,
-      };
-      await redisClient.setex(cacheKey, RAILS_CACHE_TTL, JSON.stringify(toCache));
-    } catch (err) {
-      console.error('[RailsCache] Error writing paginated cache:', err);
-    }
+  // Redis caching disabled - uncomment to enable
+  /*
+  const cacheKey = buildRailsCacheKey(brandId, pageName, page, limit);
+  try {
+    const toCache = {
+      rows: rails.map(r => {
+        const json = r.toJSON() as any;
+        json.items = (r.items || []).map(i => i.toJSON());
+        return json;
+      }),
+      count,
+    };
+    await redisClient.setex(cacheKey, RAILS_CACHE_TTL, JSON.stringify(toCache));
+  } catch (err) {
+    console.error('[RailsCache] Error writing paginated cache:', err);
   }
+  */
 
   return { rows: rails, count };
 };
