@@ -696,8 +696,8 @@ export const findTracksLightweight = async (
         model: TrackArtistMappingModel,
         as: "trackArtistMappings",
         required: false,
-        attributes: ["artistId", "role"],
-        where: { role: "primary" },
+        attributes: ["artistId", "role", "isPrimary"],
+        where: { isPrimary: true },
         include: [
           {
             model: ArtistModel,
