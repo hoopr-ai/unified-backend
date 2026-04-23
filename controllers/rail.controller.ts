@@ -39,14 +39,13 @@ const parseBrandId = (raw: unknown): number | undefined => {
 // GET /rails?brandId=123&pageName=home - Get all visible rails for a brand (or defaults)
 export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   const brandId = parseBrandId(req.query.brandId);
-  const userId = req.session?.userId;
+  const userId = parseBrandId(req.session?.userId); // Reusing parseBrandId to parse userId from session, will return undefined if invalid
   const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
 
   // Get the logged-in user's brandId for brand-specific recommendations
   const user = userId ? await findUserById(userId) : null;
-  const userBrandId = user?.brandId;
 
-  const rails = await getRailsService(brandId, userId, pageName, userBrandId);
+  const rails = await getRailsService(brandId, userId, pageName);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
@@ -57,7 +56,6 @@ export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
 
 // GET /rails/batch?brandId=123&pageName=home&page=1&limit=5&railItemLimit=10 - Get rails in batches (paginated)
 export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) => {
-  const brandId = parseBrandId(req.query.brandId);
   const userId = req.session?.userId;
   const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
 
@@ -73,9 +71,7 @@ export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) 
   // Get the logged-in user's brandId for brand-specific recommendations
   const user = userId ? await findUserById(userId) : null;
   const userBrandId = user?.brandId;
-  console.log(`[RailsBatch] userId=${userId}, userBrandId=${userBrandId}, queryBrandId=${brandId}`);
-
-  const result = await getRailsPaginatedService(brandId, userId, pageName, page, limit, railItemLimit, userBrandId);
+  const result = await getRailsPaginatedService(userBrandId, userId, pageName, page, limit, railItemLimit);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,

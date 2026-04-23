@@ -3,13 +3,66 @@ import { sequelize } from "../database";
 import { RailModel, RailDetails } from "./schemas/rail.schema";
 import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
 import { PageName } from "../../dto-service/modules.export";
+import { redisClient } from "../../helper-service/redis.client";
+
+// Cache TTL in seconds (5 minutes for rails, can be invalidated on updates)
+const RAILS_CACHE_TTL = 300;
+
+// Build cache key for rails query
+const buildRailsCacheKey = (brandId?: number, pageName?: string, page?: number, limit?: number): string => {
+  return `rails:${brandId ?? 'default'}:${pageName ?? 'all'}:${page ?? 0}:${limit ?? 0}`;
+};
+
+// Invalidate rails cache for a brand/page
+export const invalidateRailsCache = async (brandId?: number | null, pageName?: string): Promise<void> => {
+  try {
+    const pattern = `rails:${brandId ?? 'default'}:${pageName ?? '*'}:*`;
+    const keys = await redisClient.keys(pattern);
+    if (keys.length > 0) {
+      await redisClient.del(...keys);
+    }
+    // Also invalidate 'all' pages cache
+    if (pageName) {
+      const allPattern = `rails:${brandId ?? 'default'}:all:*`;
+      const allKeys = await redisClient.keys(allPattern);
+      if (allKeys.length > 0) {
+        await redisClient.del(...allKeys);
+      }
+    }
+  } catch (err) {
+    console.error('[RailsCache] Error invalidating cache:', err);
+  }
+};
 
 // Returns all rails visible to the given brand: brand-specific rows + defaults.
 // Caller dedupes by key (brand row wins).
+// Optimized: Separate queries for rails and items to avoid slow JOINs
 export const findRailsForBrand = async (
   brandId?: number,
   pageName?: string,
+  useCache: boolean = true,
 ): Promise<RailModel[]> => {
+  // Try cache first
+  if (useCache) {
+    const cacheKey = buildRailsCacheKey(brandId, pageName);
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Reconstruct RailModel instances with items
+        return parsed.map((r: any) => {
+          const rail = RailModel.build(r, { isNewRecord: false });
+          if (r.items) {
+            rail.items = r.items.map((i: any) => RailItemModel.build(i, { isNewRecord: false }));
+          }
+          return rail;
+        });
+      }
+    } catch (err) {
+      console.error('[RailsCache] Error reading cache:', err);
+    }
+  }
+
   const brandClause = brandId
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
     : { brandId: null as number | null };
@@ -19,34 +72,89 @@ export const findRailsForBrand = async (
     ? { pageName }
     : {};
 
-  return RailModel.findAll({
+  // Step 1: Fetch rails without items (faster query)
+  const rails = await RailModel.findAll({
     where: {
       isVisible: true,
       ...brandClause,
       ...pageClause,
     },
-    include: [
-      {
-        model: RailItemModel,
-        as: "items",
-        required: false,
-      },
-    ],
-    order: [
-      ["order", "ASC"],
-      [{ model: RailItemModel, as: "items" }, "order", "ASC"],
-    ],
+    order: [["order", "ASC"]],
+    raw: false,
   });
+
+  if (rails.length === 0) return rails;
+
+  // Step 2: Batch fetch all items for these rails in one query
+  const railIds = rails.map(r => r.id);
+  const items = await RailItemModel.findAll({
+    where: { railId: { [Op.in]: railIds } },
+    order: [["railId", "ASC"], ["order", "ASC"]],
+    raw: false,
+  });
+
+  // Step 3: Group items by railId
+  const itemsByRailId = new Map<number, RailItemModel[]>();
+  for (const item of items) {
+    const list = itemsByRailId.get(item.railId) || [];
+    list.push(item);
+    itemsByRailId.set(item.railId, list);
+  }
+
+  // Step 4: Attach items to rails
+  for (const rail of rails) {
+    rail.items = itemsByRailId.get(rail.id) || [];
+  }
+
+  // Cache the result
+  if (useCache) {
+    const cacheKey = buildRailsCacheKey(brandId, pageName);
+    try {
+      const toCache = rails.map(r => {
+        const json = r.toJSON() as any;
+        json.items = (r.items || []).map(i => i.toJSON());
+        return json;
+      });
+      await redisClient.setex(cacheKey, RAILS_CACHE_TTL, JSON.stringify(toCache));
+    } catch (err) {
+      console.error('[RailsCache] Error writing cache:', err);
+    }
+  }
+
+  return rails;
 };
 
 // Returns paginated rails visible to the given brand with total count.
-// Fetches rails in batches for better performance.
+// Optimized: Separate count query and data query to avoid slow JOIN count
 export const findRailsForBrandPaginated = async (
   brandId?: number,
   pageName?: string,
   page: number = 1,
   limit: number = 10,
+  useCache: boolean = true,
 ): Promise<{ rows: RailModel[]; count: number }> => {
+  // Try cache first
+  const cacheKey = buildRailsCacheKey(brandId, pageName, page, limit);
+  if (useCache) {
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Reconstruct RailModel instances with items
+        const rows = parsed.rows.map((r: any) => {
+          const rail = RailModel.build(r, { isNewRecord: false });
+          if (r.items) {
+            rail.items = r.items.map((i: any) => RailItemModel.build(i, { isNewRecord: false }));
+          }
+          return rail;
+        });
+        return { rows, count: parsed.count };
+      }
+    } catch (err) {
+      console.error('[RailsCache] Error reading paginated cache:', err);
+    }
+  }
+
   const brandClause = brandId
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
     : { brandId: null as number | null };
@@ -57,30 +165,71 @@ export const findRailsForBrandPaginated = async (
     : {};
 
   const offset = (page - 1) * limit;
+  const whereClause = {
+    isVisible: true,
+    ...brandClause,
+    ...pageClause,
+  };
 
-  const { rows, count } = await RailModel.findAndCountAll({
-    where: {
-      isVisible: true,
-      ...brandClause,
-      ...pageClause,
-    },
-    include: [
-      {
-        model: RailItemModel,
-        as: "items",
-        required: false,
-      },
-    ],
-    order: [
-      ["order", "ASC"],
-      [{ model: RailItemModel, as: "items" }, "order", "ASC"],
-    ],
+  // Step 1: Get count separately (fast, no JOIN)
+  const count = await RailModel.count({ where: whereClause });
+
+  if (count === 0) {
+    return { rows: [], count: 0 };
+  }
+
+  // Step 2: Fetch rails without items (faster query)
+  const rails = await RailModel.findAll({
+    where: whereClause,
+    order: [["order", "ASC"]],
     limit,
     offset,
-    distinct: true, // Ensures count is accurate with includes
+    raw: false,
   });
 
-  return { rows, count };
+  if (rails.length === 0) {
+    return { rows: rails, count };
+  }
+
+  // Step 3: Batch fetch all items for these rails in one query
+  const railIds = rails.map(r => r.id);
+  const items = await RailItemModel.findAll({
+    where: { railId: { [Op.in]: railIds } },
+    order: [["railId", "ASC"], ["order", "ASC"]],
+    raw: false,
+  });
+
+  // Step 4: Group items by railId
+  const itemsByRailId = new Map<number, RailItemModel[]>();
+  for (const item of items) {
+    const list = itemsByRailId.get(item.railId) || [];
+    list.push(item);
+    itemsByRailId.set(item.railId, list);
+  }
+
+  // Step 5: Attach items to rails
+  for (const rail of rails) {
+    rail.items = itemsByRailId.get(rail.id) || [];
+  }
+
+  // Cache the result
+  if (useCache) {
+    try {
+      const toCache = {
+        rows: rails.map(r => {
+          const json = r.toJSON() as any;
+          json.items = (r.items || []).map(i => i.toJSON());
+          return json;
+        }),
+        count,
+      };
+      await redisClient.setex(cacheKey, RAILS_CACHE_TTL, JSON.stringify(toCache));
+    } catch (err) {
+      console.error('[RailsCache] Error writing paginated cache:', err);
+    }
+  }
+
+  return { rows: rails, count };
 };
 
 export const findRailByKey = async (
@@ -201,6 +350,9 @@ export const findRailById = async (
 export const deleteRailById = async (
   railId: number,
 ): Promise<boolean> => {
+  // Get rail info before deleting for cache invalidation
+  const rail = await RailModel.findByPk(railId, { attributes: ['brandId', 'pageName'] });
+
   const transaction = await sequelize.transaction();
   try {
     // Delete all items first
@@ -216,6 +368,12 @@ export const deleteRailById = async (
     });
 
     await transaction.commit();
+
+    // Invalidate cache
+    if (rail) {
+      await invalidateRailsCache(rail.brandId, rail.pageName);
+    }
+
     return deleted > 0;
   } catch (err) {
     await transaction.rollback();
@@ -306,13 +464,20 @@ export const updateRailItems = async (
 
 // Bulk update rail orders
 export const bulkUpdateRailOrders = async (
-  railOrders: { id: number; order: number }[]
+  railOrders: { id: number; order: number }[],
+  pageName?: PageName,
+  brandId?: number | null,
 ): Promise<void> => {
   await Promise.all(
     railOrders.map(({ id, order }) =>
       RailModel.update({ order }, { where: { id } })
     )
   );
+
+  // Invalidate cache for this page
+  if (pageName) {
+    await invalidateRailsCache(brandId, pageName);
+  }
 };
 
 export const upsertRailWithItems = async (
@@ -345,6 +510,9 @@ export const upsertRailWithItems = async (
       : [];
 
     await transaction.commit();
+
+    // Invalidate cache for this brand and page
+    await invalidateRailsCache(input.brandId, input.pageName);
 
     return {
       rail: rail.toJSON() as RailDetails,

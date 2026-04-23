@@ -426,15 +426,14 @@ export const getRailsService = async (
   brandId?: number,
   userId?: number,
   pageName?: string,
-  userBrandId?: number,
 ): Promise<RailResponse[]> => {
   // Ensure brand recommended rail exists for the logged-in user's brand
-  if (userBrandId) {
-    await ensureBrandRecommendedRail(userBrandId, pageName ?? "HOME");
+  if (brandId) {
+    await ensureBrandRecommendedRail(brandId, pageName ?? "HOME");
   }
 
   // Use the user's brandId for fetching rails (not URL brandId)
-  const effectiveBrandId = userBrandId ?? brandId;
+  const effectiveBrandId = brandId ?? brandId;
 
   const raw = await findRailsForBrand(effectiveBrandId, pageName);
   const resolved = resolveBrandOverrides(raw);
@@ -449,17 +448,16 @@ export const getRailsPaginatedService = async (
   page: number = 1,
   limit: number = 10,
   railItemLimit?: number,
-  userBrandId?: number,
 ): Promise<PaginatedRailsResponse> => {
   // Ensure brand recommended rail exists for the logged-in user's brand
   // Use the user's brandId from their profile, not from URL query
-  if (userBrandId) {
-    await ensureBrandRecommendedRail(userBrandId, pageName ?? "HOME");
+  if (brandId) {
+    await ensureBrandRecommendedRail(brandId, pageName ?? "HOME");
   }
 
   // Use the user's brandId for fetching rails (not URL brandId)
   // This ensures brand_recommended rail created for userBrandId is included
-  const effectiveBrandId = userBrandId ?? brandId;
+  const effectiveBrandId = brandId;
 
   const { rows: raw, count: total } = await findRailsForBrandPaginated(
     effectiveBrandId,
@@ -1052,7 +1050,7 @@ export const reorderRailsService = async (
   const railIds = req.railOrders.map(r => r.id);
   const rails = await RailModel.findAll({
     where: { id: { [Op.in]: railIds } },
-    attributes: ['id', 'pageName'],
+    attributes: ['id', 'pageName', 'brandId'],
   });
 
   const invalidRails = rails.filter(r => r.pageName !== req.pageName);
@@ -1060,6 +1058,9 @@ export const reorderRailsService = async (
     throw new Error(`Rails ${invalidRails.map(r => r.id).join(', ')} do not belong to page ${req.pageName}`);
   }
 
-  await bulkUpdateRailOrders(req.railOrders);
+  // Get unique brandIds for cache invalidation
+  const brandIds = [...new Set(rails.map(r => r.brandId))];
+
+  await bulkUpdateRailOrders(req.railOrders, req.pageName, brandIds[0]);
   return { updated: req.railOrders.length, pageName: req.pageName };
 };
