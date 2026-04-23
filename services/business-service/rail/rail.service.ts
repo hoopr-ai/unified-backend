@@ -37,6 +37,7 @@ import {
   PlaylistModel,
   getRestrictedOwnersByBrandId,
   getOwnerIdsByNames,
+  findAlbumByTrackId,
 } from "../../persistence-service/exports";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { fn, col, where } from "sequelize";
@@ -92,10 +93,63 @@ const hydrateTracks = async (
 
   const likedSet = new Set(likedCodes);
 
-  // Transform to response format
+  // Collect all owner IDs from tracks to fetch owner details
+  const allOwnerIds: string[] = [];
+  for (const [, track] of tracksMap) {
+    if (track.ownerId && Array.isArray(track.ownerId)) {
+      allOwnerIds.push(...track.ownerId);
+    }
+  }
+  const uniqueOwnerIds = [...new Set(allOwnerIds)];
+
+  // Fetch owner details (type, subType, code)
+  const ownerTypeMap = new Map<string, string>();
+  const ownerSubTypeMap = new Map<string, string>();
+  const ownerCodeMap = new Map<string, string>();
+  if (uniqueOwnerIds.length > 0) {
+    const owners = await OwnerModel.findAll({
+      where: { id: { [Op.in]: uniqueOwnerIds } },
+      attributes: ["id", "type", "subType", "ownerCode"],
+    });
+    for (const owner of owners) {
+      if (owner.type) ownerTypeMap.set(owner.id, owner.type);
+      if (owner.subType) ownerSubTypeMap.set(owner.id, owner.subType);
+      if (owner.ownerCode) ownerCodeMap.set(owner.id, owner.ownerCode);
+    }
+  }
+
+  // Fetch album details for each track
+  const albumMap = new Map<string, { id: string; title?: string; type?: string }>();
+  const trackIds = Array.from(tracksMap.values()).map((t) => t.id);
+  const albumPromises = trackIds.map(async (trackId) => {
+    const album = await findAlbumByTrackId(trackId);
+    if (album) {
+      albumMap.set(trackId, {
+        id: album.id,
+        title: album.title,
+        type: album.type as string | undefined,
+      });
+    }
+  });
+  await Promise.all(albumPromises);
+
+  // Transform to response format (matching getAllTracks API structure)
   const result = new Map<string, unknown>();
   for (const [code, track] of tracksMap) {
-    result.set(code, {
+    // Get ownerType, ownerSubType, ownerCode from the first matching owner
+    let ownerType: string | undefined;
+    let ownerSubType: string | undefined;
+    let ownerCode: string | undefined;
+    if (track.ownerId && Array.isArray(track.ownerId)) {
+      for (const oid of track.ownerId) {
+        if (!ownerType && ownerTypeMap.get(oid)) ownerType = ownerTypeMap.get(oid);
+        if (!ownerSubType && ownerSubTypeMap.get(oid)) ownerSubType = ownerSubTypeMap.get(oid);
+        if (!ownerCode && ownerCodeMap.get(oid)) ownerCode = ownerCodeMap.get(oid);
+        if (ownerType && ownerSubType && ownerCode) break;
+      }
+    }
+
+    const trackData: Record<string, unknown> = {
       id: track.id,
       trackCode: track.trackCode,
       name: track.name,
@@ -108,7 +162,15 @@ const hydrateTracks = async (
       primaryArtists: track.primaryArtists,
       isLiked: likedSet.has(track.trackCode),
       token: 1, // Default token (skip SKU lookup for speed)
-    });
+    };
+
+    // Add optional fields if they exist (matching getAllTracks API)
+    if (ownerType) trackData.ownerType = ownerType;
+    if (ownerSubType) trackData.ownerSubType = ownerSubType;
+    if (ownerCode) trackData.ownerCode = ownerCode;
+    if (albumMap.has(track.id)) trackData.album = albumMap.get(track.id);
+
+    result.set(code, trackData);
   }
   return result;
 };
