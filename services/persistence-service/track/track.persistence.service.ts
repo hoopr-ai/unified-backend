@@ -639,3 +639,109 @@ export const getUserUsedCampaignIds = async (
 
   return usedCampaignIds;
 };
+
+// =============================================================================
+// LIGHTWEIGHT TRACK FETCH FOR RAILS (Optimized - minimal JOINs)
+// =============================================================================
+
+export interface LightweightTrack {
+  id: string;
+  trackCode: string;
+  name: string;
+  name_slug: string;
+  waveformLink: string | null;
+  mp3Link: string | null;
+  hasVocals: boolean | null;
+  trending: boolean | null;
+  hookTimings: unknown;
+  ownerId: string[] | null;
+  // Artist info (from single JOIN)
+  primaryArtists: Array<{ id: string; name: string; type: string | null }>;
+}
+
+/**
+ * Lightweight track fetch for rails - optimized for speed
+ * Only fetches essential fields with minimal JOINs (just artists)
+ * Skips: SKUs, campaigns, albums, owner lookups
+ */
+export const findTracksLightweight = async (
+  trackCodes: string[],
+  excludeOwnerIds?: string[],
+): Promise<Map<string, LightweightTrack>> => {
+  const result = new Map<string, LightweightTrack>();
+  if (trackCodes.length === 0) return result;
+
+  const whereClause: any = {
+    trackCode: { [Op.in]: trackCodes },
+    status: "ACTIVE",
+  };
+
+  // Exclude restricted owners
+  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
+    whereClause[Op.not] = {
+      ownerId: { [Op.overlap]: excludeOwnerIds },
+    };
+  }
+
+  // Single query with only artist JOIN (skip SKUs, campaigns)
+  const tracks = await TrackModel.findAll({
+    where: whereClause,
+    attributes: [
+      "id", "trackCode", "name", "name_slug",
+      "waveformLink", "mp3Link", "hasVocals", "trending",
+      "hookTimings", "ownerId"
+    ],
+    include: [
+      {
+        model: TrackArtistMappingModel,
+        as: "trackArtistMappings",
+        required: false,
+        attributes: ["artistId", "role"],
+        where: { role: "primary" },
+        include: [
+          {
+            model: ArtistModel,
+            as: "artist",
+            attributes: ["id", "name", "type"],
+            required: false,
+          },
+        ],
+      },
+    ],
+    raw: false,
+  });
+
+  // Build result map
+  for (const track of tracks) {
+    const json = track.toJSON() as any;
+    const primaryArtists: Array<{ id: string; name: string; type: string | null }> = [];
+
+    if (json.trackArtistMappings) {
+      for (const mapping of json.trackArtistMappings) {
+        if (mapping.artist) {
+          primaryArtists.push({
+            id: mapping.artist.id,
+            name: mapping.artist.name,
+            type: mapping.artist.type,
+          });
+        }
+      }
+    }
+
+    result.set(json.trackCode, {
+      id: json.id,
+      trackCode: json.trackCode,
+      name: json.name,
+      name_slug: json.name_slug,
+      waveformLink: json.waveformLink,
+      mp3Link: json.mp3Link,
+      hasVocals: json.hasVocals,
+      trending: json.trending,
+      hookTimings: json.hookTimings ?? [],
+      ownerId: json.ownerId,
+      primaryArtists,
+    });
+  }
+
+  return result;
+};

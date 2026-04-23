@@ -32,6 +32,7 @@ import {
   findTracksByFilter,
   findAllTracks,
   findTrackIdsByAlbumType,
+  findTracksLightweight,
   FilterModel,
   PlaylistModel,
   getRestrictedOwnersByBrandId,
@@ -72,9 +73,9 @@ const hydrateTracks = async (
   userId?: number,
   brandId?: number,
 ): Promise<Map<string, unknown>> => {
-  const out = new Map<string, unknown>();
-  if (trackCodes.length === 0) return out;
+  if (trackCodes.length === 0) return new Map();
 
+  // Get excluded owners
   let excludeOwnerIds: string[] | undefined;
   if (brandId) {
     excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
@@ -83,24 +84,33 @@ const hydrateTracks = async (
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
-  let likedTrackCodes: Set<string> | undefined;
-  if (userId) {
-    const liked = await getUserLikedTrackCodes(userId);
-    likedTrackCodes = new Set(liked);
-  }
+  // Get liked tracks (parallel with track fetch)
+  const [tracksMap, likedCodes] = await Promise.all([
+    findTracksLightweight(trackCodes, excludeOwnerIds),
+    userId ? getUserLikedTrackCodes(userId) : Promise.resolve([]),
+  ]);
 
-  const rawData = await findTracksByTrackCodes(
-    trackCodes,
-    1,
-    trackCodes.length,
-    undefined,
-    excludeOwnerIds,
-  );
-  const dtos = await transformRawTracksToDto(rawData.rows, likedTrackCodes);
-  for (const dto of dtos) {
-    out.set(dto.trackCode, dto);
+  const likedSet = new Set(likedCodes);
+
+  // Transform to response format
+  const result = new Map<string, unknown>();
+  for (const [code, track] of tracksMap) {
+    result.set(code, {
+      id: track.id,
+      trackCode: track.trackCode,
+      name: track.name,
+      name_slug: track.name_slug,
+      waveformLink: track.waveformLink,
+      mp3Link: track.mp3Link,
+      hasVocals: track.hasVocals,
+      trending: track.trending,
+      hookTimings: track.hookTimings,
+      primaryArtists: track.primaryArtists,
+      isLiked: likedSet.has(track.trackCode),
+      token: 1, // Default token (skip SKU lookup for speed)
+    });
   }
-  return out;
+  return result;
 };
 
 const hydrateFilters = async (
