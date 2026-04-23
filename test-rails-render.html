@@ -682,9 +682,8 @@
           <input id="reorderBrandId" type="number" placeholder="Filter by brand" />
         </div>
         <div class="form-group">
-          <label>Page Name</label>
+          <label>Page Name *</label>
           <select id="reorderPageName">
-            <option value="">-- All Pages --</option>
             <option value="HOME" selected>HOME</option>
             <option value="CHARTBUSTERS">CHARTBUSTERS</option>
             <option value="INTERNATIONAL">INTERNATIONAL</option>
@@ -1626,6 +1625,12 @@
 
     async function saveRailsReorder() {
       const railOrders = collectReorderRailOrders();
+      const pageName = document.getElementById('reorderPageName').value;
+
+      if (!pageName) {
+        setStatus('Page Name is required for reordering. Please select a page.', 'error');
+        return;
+      }
 
       if (railOrders.length === 0) {
         setStatus('No rails to reorder. Load rails first.', 'error');
@@ -1639,7 +1644,7 @@
         const res = await fetch(`${base}/rails/reorder`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ railOrders }),
+          body: JSON.stringify({ pageName, railOrders }),
         });
         const json = await res.json();
         if (!res.ok) {

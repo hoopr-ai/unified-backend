@@ -605,9 +605,8 @@
         <input type="number" id="reorderBrandId" placeholder="Filter by brand">
       </div>
       <div>
-        <label for="reorderPageName">Page Name (optional)</label>
+        <label for="reorderPageName">Page Name *</label>
         <select id="reorderPageName">
-          <option value="">-- All Pages --</option>
           <option value="HOME" selected>HOME</option>
           <option value="CHARTBUSTERS">CHARTBUSTERS</option>
           <option value="INTERNATIONAL">INTERNATIONAL</option>
@@ -1682,13 +1681,19 @@
 
     async function saveRailsOrder() {
       const railOrders = collectRailOrders();
+      const pageName = document.getElementById('reorderPageName').value;
+
+      if (!pageName) {
+        alert('Page Name is required for reordering. Please select a page.');
+        return;
+      }
 
       if (railOrders.length === 0) {
         alert('No rails to reorder. Load rails first.');
         return;
       }
 
-      const body = { railOrders };
+      const body = { pageName, railOrders };
 
       try {
         const res = await fetch(`${getBaseUrl()}/rails/reorder`, {
