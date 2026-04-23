@@ -324,6 +324,11 @@ const validateReorderRailsBody = (body: unknown): ReorderRailsRequest | string =
   if (!body || typeof body !== "object") return "Request body is required";
   const b = body as Record<string, unknown>;
 
+  // Validate pageName (required for page-wise reordering)
+  if (typeof b.pageName !== "string" || !VALID_PAGE_NAMES.has(b.pageName)) {
+    return `pageName is required and must be one of: ${Array.from(VALID_PAGE_NAMES).join(", ")}`;
+  }
+
   if (!Array.isArray(b.railOrders)) return "railOrders array is required";
 
   for (let i = 0; i < b.railOrders.length; i++) {

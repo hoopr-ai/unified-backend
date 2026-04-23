@@ -14,9 +14,9 @@ export const findRailsForBrand = async (
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
     : { brandId: null as number | null };
 
-  // Check if any of the pageNames array contains the requested pageName
+  // Filter by pageName (single value, not array)
   const pageClause = pageName
-    ? { pageNames: { [Op.contains]: [pageName] } }
+    ? { pageName }
     : {};
 
   return RailModel.findAll({
@@ -51,9 +51,9 @@ export const findRailsForBrandPaginated = async (
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
     : { brandId: null as number | null };
 
-  // Check if any of the pageNames array contains the requested pageName
+  // Filter by pageName (single value, not array)
   const pageClause = pageName
-    ? { pageNames: { [Op.contains]: [pageName] } }
+    ? { pageName }
     : {};
 
   const offset = (page - 1) * limit;
@@ -117,11 +117,26 @@ export const findRailByKeyAndBrand = async (
   });
 };
 
+export const findRailByKeyBrandAndPage = async (
+  key: string,
+  brandId: number | null,
+  pageName: PageName,
+): Promise<RailModel | null> => {
+  return RailModel.findOne({
+    where: { key, brandId: brandId ?? (null as number | null), pageName },
+  });
+};
+
 export const getMaxRailOrder = async (
   brandId: number | null,
+  pageName?: PageName,
 ): Promise<number> => {
+  const whereClause: Record<string, unknown> = { brandId: brandId ?? (null as number | null) };
+  if (pageName) {
+    whereClause.pageName = pageName;
+  }
   const row = await RailModel.findOne({
-    where: { brandId: brandId ?? (null as number | null) },
+    where: whereClause,
     order: [["order", "DESC"]],
     attributes: ["order"],
   });
@@ -130,9 +145,14 @@ export const getMaxRailOrder = async (
 
 export const getMinRailOrder = async (
   brandId: number | null,
+  pageName?: PageName,
 ): Promise<number> => {
+  const whereClause: Record<string, unknown> = { brandId: brandId ?? (null as number | null) };
+  if (pageName) {
+    whereClause.pageName = pageName;
+  }
   const row = await RailModel.findOne({
-    where: { brandId: brandId ?? (null as number | null) },
+    where: whereClause,
     order: [["order", "ASC"]],
     attributes: ["order"],
   });
@@ -146,7 +166,7 @@ export interface UpsertRailInput {
   type: string;
   subType?: string | null;
   brandId: number | null;
-  pageNames: PageName[];
+  pageName: PageName;
   sourceType: string;
   sourceConfig?: Record<string, unknown> | null;
   order: number;
@@ -303,7 +323,7 @@ export const upsertRailWithItems = async (
   try {
     const [rail] = await RailModel.upsert(input as unknown as RailDetails, {
       transaction,
-      conflictFields: ["key", "brandId"],
+      conflictFields: ["key", "brandId", "pageName"],
     });
 
     await RailItemModel.destroy({

@@ -27,6 +27,7 @@ export interface RailResponse {
   type: RailType;
   subType?: string | null;
   sourceType: RailSourceType;
+  pageName?: string;  // The page this rail belongs to
   order: number;
   items: RailItemResponse[];
   seeMore?: RailSeeMoreDescriptor | null;

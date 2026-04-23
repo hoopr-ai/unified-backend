@@ -19,6 +19,7 @@ import {
   findRailsForBrandPaginated,
   findRailByKey,
   findRailByKeyAndBrand,
+  findRailByKeyBrandAndPage,
   findRailById,
   getMaxRailOrder,
   getMinRailOrder,
@@ -278,6 +279,7 @@ const buildRailResponse = (
     type: rail.type,
     subType: rail.subType ?? null,
     sourceType: rail.sourceType,
+    pageName: rail.pageName,
     order: rail.order,
     items,
     seeMore: extractSeeMore(rail),
@@ -362,10 +364,10 @@ const ensureBrandRecommendedRail = async (
   pageName: string = "HOME",
 ): Promise<void> => {
   const railKey = `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}`;
-  console.log(`[BrandRecommend] Checking rail for brandId=${userBrandId}, key=${railKey}`);
+  console.log(`[BrandRecommend] Checking rail for brandId=${userBrandId}, key=${railKey}, pageName=${pageName}`);
 
-  // Check if the rail already exists for this brand
-  const existingRail = await findRailByKeyAndBrand(railKey, userBrandId);
+  // Check if the rail already exists for this brand and page
+  const existingRail = await findRailByKeyBrandAndPage(railKey, userBrandId, pageName as PageName);
   if (existingRail) {
     console.log(`[BrandRecommend] Rail already exists, skipping creation`);
     return;
@@ -382,8 +384,8 @@ const ensureBrandRecommendedRail = async (
     return;
   }
 
-  // Get the minimum order to place this rail at the top
-  const minOrder = await getMinRailOrder(userBrandId);
+  // Get the minimum order to place this rail at the top (page-wise)
+  const minOrder = await getMinRailOrder(userBrandId, pageName as PageName);
   const newOrder = minOrder - 1; // Place it above the current top rail
 
   // Create the rail with items
@@ -394,7 +396,7 @@ const ensureBrandRecommendedRail = async (
   }));
 
   try {
-    console.log(`[BrandRecommend] Creating rail with key=${railKey}, brandId=${userBrandId}, pageNames=[${pageName}], order=${newOrder}, items=${items.length}`);
+    console.log(`[BrandRecommend] Creating rail with key=${railKey}, brandId=${userBrandId}, pageName=${pageName}, order=${newOrder}, items=${items.length}`);
     const result = await upsertRailWithItems(
       {
         key: railKey,
@@ -403,7 +405,7 @@ const ensureBrandRecommendedRail = async (
         type: RailType.TRACKS,
         subType: null,
         brandId: userBrandId,
-        pageNames: [pageName as PageName],
+        pageName: pageName as PageName,
         sourceType: RailSourceType.MANUAL,
         sourceConfig: {
           source: "brand_recommend_ai",
@@ -509,7 +511,7 @@ export interface UpsertRailRequest {
   subType?: string | null;
   sourceType: RailSourceType;
   brandId?: number | null;
-  pageNames?: PageName[];
+  pageNames?: PageName[];  // Multiple pages = multiple rails created (one per page)
   order?: number;
   isVisible?: boolean;
   limit?: number;
@@ -554,9 +556,23 @@ export interface UpsertRailRequest {
   };
 }
 
+// Result for a single rail upsert
+export interface SingleRailUpsertResult {
+  rail: RailDetails;
+  items: RailItemDetails[];
+}
+
+// Result for upsert (can contain multiple rails if multiple pages specified)
+export interface UpsertRailsResult {
+  rails: SingleRailUpsertResult[];
+}
+
+// Legacy result type for backwards compatibility
 export interface UpsertRailResult {
   rail: RailDetails;
   items: RailItemDetails[];
+  // When multiple pages, additional rails are in this array
+  additionalRails?: SingleRailUpsertResult[];
 }
 
 const RAIL_TYPE_TO_ITEM_TYPE: Record<RailType, RailItemType> = {
@@ -877,20 +893,12 @@ export const upsertRailService = async (
   req: UpsertRailRequest,
 ): Promise<UpsertRailResult> => {
   const brandId = req.brandId ?? null;
+  const pageNames = req.pageNames ?? [PageName.HOME];
 
-  let order = req.order;
-  if (order == null) {
-    const existing = await findRailByKeyAndBrand(req.key, brandId);
-    if (existing) {
-      order = existing.order;
-    } else {
-      const maxOrder = await getMaxRailOrder(brandId);
-      order = maxOrder + 1;
-    }
-  }
-
+  // Build items once (same items for all pages)
   const items = await buildItemsForUpsert(req);
 
+  // Build sourceConfig once
   const sourceConfig: Record<string, unknown> = {};
   if (req.seeMore) sourceConfig.seeMore = req.seeMore;
   if (req.query) sourceConfig.query = req.query;
@@ -910,22 +918,50 @@ export const upsertRailService = async (
     sourceConfig.aiQuery = aiQueryConfig;
   }
 
-  return upsertRailWithItems(
-    {
-      key: req.key,
-      title: req.title,
-      subtitle: req.subtitle ?? null,
-      type: req.type,
-      subType: req.subType ?? null,
-      brandId,
-      pageNames: req.pageNames ?? [PageName.HOME],
-      sourceType: req.sourceType,
-      sourceConfig: Object.keys(sourceConfig).length ? sourceConfig : null,
-      order,
-      isVisible: req.isVisible ?? true,
-    },
-    items,
-  );
+  const finalSourceConfig = Object.keys(sourceConfig).length ? sourceConfig : null;
+
+  // Create a separate rail for each page
+  const results: SingleRailUpsertResult[] = [];
+
+  for (const pageName of pageNames) {
+    // Determine order for this page
+    let order = req.order;
+    if (order == null) {
+      const existing = await findRailByKeyBrandAndPage(req.key, brandId, pageName);
+      if (existing) {
+        order = existing.order;
+      } else {
+        const maxOrder = await getMaxRailOrder(brandId, pageName);
+        order = maxOrder + 1;
+      }
+    }
+
+    const result = await upsertRailWithItems(
+      {
+        key: req.key,
+        title: req.title,
+        subtitle: req.subtitle ?? null,
+        type: req.type,
+        subType: req.subType ?? null,
+        brandId,
+        pageName,
+        sourceType: req.sourceType,
+        sourceConfig: finalSourceConfig,
+        order,
+        isVisible: req.isVisible ?? true,
+      },
+      items,
+    );
+    results.push(result);
+  }
+
+  // Return first rail as primary result, additional rails in separate array
+  const [first, ...rest] = results;
+  return {
+    rail: first.rail,
+    items: first.items,
+    additionalRails: rest.length > 0 ? rest : undefined,
+  };
 };
 
 // -----------------------------------------------------------------------------
@@ -994,10 +1030,11 @@ export const editRailItemsService = async (
 };
 
 // -----------------------------------------------------------------------------
-// Reorder rails (bulk update order values)
+// Reorder rails (bulk update order values) - page-wise
 // -----------------------------------------------------------------------------
 
 export interface ReorderRailsRequest {
+  pageName: PageName;  // Required: which page to reorder rails for
   railOrders: Array<{
     id: number;
     order: number;
@@ -1006,10 +1043,23 @@ export interface ReorderRailsRequest {
 
 export const reorderRailsService = async (
   req: ReorderRailsRequest,
-): Promise<{ updated: number }> => {
+): Promise<{ updated: number; pageName: PageName }> => {
   if (!req.railOrders || req.railOrders.length === 0) {
-    return { updated: 0 };
+    return { updated: 0, pageName: req.pageName };
   }
+
+  // Validate that all rails belong to the specified page
+  const railIds = req.railOrders.map(r => r.id);
+  const rails = await RailModel.findAll({
+    where: { id: { [Op.in]: railIds } },
+    attributes: ['id', 'pageName'],
+  });
+
+  const invalidRails = rails.filter(r => r.pageName !== req.pageName);
+  if (invalidRails.length > 0) {
+    throw new Error(`Rails ${invalidRails.map(r => r.id).join(', ')} do not belong to page ${req.pageName}`);
+  }
+
   await bulkUpdateRailOrders(req.railOrders);
-  return { updated: req.railOrders.length };
+  return { updated: req.railOrders.length, pageName: req.pageName };
 };
