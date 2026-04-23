@@ -191,7 +191,6 @@ export const getTrackDetailsByCode = catchAsync(
 
 export const searchTracks = catchAsync(
   async (req: Request, res: Response) => {
-      console.log(`[DEBUG searchTracks] Searching for: "${req.query.q}" with limit ${req.query.limit}`);
     const query = (req.query.q as string) || "";
     const limit = parseInt(req.query.limit as string, 10) || 20;
 
