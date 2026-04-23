@@ -144,6 +144,125 @@
       font-style: italic;
       padding: 10px;
     }
+    /* Track search autocomplete styles */
+    .track-search-container {
+      position: relative;
+      width: 100%;
+    }
+    .track-search-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .track-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 250px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: none;
+    }
+    .track-search-dropdown.show {
+      display: block;
+    }
+    .track-search-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+    .track-search-item:last-child {
+      border-bottom: none;
+    }
+    .track-search-item:hover {
+      background: #f0f7ff;
+    }
+    .track-search-item.selected {
+      background: #e3f2fd;
+    }
+    .track-search-no-results {
+      padding: 12px;
+      color: #666;
+      font-style: italic;
+      text-align: center;
+    }
+    .track-search-loading {
+      padding: 12px;
+      color: #666;
+      text-align: center;
+    }
+    .selected-tracks-container {
+      margin-top: 10px;
+    }
+    .selected-tracks-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .selected-track-tag {
+      background: #28a745;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .selected-track-tag .remove-track {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .selected-track-tag .remove-track:hover {
+      color: #ffcccc;
+    }
+    /* Brand search autocomplete styles */
+    .brand-search-container {
+      position: relative;
+      width: 100%;
+    }
+    .brand-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: none;
+    }
+    .brand-search-dropdown.show {
+      display: block;
+    }
+    .brand-search-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+    .brand-search-item:hover {
+      background: #f0f7ff;
+    }
+    .brand-search-item .brand-id {
+      color: #666;
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -246,8 +365,11 @@
         </select>
       </div>
       <div>
-        <label for="postRailBrandId">Brand ID</label>
-        <input type="number" id="postRailBrandId" placeholder="Optional">
+        <label for="postRailBrandId">Brand ID (search by name or enter ID)</label>
+        <div class="brand-search-container">
+          <input type="text" id="postRailBrandId" placeholder="Search brand name or enter ID..." autocomplete="off">
+          <div id="brandSearchDropdown" class="brand-search-dropdown"></div>
+        </div>
       </div>
       <div>
         <label for="postRailPageNames">Page Names (multi-select)</label>
@@ -282,9 +404,23 @@
 
       <!-- Text input for TRACKS/LABELS/PLAYLISTS -->
       <div id="manualTextInput">
-        <label for="postRailItemCodes">Item Codes (comma-separated) *</label>
-        <input type="text" id="postRailItemCodes" placeholder="e.g., TRACK001,TRACK002,TRACK003">
-        <p class="help">Enter track codes, genre IDs, playlist codes, etc.</p>
+        <!-- Track search for TRACKS type -->
+        <div id="trackSearchSection">
+          <label>Search and Select Tracks</label>
+          <div class="track-search-container">
+            <input type="text" id="trackSearchInput" class="track-search-input" placeholder="Type track name to search..." autocomplete="off">
+            <div id="trackSearchDropdown" class="track-search-dropdown"></div>
+          </div>
+          <div class="selected-tracks-container">
+            <p class="help">Selected tracks will appear here. You can also manually enter codes below.</p>
+            <div id="selectedTracksList" class="selected-tracks-list"></div>
+          </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <label for="postRailItemCodes">Item Codes (comma-separated)</label>
+          <input type="text" id="postRailItemCodes" placeholder="e.g., TRACK001,TRACK002,TRACK003">
+          <p class="help">Enter track codes manually, or use the search above to add tracks.</p>
+        </div>
       </div>
 
       <!-- Filter dropdown for GENRES -->
@@ -896,12 +1032,7 @@
       updatePageNamesSelectedTags();
     }
 
-    // Load filters and owners on page load
-    document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(loadFilters, 500);
-      setTimeout(loadOwners, 600);
-      initPageNamesMultiSelect();
-    });
+    // Load filters and owners on page load - moved to end of script
 
     function displayResponse(containerId, status, data) {
       const container = document.getElementById(containerId);
@@ -1251,6 +1382,8 @@
       document.getElementById('postRailLimit').value = '10';
       document.getElementById('postRailIsVisible').checked = true;
       document.getElementById('postRailItemCodes').value = '';
+      document.getElementById('trackSearchInput').value = '';
+      clearSelectedTracks();
       document.getElementById('postRailFilterIds').value = '';
       document.getElementById('queryPopular').checked = false;
       document.getElementById('queryTrending').checked = false;
@@ -1712,6 +1845,276 @@
         displayResponse('reorderRailsResponse', 0, { error: err.message });
       }
     }
+
+    // =============================================================================
+    // Track Search Autocomplete
+    // =============================================================================
+    let selectedTracks = []; // Array of {trackCode, name}
+    let searchDebounceTimer = null;
+    let currentSearchIndex = -1;
+
+    // Initialize track search
+    function initTrackSearch() {
+      const searchInput = document.getElementById('trackSearchInput');
+      const dropdown = document.getElementById('trackSearchDropdown');
+
+      if (!searchInput || !dropdown) return;
+
+      // Handle input changes with debounce
+      searchInput.addEventListener('input', function() {
+        clearTimeout(searchDebounceTimer);
+        const query = this.value.trim();
+
+        if (query.length < 2) {
+          hideTrackDropdown();
+          return;
+        }
+
+        searchDebounceTimer = setTimeout(() => {
+          searchTracksApi(query);
+        }, 300);
+      });
+
+      // Handle keyboard navigation
+      searchInput.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.track-search-item');
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          currentSearchIndex = Math.min(currentSearchIndex + 1, items.length - 1);
+          updateSearchSelection(items);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          currentSearchIndex = Math.max(currentSearchIndex - 1, 0);
+          updateSearchSelection(items);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (currentSearchIndex >= 0 && items[currentSearchIndex]) {
+            const trackCode = items[currentSearchIndex].dataset.trackCode;
+            const trackName = items[currentSearchIndex].dataset.trackName;
+            addSelectedTrack(trackCode, trackName);
+          }
+        } else if (e.key === 'Escape') {
+          hideTrackDropdown();
+        }
+      });
+
+      // Hide dropdown when clicking outside
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.track-search-container')) {
+          hideTrackDropdown();
+        }
+      });
+
+      // Show dropdown on focus if there's a search term
+      searchInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 2 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+    }
+
+    // Search tracks via API
+    async function searchTracksApi(query) {
+      const dropdown = document.getElementById('trackSearchDropdown');
+
+      dropdown.innerHTML = '<div class="track-search-loading">Searching...</div>';
+      dropdown.classList.add('show');
+      currentSearchIndex = -1;
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/tracks/search?q=${encodeURIComponent(query)}&limit=20`);
+        const json = await res.json();
+
+        if (json.data && json.data.tracks && json.data.tracks.length > 0) {
+          renderTrackResults(json.data.tracks);
+        } else {
+          dropdown.innerHTML = '<div class="track-search-no-results">No tracks found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="track-search-no-results">Search error: ' + err.message + '</div>';
+      }
+    }
+
+    // Render search results in dropdown
+    function renderTrackResults(tracks) {
+      const dropdown = document.getElementById('trackSearchDropdown');
+      dropdown.innerHTML = '';
+
+      tracks.forEach(track => {
+        // Skip already selected tracks
+        if (selectedTracks.some(t => t.trackCode === track.trackCode)) {
+          return;
+        }
+
+        const item = document.createElement('div');
+        item.className = 'track-search-item';
+        item.dataset.trackCode = track.trackCode;
+        item.dataset.trackName = track.name;
+        item.textContent = track.name;
+
+        item.addEventListener('click', function() {
+          addSelectedTrack(track.trackCode, track.name);
+        });
+
+        dropdown.appendChild(item);
+      });
+
+      if (dropdown.children.length === 0) {
+        dropdown.innerHTML = '<div class="track-search-no-results">All matching tracks already selected</div>';
+      }
+    }
+
+    // Update visual selection for keyboard navigation
+    function updateSearchSelection(items) {
+      items.forEach((item, index) => {
+        item.classList.toggle('selected', index === currentSearchIndex);
+      });
+
+      // Scroll selected item into view
+      if (currentSearchIndex >= 0 && items[currentSearchIndex]) {
+        items[currentSearchIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    // Add a track to the selected list
+    function addSelectedTrack(trackCode, trackName) {
+      // Check if already selected
+      if (selectedTracks.some(t => t.trackCode === trackCode)) {
+        return;
+      }
+
+      selectedTracks.push({ trackCode, trackName });
+      updateSelectedTracksDisplay();
+      updateItemCodesFromSelection();
+
+      // Clear search and hide dropdown
+      document.getElementById('trackSearchInput').value = '';
+      hideTrackDropdown();
+    }
+
+    // Remove a track from selection
+    function removeSelectedTrack(trackCode) {
+      selectedTracks = selectedTracks.filter(t => t.trackCode !== trackCode);
+      updateSelectedTracksDisplay();
+      updateItemCodesFromSelection();
+    }
+
+    // Update the visual display of selected tracks
+    function updateSelectedTracksDisplay() {
+      const container = document.getElementById('selectedTracksList');
+      container.innerHTML = '';
+
+      selectedTracks.forEach(track => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-track-tag';
+        tag.innerHTML = `${track.trackName} <span class="remove-track" onclick="removeSelectedTrack('${track.trackCode}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    // Update the item codes input from selected tracks
+    function updateItemCodesFromSelection() {
+      const itemCodesInput = document.getElementById('postRailItemCodes');
+      const existingCodes = itemCodesInput.value.split(',').map(s => s.trim()).filter(Boolean);
+
+      // Get track codes from selection that aren't already in the input
+      const selectedCodes = selectedTracks.map(t => t.trackCode);
+
+      // Merge: keep manual entries that aren't in selected, add all selected
+      const manualOnlyCodes = existingCodes.filter(code => !selectedCodes.includes(code));
+      const allCodes = [...selectedCodes, ...manualOnlyCodes];
+
+      itemCodesInput.value = allCodes.join(',');
+    }
+
+    // Hide the dropdown
+    function hideTrackDropdown() {
+      const dropdown = document.getElementById('trackSearchDropdown');
+      dropdown.classList.remove('show');
+      currentSearchIndex = -1;
+    }
+
+    // Clear selected tracks (for use when clearing form)
+    function clearSelectedTracks() {
+      selectedTracks = [];
+      updateSelectedTracksDisplay();
+    }
+
+    // =============================================================================
+    // Brand Search Autocomplete
+    // =============================================================================
+    let brandSearchDebounceTimer = null;
+
+    function initBrandSearch() {
+      const brandInput = document.getElementById('postRailBrandId');
+      const dropdown = document.getElementById('brandSearchDropdown');
+
+      if (!brandInput || !dropdown) return;
+
+      brandInput.addEventListener('input', function() {
+        clearTimeout(brandSearchDebounceTimer);
+        const query = this.value.trim();
+
+        if (query.length < 1) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        brandSearchDebounceTimer = setTimeout(() => {
+          searchBrandsApi(query, dropdown, brandInput);
+        }, 300);
+      });
+
+      brandInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.brand-search-container')) {
+          dropdown.classList.remove('show');
+        }
+      });
+    }
+
+    async function searchBrandsApi(query, dropdown, input) {
+      dropdown.innerHTML = '<div class="track-search-loading">Searching...</div>';
+      dropdown.classList.add('show');
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/tracks/brands/search?q=${encodeURIComponent(query)}&limit=15`);
+        const json = await res.json();
+
+        if (json.data && json.data.brands && json.data.brands.length > 0) {
+          dropdown.innerHTML = '';
+          json.data.brands.forEach(brand => {
+            const item = document.createElement('div');
+            item.className = 'brand-search-item';
+            item.innerHTML = `${brand.name} <span class="brand-id">(ID: ${brand.id})</span>`;
+            item.addEventListener('click', function() {
+              input.value = brand.id;
+              dropdown.classList.remove('show');
+            });
+            dropdown.appendChild(item);
+          });
+        } else {
+          dropdown.innerHTML = '<div class="track-search-no-results">No brands found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="track-search-no-results">Search error: ' + err.message + '</div>';
+      }
+    }
+
+    // Initialize track search on DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(loadFilters, 500);
+      setTimeout(loadOwners, 600);
+      initPageNamesMultiSelect();
+      initTrackSearch();
+      initBrandSearch();
+    });
   </script>
 </body>
 </html>

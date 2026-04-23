@@ -664,6 +664,53 @@ export interface LightweightTrack {
  * Only fetches essential fields with minimal JOINs (just artists)
  * Skips: SKUs, campaigns, albums, owner lookups
  */
+// =============================================================================
+// TRACK SEARCH (for autocomplete/search by name)
+// =============================================================================
+
+export interface TrackSearchResult {
+  trackCode: string;
+  name: string;
+}
+
+/**
+ * Search tracks by name (case-insensitive partial match)
+ * Returns lightweight results for autocomplete
+ */
+export const searchTracksByName = async (
+  searchQuery: string,
+  limit: number = 20,
+): Promise<TrackSearchResult[]> => {
+    console.log(`[DEBUG searchTracksByName] Searching for: "${searchQuery}" with limit ${limit}`);
+  if (!searchQuery || searchQuery.trim().length === 0) {
+    return [];
+  }
+
+  console.log(`[DEBUG searchTracksByName] Searching for: "${searchQuery}" with limit ${limit}`);
+  const searchTerm = searchQuery.trim();
+  // Escape special characters for LIKE pattern
+  const escapedTerm = searchTerm.replace(/[%_\\]/g, '\\$&');
+
+  const tracks = await TrackModel.findAll({
+    where: {
+      status: "ACTIVE",
+      [Op.or]: [
+        { name: { [Op.iLike]: `%${escapedTerm}%` } },
+        { trackCode: { [Op.iLike]: `%${escapedTerm}%` } },
+      ],
+    },
+    attributes: ["trackCode", "name"],
+    order: [["name", "ASC"]],
+    limit,
+    raw: true,
+  });
+
+  return tracks.map((track: any) => ({
+    trackCode: track.trackCode,
+    name: track.name,
+  }));
+};
+
 export const findTracksLightweight = async (
   trackCodes: string[],
   excludeOwnerIds?: string[],

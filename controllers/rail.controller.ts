@@ -190,8 +190,6 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
 // POST /rails - Create or update a rail (upsert on key + brandId)
 export const upsertRail = catchAsync(
   async (req: AuthRequest, res: Response) => {
-    console.log("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh");
-    
     const parsed = validateUpsertBody(req.body);
     if (typeof parsed === "string") {
       sendResponse(res, {

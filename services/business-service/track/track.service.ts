@@ -23,7 +23,9 @@ import {
   getRestrictedTrackTiersByBrandId,
   getUserUsedCampaignIds,
   getOwnerIdsByNames,
+  searchTracksByName,
   type PaginatedRawFilterTracks,
+  type TrackSearchResult,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
@@ -930,4 +932,12 @@ export const getTrackDetailsByCodeService = async (
     ownerUsernameMap,
     albumName,
   );
+};
+
+// Search tracks by name for autocomplete
+export const searchTracksService = async (
+  query: string,
+  limit: number = 20,
+): Promise<TrackSearchResult[]> => {
+  return searchTracksByName(query, limit);
 };

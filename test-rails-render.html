@@ -385,6 +385,48 @@
       cursor: pointer;
       font-weight: bold;
     }
+    /* Brand search autocomplete */
+    .brand-search-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+    .brand-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 200px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+    }
+    .brand-search-dropdown.show {
+      display: block;
+    }
+    .brand-search-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #eee;
+    }
+    .brand-search-item:hover {
+      background: #f0f7ff;
+    }
+    .brand-search-item .brand-id {
+      color: #888;
+      font-size: 11px;
+    }
+    .brand-search-no-results {
+      padding: 10px;
+      color: #666;
+      font-style: italic;
+      text-align: center;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -394,7 +436,10 @@
       <label style="font-size: 12px; color: #666;">API:</label>
       <input id="apiBase" value="http://localhost:3002" placeholder="http://localhost:3002" style="width: 220px;" />
       <label style="font-size: 12px; color: #666;">brandId:</label>
-      <input id="brandId" placeholder="(optional)" style="width: 80px;" />
+      <div class="brand-search-wrapper">
+        <input id="brandId" placeholder="Search or ID" style="width: 120px;" autocomplete="off" />
+        <div id="brandSearchDropdown" class="brand-search-dropdown"></div>
+      </div>
       <label style="font-size: 12px; color: #666;">pageName:</label>
       <select id="pageName" style="width: 140px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
         <option value="">-- All --</option>
@@ -1658,6 +1703,79 @@
         setStatus('Failed to reorder rails: ' + e.message, 'error');
       }
     }
+
+    // =============================================================================
+    // Brand Search Autocomplete
+    // =============================================================================
+    let brandSearchTimer = null;
+
+    function initBrandSearch() {
+      const brandInput = document.getElementById('brandId');
+      const dropdown = document.getElementById('brandSearchDropdown');
+
+      if (!brandInput || !dropdown) return;
+
+      brandInput.addEventListener('input', function() {
+        clearTimeout(brandSearchTimer);
+        const query = this.value.trim();
+
+        if (query.length < 1) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        brandSearchTimer = setTimeout(() => {
+          searchBrandsApi(query, dropdown, brandInput);
+        }, 300);
+      });
+
+      brandInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.brand-search-wrapper')) {
+          dropdown.classList.remove('show');
+        }
+      });
+    }
+
+    async function searchBrandsApi(query, dropdown, input) {
+      const base = document.getElementById('apiBase').value.trim();
+      dropdown.innerHTML = '<div class="brand-search-no-results">Searching...</div>';
+      dropdown.classList.add('show');
+
+      try {
+        const res = await fetch(`${base}/tracks/brands/search?q=${encodeURIComponent(query)}&limit=15`);
+        const json = await res.json();
+
+        if (json.data && json.data.brands && json.data.brands.length > 0) {
+          dropdown.innerHTML = '';
+          json.data.brands.forEach(brand => {
+            const item = document.createElement('div');
+            item.className = 'brand-search-item';
+            item.innerHTML = `${brand.name} <span class="brand-id">(ID: ${brand.id})</span>`;
+            item.addEventListener('click', function() {
+              input.value = brand.id;
+              dropdown.classList.remove('show');
+              updateUrlPreview();
+            });
+            dropdown.appendChild(item);
+          });
+        } else {
+          dropdown.innerHTML = '<div class="brand-search-no-results">No brands found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="brand-search-no-results">Error: ' + err.message + '</div>';
+      }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      initBrandSearch();
+    });
   </script>
 </body>
 </html>
