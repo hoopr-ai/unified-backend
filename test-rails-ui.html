@@ -263,6 +263,107 @@
       color: #666;
       font-size: 11px;
     }
+    /* Copy Rail Modal Styles */
+    .copy-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .copy-modal {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      min-width: 400px;
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .copy-modal h3 {
+      margin: 0 0 16px 0;
+      color: #333;
+    }
+    .copy-modal-close {
+      float: right;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #666;
+    }
+    .copy-modal-close:hover {
+      color: #333;
+    }
+    .page-checkbox-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 8px;
+      margin: 12px 0;
+    }
+    .page-checkbox-item {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    .page-checkbox-item:hover {
+      background: #f5f5f5;
+    }
+    .page-checkbox-item input {
+      margin-right: 10px;
+      transform: scale(1.2);
+    }
+    .page-checkbox-item.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .copy-modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    .copy-btn {
+      background: #17a2b8;
+      color: white;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .copy-btn:hover {
+      background: #138496;
+    }
+    .rail-copy-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      background: #fafafa;
+    }
+    .rail-copy-info {
+      flex: 1;
+    }
+    .rail-copy-title {
+      font-weight: 600;
+      color: #333;
+    }
+    .rail-copy-meta {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
   </style>
 </head>
 <body>
@@ -770,6 +871,67 @@
       <button class="secondary" onclick="clearReorderEditor()">Clear</button>
     </div>
     <div id="reorderRailsResponse"></div>
+  </div>
+
+  <!-- POST /rails/copy - Copy Rail to Pages -->
+  <div class="section">
+    <h2>POST /rails/copy - Copy Rail to Other Pages</h2>
+    <p class="help">Copy a rail (with all its items) to one or more target pages. The rail will be added at the end of each target page.</p>
+
+    <div class="row">
+      <div>
+        <label for="copyRailBrandId">Brand ID (optional filter)</label>
+        <div class="brand-search-container">
+          <input type="text" id="copyRailBrandId" placeholder="Search brand or enter ID..." autocomplete="off">
+          <div id="copyBrandSearchDropdown" class="brand-search-dropdown"></div>
+        </div>
+      </div>
+      <div>
+        <label for="copyRailPageName">Source Page Name</label>
+        <select id="copyRailPageName">
+          <option value="HOME">HOME</option>
+          <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+          <option value="INTERNATIONAL">INTERNATIONAL</option>
+          <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+          <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+        </select>
+      </div>
+      <div>
+        <button class="secondary" style="margin-top: 32px;" onclick="loadRailsForCopy()">Load Rails</button>
+      </div>
+    </div>
+
+    <div id="railsCopyEditor" style="margin-top: 20px;">
+      <div class="filter-group">
+        <div class="filter-group-title">Select Rail to Copy</div>
+        <p class="help">Click "Copy" on any rail to select target pages and copy it.</p>
+        <div id="railsCopyList"></div>
+      </div>
+    </div>
+
+    <div id="copyRailResponse"></div>
+  </div>
+
+  <!-- Copy Modal (hidden by default) -->
+  <div id="copyModal" class="copy-modal-overlay" style="display: none;">
+    <div class="copy-modal">
+      <button class="copy-modal-close" onclick="closeCopyModal()">&times;</button>
+      <h3>Copy Rail to Pages</h3>
+      <p id="copyModalRailInfo" style="color: #666; margin-bottom: 12px;"></p>
+
+      <label><strong>Select Target Pages:</strong></label>
+      <div class="page-checkbox-list" id="targetPagesCheckboxes"></div>
+
+      <div style="margin-top: 10px;">
+        <button class="secondary" onclick="selectAllPages()">Select All</button>
+        <button class="secondary" onclick="deselectAllPages()">Deselect All</button>
+      </div>
+
+      <div class="copy-modal-actions">
+        <button class="secondary" onclick="closeCopyModal()">Cancel</button>
+        <button onclick="executeCopyRail()">Copy Rail</button>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -2042,13 +2204,153 @@
     }
 
     // =============================================================================
+    // Copy Rail Functionality
+    // =============================================================================
+    let railsForCopy = [];
+    let copyingRailId = null;
+    let copyingRailInfo = null;
+    const ALL_PAGE_NAMES = ['HOME', 'CHARTBUSTERS', 'INTERNATIONAL', 'REGIONAL_AND_INDIE', 'HOOPR_ORIGINALS'];
+
+    async function loadRailsForCopy() {
+      const brandId = document.getElementById('copyRailBrandId').value.trim();
+      const pageName = document.getElementById('copyRailPageName').value;
+      const container = document.getElementById('railsCopyList');
+      container.innerHTML = '<p class="filter-loading">Loading rails...</p>';
+
+      let url = `${getBaseUrl()}/rails?pageName=${pageName}`;
+      if (brandId) url += `&brandId=${brandId}`;
+
+      try {
+        const res = await fetch(url, { headers: getAuthHeaders() });
+        const data = await res.json();
+
+        if (data.data && Array.isArray(data.data)) {
+          railsForCopy = data.data;
+          railsForCopy.sort((a, b) => a.order - b.order);
+
+          container.innerHTML = '';
+          if (railsForCopy.length === 0) {
+            container.innerHTML = '<p class="help">No rails found on this page.</p>';
+            return;
+          }
+
+          railsForCopy.forEach(rail => {
+            const div = document.createElement('div');
+            div.className = 'rail-copy-item';
+            div.innerHTML = `
+              <div class="rail-copy-info">
+                <div class="rail-copy-title">${rail.title}</div>
+                <div class="rail-copy-meta">
+                  Key: ${rail.key} | ID: ${rail.id} | Type: ${rail.type} | Items: ${rail.items?.length || 0}
+                </div>
+              </div>
+              <button class="copy-btn" onclick="openCopyModal(${rail.id}, '${rail.key}', '${rail.title}', '${rail.pageName}')">Copy</button>
+            `;
+            container.appendChild(div);
+          });
+
+          displayResponse('copyRailResponse', 200, { message: `Loaded ${railsForCopy.length} rails` });
+        } else {
+          container.innerHTML = '<p class="help">Failed to load rails.</p>';
+        }
+      } catch (err) {
+        container.innerHTML = '<p class="help">Error loading rails.</p>';
+        displayResponse('copyRailResponse', 0, { error: err.message });
+      }
+    }
+
+    function openCopyModal(railId, railKey, railTitle, sourcePageName) {
+      copyingRailId = railId;
+      copyingRailInfo = { key: railKey, title: railTitle, sourcePage: sourcePageName };
+
+      document.getElementById('copyModalRailInfo').textContent = `"${railTitle}" (${railKey}) from ${sourcePageName}`;
+
+      // Build checkboxes for target pages
+      const container = document.getElementById('targetPagesCheckboxes');
+      container.innerHTML = '';
+
+      ALL_PAGE_NAMES.forEach(pageName => {
+        const isSourcePage = pageName === sourcePageName;
+        const div = document.createElement('div');
+        div.className = 'page-checkbox-item' + (isSourcePage ? ' disabled' : '');
+        div.innerHTML = `
+          <input type="checkbox" id="copyPage_${pageName}" value="${pageName}" ${isSourcePage ? 'disabled' : ''}>
+          <label for="copyPage_${pageName}">${pageName}${isSourcePage ? ' (source page)' : ''}</label>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById('copyModal').style.display = 'flex';
+    }
+
+    function closeCopyModal() {
+      document.getElementById('copyModal').style.display = 'none';
+      copyingRailId = null;
+      copyingRailInfo = null;
+    }
+
+    function selectAllPages() {
+      document.querySelectorAll('#targetPagesCheckboxes input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true);
+    }
+
+    function deselectAllPages() {
+      document.querySelectorAll('#targetPagesCheckboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+    }
+
+    async function executeCopyRail() {
+      const selectedPages = [];
+      document.querySelectorAll('#targetPagesCheckboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedPages.push(cb.value);
+      });
+
+      if (selectedPages.length === 0) {
+        alert('Please select at least one target page.');
+        return;
+      }
+
+      const brandId = document.getElementById('copyRailBrandId').value.trim();
+      const body = {
+        railId: copyingRailId,
+        targetPageNames: selectedPages,
+      };
+      if (brandId) body.brandId = parseInt(brandId);
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails/copy`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        closeCopyModal();
+        displayResponse('copyRailResponse', res.status, data);
+
+        if (res.ok && data.data) {
+          const copied = data.data.copiedTo?.length || 0;
+          const skipped = data.data.skipped?.length || 0;
+          alert(`Rail copied successfully!\n\nCopied to: ${copied} page(s)\nSkipped: ${skipped} page(s)`);
+        }
+      } catch (err) {
+        displayResponse('copyRailResponse', 0, { error: err.message });
+      }
+    }
+
+    // =============================================================================
     // Brand Search Autocomplete
     // =============================================================================
     let brandSearchDebounceTimer = null;
 
     function initBrandSearch() {
-      const brandInput = document.getElementById('postRailBrandId');
-      const dropdown = document.getElementById('brandSearchDropdown');
+      // Initialize for create rail form
+      initBrandSearchFor('postRailBrandId', 'brandSearchDropdown');
+      // Initialize for copy rail form
+      initBrandSearchFor('copyRailBrandId', 'copyBrandSearchDropdown');
+    }
+
+    function initBrandSearchFor(inputId, dropdownId) {
+      const brandInput = document.getElementById(inputId);
+      const dropdown = document.getElementById(dropdownId);
 
       if (!brandInput || !dropdown) return;
 
@@ -2074,7 +2376,7 @@
 
       document.addEventListener('click', function(e) {
         if (!e.target.closest('.brand-search-container')) {
-          dropdown.classList.remove('show');
+          document.querySelectorAll('.brand-search-dropdown').forEach(d => d.classList.remove('show'));
         }
       });
     }

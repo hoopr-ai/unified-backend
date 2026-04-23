@@ -7,6 +7,7 @@ import {
   deleteRail,
   editRailItems,
   reorderRails,
+  copyRail,
 } from "../controllers/rail.controller";
 import {
   authenticate,
@@ -23,6 +24,9 @@ router.get("/batch", optionalAuthenticate, getRailsBatch);
 
 // PATCH /rails/reorder - reorder rails (bulk update order values)
 router.patch("/reorder", authenticate, reorderRails);
+
+// POST /rails/copy - copy a rail to multiple target pages
+router.post("/copy", authenticate, copyRail);
 
 // GET /rails/:key - single rail by key
 router.get("/:key", optionalAuthenticate, getRailByKey);

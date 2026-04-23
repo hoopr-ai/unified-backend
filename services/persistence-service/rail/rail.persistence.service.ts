@@ -510,3 +510,120 @@ export const upsertRailWithItems = async (
     throw err;
   }
 };
+// Copy a rail to multiple target pages
+export interface CopyRailResult {
+  sourceRailId: number;
+  copiedTo: Array<{
+    pageName: PageName;
+    railId: number;
+    itemsCopied: number;
+  }>;
+  skipped: Array<{
+    pageName: PageName;
+    reason: string;
+  }>;
+}
+
+export const copyRailToPages = async (
+  railId: number,
+  targetPageNames: PageName[],
+  brandId?: number | null,
+): Promise<CopyRailResult> => {
+  const result: CopyRailResult = {
+    sourceRailId: railId,
+    copiedTo: [],
+    skipped: [],
+  };
+
+  // Find the source rail with its items
+  const sourceRail = await findRailById(railId);
+  if (!sourceRail) {
+    throw new Error(`Rail with ID ${railId} not found`);
+  }
+
+  const sourceItems = sourceRail.items || [];
+
+  for (const targetPageName of targetPageNames) {
+    // Skip if target page is the same as source
+    if (targetPageName === sourceRail.pageName) {
+      result.skipped.push({
+        pageName: targetPageName,
+        reason: "Same as source page",
+      });
+      continue;
+    }
+
+    // Check if rail with same key already exists on target page
+    const existingRail = await findRailByKeyBrandAndPage(
+      sourceRail.key,
+      brandId ?? sourceRail.brandId ?? null,
+      targetPageName,
+    );
+
+    if (existingRail) {
+      result.skipped.push({
+        pageName: targetPageName,
+        reason: `Rail with key "${sourceRail.key}" already exists on this page`,
+      });
+      continue;
+    }
+
+    // Get the max order for the target page to add at the end
+    const maxOrder = await getMaxRailOrder(brandId ?? sourceRail.brandId ?? null, targetPageName);
+    const newOrder = maxOrder + 1;
+
+    // Create the new rail
+    const transaction = await sequelize.transaction();
+    try {
+      const newRail = await RailModel.create(
+        {
+          key: sourceRail.key,
+          title: sourceRail.title,
+          subtitle: sourceRail.subtitle,
+          type: sourceRail.type,
+          subType: sourceRail.subType,
+          brandId: brandId ?? sourceRail.brandId,
+          pageName: targetPageName,
+          sourceType: sourceRail.sourceType,
+          sourceConfig: sourceRail.sourceConfig,
+          order: newOrder,
+          isVisible: sourceRail.isVisible,
+        } as RailDetails,
+        { transaction },
+      );
+
+      // Copy items to the new rail
+      if (sourceItems.length > 0) {
+        await RailItemModel.bulkCreate(
+          sourceItems.map((item) => ({
+            railId: newRail.id,
+            itemType: item.itemType,
+            itemCode: item.itemCode,
+            order: item.order,
+            isLocked: item.isLocked ?? false,
+          })) as unknown as RailItemDetails[],
+          { transaction },
+        );
+      }
+
+      await transaction.commit();
+
+      // Invalidate cache for the target page
+      await invalidateRailsCache(brandId ?? sourceRail.brandId, targetPageName);
+
+      result.copiedTo.push({
+        pageName: targetPageName,
+        railId: Number(newRail.id),
+        itemsCopied: sourceItems.length,
+      });
+    } catch (err) {
+      await transaction.rollback();
+      result.skipped.push({
+        pageName: targetPageName,
+        reason: `Error: ${(err as Error).message}`,
+      });
+    }
+  }
+
+  return result;
+};

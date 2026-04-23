@@ -11,6 +11,7 @@ import {
   reorderRailsService,
   ReorderRailsRequest,
 } from "../services/business-service/modules.export";
+import { copyRailToPages } from "../services/persistence-service/rail/rail.persistence.service";
 import {
   catchAsync,
   sendResponse,
@@ -361,5 +362,71 @@ export const reorderRails = catchAsync(
       data: result,
       message: ResponseMessages.ReorderRailsSuccess,
     });
+  },
+);
+
+// Validate copy rail request body
+const validateCopyRailBody = (body: unknown): { railId: number; targetPageNames: PageName[]; brandId?: number } | string => {
+  if (!body || typeof body !== "object") return "Request body is required";
+  const b = body as Record<string, unknown>;
+
+  if (typeof b.railId !== "number" || !Number.isFinite(b.railId) || b.railId <= 0) {
+    return "railId must be a positive number";
+  }
+
+  if (!Array.isArray(b.targetPageNames) || b.targetPageNames.length === 0) {
+    return "targetPageNames array is required and must not be empty";
+  }
+
+  for (const pn of b.targetPageNames) {
+    if (typeof pn !== "string" || !VALID_PAGE_NAMES.has(pn)) {
+      return `targetPageNames must contain valid values: ${Array.from(VALID_PAGE_NAMES).join(", ")}`;
+    }
+  }
+
+  const brandId = b.brandId !== undefined ? Number(b.brandId) : undefined;
+  if (brandId !== undefined && (!Number.isFinite(brandId) || brandId <= 0)) {
+    return "brandId must be a positive number if provided";
+  }
+
+  return {
+    railId: b.railId as number,
+    targetPageNames: b.targetPageNames as PageName[],
+    brandId,
+  };
+};
+
+// POST /rails/copy - Copy a rail to multiple target pages
+export const copyRail = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const parsed = validateCopyRailBody(req.body);
+    if (typeof parsed === "string") {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: parsed,
+      });
+      return;
+    }
+
+    try {
+      const result = await copyRailToPages(
+        parsed.railId,
+        parsed.targetPageNames,
+        parsed.brandId,
+      );
+
+      sendResponse(res, {
+        status: HttpStatusCode.OK,
+        data: result,
+        message: `Rail copied to ${result.copiedTo.length} page(s)${result.skipped.length > 0 ? `, ${result.skipped.length} skipped` : ""}`,
+      });
+    } catch (err) {
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: (err as Error).message,
+      });
+    }
   },
 );
