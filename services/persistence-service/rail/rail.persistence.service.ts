@@ -284,6 +284,17 @@ export const updateRailItems = async (
   }
 };
 
+// Bulk update rail orders
+export const bulkUpdateRailOrders = async (
+  railOrders: { id: number; order: number }[]
+): Promise<void> => {
+  await Promise.all(
+    railOrders.map(({ id, order }) =>
+      RailModel.update({ order }, { where: { id } })
+    )
+  );
+};
+
 export const upsertRailWithItems = async (
   input: UpsertRailInput,
   items: RailItemInput[],

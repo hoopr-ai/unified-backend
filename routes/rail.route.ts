@@ -6,6 +6,7 @@ import {
   upsertRail,
   deleteRail,
   editRailItems,
+  reorderRails,
 } from "../controllers/rail.controller";
 import {
   authenticate,
@@ -19,6 +20,9 @@ router.get("/", optionalAuthenticate, getRails);
 
 // GET /rails/batch - get rails in batches (paginated)
 router.get("/batch", optionalAuthenticate, getRailsBatch);
+
+// PATCH /rails/reorder - reorder rails (bulk update order values)
+router.patch("/reorder", authenticate, reorderRails);
 
 // GET /rails/:key - single rail by key
 router.get("/:key", optionalAuthenticate, getRailByKey);

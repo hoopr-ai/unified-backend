@@ -8,6 +8,8 @@ import {
   deleteRailService,
   editRailItemsService,
   EditRailItemsRequest,
+  reorderRailsService,
+  ReorderRailsRequest,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -313,6 +315,52 @@ export const editRailItems = catchAsync(
       status: HttpStatusCode.OK,
       data: result,
       message: ResponseMessages.EditRailItemsSuccess,
+    });
+  },
+);
+
+// Validate reorder rails request body
+const validateReorderRailsBody = (body: unknown): ReorderRailsRequest | string => {
+  if (!body || typeof body !== "object") return "Request body is required";
+  const b = body as Record<string, unknown>;
+
+  if (!Array.isArray(b.railOrders)) return "railOrders array is required";
+
+  for (let i = 0; i < b.railOrders.length; i++) {
+    const item = b.railOrders[i] as Record<string, unknown>;
+    if (!item || typeof item !== "object") {
+      return `railOrders[${i}] must be an object`;
+    }
+    if (typeof item.id !== "number" || !Number.isFinite(item.id) || item.id <= 0) {
+      return `railOrders[${i}].id must be a positive number`;
+    }
+    if (typeof item.order !== "number" || !Number.isFinite(item.order)) {
+      return `railOrders[${i}].order must be a number`;
+    }
+  }
+
+  return b as unknown as ReorderRailsRequest;
+};
+
+// PATCH /rails/reorder - Reorder rails (bulk update order values)
+export const reorderRails = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const parsed = validateReorderRailsBody(req.body);
+    if (typeof parsed === "string") {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: parsed,
+      });
+      return;
+    }
+
+    const result = await reorderRailsService(parsed);
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: ResponseMessages.ReorderRailsSuccess,
     });
   },
 );

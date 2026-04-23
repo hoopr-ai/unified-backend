@@ -395,10 +395,20 @@
       <input id="apiBase" value="http://localhost:3002" placeholder="http://localhost:3002" style="width: 220px;" />
       <label style="font-size: 12px; color: #666;">brandId:</label>
       <input id="brandId" placeholder="(optional)" style="width: 80px;" />
+      <label style="font-size: 12px; color: #666;">pageName:</label>
+      <select id="pageName" style="width: 140px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+        <option value="">-- All --</option>
+        <option value="HOME" selected>HOME</option>
+        <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+        <option value="INTERNATIONAL">INTERNATIONAL</option>
+        <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+        <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+      </select>
       <button onclick="loadRails()">Reload</button>
       <button class="secondary" onclick="togglePeek()">Raw</button>
       <button class="secondary" onclick="toggleCreateForm()" style="background: #28a745;">+ Create</button>
       <button class="secondary" onclick="toggleEditItemsForm()" style="background: #17a2b8;">Edit Items</button>
+      <button class="secondary" onclick="toggleReorderForm()" style="background: #fd7e14;">Reorder</button>
       <button class="secondary" onclick="toggleDeleteForm()" style="background: #dc3545; color: white;">Delete</button>
     </div>
   </div>
@@ -661,6 +671,46 @@
     </div>
   </div>
 
+  <!-- Reorder Rails Form -->
+  <div id="reorderForm" class="create-overlay" style="display: none;">
+    <div class="create-form" style="max-width: 900px;">
+      <h2>Reorder Rails</h2>
+      <p style="color: #666; margin-bottom: 16px;">Change the display order of rails. Load current rails, modify order numbers, and save.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Brand ID (optional)</label>
+          <input id="reorderBrandId" type="number" placeholder="Filter by brand" />
+        </div>
+        <div class="form-group">
+          <label>Page Name</label>
+          <select id="reorderPageName">
+            <option value="">-- All Pages --</option>
+            <option value="HOME" selected>HOME</option>
+            <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+            <option value="INTERNATIONAL">INTERNATIONAL</option>
+            <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+            <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+          </select>
+        </div>
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button onclick="loadRailsForReorder()" class="secondary">Load Rails</button>
+        </div>
+      </div>
+
+      <div id="reorderEditorContainer" style="margin-top: 16px; display: none;">
+        <h3 style="margin-bottom: 12px;">Rails Order</h3>
+        <p style="color: #888; font-size: 12px; margin-bottom: 12px;">Modify order numbers to change positions. Use up/down buttons for quick reordering.</p>
+        <div id="reorderRailsList" style="max-height: 400px; overflow-y: auto;"></div>
+        <button onclick="autoNumberReorderRails()" style="margin-top: 12px; background: #6c757d;">Auto-number (0, 1, 2...)</button>
+      </div>
+
+      <div class="form-actions">
+        <button onclick="saveRailsReorder()" class="primary">Save Order</button>
+        <button onclick="toggleReorderForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <div id="rails" class="rails">
     <div class="empty">
       <h3>Loading rails...</h3>
@@ -915,7 +965,11 @@
     function updateUrlPreview() {
       const base = document.getElementById('apiBase').value.trim();
       const brand = document.getElementById('brandId').value.trim();
-      const url = `${base}/rails${brand ? `?brandId=${brand}` : ''}`;
+      const pageName = document.getElementById('pageName').value;
+      const params = [];
+      if (brand) params.push(`brandId=${brand}`);
+      if (pageName) params.push(`pageName=${pageName}`);
+      const url = `${base}/rails${params.length > 0 ? `?${params.join('&')}` : ''}`;
       const prev = document.getElementById('urlPreview');
       if (prev) prev.textContent = url;
       return url;
@@ -1053,6 +1107,7 @@
 
     document.getElementById('apiBase').addEventListener('input', updateUrlPreview);
     document.getElementById('brandId').addEventListener('input', updateUrlPreview);
+    document.getElementById('pageName').addEventListener('change', updateUrlPreview);
 
     updateUrlPreview();
     loadRails();
@@ -1425,6 +1480,177 @@
         setTimeout(() => loadRailItemsForEdit(), 500);
       } catch (e) {
         setStatus('Failed to save rail items: ' + e.message, 'error');
+      }
+    }
+
+    // Reorder Rails Functions
+    let reorderRowCounter = 0;
+    let railsForReorder = [];
+
+    function toggleReorderForm() {
+      const form = document.getElementById('reorderForm');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+      if (form.style.display === 'none') {
+        document.getElementById('reorderRailsList').innerHTML = '';
+        document.getElementById('reorderEditorContainer').style.display = 'none';
+        reorderRowCounter = 0;
+        railsForReorder = [];
+      }
+    }
+
+    function createReorderRow(rail) {
+      const rowId = reorderRowCounter++;
+      const div = document.createElement('div');
+      div.id = `reorder-row-${rowId}`;
+      div.className = 'reorder-row';
+      div.dataset.railId = rail.id;
+      div.style.cssText = 'display: flex; gap: 10px; align-items: center; padding: 10px; background: #f8f9fa; border-radius: 4px; margin-bottom: 8px; border: 1px solid #e9ecef;';
+
+      const brandLabel = rail.brandId
+        ? `<span style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Brand: ${rail.brandId}</span>`
+        : '<span style="background: #d4edda; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Default</span>';
+
+      div.innerHTML = `
+        <div style="flex: 0 0 60px;">
+          <input type="number" class="rail-order" value="${rail.order}" style="width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center;">
+        </div>
+        <div style="flex: 0 0 50px; display: flex; flex-direction: column; gap: 2px;">
+          <button onclick="moveReorderRailUp(${rowId})" style="padding: 2px 6px; font-size: 10px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer;">▲</button>
+          <button onclick="moveReorderRailDown(${rowId})" style="padding: 2px 6px; font-size: 10px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer;">▼</button>
+        </div>
+        <div style="flex: 0 0 50px; text-align: center;">
+          <span style="font-weight: 600; color: #666; font-size: 12px;">#${rail.id}</span>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 600; font-size: 13px;">${escapeHtml(rail.title)}</div>
+          <div style="font-size: 11px; color: #666;">${escapeHtml(rail.key)} ${brandLabel}</div>
+        </div>
+        <div style="flex: 0 0 80px; text-align: right;">
+          <span style="font-size: 11px; color: #888;">${rail.items?.length || 0} items</span>
+        </div>
+      `;
+
+      return div;
+    }
+
+    async function loadRailsForReorder() {
+      const base = document.getElementById('apiBase').value.trim();
+      const brandId = document.getElementById('reorderBrandId').value.trim();
+      const pageName = document.getElementById('reorderPageName').value;
+
+      let url = `${base}/rails`;
+      const params = [];
+      if (brandId) params.push(`brandId=${brandId}`);
+      if (pageName) params.push(`pageName=${pageName}`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      document.getElementById('reorderRailsList').innerHTML = '';
+      reorderRowCounter = 0;
+      railsForReorder = [];
+
+      setStatus('Loading rails for reorder...', '');
+
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+
+        if (json.data && Array.isArray(json.data)) {
+          railsForReorder = json.data;
+          // Sort by current order
+          railsForReorder.sort((a, b) => a.order - b.order);
+
+          const container = document.getElementById('reorderRailsList');
+          railsForReorder.forEach(rail => {
+            container.appendChild(createReorderRow(rail));
+          });
+
+          document.getElementById('reorderEditorContainer').style.display = 'block';
+          setStatus(`Loaded ${railsForReorder.length} rails for reordering`, 'success');
+        } else {
+          setStatus('No rails found', 'error');
+        }
+      } catch (e) {
+        setStatus('Failed to load rails: ' + e.message, 'error');
+      }
+    }
+
+    function moveReorderRailUp(rowId) {
+      const row = document.getElementById(`reorder-row-${rowId}`);
+      const prevRow = row.previousElementSibling;
+      if (prevRow && prevRow.classList.contains('reorder-row')) {
+        // Swap order values
+        const currentOrder = row.querySelector('.rail-order');
+        const prevOrder = prevRow.querySelector('.rail-order');
+        const temp = currentOrder.value;
+        currentOrder.value = prevOrder.value;
+        prevOrder.value = temp;
+        // Move DOM element
+        row.parentNode.insertBefore(row, prevRow);
+      }
+    }
+
+    function moveReorderRailDown(rowId) {
+      const row = document.getElementById(`reorder-row-${rowId}`);
+      const nextRow = row.nextElementSibling;
+      if (nextRow && nextRow.classList.contains('reorder-row')) {
+        // Swap order values
+        const currentOrder = row.querySelector('.rail-order');
+        const nextOrder = nextRow.querySelector('.rail-order');
+        const temp = currentOrder.value;
+        currentOrder.value = nextOrder.value;
+        nextOrder.value = temp;
+        // Move DOM element
+        row.parentNode.insertBefore(nextRow, row);
+      }
+    }
+
+    function autoNumberReorderRails() {
+      const rows = document.querySelectorAll('.reorder-row');
+      rows.forEach((row, index) => {
+        row.querySelector('.rail-order').value = index;
+      });
+    }
+
+    function collectReorderRailOrders() {
+      const rows = document.querySelectorAll('.reorder-row');
+      const railOrders = [];
+
+      rows.forEach(row => {
+        const id = parseInt(row.dataset.railId);
+        const order = parseInt(row.querySelector('.rail-order').value) || 0;
+        railOrders.push({ id, order });
+      });
+
+      return railOrders;
+    }
+
+    async function saveRailsReorder() {
+      const railOrders = collectReorderRailOrders();
+
+      if (railOrders.length === 0) {
+        setStatus('No rails to reorder. Load rails first.', 'error');
+        return;
+      }
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Saving rails order...', '');
+
+      try {
+        const res = await fetch(`${base}/rails/reorder`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ railOrders }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rails reordered successfully!', 'success');
+        loadRails();
+        setTimeout(() => loadRailsForReorder(), 500);
+      } catch (e) {
+        setStatus('Failed to reorder rails: ' + e.message, 'error');
       }
     }
   </script>

@@ -26,6 +26,7 @@ import {
   deleteRailById,
   updateRailItems,
   UpdateRailItemInput,
+  bulkUpdateRailOrders,
   findTracksByTrackCodes,
   findTracksByFilter,
   findAllTracks,
@@ -990,4 +991,25 @@ export const editRailItemsService = async (
     railId,
     items: updatedItems,
   };
+};
+
+// -----------------------------------------------------------------------------
+// Reorder rails (bulk update order values)
+// -----------------------------------------------------------------------------
+
+export interface ReorderRailsRequest {
+  railOrders: Array<{
+    id: number;
+    order: number;
+  }>;
+}
+
+export const reorderRailsService = async (
+  req: ReorderRailsRequest,
+): Promise<{ updated: number }> => {
+  if (!req.railOrders || req.railOrders.length === 0) {
+    return { updated: 0 };
+  }
+  await bulkUpdateRailOrders(req.railOrders);
+  return { updated: req.railOrders.length };
 };

@@ -62,4 +62,5 @@ export const enum ResponseMessages {
   UpsertRailSuccess = "Rail saved successfully",
   DeleteRailSuccess = "Rail deleted successfully",
   EditRailItemsSuccess = "Rail items updated successfully",
+  ReorderRailsSuccess = "Rails reordered successfully",
 }
