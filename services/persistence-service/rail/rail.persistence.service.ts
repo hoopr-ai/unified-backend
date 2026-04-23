@@ -3,26 +3,18 @@ import { sequelize } from "../database";
 import { RailModel, RailDetails } from "./schemas/rail.schema";
 import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
 import { PageName } from "../../dto-service/modules.export";
-// import { redisClient } from "../../helper-service/redis.client";
+import { redisClient } from "../../helper-service/redis.client";
 
-// =============================================================================
-// REDIS CACHING - DISABLED FOR NOW
-// Uncomment the code below to enable Redis caching for rails
-// =============================================================================
-
-// Cache TTL in seconds (5 minutes for rails, can be invalidated on updates)
-// const RAILS_CACHE_TTL = 300;
+// Cache TTL in seconds (10 minutes for rails, auto-invalidated on updates)
+const RAILS_CACHE_TTL = 600;
 
 // Build cache key for rails query
-// const buildRailsCacheKey = (brandId?: number, pageName?: string, page?: number, limit?: number): string => {
-//   return `rails:${brandId ?? 'default'}:${pageName ?? 'all'}:${page ?? 0}:${limit ?? 0}`;
-// };
+const buildRailsCacheKey = (brandId?: number, pageName?: string, page?: number, limit?: number): string => {
+  return `rails:${brandId ?? 'default'}:${pageName ?? 'all'}:${page ?? 0}:${limit ?? 0}`;
+};
 
-// Invalidate rails cache for a brand/page (no-op when caching disabled)
-export const invalidateRailsCache = async (_brandId?: number | null, _pageName?: string): Promise<void> => {
-  // Redis caching disabled - no-op
-  // Uncomment below to enable cache invalidation:
-  /*
+// Invalidate rails cache for a brand/page
+export const invalidateRailsCache = async (brandId?: number | null, pageName?: string): Promise<void> => {
   try {
     const pattern = `rails:${brandId ?? 'default'}:${pageName ?? '*'}:*`;
     const keys = await redisClient.keys(pattern);
@@ -40,7 +32,6 @@ export const invalidateRailsCache = async (_brandId?: number | null, _pageName?:
   } catch (err) {
     console.error('[RailsCache] Error invalidating cache:', err);
   }
-  */
 };
 
 // Returns all rails visible to the given brand: brand-specific rows + defaults.
@@ -50,8 +41,7 @@ export const findRailsForBrand = async (
   brandId?: number,
   pageName?: string,
 ): Promise<RailModel[]> => {
-  // Redis caching disabled - uncomment to enable
-  /*
+  // Try cache first
   const cacheKey = buildRailsCacheKey(brandId, pageName);
   try {
     const cached = await redisClient.get(cacheKey);
@@ -68,7 +58,6 @@ export const findRailsForBrand = async (
   } catch (err) {
     console.error('[RailsCache] Error reading cache:', err);
   }
-  */
 
   const brandClause = brandId
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
@@ -113,9 +102,7 @@ export const findRailsForBrand = async (
     rail.items = itemsByRailId.get(rail.id) || [];
   }
 
-  // Redis caching disabled - uncomment to enable
-  /*
-  const cacheKey = buildRailsCacheKey(brandId, pageName);
+  // Cache the result
   try {
     const toCache = rails.map(r => {
       const json = r.toJSON() as any;
@@ -126,7 +113,6 @@ export const findRailsForBrand = async (
   } catch (err) {
     console.error('[RailsCache] Error writing cache:', err);
   }
-  */
 
   return rails;
 };
@@ -139,8 +125,7 @@ export const findRailsForBrandPaginated = async (
   page: number = 1,
   limit: number = 10,
 ): Promise<{ rows: RailModel[]; count: number }> => {
-  // Redis caching disabled - uncomment to enable
-  /*
+  // Try cache first
   const cacheKey = buildRailsCacheKey(brandId, pageName, page, limit);
   try {
     const cached = await redisClient.get(cacheKey);
@@ -158,7 +143,6 @@ export const findRailsForBrandPaginated = async (
   } catch (err) {
     console.error('[RailsCache] Error reading paginated cache:', err);
   }
-  */
 
   const brandClause = brandId
     ? { [Op.or]: [{ brandId }, { brandId: null as number | null }] }
@@ -217,9 +201,7 @@ export const findRailsForBrandPaginated = async (
     rail.items = itemsByRailId.get(rail.id) || [];
   }
 
-  // Redis caching disabled - uncomment to enable
-  /*
-  const cacheKey = buildRailsCacheKey(brandId, pageName, page, limit);
+  // Cache the result
   try {
     const toCache = {
       rows: rails.map(r => {
@@ -233,7 +215,6 @@ export const findRailsForBrandPaginated = async (
   } catch (err) {
     console.error('[RailsCache] Error writing paginated cache:', err);
   }
-  */
 
   return { rows: rails, count };
 };
