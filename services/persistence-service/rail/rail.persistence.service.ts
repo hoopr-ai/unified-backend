@@ -381,6 +381,9 @@ export const updateRailItems = async (
   railId: number,
   items: UpdateRailItemInput[],
 ): Promise<RailItemDetails[]> => {
+  // Get rail info for cache invalidation
+  const rail = await RailModel.findByPk(railId, { attributes: ['brandId', 'pageName'] });
+
   const transaction = await sequelize.transaction();
   try {
     // Get current items
@@ -435,6 +438,11 @@ export const updateRailItems = async (
     }
 
     await transaction.commit();
+
+    // Invalidate cache for this rail's brand and page
+    if (rail) {
+      await invalidateRailsCache(rail.brandId, rail.pageName);
+    }
 
     // Fetch and return updated items
     const updatedItems = await RailItemModel.findAll({
