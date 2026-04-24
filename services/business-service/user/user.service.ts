@@ -83,6 +83,8 @@ const buildLoginResponse = (
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    mobile: user.mobile ?? null,
+    countryCode: user.countryCode ?? null,
     role,
     isProfileComplete,
     expiresIn: AccessTokenExpiryInSeconds,

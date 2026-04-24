@@ -70,6 +70,8 @@ export interface LoginResponse {
   email: string;
   firstName?: string | null;
   lastName?: string | null;
+  mobile?: string | null;
+  countryCode?: string | null;
   role: string | null;
   isProfileComplete: boolean;
   expiresIn: number;
