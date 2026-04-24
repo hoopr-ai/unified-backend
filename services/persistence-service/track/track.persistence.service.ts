@@ -675,6 +675,7 @@ export interface TrackSearchResult {
   artistName: string | null;
   ownerType: string | null;
   ownerName: string | null;
+  artworkLink: string | null;
 }
 
 /**
@@ -701,7 +702,7 @@ export const searchTracksByName = async (
         { trackCode: { [Op.iLike]: `%${escapedTerm}%` } },
       ],
     },
-    attributes: ["trackCode", "name", "ownerId"],
+    attributes: ["trackCode", "name", "ownerId", "artworkLink"],
     include: [
       {
         model: TrackArtistMappingModel,
@@ -772,6 +773,7 @@ export const searchTracksByName = async (
       artistName,
       ownerType,
       ownerName,
+      artworkLink: track.artworkLink || null,
     };
   });
 };

@@ -9,6 +9,7 @@ import {
   reorderRails,
   copyRail,
   refreshRails,
+  triggerBrandRecommendation,
 } from "../controllers/rail.controller";
 import {
   authenticate,
@@ -31,6 +32,10 @@ router.post("/copy", authenticate, copyRail);
 
 // POST /rails/refresh - trigger manual rail refresh job
 router.post("/refresh", authenticate, refreshRails);
+
+// POST /rails/brand-recommend - trigger brand recommendation creation
+// If brandId is provided, creates for that brand. Otherwise processes ALL brands (1 per 5 seconds)
+router.post("/brand-recommend", authenticate, triggerBrandRecommendation);
 
 // GET /rails/:key - single rail by key
 router.get("/:key", optionalAuthenticate, getRailByKey);

@@ -13,7 +13,7 @@ import {
   copyRailService,
   CopyRailRequest,
 } from "../services/business-service/modules.export";
-import { triggerManualRefresh } from "../services/scheduler-service";
+import { triggerManualRefresh, triggerBrandRecommend } from "../services/scheduler-service";
 import {
   catchAsync,
   sendResponse,
@@ -447,6 +447,46 @@ export const refreshRails = catchAsync(
       status: HttpStatusCode.OK,
       data: { message: "Rail refresh job queued" },
       message: "Rail refresh job has been queued successfully",
+    });
+  },
+);
+
+// POST /rails/brand-recommend - Trigger brand recommendation creation
+// If brandId is provided, creates for that brand only
+// If no brandId, processes ALL brands slowly (1 per 5 seconds) in background
+export const triggerBrandRecommendation = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const { brandId, filters, limit, railKey, pageName } = req.body as {
+      brandId?: number;
+      filters?: Array<{
+        type: "language" | "assortment" | "vocals";
+        value: string[] | string;
+      }>;
+      limit?: number;
+      railKey?: string;
+      pageName?: string;
+    };
+
+    await triggerBrandRecommend({
+      brandId,
+      filters,
+      limit,
+      railKey,
+      pageName,
+    });
+
+    const message = brandId
+      ? `Brand recommendation job queued for brand ${brandId}`
+      : "Brand recommendation job queued for ALL brands (processing 1 per 5 seconds)";
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: {
+        message,
+        brandId: brandId ?? "all",
+        filters: filters ?? [],
+      },
+      message,
     });
   },
 );

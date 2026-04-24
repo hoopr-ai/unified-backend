@@ -55,8 +55,8 @@ import { transformRawTracksToDto } from "../track/track.service";
 // -----------------------------------------------------------------------------
 
 interface BrandRecommendFilter {
-  type: "assortment" | "language";
-  value: string[];
+  type: "assortment" | "language" | "vocals";
+  value: string[] | string;
 }
 
 const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
@@ -699,7 +699,7 @@ export interface UpsertRailRequest {
   };
   // AI_QUERY (tracks only): external AI call to snapshot
   aiQuery?: {
-    queryType: 'TRENDING' | 'POPULAR' | 'FILTERED' | 'NEW_AGE_ICONS';
+    queryType: 'TRENDING' | 'POPULAR' | 'FILTERED' | 'NEW_AGE_ICONS' | 'BRAND_RECOMMENDED';
     // For TRENDING/POPULAR: limit and brandId are used
     limit?: number;
     // For FILTERED: additional search parameters
@@ -707,8 +707,8 @@ export interface UpsertRailRequest {
     brandName?: string;
     userId?: string;
     filters?: Array<{
-      type: 'genre' | 'mood' | 'language' | 'usecase' | 'assortment';
-      value: string[];
+      type: 'genre' | 'mood' | 'language' | 'usecase' | 'assortment' | 'vocals';
+      value: string[] | string;
     }>;
     page?: number;
     // Legacy support: direct url/body/headers
@@ -990,6 +990,30 @@ const resolveAiQueryTracks = async (
     };
     body = JSON.stringify(requestBody);
     url = `${aiServiceUrl}/smash/curatedArtistTracks`;
+  } else if (aiQuery.queryType === 'BRAND_RECOMMENDED') {
+    // POST /smash/brandRecommend - Brand-specific recommendations with filters
+    if (!aiServiceUrl) {
+      throw new Error("AI_SERVICE_URL environment variable is required for BRAND_RECOMMENDED query");
+    }
+    if (!req.brandId) {
+      throw new Error("brandId is required for BRAND_RECOMMENDED query");
+    }
+    method = "POST";
+    headers["Content-Type"] = "application/json";
+    headers["Accept"] = "application/json, text/plain, */*";
+    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
+
+    const requestBody: Record<string, unknown> = {
+      brand_id: String(req.brandId),
+      limit: aiQuery.limit ?? 40,
+      page: aiQuery.page ?? 1,
+    };
+    // Add filters if provided (language, assortment, vocals)
+    if (aiQuery.filters && aiQuery.filters.length > 0) {
+      requestBody.filters = aiQuery.filters;
+    }
+    body = JSON.stringify(requestBody);
+    url = `${aiServiceUrl}/smash/brandRecommend`;
   } else if (aiQuery.url) {
     // Legacy: direct URL provided
     url = aiQuery.url;

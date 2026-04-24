@@ -9,7 +9,7 @@ import {
 import { findAllTracks } from "../../persistence-service/track/track.persistence.service";
 import { logger } from "../../helper-service/logger";
 
-const REFRESHABLE_AI_QUERY_TYPES = ["TRENDING", "POPULAR", "NEW_AGE_ICONS"];
+const REFRESHABLE_AI_QUERY_TYPES = ["TRENDING", "POPULAR", "NEW_AGE_ICONS", "BRAND_RECOMMENDED"];
 const BRAND_RECOMMENDED_KEY_PREFIX = "brand_recommended_";
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL;
 
@@ -30,10 +30,16 @@ export interface RefreshSummary {
   results: RefreshResult[];
 }
 
+interface AiQueryFilter {
+  type: string;
+  value: string[] | string;
+}
+
 async function fetchAiQueryTracks(
   queryType: string,
   limit: number = 40,
-  brandId?: number
+  brandId?: number,
+  filters?: AiQueryFilter[]
 ): Promise<string[]> {
   if (!AI_SERVICE_URL) {
     throw new Error("AI_SERVICE_URL not configured");
@@ -59,6 +65,21 @@ async function fetchAiQueryTracks(
     method = "POST";
     body = JSON.stringify({ limit, page: 1 });
     url = `${AI_SERVICE_URL}/smash/curatedArtistTracks`;
+  } else if (queryType === "BRAND_RECOMMENDED") {
+    if (!brandId) {
+      throw new Error("brandId is required for BRAND_RECOMMENDED query type");
+    }
+    method = "POST";
+    const requestBody: Record<string, unknown> = {
+      brand_id: String(brandId),
+      limit,
+      page: 1,
+    };
+    if (filters && filters.length > 0) {
+      requestBody.filters = filters;
+    }
+    body = JSON.stringify(requestBody);
+    url = `${AI_SERVICE_URL}/smash/brandRecommend`;
   } else {
     throw new Error(`Unsupported AI query type: ${queryType}`);
   }
@@ -204,10 +225,11 @@ async function refreshRail(rail: RailModel): Promise<RefreshResult> {
     } else {
       // AI_QUERY rail
       const config = rail.sourceConfig as {
-        aiQuery?: { queryType?: string; limit?: number };
+        aiQuery?: { queryType?: string; limit?: number; filters?: AiQueryFilter[] };
       } | null;
       const queryType = config?.aiQuery?.queryType;
       const limit = config?.aiQuery?.limit ?? 40;
+      const filters = config?.aiQuery?.filters;
 
       if (!queryType) {
         throw new Error("Missing queryType in sourceConfig");
@@ -216,7 +238,8 @@ async function refreshRail(rail: RailModel): Promise<RefreshResult> {
       trackCodes = await fetchAiQueryTracks(
         queryType,
         limit,
-        rail.brandId ?? undefined
+        rail.brandId ?? undefined,
+        filters
       );
     }
 

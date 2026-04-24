@@ -101,3 +101,12 @@ export const getRestrictedTrackTiersByBrandId = async (
   const restrictedTrackTiers = brand?.restrictedTrackTiers;
   return Array.isArray(restrictedTrackTiers) ? restrictedTrackTiers : [];
 };
+
+// Get all brand IDs for background processing
+export const getAllBrandIds = async (): Promise<number[]> => {
+  const brands = await BrandModel.findAll({
+    attributes: ["id"],
+    raw: true,
+  });
+  return brands.map((brand: { id: number }) => brand.id);
+};

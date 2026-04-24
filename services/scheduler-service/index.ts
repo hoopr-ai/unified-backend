@@ -3,7 +3,12 @@ import {
   railRefreshQueue,
   triggerManualRefresh,
 } from "./queues/rail-refresh.queue";
+import {
+  brandRecommendQueue,
+  triggerBrandRecommend,
+} from "./queues/brand-recommend.queue";
 import { railRefreshWorker } from "./workers/rail-refresh.worker";
+import { brandRecommendWorker } from "./workers/brand-recommend.worker";
 import { logger } from "../helper-service/logger";
 
 export async function initializeScheduler(): Promise<void> {
@@ -17,7 +22,9 @@ export async function initializeScheduler(): Promise<void> {
     const gracefulShutdown = async () => {
       logger.info("[Scheduler] Shutting down...");
       await railRefreshWorker.close();
+      await brandRecommendWorker.close();
       await railRefreshQueue.close();
+      await brandRecommendQueue.close();
       logger.info("[Scheduler] Shutdown complete");
     };
 
@@ -30,4 +37,6 @@ export async function initializeScheduler(): Promise<void> {
 }
 
 export { railRefreshQueue, railRefreshWorker, triggerManualRefresh };
+export { brandRecommendQueue, brandRecommendWorker, triggerBrandRecommend };
 export { executeRailRefresh } from "./jobs/rail-refresh.job";
+export { executeBrandRecommend } from "./jobs/brand-recommend.job";
