@@ -158,11 +158,22 @@ async function findRailsToRefresh(): Promise<RailModel[]> {
     return config?.query?.newOnHoopr === true;
   });
 
-  // Deduplicate rails by ID
+  // Deduplicate rails by ID first
   const allRails = [...filteredAiQueryRails, ...brandRecommendedRails, ...newOnHooprRails];
-  const uniqueRails = Array.from(new Map(allRails.map(r => [r.id, r])).values());
+  const uniqueById = Array.from(new Map(allRails.map(r => [r.id, r])).values());
 
-  return uniqueRails;
+  // Also deduplicate by (key, brandId, pageName) - keep the one with higher ID (newer)
+  // This handles cases where duplicate rails exist with same unique constraint fields
+  const uniqueByConstraint = new Map<string, RailModel>();
+  for (const rail of uniqueById) {
+    const constraintKey = `${rail.key}:${rail.brandId ?? 'null'}:${rail.pageName}`;
+    const existing = uniqueByConstraint.get(constraintKey);
+    if (!existing || rail.id > existing.id) {
+      uniqueByConstraint.set(constraintKey, rail);
+    }
+  }
+
+  return Array.from(uniqueByConstraint.values());
 }
 
 async function refreshRail(rail: RailModel): Promise<RefreshResult> {

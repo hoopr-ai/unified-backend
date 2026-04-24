@@ -522,14 +522,28 @@ const ensureBrandRecommendedRail = async (
   pageName: string = "HOME",
 ): Promise<void> => {
   const pageNameEnum = pageName as PageName;
-  // Make rail key page-specific to store different recommendations per page
-  const railKey = `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}_${pageName}`;
-  console.log(`[BrandRecommend] Checking rail for brandId=${userBrandId}, key=${railKey}, pageName=${pageName}`);
 
-  // Check if the rail already exists for this brand and page
-  const existingRail = await findRailByKeyBrandAndPage(railKey, userBrandId, pageNameEnum);
+  // Check for existing rail with any of the possible key formats
+  // Old format: brand_recommended_{brandId}
+  // New format: brand_recommended_{brandId}_{pageName}
+  const possibleKeys = [
+    `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}`,           // old format
+    `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}_${pageName}`, // new format
+  ];
+
+  console.log(`[BrandRecommend] Checking rail for brandId=${userBrandId}, pageName=${pageName}, possibleKeys=${possibleKeys.join(', ')}`);
+
+  // Check if any rail already exists for this brand and page with any key format
+  const existingRail = await RailModel.findOne({
+    where: {
+      key: { [Op.in]: possibleKeys },
+      brandId: userBrandId,
+      pageName: pageNameEnum,
+    },
+  });
+
   if (existingRail) {
-    console.log(`[BrandRecommend] Rail already exists, skipping creation`);
+    console.log(`[BrandRecommend] Rail already exists with key=${existingRail.key}, skipping creation`);
     return;
   }
 
@@ -549,6 +563,9 @@ const ensureBrandRecommendedRail = async (
   // Get the minimum order to place this rail at the top (page-wise)
   const minOrder = await getMinRailOrder(userBrandId, pageNameEnum);
   const newOrder = minOrder - 1; // Place it above the current top rail
+
+  // Use new format key with pageName for new rails
+  const railKey = `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}_${pageName}`;
 
   // Create the rail with items
   const items = trackCodes.map((trackCode, idx) => ({
