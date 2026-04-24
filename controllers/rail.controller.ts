@@ -18,6 +18,7 @@ import {
   catchAsync,
   sendResponse,
 } from "../services/helper-service/modules.export";
+import { redisClient } from "../services/helper-service/redis.client";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import {
   HttpStatusCode,
@@ -485,6 +486,46 @@ export const triggerBrandRecommendation = catchAsync(
         message,
         brandId: brandId ?? "all",
         filters: filters ?? [],
+      },
+      message,
+    });
+  },
+);
+
+// POST /rails/clear-cache - Clear Redis cache for rails
+export const clearRailsCache = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const { pattern, flushAll } = req.body as {
+      pattern?: string;
+      flushAll?: boolean;
+    };
+
+    let clearedCount = 0;
+
+    if (flushAll === true) {
+      // Flush entire Redis database
+      await redisClient.flushdb();
+      clearedCount = -1; // Indicate full flush
+    } else {
+      // Clear by pattern (default: rails:*)
+      const searchPattern = pattern || "rails:*";
+      const keys = await redisClient.keys(searchPattern);
+
+      if (keys.length > 0) {
+        await redisClient.del(...keys);
+        clearedCount = keys.length;
+      }
+    }
+
+    const message = flushAll
+      ? "Redis database flushed successfully"
+      : `Cleared ${clearedCount} cache keys`;
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: {
+        clearedCount,
+        pattern: flushAll ? "ALL" : (pattern || "rails:*"),
       },
       message,
     });

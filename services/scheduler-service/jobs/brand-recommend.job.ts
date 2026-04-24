@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { RailModel } from "../../persistence-service/rail/schemas/rail.schema";
 import { RailSourceType, RailItemType, RailType, PageName } from "../../dto-service/modules.export";
 import {
@@ -30,12 +31,16 @@ export interface BrandRecommendSummary {
 }
 
 async function fetchBrandRecommendTracks(
-  brandId: number,
+  brandId: number | null,
   filters?: BrandRecommendJobData["filters"],
   limit: number = 40
 ): Promise<string[]> {
   if (!AI_SERVICE_URL) {
     throw new Error("AI_SERVICE_URL not configured");
+  }
+
+  if (brandId == null) {
+    throw new Error("brandId is required for brand recommendations");
   }
 
   const requestBody: Record<string, unknown> = {
@@ -71,16 +76,12 @@ async function fetchBrandRecommendTracks(
 }
 
 async function createBrandRecommendRail(
-  brandId: number,
+  brandId: number | null,
   trackCodes: string[],
   filters?: BrandRecommendJobData["filters"],
   customRailKey?: string,
   pageName: string = "HOME"
 ): Promise<void> {
-  const filterSuffix = filters && filters.length > 0
-    ? `_${filters.map(f => `${f.type}`).join("_")}`
-    : "";
-  const railKey = customRailKey || `${BRAND_RECOMMENDED_AI_KEY_PREFIX}${brandId}_${pageName}${filterSuffix}`;
   const pageNameEnum = pageName as PageName;
 
   const items: RailItemInput[] = trackCodes.map((trackCode, idx) => ({
@@ -89,10 +90,32 @@ async function createBrandRecommendRail(
     order: idx,
   }));
 
-  // Find existing rail order or use a high number for placement
+  // Build key patterns to search for existing rails
+  // Old format: brand_recommended_{brandId}
+  // New format: brand_recommended_ai_{brandId}_{pageName} or brand_recommended_{brandId}_{pageName}
+  const brandIdStr = brandId ?? "default";
+  const keyPatterns = [
+    `brand_recommended_${brandIdStr}`,           // old format (no page suffix)
+    `brand_recommended_${brandIdStr}_${pageName}`, // new format without 'ai'
+    `${BRAND_RECOMMENDED_AI_KEY_PREFIX}${brandIdStr}_${pageName}`, // new format with 'ai'
+  ];
+
+  // Find existing rail by key pattern + brandId + pageName
+  // Handle null brandId properly
+  const brandIdClause = brandId != null
+    ? { brandId }
+    : { brandId: null as number | null };
+
   const existingRail = await RailModel.findOne({
-    where: { key: railKey, brandId, pageName: pageNameEnum },
+    where: {
+      key: { [Op.in]: keyPatterns },
+      ...brandIdClause,
+      pageName: pageNameEnum,
+    },
   });
+
+  // Use existing rail's key if found, otherwise create new key with pageName
+  const railKey = customRailKey || existingRail?.key || `${BRAND_RECOMMENDED_AI_KEY_PREFIX}${brandIdStr}_${pageName}`;
 
   const input: UpsertRailInput = {
     key: railKey,
@@ -102,16 +125,14 @@ async function createBrandRecommendRail(
     subType: null,
     brandId,
     pageName: pageNameEnum,
-    sourceType: RailSourceType.AI_QUERY,
+    sourceType: RailSourceType.MANUAL,
     sourceConfig: {
-      aiQuery: {
-        queryType: "BRAND_RECOMMENDED",
-        filters: filters || [],
-        limit: trackCodes.length,
-      },
+      source: "brand_recommend_ai",
+      filters: filters || [],
+      pageName,
       createdAt: new Date().toISOString(),
     },
-    order: existingRail?.order ?? 0,
+    order: existingRail?.order ?? -1,
     isVisible: true,
   };
 
@@ -119,14 +140,14 @@ async function createBrandRecommendRail(
 }
 
 async function processSingleBrand(
-  brandId: number,
+  brandId: number | null,
   filters?: BrandRecommendJobData["filters"],
   limit?: number,
   customRailKey?: string,
   pageName?: string
 ): Promise<BrandRecommendResult> {
   const result: BrandRecommendResult = {
-    brandId,
+    brandId: brandId ?? 0,
     success: false,
   };
 

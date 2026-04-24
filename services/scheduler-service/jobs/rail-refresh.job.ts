@@ -116,42 +116,8 @@ async function fetchNewOnHooprTracks(limit: number = 40): Promise<string[]> {
   return result.rows.map((track) => track.trackCode);
 }
 
-async function fetchBrandRecommendationTracks(
-  brandId: number,
-  limit: number = 40
-): Promise<string[]> {
-  if (!AI_SERVICE_URL) {
-    throw new Error("AI_SERVICE_URL not configured");
-  }
-
-  const res = await fetch(`${AI_SERVICE_URL}/smash/brandRecommend`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      brand_id: String(brandId),
-      limit,
-      page: 1,
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Brand recommend API returned ${res.status}`);
-  }
-
-  const json = (await res.json()) as {
-    data?: { tracks?: Array<{ trackCode?: string }> };
-  };
-
-  return (json?.data?.tracks ?? [])
-    .map((t) => t?.trackCode)
-    .filter((code): code is string => !!code);
-}
-
 async function findRailsToRefresh(): Promise<RailModel[]> {
-  // Find AI_QUERY rails (TRENDING, POPULAR, NEW_AGE_ICONS)
+  // Find AI_QUERY rails (TRENDING, POPULAR, NEW_AGE_ICONS) - excluding BRAND_RECOMMENDED which we handle separately
   const aiQueryRails = await RailModel.findAll({
     where: {
       sourceType: RailSourceType.AI_QUERY,
@@ -164,10 +130,12 @@ async function findRailsToRefresh(): Promise<RailModel[]> {
       aiQuery?: { queryType?: string };
     } | null;
     const queryType = config?.aiQuery?.queryType;
-    return queryType && REFRESHABLE_AI_QUERY_TYPES.includes(queryType);
+    // Exclude BRAND_RECOMMENDED - we find those by key prefix to catch both old and new format
+    return queryType && REFRESHABLE_AI_QUERY_TYPES.includes(queryType) && queryType !== "BRAND_RECOMMENDED";
   });
 
-  // Find brand recommendation rails
+  // Find brand recommendation rails by key prefix (catches both old format "brand_recommended_13"
+  // and new format "brand_recommended_ai_13_HOME")
   const brandRecommendedRails = await RailModel.findAll({
     where: {
       key: { [Op.like]: `${BRAND_RECOMMENDED_KEY_PREFIX}%` },
@@ -190,7 +158,11 @@ async function findRailsToRefresh(): Promise<RailModel[]> {
     return config?.query?.newOnHoopr === true;
   });
 
-  return [...filteredAiQueryRails, ...brandRecommendedRails, ...newOnHooprRails];
+  // Deduplicate rails by ID
+  const allRails = [...filteredAiQueryRails, ...brandRecommendedRails, ...newOnHooprRails];
+  const uniqueRails = Array.from(new Map(allRails.map(r => [r.id, r])).values());
+
+  return uniqueRails;
 }
 
 async function refreshRail(rail: RailModel): Promise<RefreshResult> {
@@ -204,15 +176,21 @@ async function refreshRail(rail: RailModel): Promise<RefreshResult> {
     let trackCodes: string[];
 
     if (rail.key.startsWith(BRAND_RECOMMENDED_KEY_PREFIX)) {
-      // Brand recommendation rail
-      const brandIdStr = rail.key.replace(BRAND_RECOMMENDED_KEY_PREFIX, "");
-      const brandId = parseInt(brandIdStr, 10);
+      // Brand recommendation rail - use brandId from the rail itself, not from the key
+      const brandId = rail.brandId;
 
-      if (isNaN(brandId)) {
-        throw new Error(`Invalid brandId in key: ${rail.key}`);
+      if (!brandId) {
+        throw new Error(`Missing brandId for brand_recommended rail: ${rail.key}`);
       }
 
-      trackCodes = await fetchBrandRecommendationTracks(brandId);
+      // Extract filters from sourceConfig if available
+      const config = rail.sourceConfig as {
+        filters?: AiQueryFilter[];
+        aiQuery?: { filters?: AiQueryFilter[] };
+      } | null;
+      const filters = config?.filters || config?.aiQuery?.filters;
+
+      trackCodes = await fetchAiQueryTracks("BRAND_RECOMMENDED", 40, brandId, filters);
     } else if (rail.sourceType === RailSourceType.QUERY) {
       // QUERY rail with newOnHoopr
       const config = rail.sourceConfig as {
