@@ -511,6 +511,106 @@
       cursor: pointer;
       font-size: 13px;
     }
+    /* Playlist search autocomplete styles */
+    .playlist-search-wrapper {
+      position: relative;
+    }
+    .playlist-search-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .playlist-search-input:focus {
+      outline: none;
+      border-color: #e91e63;
+    }
+    .playlist-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      max-height: 250px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+    }
+    .playlist-search-dropdown.show {
+      display: block;
+    }
+    .playlist-search-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #eee;
+    }
+    .playlist-search-item:last-child {
+      border-bottom: none;
+    }
+    .playlist-search-item:hover {
+      background: #f0f7ff;
+    }
+    .playlist-search-item .playlist-name {
+      font-weight: 600;
+      color: #333;
+    }
+    .playlist-search-item .playlist-code {
+      color: #888;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    .playlist-search-item .playlist-desc {
+      color: #666;
+      font-size: 11px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .playlist-search-no-results {
+      padding: 12px;
+      color: #666;
+      font-style: italic;
+      text-align: center;
+      font-size: 12px;
+    }
+    .selected-playlists {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      min-height: 30px;
+    }
+    .playlist-chip {
+      background: #e91e63;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .playlist-chip .chip-name {
+      max-width: 150px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .playlist-chip .chip-remove {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .playlist-chip .chip-remove:hover {
+      color: #ffcdd2;
+    }
   </style>
 </head>
 <body>
@@ -679,10 +779,19 @@
       <!-- Manual Section -->
       <div id="manualSection" class="form-section" style="display: none;">
         <h3>Manual Item Codes</h3>
-        <!-- Text input for TRACKS/PLAYLISTS -->
+        <!-- Text input for TRACKS -->
         <div id="manualTextInput" class="form-group">
           <label>Item Codes (comma-separated)</label>
           <textarea id="manualItemCodes" rows="3" placeholder="TRACK001, TRACK002, TRACK003"></textarea>
+        </div>
+        <!-- Playlist search autocomplete for PLAYLISTS -->
+        <div id="manualPlaylistsSelect" class="form-group" style="display: none;">
+          <label>Search and Select Playlists</label>
+          <div class="playlist-search-wrapper">
+            <input type="text" id="playlistSearchInput" class="playlist-search-input" placeholder="Type to search playlists by name..." autocomplete="off" />
+            <div id="playlistSearchDropdown" class="playlist-search-dropdown"></div>
+          </div>
+          <div id="selectedPlaylists" class="selected-playlists"></div>
         </div>
         <!-- Filter dropdown for GENRES -->
         <div id="manualGenresSelect" class="form-group" style="display: none;">
@@ -1266,7 +1375,13 @@
     // Create Rail Form Functions
     function toggleCreateForm() {
       const form = document.getElementById('createForm');
-      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+      const isHidden = form.style.display === 'none';
+      form.style.display = isHidden ? 'block' : 'none';
+
+      // Clear selected playlists when closing the form
+      if (!isHidden && typeof clearSelectedPlaylists === 'function') {
+        clearSelectedPlaylists();
+      }
     }
 
     function handleSourceTypeChange() {
@@ -1286,6 +1401,7 @@
     function toggleManualInputType(railType) {
       // Hide all manual input options
       document.getElementById('manualTextInput').style.display = 'none';
+      document.getElementById('manualPlaylistsSelect').style.display = 'none';
       document.getElementById('manualGenresSelect').style.display = 'none';
       document.getElementById('manualMoodsSelect').style.display = 'none';
       document.getElementById('manualLanguagesSelect').style.display = 'none';
@@ -1300,8 +1416,10 @@
         document.getElementById('manualLanguagesSelect').style.display = 'block';
       } else if (railType === 'LABELS') {
         document.getElementById('manualLabelsSelect').style.display = 'block';
+      } else if (railType === 'PLAYLISTS') {
+        document.getElementById('manualPlaylistsSelect').style.display = 'block';
       } else {
-        // TRACKS or PLAYLISTS - use text input
+        // TRACKS - use text input
         document.getElementById('manualTextInput').style.display = 'block';
       }
     }
@@ -1402,8 +1520,11 @@
         } else if (type === 'LABELS') {
           // For LABELS, use owner codes (from owners and/or categories selection)
           itemCodes = getSelectedOwnerCodes();
+        } else if (type === 'PLAYLISTS') {
+          // For PLAYLISTS, use selected playlists from autocomplete
+          itemCodes = getSelectedPlaylistCodes();
         } else {
-          // TRACKS or PLAYLISTS - use text input
+          // TRACKS - use text input
           const itemCodesStr = document.getElementById('manualItemCodes').value.trim();
           itemCodes = parseCommaSeparated(itemCodesStr);
         }
@@ -1882,7 +2003,135 @@
     // Initialize on page load
     document.addEventListener('DOMContentLoaded', function() {
       initBrandSearch();
+      initPlaylistSearch();
     });
+
+    // =============================================================================
+    // Playlist Search Autocomplete
+    // =============================================================================
+    let playlistSearchTimer = null;
+    let selectedPlaylistsMap = new Map(); // playlistCode -> { name, id, playlistCode }
+
+    function initPlaylistSearch() {
+      const searchInput = document.getElementById('playlistSearchInput');
+      const dropdown = document.getElementById('playlistSearchDropdown');
+
+      if (!searchInput || !dropdown) return;
+
+      searchInput.addEventListener('input', function() {
+        clearTimeout(playlistSearchTimer);
+        const query = this.value.trim();
+
+        if (query.length < 1) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        playlistSearchTimer = setTimeout(() => {
+          searchPlaylistsApi(query, dropdown);
+        }, 300);
+      });
+
+      searchInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.playlist-search-wrapper')) {
+          dropdown.classList.remove('show');
+        }
+      });
+    }
+
+    async function searchPlaylistsApi(query, dropdown) {
+      const base = document.getElementById('apiBase').value.trim();
+      dropdown.innerHTML = '<div class="playlist-search-no-results">Searching...</div>';
+      dropdown.classList.add('show');
+
+      try {
+        const res = await fetch(`${base}/playlists/search?name=${encodeURIComponent(query)}&limit=20`);
+        const json = await res.json();
+
+        if (json.data && json.data.playlists && json.data.playlists.length > 0) {
+          dropdown.innerHTML = '';
+          json.data.playlists.forEach(playlist => {
+            // Skip already selected playlists
+            if (selectedPlaylistsMap.has(playlist.playlistCode)) {
+              return;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'playlist-search-item';
+            const desc = playlist.description ? playlist.description.substring(0, 60) + (playlist.description.length > 60 ? '...' : '') : '';
+            item.innerHTML = `
+              <div>
+                <span class="playlist-name">${escapeHtml(playlist.name)}</span>
+                <span class="playlist-code">${escapeHtml(playlist.playlistCode || '')}</span>
+              </div>
+              ${desc ? `<div class="playlist-desc">${escapeHtml(desc)}</div>` : ''}
+            `;
+            item.addEventListener('click', function() {
+              selectPlaylist(playlist);
+              dropdown.classList.remove('show');
+              document.getElementById('playlistSearchInput').value = '';
+            });
+            dropdown.appendChild(item);
+          });
+
+          // If all results are already selected
+          if (dropdown.children.length === 0) {
+            dropdown.innerHTML = '<div class="playlist-search-no-results">All matching playlists already selected</div>';
+          }
+        } else {
+          dropdown.innerHTML = '<div class="playlist-search-no-results">No playlists found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="playlist-search-no-results">Error: ' + escapeHtml(err.message) + '</div>';
+      }
+    }
+
+    function selectPlaylist(playlist) {
+      if (!playlist.playlistCode) return;
+
+      selectedPlaylistsMap.set(playlist.playlistCode, {
+        id: playlist.id,
+        name: playlist.name,
+        playlistCode: playlist.playlistCode
+      });
+
+      renderSelectedPlaylists();
+    }
+
+    function removePlaylist(playlistCode) {
+      selectedPlaylistsMap.delete(playlistCode);
+      renderSelectedPlaylists();
+    }
+
+    function renderSelectedPlaylists() {
+      const container = document.getElementById('selectedPlaylists');
+      container.innerHTML = '';
+
+      selectedPlaylistsMap.forEach((playlist, code) => {
+        const chip = document.createElement('div');
+        chip.className = 'playlist-chip';
+        chip.innerHTML = `
+          <span class="chip-name" title="${escapeHtml(playlist.name)}">${escapeHtml(playlist.name)}</span>
+          <span class="chip-remove" onclick="removePlaylist('${escapeHtml(code)}')">&times;</span>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    function getSelectedPlaylistCodes() {
+      return Array.from(selectedPlaylistsMap.keys());
+    }
+
+    function clearSelectedPlaylists() {
+      selectedPlaylistsMap.clear();
+      renderSelectedPlaylists();
+    }
 
     // =============================================================================
     // Copy Rail Functionality

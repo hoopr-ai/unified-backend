@@ -90,3 +90,40 @@ export const findTracksByPlaylistId = async (
     ],
   });
 };
+
+export interface SearchPlaylistsByNameParams {
+  name: string;
+  limit?: number;
+}
+
+export interface SearchPlaylistResult {
+  id: string;
+  playlistCode: string | null;
+  name: string;
+  name_slug: string | null;
+  description: string | null;
+}
+
+export const searchPlaylistsByName = async (
+  params: SearchPlaylistsByNameParams,
+): Promise<SearchPlaylistResult[]> => {
+  const { name, limit = 20 } = params;
+
+  const rows = await PlaylistModel.findAll({
+    where: {
+      name: { [Op.iLike]: `%${name}%` },
+      status: { [Op.in]: [PlaylistStatus.ACTIVE, PlaylistStatus.HIDDEN] },
+    },
+    attributes: ["id", "playlistCode", "name", "name_slug", "description"],
+    order: [["name", "ASC"]],
+    limit,
+  });
+
+  return rows.map((playlist) => ({
+    id: playlist.id,
+    playlistCode: playlist.playlistCode || null,
+    name: playlist.name || "",
+    name_slug: playlist.name_slug || null,
+    description: playlist.description || null,
+  }));
+};
