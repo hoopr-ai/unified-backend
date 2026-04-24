@@ -92,7 +92,7 @@ async function fetchNewOnHooprTracks(limit: number = 40): Promise<string[]> {
     undefined
   );
 
-  return result.tracks.map((track) => track.trackCode);
+  return result.rows.map((track) => track.trackCode);
 }
 
 async function fetchBrandRecommendationTracks(

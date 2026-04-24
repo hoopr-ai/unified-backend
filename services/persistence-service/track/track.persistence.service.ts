@@ -3,6 +3,7 @@ import {
   TrackArtistMappingModel,
   ArtistModel,
 } from "../artists/modules.export";
+import { OwnerModel } from "../owner/modules.export";
 import {
   PaginatedRawTracks,
   RawTrackWithMappings,
@@ -671,6 +672,9 @@ export interface LightweightTrack {
 export interface TrackSearchResult {
   trackCode: string;
   name: string;
+  artistName: string | null;
+  ownerType: string | null;
+  ownerName: string | null;
 }
 
 /**
@@ -681,12 +685,10 @@ export const searchTracksByName = async (
   searchQuery: string,
   limit: number = 20,
 ): Promise<TrackSearchResult[]> => {
-    console.log(`[DEBUG searchTracksByName] Searching for: "${searchQuery}" with limit ${limit}`);
   if (!searchQuery || searchQuery.trim().length === 0) {
     return [];
   }
 
-  console.log(`[DEBUG searchTracksByName] Searching for: "${searchQuery}" with limit ${limit}`);
   const searchTerm = searchQuery.trim();
   // Escape special characters for LIKE pattern
   const escapedTerm = searchTerm.replace(/[%_\\]/g, '\\$&');
@@ -699,16 +701,79 @@ export const searchTracksByName = async (
         { trackCode: { [Op.iLike]: `%${escapedTerm}%` } },
       ],
     },
-    attributes: ["trackCode", "name"],
+    attributes: ["trackCode", "name", "ownerId"],
+    include: [
+      {
+        model: TrackArtistMappingModel,
+        as: "trackArtistMappings",
+        required: false,
+        include: [
+          {
+            model: ArtistModel,
+            as: "artist",
+            attributes: ["id", "name"],
+            required: false,
+          },
+        ],
+      },
+    ],
     order: [["name", "ASC"]],
     limit,
-    raw: true,
   });
 
-  return tracks.map((track: any) => ({
-    trackCode: track.trackCode,
-    name: track.name,
-  }));
+  // Collect all unique owner IDs
+  const allOwnerIds: string[] = [];
+  tracks.forEach((track: any) => {
+    if (track.ownerId && Array.isArray(track.ownerId) && track.ownerId.length > 0) {
+      allOwnerIds.push(track.ownerId[0]); // Get first owner
+    }
+  });
+  const uniqueOwnerIds = [...new Set(allOwnerIds)];
+
+  // Fetch owner info
+  const ownerMap = new Map<string, { type: string | null; username: string | null }>();
+  if (uniqueOwnerIds.length > 0) {
+    const owners = await OwnerModel.findAll({
+      where: { id: { [Op.in]: uniqueOwnerIds } },
+      attributes: ["id", "type", "username"],
+    });
+    owners.forEach((owner) => {
+      ownerMap.set(owner.id, {
+        type: owner.type || null,
+        username: owner.username || null,
+      });
+    });
+  }
+
+  return tracks.map((track: any) => {
+    // Get primary artist name (first artist)
+    let artistName: string | null = null;
+    if (track.trackArtistMappings && track.trackArtistMappings.length > 0) {
+      const firstMapping = track.trackArtistMappings[0];
+      if (firstMapping.artist) {
+        artistName = firstMapping.artist.name || null;
+      }
+    }
+
+    // Get owner info (first owner)
+    let ownerType: string | null = null;
+    let ownerName: string | null = null;
+    if (track.ownerId && Array.isArray(track.ownerId) && track.ownerId.length > 0) {
+      const ownerInfo = ownerMap.get(track.ownerId[0]);
+      if (ownerInfo) {
+        ownerType = ownerInfo.type;
+        ownerName = ownerInfo.username;
+      }
+    }
+
+    return {
+      trackCode: track.trackCode,
+      name: track.name,
+      artistName,
+      ownerType,
+      ownerName,
+    };
+  });
 };
 
 export const findTracksLightweight = async (

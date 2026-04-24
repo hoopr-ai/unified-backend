@@ -44,6 +44,32 @@ import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { transformRawTracksToDto } from "../track/track.service";
 
+// -----------------------------------------------------------------------------
+// Brand Recommendation Filter Configuration per Page
+// -----------------------------------------------------------------------------
+
+interface BrandRecommendFilter {
+  type: "assortment" | "language";
+  value: string[];
+}
+
+const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
+  [PageName.HOME]: [],
+  [PageName.CHARTBUSTERS]: [
+    { type: "assortment", value: ["chartbusters"] },
+    { type: "language", value: ["hindi", "punjabi"] },
+  ],
+  [PageName.INTERNATIONAL]: [
+    { type: "assortment", value: ["International"] },
+  ],
+  [PageName.REGIONAL_AND_INDIE]: [
+    { type: "assortment", value: ["Regional&Indie"] },
+  ],
+  [PageName.HOOPR_ORIGINALS]: [
+    { type: "assortment", value: ["hooproriginals"] },
+  ],
+};
+
 // Keep brand-scoped row when a default with the same key also exists
 const resolveBrandOverrides = (rails: RailModel[]): RailModel[] => {
   const byKey = new Map<string, RailModel>();
@@ -386,11 +412,22 @@ interface BrandRecommendResponse {
 
 const fetchBrandRecommendations = async (
   brandId: number,
-  limit: number = 40,
+  filters: BrandRecommendFilter[] = [],
+  limit: number = 50,
   page: number = 1,
 ): Promise<string[]> => {
   try {
-    console.log(`[BrandRecommend] Calling AI API: ${AI_SERVICE_BRAND_RECOMMEND_URL} with brand_id=${brandId}`);
+    const requestBody: Record<string, unknown> = {
+      brand_id: String(brandId),
+      limit,
+      page,
+    };
+
+    if (filters.length > 0) {
+      requestBody.filters = filters;
+    }
+
+    console.log(`[BrandRecommend] Calling AI API: ${AI_SERVICE_BRAND_RECOMMEND_URL} with brand_id=${brandId}, filters=${JSON.stringify(filters)}`);
 
     const response = await fetch(AI_SERVICE_BRAND_RECOMMEND_URL, {
       method: "POST",
@@ -398,11 +435,7 @@ const fetchBrandRecommendations = async (
         "Content-Type": "application/json",
         "Accept": "application/json, text/plain, */*",
       },
-      body: JSON.stringify({
-        brand_id: String(brandId),
-        limit,
-        page,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     console.log(`[BrandRecommend] AI API response status: ${response.status}`);
@@ -435,20 +468,24 @@ const ensureBrandRecommendedRail = async (
   userBrandId: number,
   pageName: string = "HOME",
 ): Promise<void> => {
-  const railKey = `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}`;
+  const pageNameEnum = pageName as PageName;
+  // Make rail key page-specific to store different recommendations per page
+  const railKey = `${BRAND_RECOMMENDED_RAIL_KEY_PREFIX}${userBrandId}_${pageName}`;
   console.log(`[BrandRecommend] Checking rail for brandId=${userBrandId}, key=${railKey}, pageName=${pageName}`);
 
   // Check if the rail already exists for this brand and page
-  const existingRail = await findRailByKeyBrandAndPage(railKey, userBrandId, pageName as PageName);
+  const existingRail = await findRailByKeyBrandAndPage(railKey, userBrandId, pageNameEnum);
   if (existingRail) {
     console.log(`[BrandRecommend] Rail already exists, skipping creation`);
     return;
   }
 
-  console.log(`[BrandRecommend] Rail not found, fetching from AI server: ${AI_SERVICE_BRAND_RECOMMEND_URL}`);
+  // Get page-specific filters for the recommendation API
+  const filters = PAGE_RECOMMENDATION_FILTERS[pageNameEnum] ?? [];
+  console.log(`[BrandRecommend] Rail not found, fetching from AI server: ${AI_SERVICE_BRAND_RECOMMEND_URL} with filters: ${JSON.stringify(filters)}`);
 
-  // Fetch recommendations from AI server
-  const trackCodes = await fetchBrandRecommendations(userBrandId);
+  // Fetch recommendations from AI server with page-specific filters
+  const trackCodes = await fetchBrandRecommendations(userBrandId, filters);
   console.log(`[BrandRecommend] AI server returned ${trackCodes.length} tracks`);
 
   if (trackCodes.length === 0) {
@@ -457,7 +494,7 @@ const ensureBrandRecommendedRail = async (
   }
 
   // Get the minimum order to place this rail at the top (page-wise)
-  const minOrder = await getMinRailOrder(userBrandId, pageName as PageName);
+  const minOrder = await getMinRailOrder(userBrandId, pageNameEnum);
   const newOrder = minOrder - 1; // Place it above the current top rail
 
   // Create the rail with items
@@ -477,10 +514,12 @@ const ensureBrandRecommendedRail = async (
         type: RailType.TRACKS,
         subType: null,
         brandId: userBrandId,
-        pageName: pageName as PageName,
+        pageName: pageNameEnum,
         sourceType: RailSourceType.MANUAL,
         sourceConfig: {
           source: "brand_recommend_ai",
+          pageName: pageName,
+          filters: filters,
           createdAt: new Date().toISOString(),
         },
         order: newOrder,
