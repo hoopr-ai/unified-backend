@@ -1,0 +1,2235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rails Renderer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #fafafa;
+      color: #1a1a1a;
+      padding-bottom: 80px;
+    }
+
+    /* Top bar */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar h1 { font-size: 18px; font-weight: 700; color: #e91e63; }
+    .controls {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .controls input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      width: 120px;
+    }
+    .controls button {
+      padding: 8px 16px;
+      background: #e91e63;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .controls button:hover { background: #c2185b; }
+    .controls button.secondary { background: #6c757d; }
+
+    /* Status bar */
+    .status {
+      padding: 10px 28px;
+      font-size: 13px;
+      background: #fff3cd;
+      border-bottom: 1px solid #ffeaa7;
+      display: none;
+    }
+    .status.visible { display: block; }
+    .status.error { background: #f8d7da; border-color: #f5c6cb; color: #721c24; }
+    .status.success { background: #d4edda; border-color: #c3e6cb; color: #155724; }
+
+    /* Rails container */
+    .rails { padding: 20px 28px; }
+
+    .rail { margin-bottom: 32px; }
+    .rail-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .rail-title-group { display: flex; align-items: baseline; gap: 12px; }
+    .rail-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+    .rail-subtitle {
+      font-size: 13px;
+      color: #888;
+    }
+    .rail-meta {
+      font-size: 11px;
+      color: #aaa;
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .rail-see-all {
+      font-size: 13px;
+      color: #e91e63;
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Horizontal scroll strip */
+    .rail-strip {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      padding-bottom: 8px;
+    }
+    .rail-strip::-webkit-scrollbar { height: 6px; }
+    .rail-strip::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+
+    /* Card */
+    .card {
+      flex: 0 0 auto;
+      width: 140px;
+      scroll-snap-align: start;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .card:hover { transform: translateY(-2px); }
+    .card-art {
+      width: 140px;
+      height: 140px;
+      border-radius: 8px;
+      display: flex;
+      align-items: flex-end;
+      padding: 8px;
+      color: white;
+      font-weight: 700;
+      font-size: 13px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .card-art.wide {
+      width: 220px;
+    }
+    .card-art .badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .card-art .play-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .card:hover .card-art .play-overlay { opacity: 1; }
+    .card-art .play-overlay::after {
+      content: '';
+      border-style: solid;
+      border-width: 8px 0 8px 12px;
+      border-color: transparent transparent transparent #e91e63;
+      margin-left: 3px;
+    }
+
+    .card-art .art-title {
+      z-index: 2;
+      line-height: 1.2;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    }
+    .card-info { padding: 6px 2px 0; }
+    .card-tag {
+      font-size: 10px;
+      color: #e91e63;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a1a1a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+    .card-sub {
+      font-size: 12px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+
+    /* Mood/Genre pill-style cards */
+    .card-pill .card-art {
+      width: 180px;
+      height: 90px;
+      border-radius: 10px;
+    }
+    .card-pill { width: 180px; }
+
+    /* Empty / skeleton */
+    .empty {
+      padding: 60px 20px;
+      text-align: center;
+      color: #888;
+    }
+    .empty h3 { color: #555; margin-bottom: 8px; }
+    .empty code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+
+    /* Item count pill */
+    .item-count {
+      font-size: 11px;
+      color: #aaa;
+      margin-left: 8px;
+    }
+
+    /* Modal for raw data peek */
+    .peek {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #1a1a1a;
+      color: #0f0;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      max-width: 400px;
+      max-height: 300px;
+      overflow: auto;
+      display: none;
+      z-index: 100;
+    }
+    .peek.visible { display: block; }
+    .peek pre { white-space: pre-wrap; word-break: break-all; }
+
+    /* Create Rail Form */
+    .create-form {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      margin: 20px 28px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .form-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid #eee;
+      background: #f8f9fa;
+      border-radius: 8px 8px 0 0;
+    }
+    .form-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+      line-height: 1;
+    }
+    .close-btn:hover { color: #333; }
+    .form-body { padding: 20px; }
+    .form-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .form-group {
+      flex: 1;
+      min-width: 150px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #e91e63;
+    }
+    .form-section {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .form-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: #333;
+    }
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+    }
+    .form-actions button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .form-actions button.primary {
+      background: #e91e63;
+      color: white;
+    }
+    .form-actions button.primary:hover { background: #c2185b; }
+    .form-actions button.secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+    .form-actions button.secondary:hover { background: #e0e0e0; }
+    /* Multi-select filter styles */
+    .filter-select {
+      width: 100%;
+      min-height: 100px;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .filter-select option { padding: 3px 6px; }
+    .filter-select option:checked { background: #e91e63; color: white; }
+    .selected-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+      min-height: 24px;
+    }
+    .selected-tag {
+      background: #e91e63;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .selected-tag .remove {
+      cursor: pointer;
+      font-weight: bold;
+    }
+    /* Brand search autocomplete */
+    .brand-search-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+    .brand-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      min-width: 200px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+    }
+    .brand-search-dropdown.show {
+      display: block;
+    }
+    .brand-search-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #eee;
+    }
+    .brand-search-item:hover {
+      background: #f0f7ff;
+    }
+    .brand-search-item .brand-id {
+      color: #888;
+      font-size: 11px;
+    }
+    .brand-search-no-results {
+      padding: 10px;
+      color: #666;
+      font-style: italic;
+      text-align: center;
+      font-size: 12px;
+    }
+    /* Copy Rail Button and Modal */
+    .copy-rail-btn {
+      background: #17a2b8;
+      color: white;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    .copy-rail-btn:hover {
+      background: #138496;
+    }
+    .copy-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .copy-modal {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      min-width: 350px;
+      max-width: 450px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .copy-modal h3 {
+      margin: 0 0 12px 0;
+      color: #333;
+      font-size: 16px;
+    }
+    .copy-modal-close {
+      float: right;
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: #666;
+    }
+    .page-checkbox-list {
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 6px;
+      margin: 10px 0;
+    }
+    .page-checkbox-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .page-checkbox-item:hover {
+      background: #f5f5f5;
+    }
+    .page-checkbox-item input {
+      margin-right: 8px;
+    }
+    .page-checkbox-item.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .copy-modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+    .copy-modal-actions button {
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    /* Playlist search autocomplete styles */
+    .playlist-search-wrapper {
+      position: relative;
+    }
+    .playlist-search-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .playlist-search-input:focus {
+      outline: none;
+      border-color: #e91e63;
+    }
+    .playlist-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      max-height: 250px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: none;
+    }
+    .playlist-search-dropdown.show {
+      display: block;
+    }
+    .playlist-search-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid #eee;
+    }
+    .playlist-search-item:last-child {
+      border-bottom: none;
+    }
+    .playlist-search-item:hover {
+      background: #f0f7ff;
+    }
+    .playlist-search-item .playlist-name {
+      font-weight: 600;
+      color: #333;
+    }
+    .playlist-search-item .playlist-code {
+      color: #888;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    .playlist-search-item .playlist-desc {
+      color: #666;
+      font-size: 11px;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .playlist-search-no-results {
+      padding: 12px;
+      color: #666;
+      font-style: italic;
+      text-align: center;
+      font-size: 12px;
+    }
+    .selected-playlists {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      min-height: 30px;
+    }
+    .playlist-chip {
+      background: #e91e63;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 16px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .playlist-chip .chip-name {
+      max-width: 150px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .playlist-chip .chip-remove {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      line-height: 1;
+    }
+    .playlist-chip .chip-remove:hover {
+      color: #ffcdd2;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Rails Preview</h1>
+    <div class="controls">
+      <label style="font-size: 12px; color: #666;">API:</label>
+      <input id="apiBase" value="http://localhost:3002" placeholder="http://localhost:3002" style="width: 220px;" />
+      <label style="font-size: 12px; color: #666;">brandId:</label>
+      <div class="brand-search-wrapper">
+        <input id="brandId" placeholder="Search or ID" style="width: 120px;" autocomplete="off" />
+        <div id="brandSearchDropdown" class="brand-search-dropdown"></div>
+      </div>
+      <label style="font-size: 12px; color: #666;">pageName:</label>
+      <select id="pageName" style="width: 140px; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;">
+        <option value="">-- All --</option>
+        <option value="HOME" selected>HOME</option>
+        <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+        <option value="INTERNATIONAL">INTERNATIONAL</option>
+        <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+        <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+      </select>
+      <button onclick="loadRails()">Reload</button>
+      <button class="secondary" onclick="togglePeek()">Raw</button>
+      <button class="secondary" onclick="toggleCreateForm()" style="background: #28a745;">+ Create</button>
+      <button class="secondary" onclick="toggleEditItemsForm()" style="background: #17a2b8;">Edit Items</button>
+      <button class="secondary" onclick="toggleReorderForm()" style="background: #fd7e14;">Reorder</button>
+      <button class="secondary" onclick="toggleDeleteForm()" style="background: #dc3545; color: white;">Delete</button>
+    </div>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <!-- Create Rail Form -->
+  <div id="createForm" class="create-form" style="display: none;">
+    <div class="form-header">
+      <h2>Create Rail</h2>
+      <button onclick="toggleCreateForm()" class="close-btn">&times;</button>
+    </div>
+    <div class="form-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Key *</label>
+          <input id="railKey" placeholder="unique-rail-key" />
+        </div>
+        <div class="form-group">
+          <label>Title *</label>
+          <input id="railTitle" placeholder="Rail Title" />
+        </div>
+        <div class="form-group">
+          <label>Subtitle</label>
+          <input id="railSubtitle" placeholder="Optional subtitle" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type *</label>
+          <select id="railType" onchange="handleSourceTypeChange()">
+            <option value="TRACKS">TRACKS</option>
+            <option value="GENRES">GENRES</option>
+            <option value="MOODS">MOODS</option>
+            <option value="LANGUAGES">LANGUAGES</option>
+            <option value="LABELS">LABELS</option>
+            <option value="PLAYLISTS">PLAYLISTS</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Source Type *</label>
+          <select id="railSourceType" onchange="handleSourceTypeChange()">
+            <option value="AI_QUERY">AI_QUERY</option>
+            <option value="MANUAL">MANUAL</option>
+            <option value="QUERY">QUERY</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Page Names</label>
+          <select id="railPageNames" class="filter-select" multiple style="min-height: 90px;" onchange="updateTags('railPageNames')">
+            <option value="HOME" data-name="HOME" selected>HOME</option>
+            <option value="CHARTBUSTERS" data-name="CHARTBUSTERS">CHARTBUSTERS</option>
+            <option value="INTERNATIONAL" data-name="INTERNATIONAL">INTERNATIONAL</option>
+            <option value="REGIONAL_AND_INDIE" data-name="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+            <option value="HOOPR_ORIGINALS" data-name="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+          </select>
+          <div id="railPageNamesTags" class="selected-tags"></div>
+        </div>
+        <div class="form-group">
+          <label>Order</label>
+          <input id="railOrder" type="number" placeholder="Auto" />
+        </div>
+        <div class="form-group">
+          <label>Limit</label>
+          <input id="railLimit" type="number" value="40" />
+        </div>
+      </div>
+
+      <!-- AI Query Section -->
+      <div id="aiQuerySection" class="form-section">
+        <h3>AI Query Configuration</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Query Type *</label>
+            <select id="aiQueryType" onchange="handleAiQueryTypeChange()">
+              <option value="TRENDING">Trending Songs</option>
+              <option value="POPULAR">Popular Songs</option>
+              <option value="FILTERED">AI Search with Filters</option>
+              <option value="NEW_AGE_ICONS">New Age Icons</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Auth Token (optional)</label>
+            <input id="aiToken" placeholder="Bearer token" style="width: 300px;" />
+          </div>
+        </div>
+
+        <!-- Filtered Search Options -->
+        <div id="filteredOptions" style="display: none;">
+          <div class="form-row">
+            <div class="form-group" style="flex: 2;">
+              <label>Search Query (q)</label>
+              <input id="aiSearchQ" placeholder="e.g., woman power" />
+            </div>
+            <div class="form-group">
+              <label>Brand Name</label>
+              <input id="aiBrandName" placeholder="e.g., Hoopr" />
+            </div>
+            <div class="form-group">
+              <label>User ID</label>
+              <input id="aiUserId" placeholder="e.g., 24" />
+            </div>
+          </div>
+          <div id="filtersLoadingMsg" style="color: #888; font-size: 12px; padding: 8px 0; display: none;">Loading filters...</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Genres</label>
+              <select id="aiGenres" class="filter-select" multiple onchange="updateTags('aiGenres')"></select>
+              <div id="aiGenresTags" class="selected-tags"></div>
+            </div>
+            <div class="form-group">
+              <label>Moods</label>
+              <select id="aiMoods" class="filter-select" multiple onchange="updateTags('aiMoods')"></select>
+              <div id="aiMoodsTags" class="selected-tags"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Languages</label>
+              <select id="aiLanguages" class="filter-select" multiple onchange="updateTags('aiLanguages')"></select>
+              <div id="aiLanguagesTags" class="selected-tags"></div>
+            </div>
+            <div class="form-group">
+              <label>Use Cases</label>
+              <select id="aiUsecases" class="filter-select" multiple onchange="updateTags('aiUsecases')"></select>
+              <div id="aiUsecasesTags" class="selected-tags"></div>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Assortment</label>
+              <select id="aiAssortment" class="filter-select" multiple onchange="updateTags('aiAssortment')"></select>
+              <div id="aiAssortmentTags" class="selected-tags"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Section -->
+      <div id="manualSection" class="form-section" style="display: none;">
+        <h3>Manual Item Codes</h3>
+        <!-- Text input for TRACKS -->
+        <div id="manualTextInput" class="form-group">
+          <label>Item Codes (comma-separated)</label>
+          <textarea id="manualItemCodes" rows="3" placeholder="TRACK001, TRACK002, TRACK003"></textarea>
+        </div>
+        <!-- Playlist search autocomplete for PLAYLISTS -->
+        <div id="manualPlaylistsSelect" class="form-group" style="display: none;">
+          <label>Search and Select Playlists</label>
+          <div class="playlist-search-wrapper">
+            <input type="text" id="playlistSearchInput" class="playlist-search-input" placeholder="Type to search playlists by name..." autocomplete="off" />
+            <div id="playlistSearchDropdown" class="playlist-search-dropdown"></div>
+          </div>
+          <div id="selectedPlaylists" class="selected-playlists"></div>
+        </div>
+        <!-- Filter dropdown for GENRES -->
+        <div id="manualGenresSelect" class="form-group" style="display: none;">
+          <label>Select Genres</label>
+          <select id="manualGenres" class="filter-select" multiple onchange="updateTags('manualGenres')"></select>
+          <div id="manualGenresTags" class="selected-tags"></div>
+        </div>
+        <!-- Filter dropdown for MOODS -->
+        <div id="manualMoodsSelect" class="form-group" style="display: none;">
+          <label>Select Moods</label>
+          <select id="manualMoods" class="filter-select" multiple onchange="updateTags('manualMoods')"></select>
+          <div id="manualMoodsTags" class="selected-tags"></div>
+        </div>
+        <!-- Filter dropdown for LANGUAGES -->
+        <div id="manualLanguagesSelect" class="form-group" style="display: none;">
+          <label>Select Languages</label>
+          <select id="manualLanguages" class="filter-select" multiple onchange="updateTags('manualLanguages')"></select>
+          <div id="manualLanguagesTags" class="selected-tags"></div>
+        </div>
+        <!-- Owner/Category dropdowns for LABELS -->
+        <div id="manualLabelsSelect" class="form-group" style="display: none;">
+          <div id="ownersLoadingMsg" style="color: #888; font-size: 12px; padding: 8px 0; display: none;">Loading owners...</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Select Owners</label>
+              <select id="manualOwners" class="filter-select" multiple onchange="updateTags('manualOwners')"></select>
+              <div id="manualOwnersTags" class="selected-tags"></div>
+            </div>
+            <div class="form-group">
+              <label>Select Categories</label>
+              <select id="manualCategories" class="filter-select" multiple onchange="updateTags('manualCategories')"></select>
+              <div id="manualCategoriesTags" class="selected-tags"></div>
+            </div>
+          </div>
+          <button type="button" onclick="loadOwnersData()" style="background: #6c757d; margin-top: 8px; padding: 6px 12px; font-size: 11px;">Reload Owners</button>
+        </div>
+      </div>
+
+      <!-- Query Section -->
+      <div id="querySection" class="form-section" style="display: none;">
+        <h3>Query Configuration</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label><input type="checkbox" id="queryPopular" /> Popular</label>
+          </div>
+          <div class="form-group">
+            <label><input type="checkbox" id="queryTrending" /> Trending</label>
+          </div>
+          <div class="form-group">
+            <label><input type="checkbox" id="queryNewOnHoopr" /> New on Hoopr</label>
+          </div>
+          <div class="form-group">
+            <label><input type="checkbox" id="queryCampaign" /> Campaign</label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Filter IDs (comma-separated)</label>
+            <input id="queryFilterIds" placeholder="filter-id-1, filter-id-2" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button onclick="createRail()" class="primary">Create Rail</button>
+        <button onclick="toggleCreateForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Rail Form -->
+  <div id="deleteForm" class="create-overlay" style="display: none;">
+    <div class="create-form">
+      <h2>Delete Rail</h2>
+      <p style="color: #666; margin-bottom: 16px;">Permanently delete a rail and all its items. This action cannot be undone.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Rail ID *</label>
+          <input id="deleteRailId" type="number" placeholder="e.g., 123" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button onclick="deleteRail()" style="background: #dc3545;">Delete Rail</button>
+        <button onclick="toggleDeleteForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Rail Items Form -->
+  <div id="editItemsForm" class="create-overlay" style="display: none;">
+    <div class="create-form" style="max-width: 800px;">
+      <h2>Edit Rail Items</h2>
+      <p style="color: #666; margin-bottom: 16px;">Edit rail items: delete, freeze/unfreeze, reorder, or add new items.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Rail ID *</label>
+          <input id="editItemsRailId" type="number" placeholder="e.g., 123" />
+        </div>
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button onclick="loadRailItemsForEdit()" class="secondary">Load Items</button>
+        </div>
+      </div>
+
+      <div id="itemsEditorContainer" style="margin-top: 16px; display: none;">
+        <h3 style="margin-bottom: 12px;">Rail Items</h3>
+        <p style="color: #888; font-size: 12px; margin-bottom: 12px;">Remove items to delete. Toggle "Locked" to freeze. Change order numbers to reorder. Add new items below.</p>
+        <div id="editItemsList" style="max-height: 400px; overflow-y: auto;"></div>
+        <button onclick="addEditItemRow()" style="margin-top: 12px; background: #28a745;">+ Add Item</button>
+      </div>
+
+      <div class="form-actions">
+        <button onclick="saveRailItemsEdit()" class="primary">Save Changes</button>
+        <button onclick="toggleEditItemsForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reorder Rails Form -->
+  <div id="reorderForm" class="create-overlay" style="display: none;">
+    <div class="create-form" style="max-width: 900px;">
+      <h2>Reorder Rails</h2>
+      <p style="color: #666; margin-bottom: 16px;">Change the display order of rails. Load current rails, modify order numbers, and save.</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Brand ID (optional)</label>
+          <input id="reorderBrandId" type="number" placeholder="Filter by brand" />
+        </div>
+        <div class="form-group">
+          <label>Page Name *</label>
+          <select id="reorderPageName">
+            <option value="HOME" selected>HOME</option>
+            <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+            <option value="INTERNATIONAL">INTERNATIONAL</option>
+            <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+            <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+          </select>
+        </div>
+        <div class="form-group" style="display: flex; align-items: flex-end;">
+          <button onclick="loadRailsForReorder()" class="secondary">Load Rails</button>
+        </div>
+      </div>
+
+      <div id="reorderEditorContainer" style="margin-top: 16px; display: none;">
+        <h3 style="margin-bottom: 12px;">Rails Order</h3>
+        <p style="color: #888; font-size: 12px; margin-bottom: 12px;">Modify order numbers to change positions. Use up/down buttons for quick reordering.</p>
+        <div id="reorderRailsList" style="max-height: 400px; overflow-y: auto;"></div>
+        <button onclick="autoNumberReorderRails()" style="margin-top: 12px; background: #6c757d;">Auto-number (0, 1, 2...)</button>
+      </div>
+
+      <div class="form-actions">
+        <button onclick="saveRailsReorder()" class="primary">Save Order</button>
+        <button onclick="toggleReorderForm()" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rails" class="rails">
+    <div class="empty">
+      <h3>Loading rails...</h3>
+      <p>Fetching from <code id="urlPreview"></code></p>
+    </div>
+  </div>
+
+  <div id="peek" class="peek"><pre id="peekContent"></pre></div>
+
+  <!-- Copy Rail Modal -->
+  <div id="copyModal" class="copy-modal-overlay" style="display: none;">
+    <div class="copy-modal">
+      <button class="copy-modal-close" onclick="closeCopyModal()">&times;</button>
+      <h3>Copy Rail to Other Pages</h3>
+      <p id="copyModalInfo" style="color: #666; font-size: 12px; margin-bottom: 10px;"></p>
+
+      <label style="font-size: 13px;"><strong>Select Target Pages:</strong></label>
+      <div class="page-checkbox-list" id="copyTargetPages"></div>
+
+      <div style="margin-top: 8px;">
+        <button onclick="selectAllCopyPages()" style="background: #6c757d; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;">Select All</button>
+        <button onclick="deselectAllCopyPages()" style="background: #6c757d; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;">Deselect All</button>
+      </div>
+
+      <div class="copy-modal-actions">
+        <button onclick="closeCopyModal()" style="background: #6c757d; color: white; border: none;">Cancel</button>
+        <button onclick="executeCopyRail()" style="background: #17a2b8; color: white; border: none;">Copy Rail</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ARTWORK_GRADIENTS = [
+      ['#667eea', '#764ba2'], ['#f093fb', '#f5576c'], ['#4facfe', '#00f2fe'],
+      ['#fa709a', '#fee140'], ['#30cfd0', '#330867'], ['#a8edea', '#fed6e3'],
+      ['#ff9a9e', '#fecfef'], ['#ffecd2', '#fcb69f'], ['#ff6e7f', '#bfe9ff'],
+      ['#e0c3fc', '#8ec5fc'], ['#f6d365', '#fda085'], ['#5ee7df', '#b490ca'],
+      ['#c471f5', '#fa71cd'], ['#48c6ef', '#6f86d6'], ['#f77062', '#fe5196'],
+      ['#43cea2', '#185a9d'], ['#ff5858', '#f09819'], ['#1a2980', '#26d0ce'],
+    ];
+
+    function hashString(s) {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      return Math.abs(h);
+    }
+
+    function gradientFor(seed) {
+      const [a, b] = ARTWORK_GRADIENTS[hashString(seed) % ARTWORK_GRADIENTS.length];
+      return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[c]);
+    }
+
+    function setStatus(msg, type) {
+      const el = document.getElementById('status');
+      el.className = 'status visible ' + (type || '');
+      el.textContent = msg;
+      if (type === 'success') {
+        setTimeout(() => { el.className = 'status'; }, 2500);
+      }
+    }
+
+    // Filter data storage and loading
+    let filtersData = null;
+
+    async function loadFiltersData() {
+      const msgEl = document.getElementById('filtersLoadingMsg');
+      if (msgEl) msgEl.style.display = 'block';
+
+      try {
+        const base = document.getElementById('apiBase').value.trim();
+        const res = await fetch(`${base}/filters`);
+        const json = await res.json();
+
+        if (json.data && json.data.filters) {
+          filtersData = json.data.filters;
+          populateFilterDropdowns();
+        }
+        if (msgEl) msgEl.style.display = 'none';
+      } catch (e) {
+        if (msgEl) {
+          msgEl.textContent = 'Failed to load filters';
+          msgEl.style.color = '#dc3545';
+        }
+      }
+    }
+
+    // Handle multi-select click to toggle selection without requiring Ctrl key
+    function handleMultiSelectClick(e) {
+      const select = e.currentTarget;
+      const option = e.target;
+      if (option.tagName !== 'OPTION') return;
+      e.preventDefault();
+      option.selected = !option.selected;
+      select.dispatchEvent(new Event('change'));
+    }
+
+    function populateFilterDropdowns() {
+      if (!filtersData) return;
+
+      const mappings = [
+        // AI Query filters
+        { id: 'aiGenres', key: 'genre' },
+        { id: 'aiMoods', key: 'mood' },
+        { id: 'aiLanguages', key: 'language' },
+        { id: 'aiUsecases', key: 'usecase' },
+        { id: 'aiAssortment', key: 'assortment' },
+        // Manual source filters (LABELS uses owner dropdowns instead)
+        { id: 'manualGenres', key: 'genre' },
+        { id: 'manualMoods', key: 'mood' },
+        { id: 'manualLanguages', key: 'language' }
+      ];
+
+      mappings.forEach(({ id, key }) => {
+        const select = document.getElementById(id);
+        if (!select) return;
+
+        const items = filtersData[key] || [];
+        select.innerHTML = '';
+        items.sort((a, b) => (a.rank || 999) - (b.rank || 999));
+
+        items.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = item.id;
+          opt.textContent = item.name;
+          opt.dataset.name = item.name;
+          select.appendChild(opt);
+        });
+
+        // Add click handler for toggle selection without Ctrl key
+        select.removeEventListener('mousedown', handleMultiSelectClick);
+        select.addEventListener('mousedown', handleMultiSelectClick);
+      });
+    }
+
+    function updateTags(selectId) {
+      const select = document.getElementById(selectId);
+      const container = document.getElementById(selectId + 'Tags');
+      if (!container) return;
+
+      container.innerHTML = '';
+      Array.from(select.selectedOptions).forEach(opt => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${opt.dataset.name || opt.textContent} <span class="remove" onclick="deselectOption('${selectId}', '${opt.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function deselectOption(selectId, value) {
+      const select = document.getElementById(selectId);
+      const opt = select.querySelector(`option[value="${value}"]`);
+      if (opt) opt.selected = false;
+      updateTags(selectId);
+    }
+
+    function getSelectedNames(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return [];
+      return Array.from(select.selectedOptions).map(opt => opt.dataset.name || opt.textContent);
+    }
+
+    // Owner data storage and loading
+    let ownersData = null;
+
+    async function loadOwnersData() {
+      const msgEl = document.getElementById('ownersLoadingMsg');
+      if (msgEl) {
+        msgEl.style.display = 'block';
+        msgEl.textContent = 'Loading owners...';
+        msgEl.style.color = '#888';
+      }
+
+      try {
+        const base = document.getElementById('apiBase').value.trim();
+        const res = await fetch(`${base}/owners?limit=200`);
+        const json = await res.json();
+
+        if (json.data && json.data.owners) {
+          ownersData = json.data.owners;
+          populateOwnerDropdowns();
+        }
+        if (msgEl) msgEl.style.display = 'none';
+      } catch (e) {
+        if (msgEl) {
+          msgEl.textContent = 'Failed to load owners';
+          msgEl.style.color = '#dc3545';
+        }
+      }
+    }
+
+    function populateOwnerDropdowns() {
+      if (!ownersData) return;
+
+      // Populate owners dropdown
+      const ownersSelect = document.getElementById('manualOwners');
+      if (ownersSelect) {
+        ownersSelect.innerHTML = '';
+        ownersData.forEach(owner => {
+          const opt = document.createElement('option');
+          opt.value = owner.ownerCode;
+          opt.textContent = owner.name || owner.ownerCode;
+          opt.dataset.name = owner.name || owner.ownerCode;
+          opt.dataset.category = owner.category || '';
+          ownersSelect.appendChild(opt);
+        });
+
+        ownersSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        ownersSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+
+      // Extract unique categories and populate categories dropdown
+      const categoriesSelect = document.getElementById('manualCategories');
+      if (categoriesSelect) {
+        categoriesSelect.innerHTML = '';
+        const uniqueCategories = [...new Set(ownersData.map(o => o.category).filter(Boolean))].sort();
+        uniqueCategories.forEach(category => {
+          const opt = document.createElement('option');
+          opt.value = category;
+          opt.textContent = category;
+          opt.dataset.name = category;
+          categoriesSelect.appendChild(opt);
+        });
+
+        categoriesSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        categoriesSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+    }
+
+    function getSelectedOwnerCodes() {
+      const ownersSelect = document.getElementById('manualOwners');
+      const categoriesSelect = document.getElementById('manualCategories');
+
+      const selectedOwnerCodes = Array.from(ownersSelect?.selectedOptions || []).map(opt => opt.value);
+      const selectedCategories = Array.from(categoriesSelect?.selectedOptions || []).map(opt => opt.value);
+
+      // If categories selected, get all owner codes from those categories
+      if (selectedCategories.length > 0 && ownersData) {
+        const categoryOwnerCodes = ownersData
+          .filter(o => selectedCategories.includes(o.category))
+          .map(o => o.ownerCode);
+
+        // Merge with directly selected owners (unique)
+        return [...new Set([...selectedOwnerCodes, ...categoryOwnerCodes])];
+      }
+
+      return selectedOwnerCodes;
+    }
+
+    // Initialize page names multi-select with toggle handler
+    function initPageNamesMultiSelect() {
+      const select = document.getElementById('railPageNames');
+      if (!select) return;
+
+      select.removeEventListener('mousedown', handleMultiSelectClick);
+      select.addEventListener('mousedown', handleMultiSelectClick);
+      // Initialize tags
+      updateTags('railPageNames');
+    }
+
+    // Load filters and owners when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(loadFiltersData, 500);
+      setTimeout(loadOwnersData, 600);
+      initPageNamesMultiSelect();
+    });
+
+    function updateUrlPreview() {
+      const base = document.getElementById('apiBase').value.trim();
+      const brand = document.getElementById('brandId').value.trim();
+      const pageName = document.getElementById('pageName').value;
+      const params = [];
+      if (brand) params.push(`brandId=${brand}`);
+      if (pageName) params.push(`pageName=${pageName}`);
+      const url = `${base}/rails${params.length > 0 ? `?${params.join('&')}` : ''}`;
+      const prev = document.getElementById('urlPreview');
+      if (prev) prev.textContent = url;
+      return url;
+    }
+
+    let lastRaw = null;
+
+    async function loadRails() {
+      const url = updateUrlPreview();
+      setStatus('Loading ' + url, '');
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+        lastRaw = json;
+        document.getElementById('peekContent').textContent = JSON.stringify(json, null, 2);
+        if (!res.ok) {
+          setStatus(`HTTP ${res.status}: ${json.message || 'error'}`, 'error');
+          return;
+        }
+        const rails = Array.isArray(json.data) ? json.data : [];
+        renderRails(rails);
+        setStatus(`Loaded ${rails.length} rails`, 'success');
+      } catch (e) {
+        setStatus('Fetch failed: ' + e.message + ' (is the server running?)', 'error');
+        document.getElementById('rails').innerHTML = `
+          <div class="empty">
+            <h3>Couldn't reach the API</h3>
+            <p>${escapeHtml(e.message)}</p>
+            <p style="margin-top: 8px;">Check <code>apiBase</code> above and that your backend is running.</p>
+          </div>`;
+      }
+    }
+
+    function renderRails(rails) {
+      const host = document.getElementById('rails');
+      if (rails.length === 0) {
+        host.innerHTML = `<div class="empty"><h3>No rails</h3><p>The API returned an empty list.</p></div>`;
+        return;
+      }
+      rails.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      host.innerHTML = rails.map(renderRail).join('');
+    }
+
+    function renderRail(rail) {
+      const items = Array.isArray(rail.items) ? rail.items : [];
+      const isPillStyle = rail.type === 'GENRES' || rail.type === 'MOODS' || rail.type === 'LANGUAGES';
+      const stripItems = items.map(it => renderItem(it, rail.type, isPillStyle)).join('');
+
+      const seeAll = rail.seeMore
+        ? `<a class="rail-see-all" onclick="showSeeMore('${escapeHtml(rail.key)}')">See All</a>`
+        : '';
+
+      return `
+        <section class="rail" data-key="${escapeHtml(rail.key)}" data-id="${rail.id}">
+          <div class="rail-header">
+            <div class="rail-title-group">
+              <h2 class="rail-title">${escapeHtml(rail.title)}</h2>
+              ${rail.subtitle ? `<span class="rail-subtitle">${escapeHtml(rail.subtitle)}</span>` : ''}
+              <span class="rail-meta">${escapeHtml(rail.type)}</span>
+              <span class="item-count">${items.length} items</span>
+              <button class="copy-rail-btn" onclick="openCopyModal(${rail.id}, '${escapeHtml(rail.key)}', '${escapeHtml(rail.title)}', '${escapeHtml(rail.pageName || 'HOME')}')">Copy</button>
+            </div>
+            ${seeAll}
+          </div>
+          <div class="rail-strip">
+            ${stripItems || '<div class="empty" style="padding: 20px;">No items</div>'}
+          </div>
+        </section>`;
+    }
+
+    function renderItem(item, railType, isPillStyle) {
+      const data = item.data || {};
+      let title = '';
+      let subtitle = '';
+      let tag = '';
+      let seed = item.itemCode || '';
+
+      switch (item.itemType) {
+        case 'TRACK':
+          title = data.name || item.itemCode;
+          subtitle = (data.primaryArtists || []).map(a => a.name).join(', ') || data.ownerCode || '';
+          tag = data.trending ? 'Trending' : (data.ownerType || '');
+          seed = data.trackCode || item.itemCode;
+          break;
+        case 'GENRE':
+        case 'MOOD':
+        case 'LANGUAGE':
+        case 'LABEL':
+          title = data.name || item.itemCode;
+          subtitle = data.type || item.itemType;
+          seed = data.name_slug || data.id || item.itemCode;
+          break;
+        case 'PLAYLIST':
+          title = data.name || item.itemCode;
+          subtitle = data.description ? String(data.description).slice(0, 40) : 'Playlist';
+          seed = data.playlistCode || data.id || item.itemCode;
+          break;
+        default:
+          title = item.itemCode;
+          subtitle = item.itemType;
+      }
+
+      const bg = gradientFor(seed || String(Math.random()));
+      const artClass = isPillStyle ? 'card-art' : 'card-art';
+      const wrapClass = isPillStyle ? 'card card-pill' : 'card';
+      const initials = (title || '?').split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+
+      const missing = item.data == null;
+
+      return `
+        <div class="${wrapClass}" title="${escapeHtml(item.itemType)}: ${escapeHtml(item.itemCode)}">
+          <div class="${artClass}" style="background: ${bg};">
+            ${tag ? `<span class="badge">${escapeHtml(tag)}</span>` : ''}
+            ${missing ? `<span class="badge" style="background: rgba(220,53,69,0.85);">missing</span>` : ''}
+            <span class="art-title">${isPillStyle ? escapeHtml(title) : escapeHtml(initials)}</span>
+            ${item.itemType === 'TRACK' ? '<span class="play-overlay"></span>' : ''}
+          </div>
+          ${!isPillStyle ? `
+            <div class="card-info">
+              ${tag ? `<div class="card-tag">${escapeHtml(tag)}</div>` : ''}
+              <div class="card-title">${escapeHtml(title)}</div>
+              ${subtitle ? `<div class="card-sub">${escapeHtml(subtitle)}</div>` : ''}
+            </div>` : ''}
+        </div>`;
+    }
+
+    function showSeeMore(key) {
+      const rail = (lastRaw?.data || []).find(r => r.key === key);
+      if (!rail) return;
+      alert(`seeMore for "${rail.title}":\n\n${JSON.stringify(rail.seeMore, null, 2)}`);
+    }
+
+    function togglePeek() {
+      document.getElementById('peek').classList.toggle('visible');
+    }
+
+    document.getElementById('apiBase').addEventListener('input', updateUrlPreview);
+    document.getElementById('brandId').addEventListener('input', updateUrlPreview);
+    document.getElementById('pageName').addEventListener('change', updateUrlPreview);
+
+    updateUrlPreview();
+    loadRails();
+
+    // Create Rail Form Functions
+    function toggleCreateForm() {
+      const form = document.getElementById('createForm');
+      const isHidden = form.style.display === 'none';
+      form.style.display = isHidden ? 'block' : 'none';
+
+      // Clear selected playlists when closing the form
+      if (!isHidden && typeof clearSelectedPlaylists === 'function') {
+        clearSelectedPlaylists();
+      }
+    }
+
+    function handleSourceTypeChange() {
+      const sourceType = document.getElementById('railSourceType').value;
+      const railType = document.getElementById('railType').value;
+
+      document.getElementById('aiQuerySection').style.display = sourceType === 'AI_QUERY' ? 'block' : 'none';
+      document.getElementById('manualSection').style.display = sourceType === 'MANUAL' ? 'block' : 'none';
+      document.getElementById('querySection').style.display = sourceType === 'QUERY' ? 'block' : 'none';
+
+      // Toggle manual input type based on rail type
+      if (sourceType === 'MANUAL') {
+        toggleManualInputType(railType);
+      }
+    }
+
+    function toggleManualInputType(railType) {
+      // Hide all manual input options
+      document.getElementById('manualTextInput').style.display = 'none';
+      document.getElementById('manualPlaylistsSelect').style.display = 'none';
+      document.getElementById('manualGenresSelect').style.display = 'none';
+      document.getElementById('manualMoodsSelect').style.display = 'none';
+      document.getElementById('manualLanguagesSelect').style.display = 'none';
+      document.getElementById('manualLabelsSelect').style.display = 'none';
+
+      // Show appropriate input based on rail type
+      if (railType === 'GENRES') {
+        document.getElementById('manualGenresSelect').style.display = 'block';
+      } else if (railType === 'MOODS') {
+        document.getElementById('manualMoodsSelect').style.display = 'block';
+      } else if (railType === 'LANGUAGES') {
+        document.getElementById('manualLanguagesSelect').style.display = 'block';
+      } else if (railType === 'LABELS') {
+        document.getElementById('manualLabelsSelect').style.display = 'block';
+      } else if (railType === 'PLAYLISTS') {
+        document.getElementById('manualPlaylistsSelect').style.display = 'block';
+      } else {
+        // TRACKS - use text input
+        document.getElementById('manualTextInput').style.display = 'block';
+      }
+    }
+
+    function getSelectedIds(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return [];
+      return Array.from(select.selectedOptions).map(opt => opt.value);
+    }
+
+    function handleAiQueryTypeChange() {
+      const queryType = document.getElementById('aiQueryType').value;
+      document.getElementById('filteredOptions').style.display = queryType === 'FILTERED' ? 'block' : 'none';
+    }
+
+    function parseCommaSeparated(str) {
+      if (!str || !str.trim()) return [];
+      return str.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    }
+
+    async function createRail() {
+      const base = document.getElementById('apiBase').value.trim();
+      const brandIdValue = document.getElementById('brandId').value.trim();
+
+      const key = document.getElementById('railKey').value.trim();
+      const title = document.getElementById('railTitle').value.trim();
+      const subtitle = document.getElementById('railSubtitle').value.trim() || null;
+      const type = document.getElementById('railType').value;
+      const sourceType = document.getElementById('railSourceType').value;
+      const pageNamesSelect = document.getElementById('railPageNames');
+      const pageNames = Array.from(pageNamesSelect.selectedOptions).map(opt => opt.value);
+      const orderValue = document.getElementById('railOrder').value.trim();
+      const limitValue = document.getElementById('railLimit').value.trim();
+
+      if (!key || !title) {
+        setStatus('Key and Title are required', 'error');
+        return;
+      }
+
+      const payload = {
+        key,
+        title,
+        subtitle,
+        type,
+        sourceType,
+        brandId: brandIdValue ? parseInt(brandIdValue) : null,
+        pageNames: pageNames.length > 0 ? pageNames : ['HOME'],
+        order: orderValue ? parseInt(orderValue) : undefined,
+        limit: limitValue ? parseInt(limitValue) : 40,
+      };
+
+      if (sourceType === 'AI_QUERY') {
+        const queryType = document.getElementById('aiQueryType').value;
+        const token = document.getElementById('aiToken').value.trim();
+
+        const aiQuery = {
+          queryType,
+          limit: payload.limit,
+        };
+
+        // Add token if provided
+        if (token) {
+          aiQuery.headers = { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` };
+        }
+
+        if (queryType === 'FILTERED') {
+          aiQuery.q = document.getElementById('aiSearchQ').value.trim() || '';
+          aiQuery.brandName = document.getElementById('aiBrandName').value.trim() || '';
+          aiQuery.userId = document.getElementById('aiUserId').value.trim() || '';
+
+          // Build filters from multi-select dropdowns
+          const filters = [];
+          const genres = getSelectedNames('aiGenres');
+          const moods = getSelectedNames('aiMoods');
+          const languages = getSelectedNames('aiLanguages');
+          const usecases = getSelectedNames('aiUsecases');
+          const assortment = getSelectedNames('aiAssortment');
+
+          if (genres.length) filters.push({ type: 'genre', value: genres });
+          if (moods.length) filters.push({ type: 'mood', value: moods });
+          if (languages.length) filters.push({ type: 'language', value: languages });
+          if (usecases.length) filters.push({ type: 'usecase', value: usecases });
+          if (assortment.length) filters.push({ type: 'assortment', value: assortment });
+
+          aiQuery.filters = filters;
+        }
+
+        payload.aiQuery = aiQuery;
+      } else if (sourceType === 'MANUAL') {
+        let itemCodes = [];
+        // Check if using filter dropdown based on type
+        if (type === 'GENRES') {
+          itemCodes = getSelectedIds('manualGenres');
+        } else if (type === 'MOODS') {
+          itemCodes = getSelectedIds('manualMoods');
+        } else if (type === 'LANGUAGES') {
+          itemCodes = getSelectedIds('manualLanguages');
+        } else if (type === 'LABELS') {
+          // For LABELS, use owner codes (from owners and/or categories selection)
+          itemCodes = getSelectedOwnerCodes();
+        } else if (type === 'PLAYLISTS') {
+          // For PLAYLISTS, use selected playlists from autocomplete
+          itemCodes = getSelectedPlaylistCodes();
+        } else {
+          // TRACKS - use text input
+          const itemCodesStr = document.getElementById('manualItemCodes').value.trim();
+          itemCodes = parseCommaSeparated(itemCodesStr);
+        }
+        if (itemCodes.length === 0) {
+          setStatus('Item codes are required for MANUAL source', 'error');
+          return;
+        }
+        payload.itemCodes = itemCodes;
+      } else if (sourceType === 'QUERY') {
+        const query = {};
+        if (document.getElementById('queryPopular').checked) query.popular = true;
+        if (document.getElementById('queryTrending').checked) query.trending = true;
+        if (document.getElementById('queryNewOnHoopr').checked) query.newOnHoopr = true;
+        if (document.getElementById('queryCampaign').checked) query.campaign = true;
+        const filterIds = parseCommaSeparated(document.getElementById('queryFilterIds').value);
+        if (filterIds.length) query.filterIds = filterIds;
+
+        if (Object.keys(query).length === 0) {
+          setStatus('At least one query filter is required for QUERY source', 'error');
+          return;
+        }
+        payload.query = query;
+      }
+
+      setStatus('Creating rail...', '');
+
+      try {
+        const res = await fetch(`${base}/rails`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rail created successfully!', 'success');
+        toggleCreateForm();
+        loadRails();
+      } catch (e) {
+        setStatus('Failed to create rail: ' + e.message, 'error');
+      }
+    }
+
+    // Delete Rail Functions
+    function toggleDeleteForm() {
+      const form = document.getElementById('deleteForm');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    async function deleteRail() {
+      const railId = document.getElementById('deleteRailId').value;
+      if (!railId) {
+        setStatus('Rail ID is required', 'error');
+        return;
+      }
+      if (!confirm(`Are you sure you want to permanently delete rail ${railId}? This cannot be undone.`)) {
+        return;
+      }
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Deleting rail...', '');
+
+      try {
+        const res = await fetch(`${base}/rails/${railId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rail deleted successfully!', 'success');
+        toggleDeleteForm();
+        document.getElementById('deleteRailId').value = '';
+        loadRails();
+      } catch (e) {
+        setStatus('Failed to delete rail: ' + e.message, 'error');
+      }
+    }
+
+    // Edit Rail Items Functions
+    let editItemRowCounter = 0;
+
+    function toggleEditItemsForm() {
+      const form = document.getElementById('editItemsForm');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+      if (form.style.display === 'none') {
+        document.getElementById('editItemsList').innerHTML = '';
+        document.getElementById('itemsEditorContainer').style.display = 'none';
+        editItemRowCounter = 0;
+      }
+    }
+
+    function createEditItemRow(item = null) {
+      const rowId = editItemRowCounter++;
+      const div = document.createElement('div');
+      div.id = `edit-item-row-${rowId}`;
+      div.style.cssText = 'display: flex; gap: 10px; align-items: center; padding: 10px; background: #f8f9fa; border-radius: 4px; margin-bottom: 8px; border: 1px solid #e9ecef;';
+
+      div.innerHTML = `
+        <input type="hidden" class="item-id" value="${item?.id || ''}">
+        <div style="flex: 0 0 60px;">
+          <label style="font-size: 10px; color: #888;">Order</label>
+          <input type="number" class="item-order" value="${item?.order ?? editItemRowCounter - 1}" style="width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 10px; color: #888;">Item Code</label>
+          <input type="text" class="item-code" value="${item?.itemCode || ''}" placeholder="e.g., TRACK001" style="padding: 4px; border: 1px solid #ddd; border-radius: 4px; width: 100%;">
+        </div>
+        <div style="flex: 0 0 70px; text-align: center;">
+          <label style="font-size: 10px; color: #888;">Locked</label>
+          <div><input type="checkbox" class="item-locked" ${item?.isLocked ? 'checked' : ''}></div>
+        </div>
+        <div style="flex: 0 0 70px;">
+          <button onclick="removeEditItemRow(${rowId})" style="background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Remove</button>
+        </div>
+      `;
+
+      return div;
+    }
+
+    function addEditItemRow(item = null) {
+      const container = document.getElementById('editItemsList');
+      container.appendChild(createEditItemRow(item));
+    }
+
+    function removeEditItemRow(rowId) {
+      const row = document.getElementById(`edit-item-row-${rowId}`);
+      if (row) row.remove();
+    }
+
+    async function loadRailItemsForEdit() {
+      const railId = document.getElementById('editItemsRailId').value;
+      if (!railId) {
+        setStatus('Rail ID is required', 'error');
+        return;
+      }
+
+      document.getElementById('editItemsList').innerHTML = '';
+      editItemRowCounter = 0;
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Loading rail items...', '');
+
+      try {
+        const res = await fetch(`${base}/rails`);
+        const json = await res.json();
+
+        if (json.data && Array.isArray(json.data)) {
+          const rail = json.data.find(r => r.id == railId);
+          if (rail && rail.items) {
+            rail.items.forEach(item => {
+              addEditItemRow({
+                id: item.id,
+                itemCode: item.itemCode,
+                order: item.order,
+                isLocked: item.isLocked || false
+              });
+            });
+            document.getElementById('itemsEditorContainer').style.display = 'block';
+            setStatus(`Loaded ${rail.items.length} items from "${rail.title}"`, 'success');
+          } else {
+            setStatus('Rail not found or has no items', 'error');
+          }
+        }
+      } catch (e) {
+        setStatus('Failed to load rail items: ' + e.message, 'error');
+      }
+    }
+
+    function collectEditItems() {
+      const rows = document.querySelectorAll('#editItemsList > div');
+      const items = [];
+
+      rows.forEach(row => {
+        const id = row.querySelector('.item-id').value;
+        const order = parseInt(row.querySelector('.item-order').value) || 0;
+        const itemCode = row.querySelector('.item-code').value.trim();
+        const isLocked = row.querySelector('.item-locked').checked;
+
+        if (itemCode) {
+          const item = { itemCode, order, isLocked };
+          if (id) item.id = parseInt(id);
+          items.push(item);
+        }
+      });
+
+      items.sort((a, b) => a.order - b.order);
+      return items;
+    }
+
+    async function saveRailItemsEdit() {
+      const railId = document.getElementById('editItemsRailId').value;
+      if (!railId) {
+        setStatus('Rail ID is required', 'error');
+        return;
+      }
+
+      const items = collectEditItems();
+      if (items.length === 0) {
+        if (!confirm('No items found. This will remove all items from the rail. Continue?')) {
+          return;
+        }
+      }
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Saving rail items...', '');
+
+      try {
+        const res = await fetch(`${base}/rails/${railId}/items`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rail items updated successfully!', 'success');
+        loadRails();
+        setTimeout(() => loadRailItemsForEdit(), 500);
+      } catch (e) {
+        setStatus('Failed to save rail items: ' + e.message, 'error');
+      }
+    }
+
+    // Reorder Rails Functions
+    let reorderRowCounter = 0;
+    let railsForReorder = [];
+
+    function toggleReorderForm() {
+      const form = document.getElementById('reorderForm');
+      form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+      if (form.style.display === 'none') {
+        document.getElementById('reorderRailsList').innerHTML = '';
+        document.getElementById('reorderEditorContainer').style.display = 'none';
+        reorderRowCounter = 0;
+        railsForReorder = [];
+      }
+    }
+
+    function createReorderRow(rail) {
+      const rowId = reorderRowCounter++;
+      const div = document.createElement('div');
+      div.id = `reorder-row-${rowId}`;
+      div.className = 'reorder-row';
+      div.dataset.railId = rail.id;
+      div.style.cssText = 'display: flex; gap: 10px; align-items: center; padding: 10px; background: #f8f9fa; border-radius: 4px; margin-bottom: 8px; border: 1px solid #e9ecef;';
+
+      const brandLabel = rail.brandId
+        ? `<span style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Brand: ${rail.brandId}</span>`
+        : '<span style="background: #d4edda; padding: 2px 6px; border-radius: 3px; font-size: 10px;">Default</span>';
+
+      div.innerHTML = `
+        <div style="flex: 0 0 60px;">
+          <input type="number" class="rail-order" value="${rail.order}" style="width: 50px; padding: 4px; border: 1px solid #ddd; border-radius: 4px; text-align: center;">
+        </div>
+        <div style="flex: 0 0 50px; display: flex; flex-direction: column; gap: 2px;">
+          <button onclick="moveReorderRailUp(${rowId})" style="padding: 2px 6px; font-size: 10px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer;">▲</button>
+          <button onclick="moveReorderRailDown(${rowId})" style="padding: 2px 6px; font-size: 10px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer;">▼</button>
+        </div>
+        <div style="flex: 0 0 50px; text-align: center;">
+          <span style="font-weight: 600; color: #666; font-size: 12px;">#${rail.id}</span>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 600; font-size: 13px;">${escapeHtml(rail.title)}</div>
+          <div style="font-size: 11px; color: #666;">${escapeHtml(rail.key)} ${brandLabel}</div>
+        </div>
+        <div style="flex: 0 0 80px; text-align: right;">
+          <span style="font-size: 11px; color: #888;">${rail.items?.length || 0} items</span>
+        </div>
+      `;
+
+      return div;
+    }
+
+    async function loadRailsForReorder() {
+      const base = document.getElementById('apiBase').value.trim();
+      const brandId = document.getElementById('reorderBrandId').value.trim();
+      const pageName = document.getElementById('reorderPageName').value;
+
+      let url = `${base}/rails`;
+      const params = [];
+      if (brandId) params.push(`brandId=${brandId}`);
+      if (pageName) params.push(`pageName=${pageName}`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      document.getElementById('reorderRailsList').innerHTML = '';
+      reorderRowCounter = 0;
+      railsForReorder = [];
+
+      setStatus('Loading rails for reorder...', '');
+
+      try {
+        const res = await fetch(url);
+        const json = await res.json();
+
+        if (json.data && Array.isArray(json.data)) {
+          railsForReorder = json.data;
+          // Sort by current order
+          railsForReorder.sort((a, b) => a.order - b.order);
+
+          const container = document.getElementById('reorderRailsList');
+          railsForReorder.forEach(rail => {
+            container.appendChild(createReorderRow(rail));
+          });
+
+          document.getElementById('reorderEditorContainer').style.display = 'block';
+          setStatus(`Loaded ${railsForReorder.length} rails for reordering`, 'success');
+        } else {
+          setStatus('No rails found', 'error');
+        }
+      } catch (e) {
+        setStatus('Failed to load rails: ' + e.message, 'error');
+      }
+    }
+
+    function moveReorderRailUp(rowId) {
+      const row = document.getElementById(`reorder-row-${rowId}`);
+      const prevRow = row.previousElementSibling;
+      if (prevRow && prevRow.classList.contains('reorder-row')) {
+        // Swap order values
+        const currentOrder = row.querySelector('.rail-order');
+        const prevOrder = prevRow.querySelector('.rail-order');
+        const temp = currentOrder.value;
+        currentOrder.value = prevOrder.value;
+        prevOrder.value = temp;
+        // Move DOM element
+        row.parentNode.insertBefore(row, prevRow);
+      }
+    }
+
+    function moveReorderRailDown(rowId) {
+      const row = document.getElementById(`reorder-row-${rowId}`);
+      const nextRow = row.nextElementSibling;
+      if (nextRow && nextRow.classList.contains('reorder-row')) {
+        // Swap order values
+        const currentOrder = row.querySelector('.rail-order');
+        const nextOrder = nextRow.querySelector('.rail-order');
+        const temp = currentOrder.value;
+        currentOrder.value = nextOrder.value;
+        nextOrder.value = temp;
+        // Move DOM element
+        row.parentNode.insertBefore(nextRow, row);
+      }
+    }
+
+    function autoNumberReorderRails() {
+      const rows = document.querySelectorAll('.reorder-row');
+      rows.forEach((row, index) => {
+        row.querySelector('.rail-order').value = index;
+      });
+    }
+
+    function collectReorderRailOrders() {
+      const rows = document.querySelectorAll('.reorder-row');
+      const railOrders = [];
+
+      rows.forEach(row => {
+        const id = parseInt(row.dataset.railId);
+        const order = parseInt(row.querySelector('.rail-order').value) || 0;
+        railOrders.push({ id, order });
+      });
+
+      return railOrders;
+    }
+
+    async function saveRailsReorder() {
+      const railOrders = collectReorderRailOrders();
+      const pageName = document.getElementById('reorderPageName').value;
+
+      if (!pageName) {
+        setStatus('Page Name is required for reordering. Please select a page.', 'error');
+        return;
+      }
+
+      if (railOrders.length === 0) {
+        setStatus('No rails to reorder. Load rails first.', 'error');
+        return;
+      }
+
+      const base = document.getElementById('apiBase').value.trim();
+      setStatus('Saving rails order...', '');
+
+      try {
+        const res = await fetch(`${base}/rails/reorder`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pageName, railOrders }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${json.message || res.status}`, 'error');
+          return;
+        }
+        setStatus('Rails reordered successfully!', 'success');
+        loadRails();
+        setTimeout(() => loadRailsForReorder(), 500);
+      } catch (e) {
+        setStatus('Failed to reorder rails: ' + e.message, 'error');
+      }
+    }
+
+    // =============================================================================
+    // Brand Search Autocomplete
+    // =============================================================================
+    let brandSearchTimer = null;
+
+    function initBrandSearch() {
+      const brandInput = document.getElementById('brandId');
+      const dropdown = document.getElementById('brandSearchDropdown');
+
+      if (!brandInput || !dropdown) return;
+
+      brandInput.addEventListener('input', function() {
+        clearTimeout(brandSearchTimer);
+        const query = this.value.trim();
+
+        if (query.length < 1) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        brandSearchTimer = setTimeout(() => {
+          searchBrandsApi(query, dropdown, brandInput);
+        }, 300);
+      });
+
+      brandInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.brand-search-wrapper')) {
+          dropdown.classList.remove('show');
+        }
+      });
+    }
+
+    async function searchBrandsApi(query, dropdown, input) {
+      const base = document.getElementById('apiBase').value.trim();
+      dropdown.innerHTML = '<div class="brand-search-no-results">Searching...</div>';
+      dropdown.classList.add('show');
+
+      try {
+        const res = await fetch(`${base}/tracks/brands/search?q=${encodeURIComponent(query)}&limit=15`);
+        const json = await res.json();
+
+        if (json.data && json.data.brands && json.data.brands.length > 0) {
+          dropdown.innerHTML = '';
+          json.data.brands.forEach(brand => {
+            const item = document.createElement('div');
+            item.className = 'brand-search-item';
+            item.innerHTML = `${brand.name} <span class="brand-id">(ID: ${brand.id})</span>`;
+            item.addEventListener('click', function() {
+              input.value = brand.id;
+              dropdown.classList.remove('show');
+              updateUrlPreview();
+            });
+            dropdown.appendChild(item);
+          });
+        } else {
+          dropdown.innerHTML = '<div class="brand-search-no-results">No brands found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="brand-search-no-results">Error: ' + err.message + '</div>';
+      }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      initBrandSearch();
+      initPlaylistSearch();
+    });
+
+    // =============================================================================
+    // Playlist Search Autocomplete
+    // =============================================================================
+    let playlistSearchTimer = null;
+    let selectedPlaylistsMap = new Map(); // playlistCode -> { name, id, playlistCode }
+
+    function initPlaylistSearch() {
+      const searchInput = document.getElementById('playlistSearchInput');
+      const dropdown = document.getElementById('playlistSearchDropdown');
+
+      if (!searchInput || !dropdown) return;
+
+      searchInput.addEventListener('input', function() {
+        clearTimeout(playlistSearchTimer);
+        const query = this.value.trim();
+
+        if (query.length < 1) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        playlistSearchTimer = setTimeout(() => {
+          searchPlaylistsApi(query, dropdown);
+        }, 300);
+      });
+
+      searchInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.playlist-search-wrapper')) {
+          dropdown.classList.remove('show');
+        }
+      });
+    }
+
+    async function searchPlaylistsApi(query, dropdown) {
+      const base = document.getElementById('apiBase').value.trim();
+      dropdown.innerHTML = '<div class="playlist-search-no-results">Searching...</div>';
+      dropdown.classList.add('show');
+
+      try {
+        const res = await fetch(`${base}/playlists/search?name=${encodeURIComponent(query)}&limit=20`);
+        const json = await res.json();
+
+        if (json.data && json.data.playlists && json.data.playlists.length > 0) {
+          dropdown.innerHTML = '';
+          json.data.playlists.forEach(playlist => {
+            // Skip already selected playlists
+            if (selectedPlaylistsMap.has(playlist.playlistCode)) {
+              return;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'playlist-search-item';
+            const desc = playlist.description ? playlist.description.substring(0, 60) + (playlist.description.length > 60 ? '...' : '') : '';
+            item.innerHTML = `
+              <div>
+                <span class="playlist-name">${escapeHtml(playlist.name)}</span>
+                <span class="playlist-code">${escapeHtml(playlist.playlistCode || '')}</span>
+              </div>
+              ${desc ? `<div class="playlist-desc">${escapeHtml(desc)}</div>` : ''}
+            `;
+            item.addEventListener('click', function() {
+              selectPlaylist(playlist);
+              dropdown.classList.remove('show');
+              document.getElementById('playlistSearchInput').value = '';
+            });
+            dropdown.appendChild(item);
+          });
+
+          // If all results are already selected
+          if (dropdown.children.length === 0) {
+            dropdown.innerHTML = '<div class="playlist-search-no-results">All matching playlists already selected</div>';
+          }
+        } else {
+          dropdown.innerHTML = '<div class="playlist-search-no-results">No playlists found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="playlist-search-no-results">Error: ' + escapeHtml(err.message) + '</div>';
+      }
+    }
+
+    function selectPlaylist(playlist) {
+      if (!playlist.playlistCode) return;
+
+      selectedPlaylistsMap.set(playlist.playlistCode, {
+        id: playlist.id,
+        name: playlist.name,
+        playlistCode: playlist.playlistCode
+      });
+
+      renderSelectedPlaylists();
+    }
+
+    function removePlaylist(playlistCode) {
+      selectedPlaylistsMap.delete(playlistCode);
+      renderSelectedPlaylists();
+    }
+
+    function renderSelectedPlaylists() {
+      const container = document.getElementById('selectedPlaylists');
+      container.innerHTML = '';
+
+      selectedPlaylistsMap.forEach((playlist, code) => {
+        const chip = document.createElement('div');
+        chip.className = 'playlist-chip';
+        chip.innerHTML = `
+          <span class="chip-name" title="${escapeHtml(playlist.name)}">${escapeHtml(playlist.name)}</span>
+          <span class="chip-remove" onclick="removePlaylist('${escapeHtml(code)}')">&times;</span>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    function getSelectedPlaylistCodes() {
+      return Array.from(selectedPlaylistsMap.keys());
+    }
+
+    function clearSelectedPlaylists() {
+      selectedPlaylistsMap.clear();
+      renderSelectedPlaylists();
+    }
+
+    // =============================================================================
+    // Copy Rail Functionality
+    // =============================================================================
+    let copyingRailId = null;
+    let copyingRailInfo = null;
+    const ALL_PAGE_NAMES = ['HOME', 'CHARTBUSTERS', 'INTERNATIONAL', 'REGIONAL_AND_INDIE', 'HOOPR_ORIGINALS'];
+
+    function openCopyModal(railId, railKey, railTitle, sourcePageName) {
+      copyingRailId = railId;
+      copyingRailInfo = { key: railKey, title: railTitle, sourcePage: sourcePageName };
+
+      document.getElementById('copyModalInfo').textContent = `"${railTitle}" (${railKey}) from ${sourcePageName}`;
+
+      const container = document.getElementById('copyTargetPages');
+      container.innerHTML = '';
+
+      ALL_PAGE_NAMES.forEach(pageName => {
+        const isSourcePage = pageName === sourcePageName;
+        const div = document.createElement('div');
+        div.className = 'page-checkbox-item' + (isSourcePage ? ' disabled' : '');
+        div.innerHTML = `
+          <input type="checkbox" id="copyPage_${pageName}" value="${pageName}" ${isSourcePage ? 'disabled' : ''}>
+          <label for="copyPage_${pageName}">${pageName}${isSourcePage ? ' (source)' : ''}</label>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById('copyModal').style.display = 'flex';
+    }
+
+    function closeCopyModal() {
+      document.getElementById('copyModal').style.display = 'none';
+      copyingRailId = null;
+      copyingRailInfo = null;
+    }
+
+    function selectAllCopyPages() {
+      document.querySelectorAll('#copyTargetPages input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true);
+    }
+
+    function deselectAllCopyPages() {
+      document.querySelectorAll('#copyTargetPages input[type="checkbox"]').forEach(cb => cb.checked = false);
+    }
+
+    async function executeCopyRail() {
+      const selectedPages = [];
+      document.querySelectorAll('#copyTargetPages input[type="checkbox"]:checked').forEach(cb => {
+        selectedPages.push(cb.value);
+      });
+
+      if (selectedPages.length === 0) {
+        alert('Please select at least one target page.');
+        return;
+      }
+
+      const base = document.getElementById('apiBase').value.trim();
+      const brandIdValue = document.getElementById('brandId').value.trim();
+
+      const body = {
+        railId: copyingRailId,
+        targetPageNames: selectedPages,
+      };
+      if (brandIdValue) body.brandId = parseInt(brandIdValue);
+
+      setStatus('Copying rail...', '');
+
+      try {
+        const res = await fetch(`${base}/rails/copy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        closeCopyModal();
+
+        if (res.ok && data.data) {
+          const copied = data.data.copiedTo?.length || 0;
+          const skipped = data.data.skipped?.length || 0;
+
+          let message = `Rail copied to ${copied} page(s)`;
+          if (skipped > 0) {
+            message += `. Skipped: ${skipped}`;
+            if (data.data.skipped) {
+              const reasons = data.data.skipped.map(s => `${s.pageName}: ${s.reason}`).join(', ');
+              message += ` (${reasons})`;
+            }
+          }
+
+          setStatus(message, 'success');
+        } else {
+          setStatus(`Error: ${data.message || 'Failed to copy rail'}`, 'error');
+        }
+      } catch (err) {
+        setStatus('Failed to copy rail: ' + err.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -23,7 +23,9 @@ import {
   getRestrictedTrackTiersByBrandId,
   getUserUsedCampaignIds,
   getOwnerIdsByNames,
+  searchTracksByName,
   type PaginatedRawFilterTracks,
+  type TrackSearchResult,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
@@ -70,6 +72,7 @@ const extractFiltersByType = (
 
 // Normalize hookTimings which may be a JSON string, array, or object.
 // Always returns a value so the field is present in every track response.
+// Returns [] when no hook timings exist.
 const normalizeHookTimings = (raw: unknown): unknown => {
   if (raw === null || raw === undefined) return [];
   let value: unknown = raw;
@@ -80,8 +83,12 @@ const normalizeHookTimings = (raw: unknown): unknown => {
       return [];
     }
   }
-  if (Array.isArray(value)) return value;
-  if (typeof value === "object") return value;
+  if (Array.isArray(value)) return value.length > 0 ? value : [];
+  if (typeof value === "object") {
+    // If it's an empty object {}, return empty array
+    if (Object.keys(value as object).length === 0) return [];
+    return value;
+  }
   return [];
 };
 
@@ -188,6 +195,8 @@ const transformTrackToDto = (
   ownerCodeMap?: Map<string, string>,
   usedCampaignIds?: Set<string>,
 ): TrackWithArtists => {
+  // Debug: Log hookTimings data to trace the issue
+  console.log(`[DEBUG hookTimings] trackCode=${track.trackCode}, raw hookTimings:`, JSON.stringify(track.hookTimings), `type:`, typeof track.hookTimings, `isArray:`, Array.isArray(track.hookTimings));
   const primaryArtists: ArtistInfoTrack[] = [];
 
   if (track.trackArtistMappings) {
@@ -923,4 +932,12 @@ export const getTrackDetailsByCodeService = async (
     ownerUsernameMap,
     albumName,
   );
+};
+
+// Search tracks by name for autocomplete
+export const searchTracksService = async (
+  query: string,
+  limit: number = 20,
+): Promise<TrackSearchResult[]> => {
+  return searchTracksByName(query, limit);
 };

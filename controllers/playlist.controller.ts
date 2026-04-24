@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import {
   getAllPlaylistsService,
   getPlaylistDetailService,
+  searchPlaylistsService,
 } from "../services/business-service/modules.export";
 import { catchAsync, sendResponse, sendError } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
@@ -35,4 +36,16 @@ export const getPlaylistDetail = catchAsync(async (req: AuthRequest, res: Respon
     return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.PlaylistNotFound);
   }
   sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetPlaylistDetailSuccess });
+});
+
+export const searchPlaylists = catchAsync(async (req: Request, res: Response) => {
+  const name = req.query.name as string;
+  if (!name || name.trim().length < 1) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Search query 'name' is required");
+  }
+  const response = await searchPlaylistsService({
+    name,
+    limit: req.query.limit as string,
+  });
+  sendResponse(res, { status: HttpStatusCode.OK, data: { playlists: response }, message: "Playlists search successful" });
 });

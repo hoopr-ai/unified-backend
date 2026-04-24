@@ -74,3 +74,28 @@ export const getTotalLicensesByUserId = async (
   });
   return count;
 };
+
+export const countLicensesWithMissingVideoLinks = async (
+  brandId: number,
+  requiredVideoLinksCount: number = 3
+): Promise<number> => {
+  const licenses = await LicenseModel.findAll({
+    where: { brandId },
+    include: [
+      {
+        model: VideoLinkModel,
+        attributes: ["id"],
+      },
+    ],
+  });
+
+  let missingCount = 0;
+  for (const license of licenses) {
+    const videoLinksCount = license.videoLinks?.length ?? 0;
+    if (videoLinksCount < requiredVideoLinksCount) {
+      missingCount++;
+    }
+  }
+
+  return missingCount;
+};

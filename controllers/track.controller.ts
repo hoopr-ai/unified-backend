@@ -4,6 +4,7 @@ import {
   getTracksByCodesService,
   getTracksByFilterService,
   getTrackDetailsByCodeService,
+  searchTracksService,
   GetTracksByFilterQuery,
 } from "../services/business-service/modules.export";
 import {
@@ -18,6 +19,7 @@ import {
 } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 import { findUserById } from "../services/persistence-service/exports";
+import { searchBrands } from "../services/persistence-service/brand/brand.persistence.service";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -183,6 +185,36 @@ export const getTrackDetailsByCode = catchAsync(
       status: HttpStatusCode.OK,
       data,
       message: ResponseMessages.GetTrackDetailSuccess,
+    });
+  },
+);
+
+export const searchTracks = catchAsync(
+  async (req: Request, res: Response) => {
+    const query = (req.query.q as string) || "";
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+
+    const results = await searchTracksService(query, Math.min(limit, 50));
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: { tracks: results },
+      message: ResponseMessages.GetTracksSuccess,
+    });
+  },
+);
+
+export const searchBrandsController = catchAsync(
+  async (req: Request, res: Response) => {
+    const query = (req.query.q as string) || "";
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+
+    const results = await searchBrands(query, Math.min(limit, 50));
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: { brands: results },
+      message: "Brands fetched successfully",
     });
   },
 );

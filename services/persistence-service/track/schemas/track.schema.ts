@@ -59,7 +59,7 @@ export interface TrackDetails {
   jioSaavanStream?: string;
   campaignId?: number;
   artLink?: string;
-  hookTimings?: object;
+  hookTimings?: unknown;
   artworkLink?: string;
 }
 
@@ -309,7 +309,7 @@ export class TrackModel extends Model<TrackModel> {
     type: DataType.JSONB,
     allowNull: true,
   })
-  hookTimings?: object;
+  hookTimings?: unknown;
 
   @Column({
     type: DataType.TEXT,

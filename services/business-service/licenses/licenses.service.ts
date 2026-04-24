@@ -4,6 +4,7 @@ import {
   LicenseModel,
   VideoLinkModel,
   type LicenseDetails,
+  countLicensesWithMissingVideoLinks,
 } from "../../persistence-service/licenses/modules.export";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
 import {
@@ -747,3 +748,30 @@ export const getTokenDetailsService = async (
   };
 };
 
+export interface MissingVideoLinksResponse {
+  missingVideoLinksCount: number;
+  missingLink: boolean;
+}
+
+export const getMissingVideoLinksService = async (
+  userId: number,
+): Promise<MissingVideoLinksResponse> => {
+  const user = await UserModel.findByPk(userId, {
+    attributes: ["id", "brandId"],
+  });
+
+  if (!user) {
+    throw new AppError("User not found", 404);
+  }
+
+  if (!user.brandId) {
+    throw new AppError("User is not associated with any brand", 400);
+  }
+
+  const missingVideoLinksCount = await countLicensesWithMissingVideoLinks(user.brandId);
+
+  return {
+    missingVideoLinksCount,
+    missingLink: missingVideoLinksCount > 0,
+  };
+};

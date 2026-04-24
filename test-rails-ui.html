@@ -1,0 +1,2444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rails API Tester</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { color: #333; }
+    h2 { color: #555; margin-top: 30px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+    h3 { color: #666; margin-top: 20px; margin-bottom: 10px; font-size: 16px; }
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    label { display: block; margin: 10px 0 5px; font-weight: 600; color: #444; font-size: 13px; }
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    input[type="checkbox"] { width: auto; margin-right: 8px; }
+    textarea { min-height: 100px; font-family: monospace; }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-top: 15px;
+      margin-right: 10px;
+    }
+    button:hover { background: #0056b3; }
+    button.secondary { background: #6c757d; }
+    button.secondary:hover { background: #545b62; }
+    button.success { background: #28a745; }
+    button.success:hover { background: #218838; }
+    .response {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 15px;
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .response pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+    .status { padding: 5px 10px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
+    .status.success { background: #d4edda; color: #155724; }
+    .status.error { background: #f8d7da; color: #721c24; }
+    .row { display: flex; gap: 15px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 200px; }
+    .row-3 > div { flex: 0 0 calc(33.333% - 10px); min-width: 180px; }
+    .row-4 > div { flex: 0 0 calc(25% - 12px); min-width: 150px; }
+    .help { font-size: 12px; color: #666; margin-top: 5px; }
+    .config-section { background: #e9ecef; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+    .checkbox-row { display: flex; align-items: center; padding: 8px 0; }
+    .checkbox-row label { margin: 0; display: flex; align-items: center; font-weight: normal; }
+    .filter-group {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 15px;
+      border: 1px solid #e9ecef;
+    }
+    .filter-group-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 2px solid #ddd;
+      margin-bottom: 20px;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      font-size: 14px;
+      color: #666;
+      margin: 0;
+    }
+    .tab:hover { color: #333; }
+    .tab.active {
+      color: #007bff;
+      border-bottom: 2px solid #007bff;
+      margin-bottom: -2px;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    /* Multi-select filter styles */
+    .filter-select {
+      width: 100%;
+      min-height: 120px;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .filter-select option { padding: 4px 8px; }
+    .filter-select option:checked { background: #007bff; color: white; }
+    .selected-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 8px;
+      min-height: 28px;
+    }
+    .selected-tag {
+      background: #007bff;
+      color: white;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .selected-tag .remove {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .filter-loading {
+      color: #666;
+      font-style: italic;
+      padding: 10px;
+    }
+    /* Track search autocomplete styles */
+    .track-search-container {
+      position: relative;
+      width: 100%;
+    }
+    .track-search-input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .track-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 250px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: none;
+    }
+    .track-search-dropdown.show {
+      display: block;
+    }
+    .track-search-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+    }
+    .track-search-item:last-child {
+      border-bottom: none;
+    }
+    .track-search-item:hover {
+      background: #f0f7ff;
+    }
+    .track-search-item.selected {
+      background: #e3f2fd;
+    }
+    .track-search-no-results {
+      padding: 12px;
+      color: #666;
+      font-style: italic;
+      text-align: center;
+    }
+    .track-search-loading {
+      padding: 12px;
+      color: #666;
+      text-align: center;
+    }
+    .selected-tracks-container {
+      margin-top: 10px;
+    }
+    .selected-tracks-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .selected-track-tag {
+      background: #28a745;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .selected-track-tag .remove-track {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .selected-track-tag .remove-track:hover {
+      color: #ffcccc;
+    }
+    /* Brand search autocomplete styles */
+    .brand-search-container {
+      position: relative;
+      width: 100%;
+    }
+    .brand-search-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      display: none;
+    }
+    .brand-search-dropdown.show {
+      display: block;
+    }
+    .brand-search-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+    .brand-search-item:hover {
+      background: #f0f7ff;
+    }
+    .brand-search-item .brand-id {
+      color: #666;
+      font-size: 11px;
+    }
+    /* Copy Rail Modal Styles */
+    .copy-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .copy-modal {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      min-width: 400px;
+      max-width: 500px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    }
+    .copy-modal h3 {
+      margin: 0 0 16px 0;
+      color: #333;
+    }
+    .copy-modal-close {
+      float: right;
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #666;
+    }
+    .copy-modal-close:hover {
+      color: #333;
+    }
+    .page-checkbox-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 8px;
+      margin: 12px 0;
+    }
+    .page-checkbox-item {
+      display: flex;
+      align-items: center;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    .page-checkbox-item:hover {
+      background: #f5f5f5;
+    }
+    .page-checkbox-item input {
+      margin-right: 10px;
+      transform: scale(1.2);
+    }
+    .page-checkbox-item.disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .copy-modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    .copy-btn {
+      background: #17a2b8;
+      color: white;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .copy-btn:hover {
+      background: #138496;
+    }
+    .rail-copy-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      background: #fafafa;
+    }
+    .rail-copy-info {
+      flex: 1;
+    }
+    .rail-copy-title {
+      font-weight: 600;
+      color: #333;
+    }
+    .rail-copy-meta {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rails API Tester</h1>
+
+  <div class="config-section">
+    <div class="row">
+      <div>
+        <label for="baseUrl">Base URL</label>
+        <input type="text" id="baseUrl" value="http://localhost:3002">
+      </div>
+      <div>
+        <label for="authToken">Auth Token (for POST)</label>
+        <input type="text" id="authToken" placeholder="Bearer token for authenticated requests">
+      </div>
+    </div>
+  </div>
+
+  <!-- GET /rails -->
+  <div class="section">
+    <h2>GET /rails - Fetch All Rails</h2>
+    <div class="row">
+      <div>
+        <label for="getRailsBrandId">Brand ID (optional)</label>
+        <input type="number" id="getRailsBrandId" placeholder="e.g., 123">
+      </div>
+      <div>
+        <label for="getRailsPageName">Page Name (optional)</label>
+        <select id="getRailsPageName">
+          <option value="">-- All Pages --</option>
+          <option value="HOME" selected>HOME</option>
+          <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+          <option value="INTERNATIONAL">INTERNATIONAL</option>
+          <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+          <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+        </select>
+      </div>
+    </div>
+    <button onclick="fetchRails()">Fetch Rails</button>
+    <div id="getRailsResponse"></div>
+  </div>
+
+  <!-- POST /rails/refresh -->
+  <div class="section">
+    <h2>POST /rails/refresh - Trigger Rail Refresh Job</h2>
+    <p class="help">Manually trigger the rail refresh job to update AI-sourced rails (Trending, Popular, New Age Icons) and Brand Recommendations. This normally runs automatically every 6 hours.</p>
+    <button class="success" onclick="triggerRefresh()">Trigger Refresh</button>
+    <div id="refreshRailsResponse"></div>
+  </div>
+
+  <!-- GET /rails/:key -->
+  <div class="section">
+    <h2>GET /rails/:key - Fetch Rail by Key</h2>
+    <div class="row">
+      <div>
+        <label for="getRailKey">Rail Key *</label>
+        <input type="text" id="getRailKey" placeholder="e.g., featured-tracks">
+      </div>
+      <div>
+        <label for="getRailKeyBrandId">Brand ID (optional)</label>
+        <input type="number" id="getRailKeyBrandId" placeholder="e.g., 123">
+      </div>
+    </div>
+    <button onclick="fetchRailByKey()">Fetch Rail</button>
+    <div id="getRailKeyResponse"></div>
+  </div>
+
+  <!-- POST /rails -->
+  <div class="section">
+    <h2>POST /rails - Create/Update Rail</h2>
+    <p class="help">This endpoint requires authentication. Make sure to set the Auth Token above.</p>
+
+    <!-- Basic Info -->
+    <h3>Basic Information</h3>
+    <div class="row">
+      <div>
+        <label for="postRailKey">Key *</label>
+        <input type="text" id="postRailKey" placeholder="e.g., my-rail">
+      </div>
+      <div>
+        <label for="postRailTitle">Title *</label>
+        <input type="text" id="postRailTitle" placeholder="e.g., My Custom Rail">
+      </div>
+      <div>
+        <label for="postRailSubtitle">Subtitle</label>
+        <input type="text" id="postRailSubtitle" placeholder="e.g., Check out these tracks">
+      </div>
+    </div>
+
+    <div class="row row-4">
+      <div>
+        <label for="postRailType">Type *</label>
+        <select id="postRailType" onchange="toggleSourceFields()">
+          <option value="TRACKS">TRACKS</option>
+          <option value="GENRES">GENRES</option>
+          <option value="LANGUAGES">LANGUAGES</option>
+          <option value="MOODS">MOODS</option>
+          <option value="LABELS">LABELS</option>
+          <option value="PLAYLISTS">PLAYLISTS</option>
+        </select>
+      </div>
+      <div>
+        <label for="postRailSourceType">Source Type *</label>
+        <select id="postRailSourceType" onchange="toggleSourceFields()">
+          <option value="MANUAL">MANUAL</option>
+          <option value="QUERY">QUERY (TRACKS only)</option>
+          <option value="AI_QUERY">AI_QUERY (TRACKS only)</option>
+        </select>
+      </div>
+      <div>
+        <label for="postRailBrandId">Brand ID (search by name or enter ID)</label>
+        <div class="brand-search-container">
+          <input type="text" id="postRailBrandId" placeholder="Search brand name or enter ID..." autocomplete="off">
+          <div id="brandSearchDropdown" class="brand-search-dropdown"></div>
+        </div>
+      </div>
+      <div>
+        <label for="postRailPageNames">Page Names (multi-select)</label>
+        <select id="postRailPageNames" class="filter-select" multiple style="min-height: 90px;">
+          <option value="HOME" selected>HOME</option>
+          <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+          <option value="INTERNATIONAL">INTERNATIONAL</option>
+          <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+          <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+        </select>
+        <div id="postRailPageNamesSelected" class="selected-filters"></div>
+      </div>
+      <div>
+        <label for="postRailOrder">Order</label>
+        <input type="number" id="postRailOrder" placeholder="Auto-assigned">
+      </div>
+    </div>
+
+    <div class="row row-3">
+      <div>
+        <label for="postRailLimit">Limit</label>
+        <input type="number" id="postRailLimit" placeholder="Default: 10, Max: 200" value="10">
+      </div>
+      <div class="checkbox-row" style="padding-top: 35px;">
+        <label><input type="checkbox" id="postRailIsVisible" checked> Is Visible</label>
+      </div>
+    </div>
+
+    <!-- MANUAL fields -->
+    <div id="manualFields" class="filter-group">
+      <div class="filter-group-title">MANUAL Source - Item Codes</div>
+
+      <!-- Text input for TRACKS/LABELS/PLAYLISTS -->
+      <div id="manualTextInput">
+        <!-- Track search for TRACKS type -->
+        <div id="trackSearchSection">
+          <label>Search and Select Tracks</label>
+          <div class="track-search-container">
+            <input type="text" id="trackSearchInput" class="track-search-input" placeholder="Type track name to search..." autocomplete="off">
+            <div id="trackSearchDropdown" class="track-search-dropdown"></div>
+          </div>
+          <div class="selected-tracks-container">
+            <p class="help">Selected tracks will appear here. You can also manually enter codes below.</p>
+            <div id="selectedTracksList" class="selected-tracks-list"></div>
+          </div>
+        </div>
+        <div style="margin-top: 15px;">
+          <label for="postRailItemCodes">Item Codes (comma-separated)</label>
+          <input type="text" id="postRailItemCodes" placeholder="e.g., TRACK001,TRACK002,TRACK003">
+          <p class="help">Enter track codes manually, or use the search above to add tracks.</p>
+        </div>
+      </div>
+
+      <!-- Filter dropdown for GENRES -->
+      <div id="manualGenresSelect" style="display: none;">
+        <label>Select Genres (multi-select) *</label>
+        <select id="manualGenres" class="filter-select" multiple onchange="updateManualSelectedTags('manualGenres')"></select>
+        <div id="manualGenresSelected" class="selected-filters"></div>
+        <p class="help">Select genres to include in this rail</p>
+      </div>
+
+      <!-- Filter dropdown for MOODS -->
+      <div id="manualMoodsSelect" style="display: none;">
+        <label>Select Moods (multi-select) *</label>
+        <select id="manualMoods" class="filter-select" multiple onchange="updateManualSelectedTags('manualMoods')"></select>
+        <div id="manualMoodsSelected" class="selected-filters"></div>
+        <p class="help">Select moods to include in this rail</p>
+      </div>
+
+      <!-- Filter dropdown for LANGUAGES -->
+      <div id="manualLanguagesSelect" style="display: none;">
+        <label>Select Languages (multi-select) *</label>
+        <select id="manualLanguages" class="filter-select" multiple onchange="updateManualSelectedTags('manualLanguages')"></select>
+        <div id="manualLanguagesSelected" class="selected-filters"></div>
+        <p class="help">Select languages to include in this rail</p>
+      </div>
+
+      <!-- Owner/Category dropdowns for LABELS -->
+      <div id="manualLabelsSelect" style="display: none;">
+        <div id="ownersLoadingStatus" class="filter-loading" style="display: none;">Loading owners...</div>
+        <div class="row">
+          <div>
+            <label>Select Owners (multi-select)</label>
+            <select id="manualOwners" class="filter-select" multiple onchange="updateManualSelectedTags('manualOwners')"></select>
+            <div id="manualOwnersSelected" class="selected-filters"></div>
+            <p class="help">Select owners to include in this rail</p>
+          </div>
+          <div>
+            <label>Select Categories (multi-select)</label>
+            <select id="manualCategories" class="filter-select" multiple onchange="updateManualSelectedTags('manualCategories')"></select>
+            <div id="manualCategoriesSelected" class="selected-filters"></div>
+            <p class="help">Select categories to include (filters owners by category)</p>
+          </div>
+        </div>
+        <button type="button" class="secondary" style="padding: 5px 10px; font-size: 11px; margin-top: 10px;" onclick="loadOwners()">Reload Owners</button>
+      </div>
+    </div>
+
+    <!-- QUERY fields -->
+    <div id="queryFields" style="display:none;">
+      <div class="filter-group">
+        <div class="filter-group-title">QUERY Source - Track Filters</div>
+        <p class="help">Use filterIds OR track filter parameters (or both). At least one filter must be specified.</p>
+
+        <div class="tabs">
+          <button class="tab active" onclick="switchQueryTab('filters')">Filter IDs</button>
+          <button class="tab" onclick="switchQueryTab('trackParams')">Track Parameters</button>
+          <button class="tab" onclick="switchQueryTab('advanced')">Advanced</button>
+        </div>
+
+        <!-- Filter IDs Tab -->
+        <div id="queryFiltersTab" class="tab-content active">
+          <label for="postRailFilterIds">Filter IDs (comma-separated)</label>
+          <input type="text" id="postRailFilterIds" placeholder="e.g., genre-123,mood-456">
+          <p class="help">Query tracks by filter IDs (genres, moods, languages, etc.)</p>
+        </div>
+
+        <!-- Track Parameters Tab -->
+        <div id="queryTrackParamsTab" class="tab-content">
+          <h3>Boolean Filters</h3>
+          <div class="row row-4">
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryPopular"> Popular</label>
+            </div>
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryTrending"> Trending</label>
+            </div>
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryNewOnHoopr"> New on Hoopr</label>
+            </div>
+            <div class="checkbox-row">
+              <label><input type="checkbox" id="queryCampaign"> Campaign</label>
+            </div>
+          </div>
+
+          <div class="row row-3" style="margin-top: 15px;">
+            <div>
+              <label for="queryMovie">Movie Filter</label>
+              <select id="queryMovie">
+                <option value="">-- Not Set --</option>
+                <option value="true">Movie tracks only</option>
+                <option value="false">Exclude movie tracks</option>
+              </select>
+            </div>
+            <div>
+              <label for="queryReleaseYearFrom">Release Year From</label>
+              <input type="number" id="queryReleaseYearFrom" placeholder="e.g., 2020">
+            </div>
+            <div>
+              <label for="queryReleaseYearTo">Release Year To</label>
+              <input type="number" id="queryReleaseYearTo" placeholder="e.g., 2024">
+            </div>
+          </div>
+
+          <div class="row" style="margin-top: 15px;">
+            <div>
+              <label for="queryType">Owner Type (comma-separated)</label>
+              <input type="text" id="queryType" placeholder="e.g., label,indie">
+              <p class="help">Filter by owner type</p>
+            </div>
+            <div>
+              <label for="queryOwnerCode">Owner Code (comma-separated)</label>
+              <input type="text" id="queryOwnerCode" placeholder="e.g., SONY,WARNER">
+              <p class="help">Filter by owner code</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Tab -->
+        <div id="queryAdvancedTab" class="tab-content">
+          <div class="row">
+            <div>
+              <label for="queryOwnerIds">Owner IDs (comma-separated)</label>
+              <input type="text" id="queryOwnerIds" placeholder="Include only these owner IDs">
+            </div>
+            <div>
+              <label for="queryExcludeOwnerIds">Exclude Owner IDs (comma-separated)</label>
+              <input type="text" id="queryExcludeOwnerIds" placeholder="Exclude these owner IDs">
+            </div>
+          </div>
+          <div class="row" style="margin-top: 15px;">
+            <div>
+              <label for="queryExcludeTiers">Exclude Tiers (comma-separated)</label>
+              <input type="text" id="queryExcludeTiers" placeholder="e.g., tier1,tier2">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI_QUERY fields -->
+    <div id="aiQueryFields" style="display:none;" class="filter-group">
+      <div class="filter-group-title">AI_QUERY Source</div>
+
+      <div class="row">
+        <div>
+          <label for="aiQueryType">Query Type *</label>
+          <select id="aiQueryType" onchange="toggleAiQueryType()">
+            <option value="TRENDING">Trending Songs</option>
+            <option value="POPULAR">Popular Songs</option>
+            <option value="FILTERED">AI Search with Filters</option>
+            <option value="NEW_AGE_ICONS">New Age Icons</option>
+          </select>
+          <p class="help">Select the type of AI-powered search</p>
+        </div>
+        <div>
+          <label for="aiQueryToken">AI Service Token (optional)</label>
+          <input type="text" id="aiQueryToken" placeholder="Bearer token for AI service">
+          <p class="help">Authorization token for the AI service API (optional)</p>
+        </div>
+      </div>
+
+      <!-- Filtered Search Options -->
+      <div id="aiFilteredOptions" style="display:none; margin-top: 15px;">
+        <div class="row">
+          <div style="flex: 2;">
+            <label for="aiSearchQuery">Search Query (q)</label>
+            <input type="text" id="aiSearchQuery" placeholder="e.g., woman power, happy vibes">
+          </div>
+          <div>
+            <label for="aiBrandName">Brand Name</label>
+            <input type="text" id="aiBrandName" placeholder="e.g., Hoopr">
+          </div>
+          <div>
+            <label for="aiUserId">User ID</label>
+            <input type="text" id="aiUserId" placeholder="e.g., 24">
+          </div>
+        </div>
+
+        <h3 style="margin-top: 15px;">Filters <button type="button" class="secondary" style="padding: 5px 10px; font-size: 11px; margin: 0;" onclick="loadFilters()">Reload Filters</button></h3>
+        <div id="filtersLoadingStatus" class="filter-loading" style="display: none;">Loading filters...</div>
+        <div class="row">
+          <div>
+            <label>Genres (multi-select)</label>
+            <select id="aiGenres" class="filter-select" multiple></select>
+            <div id="aiGenresSelected" class="selected-filters"></div>
+          </div>
+          <div>
+            <label>Moods (multi-select)</label>
+            <select id="aiMoods" class="filter-select" multiple></select>
+            <div id="aiMoodsSelected" class="selected-filters"></div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <div>
+            <label>Languages (multi-select)</label>
+            <select id="aiLanguages" class="filter-select" multiple></select>
+            <div id="aiLanguagesSelected" class="selected-filters"></div>
+          </div>
+          <div>
+            <label>Use Cases (multi-select)</label>
+            <select id="aiUsecases" class="filter-select" multiple></select>
+            <div id="aiUsecasesSelected" class="selected-filters"></div>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 10px;">
+          <div>
+            <label>Assortment (multi-select)</label>
+            <select id="aiAssortment" class="filter-select" multiple></select>
+            <div id="aiAssortmentSelected" class="selected-filters"></div>
+          </div>
+          <div>
+            <label for="aiPage">Page</label>
+            <input type="number" id="aiPage" value="1" placeholder="1">
+          </div>
+        </div>
+      </div>
+
+      <!-- Legacy URL Option -->
+      <div id="aiLegacyOption" style="margin-top: 15px; display: none;">
+        <label for="postRailAiUrl">Custom AI Query URL</label>
+        <input type="text" id="postRailAiUrl" placeholder="https://ai-service.example.com/recommend">
+        <p class="help">Direct URL for custom AI endpoint (legacy)</p>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <button onclick="createRail()">Create/Update Rail</button>
+      <button class="secondary" onclick="fillSampleManual()">Sample: Manual</button>
+      <button class="secondary" onclick="fillSampleQueryFilter()">Sample: Query (Filters)</button>
+      <button class="secondary" onclick="fillSampleQueryNewOnHoopr()">Sample: Query (New)</button>
+      <button class="secondary" onclick="fillSampleQueryPopular()">Sample: Query (Popular)</button>
+    </div>
+    <div style="margin-top: 10px;">
+      <button class="success" onclick="fillSampleAiTrending()">Sample: AI Trending</button>
+      <button class="success" onclick="fillSampleAiPopular()">Sample: AI Popular</button>
+      <button class="success" onclick="fillSampleAiFiltered()">Sample: AI Filtered</button>
+    </div>
+    <div id="postRailResponse"></div>
+  </div>
+
+  <!-- Raw JSON Request -->
+  <div class="section">
+    <h2>POST /rails - Raw JSON Request</h2>
+    <p class="help">For advanced testing, paste the full JSON body below.</p>
+    <label for="rawJson">JSON Body</label>
+    <textarea id="rawJson" rows="12">{
+  "key": "test-rail",
+  "title": "Test Rail",
+  "type": "TRACKS",
+  "sourceType": "QUERY",
+  "limit": 10,
+  "query": {
+    "newOnHoopr": true
+  }
+}</textarea>
+    <button onclick="createRailRaw()">Send Raw Request</button>
+    <button class="success" onclick="previewJson()">Preview JSON from Form</button>
+    <div id="rawJsonResponse"></div>
+  </div>
+
+  <!-- DELETE /rails/:railId -->
+  <div class="section">
+    <h2>DELETE /rails/:railId - Delete Rail</h2>
+    <p class="help">Permanently delete a rail and all its items. This action cannot be undone.</p>
+    <div class="row">
+      <div>
+        <label for="deleteRailId">Rail ID *</label>
+        <input type="number" id="deleteRailId" placeholder="e.g., 123">
+      </div>
+    </div>
+    <button style="background: #dc3545;" onclick="deleteRail()">Delete Rail</button>
+    <div id="deleteRailResponse"></div>
+  </div>
+
+  <!-- PATCH /rails/:railId/items - Edit Rail Items -->
+  <div class="section">
+    <h2>PATCH /rails/:railId/items - Edit Rail Items</h2>
+    <p class="help">Edit rail items: delete, freeze/unfreeze, reorder, or add new items. Send the complete list of items you want the rail to have.</p>
+
+    <div class="row">
+      <div>
+        <label for="editRailId">Rail ID *</label>
+        <input type="number" id="editRailId" placeholder="e.g., 123">
+      </div>
+      <div>
+        <button class="secondary" style="margin-top: 32px;" onclick="loadRailItems()">Load Current Items</button>
+      </div>
+    </div>
+
+    <div id="railItemsEditor" style="margin-top: 20px;">
+      <div class="filter-group">
+        <div class="filter-group-title">Rail Items</div>
+        <p class="help">Each row represents an item. Remove items to delete them. Toggle "Locked" to freeze/unfreeze. Drag or change order numbers to reorder. Add new rows for new items.</p>
+
+        <div id="itemsList"></div>
+
+        <div style="margin-top: 15px;">
+          <button class="success" onclick="addItemRow()">+ Add Item</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <button onclick="saveRailItems()">Save Changes</button>
+      <button class="secondary" onclick="clearItemsEditor()">Clear</button>
+    </div>
+    <div id="editRailItemsResponse"></div>
+  </div>
+
+  <!-- PATCH /rails/reorder - Reorder Rails -->
+  <div class="section">
+    <h2>PATCH /rails/reorder - Reorder Rails</h2>
+    <p class="help">Change the display order of rails. Load current rails, modify order numbers, and save.</p>
+
+    <div class="row">
+      <div>
+        <label for="reorderBrandId">Brand ID (optional)</label>
+        <input type="number" id="reorderBrandId" placeholder="Filter by brand">
+      </div>
+      <div>
+        <label for="reorderPageName">Page Name *</label>
+        <select id="reorderPageName">
+          <option value="HOME" selected>HOME</option>
+          <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+          <option value="INTERNATIONAL">INTERNATIONAL</option>
+          <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+          <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+        </select>
+      </div>
+      <div>
+        <button class="secondary" style="margin-top: 32px;" onclick="loadRailsForReorder()">Load Rails</button>
+      </div>
+    </div>
+
+    <div id="railsReorderEditor" style="margin-top: 20px;">
+      <div class="filter-group">
+        <div class="filter-group-title">Rails Order</div>
+        <p class="help">Modify the order numbers to change rail positions. Lower numbers appear first. You can also use the up/down buttons.</p>
+
+        <div id="railsReorderList"></div>
+      </div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <button onclick="saveRailsOrder()">Save Order</button>
+      <button class="secondary" onclick="autoNumberRails()">Auto-number (0, 1, 2...)</button>
+      <button class="secondary" onclick="clearReorderEditor()">Clear</button>
+    </div>
+    <div id="reorderRailsResponse"></div>
+  </div>
+
+  <!-- POST /rails/copy - Copy Rail to Pages -->
+  <div class="section">
+    <h2>POST /rails/copy - Copy Rail to Other Pages</h2>
+    <p class="help">Copy a rail (with all its items) to one or more target pages. The rail will be added at the end of each target page.</p>
+
+    <div class="row">
+      <div>
+        <label for="copyRailBrandId">Brand ID (optional filter)</label>
+        <div class="brand-search-container">
+          <input type="text" id="copyRailBrandId" placeholder="Search brand or enter ID..." autocomplete="off">
+          <div id="copyBrandSearchDropdown" class="brand-search-dropdown"></div>
+        </div>
+      </div>
+      <div>
+        <label for="copyRailPageName">Source Page Name</label>
+        <select id="copyRailPageName">
+          <option value="HOME">HOME</option>
+          <option value="CHARTBUSTERS">CHARTBUSTERS</option>
+          <option value="INTERNATIONAL">INTERNATIONAL</option>
+          <option value="REGIONAL_AND_INDIE">REGIONAL_AND_INDIE</option>
+          <option value="HOOPR_ORIGINALS">HOOPR_ORIGINALS</option>
+        </select>
+      </div>
+      <div>
+        <button class="secondary" style="margin-top: 32px;" onclick="loadRailsForCopy()">Load Rails</button>
+      </div>
+    </div>
+
+    <div id="railsCopyEditor" style="margin-top: 20px;">
+      <div class="filter-group">
+        <div class="filter-group-title">Select Rail to Copy</div>
+        <p class="help">Click "Copy" on any rail to select target pages and copy it.</p>
+        <div id="railsCopyList"></div>
+      </div>
+    </div>
+
+    <div id="copyRailResponse"></div>
+  </div>
+
+  <!-- Copy Modal (hidden by default) -->
+  <div id="copyModal" class="copy-modal-overlay" style="display: none;">
+    <div class="copy-modal">
+      <button class="copy-modal-close" onclick="closeCopyModal()">&times;</button>
+      <h3>Copy Rail to Pages</h3>
+      <p id="copyModalRailInfo" style="color: #666; margin-bottom: 12px;"></p>
+
+      <label><strong>Select Target Pages:</strong></label>
+      <div class="page-checkbox-list" id="targetPagesCheckboxes"></div>
+
+      <div style="margin-top: 10px;">
+        <button class="secondary" onclick="selectAllPages()">Select All</button>
+        <button class="secondary" onclick="deselectAllPages()">Deselect All</button>
+      </div>
+
+      <div class="copy-modal-actions">
+        <button class="secondary" onclick="closeCopyModal()">Cancel</button>
+        <button onclick="executeCopyRail()">Copy Rail</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getBaseUrl() {
+      return document.getElementById('baseUrl').value.replace(/\/$/, '');
+    }
+
+    function getAuthHeaders() {
+      const token = document.getElementById('authToken').value;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+      }
+      return headers;
+    }
+
+    // Filter data storage
+    let filtersData = null;
+    // Owner data storage
+    let ownersData = null;
+
+    // Load owners from API
+    async function loadOwners() {
+      const statusEl = document.getElementById('ownersLoadingStatus');
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Loading owners...';
+        statusEl.style.color = '#666';
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/owners?limit=200`);
+        const json = await res.json();
+
+        if (json.data && json.data.owners) {
+          ownersData = json.data.owners;
+          populateOwnerSelects();
+          if (statusEl) statusEl.style.display = 'none';
+        } else {
+          if (statusEl) {
+            statusEl.textContent = 'Failed to load owners';
+            statusEl.style.color = '#dc3545';
+          }
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = 'Error loading owners: ' + err.message;
+          statusEl.style.color = '#dc3545';
+        }
+      }
+    }
+
+    // Populate owner and category select elements
+    function populateOwnerSelects() {
+      if (!ownersData) return;
+
+      // Populate owners dropdown
+      const ownersSelect = document.getElementById('manualOwners');
+      if (ownersSelect) {
+        ownersSelect.innerHTML = '';
+        ownersData.forEach(owner => {
+          const option = document.createElement('option');
+          option.value = owner.ownerCode;
+          option.textContent = owner.name || owner.ownerCode;
+          option.dataset.name = owner.name || owner.ownerCode;
+          option.dataset.category = owner.category || '';
+          ownersSelect.appendChild(option);
+        });
+
+        // Add click handler for toggle selection
+        ownersSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        ownersSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+
+      // Extract unique categories and populate categories dropdown
+      const categoriesSelect = document.getElementById('manualCategories');
+      if (categoriesSelect) {
+        categoriesSelect.innerHTML = '';
+        const uniqueCategories = [...new Set(ownersData.map(o => o.category).filter(Boolean))].sort();
+        uniqueCategories.forEach(category => {
+          const option = document.createElement('option');
+          option.value = category;
+          option.textContent = category;
+          option.dataset.name = category;
+          categoriesSelect.appendChild(option);
+        });
+
+        // Add click handler for toggle selection
+        categoriesSelect.removeEventListener('mousedown', handleMultiSelectClick);
+        categoriesSelect.addEventListener('mousedown', handleMultiSelectClick);
+      }
+    }
+
+    // Get selected owner codes
+    function getSelectedOwnerCodes() {
+      const ownersSelect = document.getElementById('manualOwners');
+      const categoriesSelect = document.getElementById('manualCategories');
+
+      const selectedOwnerCodes = Array.from(ownersSelect?.selectedOptions || []).map(opt => opt.value);
+      const selectedCategories = Array.from(categoriesSelect?.selectedOptions || []).map(opt => opt.value);
+
+      // If categories selected, get all owner codes from those categories
+      if (selectedCategories.length > 0 && ownersData) {
+        const categoryOwnerCodes = ownersData
+          .filter(o => selectedCategories.includes(o.category))
+          .map(o => o.ownerCode);
+
+        // Merge with directly selected owners (unique)
+        return [...new Set([...selectedOwnerCodes, ...categoryOwnerCodes])];
+      }
+
+      return selectedOwnerCodes;
+    }
+
+    // Load filters from API
+    async function loadFilters() {
+      const statusEl = document.getElementById('filtersLoadingStatus');
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'Loading filters...';
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/filters`);
+        const json = await res.json();
+
+        if (json.data && json.data.filters) {
+          filtersData = json.data.filters;
+          populateFilterSelects();
+          statusEl.style.display = 'none';
+        } else {
+          statusEl.textContent = 'Failed to load filters';
+          statusEl.style.color = '#dc3545';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Error loading filters: ' + err.message;
+        statusEl.style.color = '#dc3545';
+      }
+    }
+
+    // Populate filter select elements
+    function populateFilterSelects() {
+      if (!filtersData) return;
+
+      const filterMappings = [
+        // AI Query filters
+        { selectId: 'aiGenres', dataKey: 'genre' },
+        { selectId: 'aiMoods', dataKey: 'mood' },
+        { selectId: 'aiLanguages', dataKey: 'language' },
+        { selectId: 'aiUsecases', dataKey: 'usecase' },
+        { selectId: 'aiAssortment', dataKey: 'assortment' },
+        // Manual source filters
+        { selectId: 'manualGenres', dataKey: 'genre' },
+        { selectId: 'manualMoods', dataKey: 'mood' },
+        { selectId: 'manualLanguages', dataKey: 'language' },
+        { selectId: 'manualUsecases', dataKey: 'usecase' }
+      ];
+
+      filterMappings.forEach(({ selectId, dataKey }) => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        const items = filtersData[dataKey] || [];
+
+        select.innerHTML = '';
+        items.sort((a, b) => (a.rank || 999) - (b.rank || 999));
+
+        items.forEach(item => {
+          const option = document.createElement('option');
+          option.value = item.id;
+          option.textContent = item.name;
+          option.dataset.name = item.name;
+          select.appendChild(option);
+        });
+
+        // Add click handler for toggle selection (no Ctrl needed)
+        select.removeEventListener('mousedown', handleMultiSelectClick);
+        select.addEventListener('mousedown', handleMultiSelectClick);
+
+        // Add change handler for selected tags display
+        select.removeEventListener('change', updateSelectedTags);
+        select.addEventListener('change', updateSelectedTags);
+      });
+    }
+
+    // Handle multi-select click to toggle without Ctrl key
+    function handleMultiSelectClick(e) {
+      const select = e.currentTarget;
+      const option = e.target;
+
+      if (option.tagName !== 'OPTION') return;
+
+      e.preventDefault();
+      option.selected = !option.selected;
+      select.dispatchEvent(new Event('change'));
+    }
+
+    // Update selected tags display
+    function updateSelectedTags(event) {
+      const select = event.target;
+      const containerId = select.id + 'Selected';
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      container.innerHTML = '';
+      const selectedOptions = Array.from(select.selectedOptions);
+
+      selectedOptions.forEach(option => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${option.dataset.name || option.textContent} <span class="remove" onclick="removeFilterSelection('${select.id}', '${option.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    // Remove a filter selection
+    function removeFilterSelection(selectId, value) {
+      const select = document.getElementById(selectId);
+      const option = select.querySelector(`option[value="${value}"]`);
+      if (option) {
+        option.selected = false;
+        select.dispatchEvent(new Event('change'));
+      }
+    }
+
+    // Get selected filter names for a select element
+    function getSelectedFilterNames(selectId) {
+      const select = document.getElementById(selectId);
+      return Array.from(select.selectedOptions).map(opt => opt.dataset.name || opt.textContent);
+    }
+
+    // Page Names multi-select helpers
+    function updatePageNamesSelectedTags() {
+      const select = document.getElementById('postRailPageNames');
+      const container = document.getElementById('postRailPageNamesSelected');
+      if (!container) return;
+
+      container.innerHTML = '';
+      Array.from(select.selectedOptions).forEach(option => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${option.textContent} <span class="remove" onclick="removePageNameSelection('${option.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function removePageNameSelection(value) {
+      const select = document.getElementById('postRailPageNames');
+      const option = select.querySelector(`option[value="${value}"]`);
+      if (option) {
+        option.selected = false;
+        updatePageNamesSelectedTags();
+      }
+    }
+
+    function initPageNamesMultiSelect() {
+      const select = document.getElementById('postRailPageNames');
+      if (!select) return;
+
+      select.addEventListener('mousedown', handleMultiSelectClick);
+      select.addEventListener('change', updatePageNamesSelectedTags);
+      // Initialize tags
+      updatePageNamesSelectedTags();
+    }
+
+    // Load filters and owners on page load - moved to end of script
+
+    function displayResponse(containerId, status, data) {
+      const container = document.getElementById(containerId);
+      const isSuccess = status >= 200 && status < 300;
+      container.innerHTML = `
+        <div class="status ${isSuccess ? 'success' : 'error'}">Status: ${status}</div>
+        <div class="response"><pre>${JSON.stringify(data, null, 2)}</pre></div>
+      `;
+    }
+
+    async function fetchRails() {
+      const brandId = document.getElementById('getRailsBrandId').value;
+      const pageName = document.getElementById('getRailsPageName').value;
+      let url = `${getBaseUrl()}/rails`;
+      const params = [];
+      if (brandId) params.push(`brandId=${brandId}`);
+      if (pageName) params.push(`pageName=${pageName}`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        displayResponse('getRailsResponse', res.status, data);
+      } catch (err) {
+        displayResponse('getRailsResponse', 0, { error: err.message });
+      }
+    }
+
+    async function triggerRefresh() {
+      const url = `${getBaseUrl()}/rails/refresh`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+        });
+        const data = await res.json();
+        displayResponse('refreshRailsResponse', res.status, data);
+      } catch (err) {
+        displayResponse('refreshRailsResponse', 0, { error: err.message });
+      }
+    }
+
+    async function fetchRailByKey() {
+      const key = document.getElementById('getRailKey').value;
+      if (!key) {
+        alert('Rail Key is required');
+        return;
+      }
+      const brandId = document.getElementById('getRailKeyBrandId').value;
+      let url = `${getBaseUrl()}/rails/${encodeURIComponent(key)}`;
+      if (brandId) url += `?brandId=${brandId}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        displayResponse('getRailKeyResponse', res.status, data);
+      } catch (err) {
+        displayResponse('getRailKeyResponse', 0, { error: err.message });
+      }
+    }
+
+    function toggleSourceFields() {
+      const sourceType = document.getElementById('postRailSourceType').value;
+      const railType = document.getElementById('postRailType').value;
+
+      document.getElementById('manualFields').style.display = sourceType === 'MANUAL' ? 'block' : 'none';
+      document.getElementById('queryFields').style.display = sourceType === 'QUERY' ? 'block' : 'none';
+      document.getElementById('aiQueryFields').style.display = sourceType === 'AI_QUERY' ? 'block' : 'none';
+
+      if (sourceType === 'AI_QUERY') {
+        toggleAiQueryType();
+      }
+
+      // Toggle manual input type based on rail type
+      if (sourceType === 'MANUAL') {
+        toggleManualInputType(railType);
+      }
+    }
+
+    function toggleManualInputType(railType) {
+      // Hide all manual input options first
+      document.getElementById('manualTextInput').style.display = 'none';
+      document.getElementById('manualGenresSelect').style.display = 'none';
+      document.getElementById('manualMoodsSelect').style.display = 'none';
+      document.getElementById('manualLanguagesSelect').style.display = 'none';
+      document.getElementById('manualLabelsSelect').style.display = 'none';
+
+      // Show appropriate input based on rail type
+      if (railType === 'GENRES') {
+        document.getElementById('manualGenresSelect').style.display = 'block';
+      } else if (railType === 'MOODS') {
+        document.getElementById('manualMoodsSelect').style.display = 'block';
+      } else if (railType === 'LANGUAGES') {
+        document.getElementById('manualLanguagesSelect').style.display = 'block';
+      } else if (railType === 'LABELS') {
+        document.getElementById('manualLabelsSelect').style.display = 'block';
+      } else {
+        // TRACKS or PLAYLISTS - use text input
+        document.getElementById('manualTextInput').style.display = 'block';
+      }
+    }
+
+    // Update selected tags for manual filter selects
+    function updateManualSelectedTags(selectId) {
+      const select = document.getElementById(selectId);
+      const containerId = selectId + 'Selected';
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      container.innerHTML = '';
+      const selectedOptions = Array.from(select.selectedOptions);
+
+      selectedOptions.forEach(option => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-tag';
+        tag.innerHTML = `${option.dataset.name || option.textContent} <span class="remove" onclick="removeManualFilterSelection('${selectId}', '${option.value}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    function removeManualFilterSelection(selectId, value) {
+      const select = document.getElementById(selectId);
+      const option = select.querySelector(`option[value="${value}"]`);
+      if (option) {
+        option.selected = false;
+        updateManualSelectedTags(selectId);
+      }
+    }
+
+    // Get selected filter IDs for manual source
+    function getManualSelectedIds(selectId) {
+      const select = document.getElementById(selectId);
+      return Array.from(select.selectedOptions).map(opt => opt.value);
+    }
+
+    function toggleAiQueryType() {
+      const queryType = document.getElementById('aiQueryType').value;
+      document.getElementById('aiFilteredOptions').style.display = queryType === 'FILTERED' ? 'block' : 'none';
+    }
+
+    function switchQueryTab(tabName) {
+      // Remove active from all tabs and contents
+      document.querySelectorAll('#queryFields .tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('#queryFields .tab-content').forEach(c => c.classList.remove('active'));
+
+      // Add active to selected
+      if (tabName === 'filters') {
+        document.querySelector('#queryFields .tab:nth-child(1)').classList.add('active');
+        document.getElementById('queryFiltersTab').classList.add('active');
+      } else if (tabName === 'trackParams') {
+        document.querySelector('#queryFields .tab:nth-child(2)').classList.add('active');
+        document.getElementById('queryTrackParamsTab').classList.add('active');
+      } else if (tabName === 'advanced') {
+        document.querySelector('#queryFields .tab:nth-child(3)').classList.add('active');
+        document.getElementById('queryAdvancedTab').classList.add('active');
+      }
+    }
+
+    function buildRequestBody() {
+      const key = document.getElementById('postRailKey').value;
+      const title = document.getElementById('postRailTitle').value;
+      const type = document.getElementById('postRailType').value;
+      const sourceType = document.getElementById('postRailSourceType').value;
+
+      const body = { key, title, type, sourceType };
+
+      // Optional fields
+      const subtitle = document.getElementById('postRailSubtitle').value;
+      const brandId = document.getElementById('postRailBrandId').value;
+      const pageNamesSelect = document.getElementById('postRailPageNames');
+      const pageNames = Array.from(pageNamesSelect.selectedOptions).map(opt => opt.value);
+      const order = document.getElementById('postRailOrder').value;
+      const limit = document.getElementById('postRailLimit').value;
+      const isVisible = document.getElementById('postRailIsVisible').checked;
+
+      if (subtitle) body.subtitle = subtitle;
+      if (brandId) body.brandId = parseInt(brandId);
+      if (pageNames.length > 0) body.pageNames = pageNames;
+      if (order) body.order = parseInt(order);
+      if (limit) body.limit = parseInt(limit);
+      body.isVisible = isVisible;
+
+      // Source-specific fields
+      if (sourceType === 'MANUAL') {
+        // Check if using filter dropdown based on type
+        if (type === 'GENRES') {
+          body.itemCodes = getManualSelectedIds('manualGenres');
+        } else if (type === 'MOODS') {
+          body.itemCodes = getManualSelectedIds('manualMoods');
+        } else if (type === 'LANGUAGES') {
+          body.itemCodes = getManualSelectedIds('manualLanguages');
+        } else if (type === 'LABELS') {
+          // For LABELS, use owner codes (from owners and/or categories selection)
+          body.itemCodes = getSelectedOwnerCodes();
+        } else {
+          // TRACKS or PLAYLISTS - use text input
+          const itemCodes = document.getElementById('postRailItemCodes').value;
+          body.itemCodes = itemCodes.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      } else if (sourceType === 'QUERY') {
+        const query = {};
+
+        // Filter IDs
+        const filterIds = document.getElementById('postRailFilterIds').value;
+        if (filterIds.trim()) {
+          query.filterIds = filterIds.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        // Boolean filters
+        if (document.getElementById('queryPopular').checked) query.popular = true;
+        if (document.getElementById('queryTrending').checked) query.trending = true;
+        if (document.getElementById('queryNewOnHoopr').checked) query.newOnHoopr = true;
+        if (document.getElementById('queryCampaign').checked) query.campaign = true;
+
+        // Movie filter
+        const movieVal = document.getElementById('queryMovie').value;
+        if (movieVal === 'true') query.movie = true;
+        else if (movieVal === 'false') query.movie = false;
+
+        // Release year
+        const releaseYearFrom = document.getElementById('queryReleaseYearFrom').value;
+        const releaseYearTo = document.getElementById('queryReleaseYearTo').value;
+        if (releaseYearFrom) query.releaseYearFrom = parseInt(releaseYearFrom);
+        if (releaseYearTo) query.releaseYearTo = parseInt(releaseYearTo);
+
+        // Type and owner code
+        const typeVal = document.getElementById('queryType').value;
+        if (typeVal.trim()) {
+          query.type = typeVal.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        const ownerCodeVal = document.getElementById('queryOwnerCode').value;
+        if (ownerCodeVal.trim()) {
+          query.ownerCode = ownerCodeVal.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        // Advanced: owner IDs
+        const ownerIds = document.getElementById('queryOwnerIds').value;
+        if (ownerIds.trim()) {
+          query.ownerIds = ownerIds.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        const excludeOwnerIds = document.getElementById('queryExcludeOwnerIds').value;
+        if (excludeOwnerIds.trim()) {
+          query.excludeOwnerIds = excludeOwnerIds.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        const excludeTiers = document.getElementById('queryExcludeTiers').value;
+        if (excludeTiers.trim()) {
+          query.excludeTiers = excludeTiers.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        body.query = query;
+      } else if (sourceType === 'AI_QUERY') {
+        const queryType = document.getElementById('aiQueryType').value;
+        const token = document.getElementById('aiQueryToken').value.trim();
+
+        const aiQuery = {
+          queryType,
+          limit: body.limit || 40,
+        };
+
+        // Add token as headers if provided
+        if (token) {
+          aiQuery.headers = { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` };
+        }
+
+        if (queryType === 'FILTERED') {
+          aiQuery.q = document.getElementById('aiSearchQuery').value.trim() || '';
+          aiQuery.brandName = document.getElementById('aiBrandName').value.trim() || '';
+          aiQuery.userId = document.getElementById('aiUserId').value.trim() || '';
+
+          const page = document.getElementById('aiPage').value;
+          if (page) aiQuery.page = parseInt(page);
+
+          // Build filters array from multi-select dropdowns
+          const filters = [];
+          const genres = getSelectedFilterNames('aiGenres');
+          const moods = getSelectedFilterNames('aiMoods');
+          const languages = getSelectedFilterNames('aiLanguages');
+          const usecases = getSelectedFilterNames('aiUsecases');
+          const assortment = getSelectedFilterNames('aiAssortment');
+
+          if (genres.length) filters.push({ type: 'genre', value: genres });
+          if (moods.length) filters.push({ type: 'mood', value: moods });
+          if (languages.length) filters.push({ type: 'language', value: languages });
+          if (usecases.length) filters.push({ type: 'usecase', value: usecases });
+          if (assortment.length) filters.push({ type: 'assortment', value: assortment });
+
+          aiQuery.filters = filters;
+        }
+
+        // Legacy URL support
+        const legacyUrl = document.getElementById('postRailAiUrl').value.trim();
+        if (legacyUrl && !queryType) {
+          aiQuery.url = legacyUrl;
+        }
+
+        body.aiQuery = aiQuery;
+      }
+
+      return body;
+    }
+
+    async function createRail() {
+      const body = buildRequestBody();
+
+      if (!body.key || !body.title) {
+        alert('Key and Title are required');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResponse('postRailResponse', res.status, data);
+      } catch (err) {
+        displayResponse('postRailResponse', 0, { error: err.message });
+      }
+    }
+
+    async function createRailRaw() {
+      const jsonStr = document.getElementById('rawJson').value;
+      let body;
+      try {
+        body = JSON.parse(jsonStr);
+      } catch (err) {
+        alert('Invalid JSON: ' + err.message);
+        return;
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResponse('rawJsonResponse', res.status, data);
+      } catch (err) {
+        displayResponse('rawJsonResponse', 0, { error: err.message });
+      }
+    }
+
+    function previewJson() {
+      const body = buildRequestBody();
+      document.getElementById('rawJson').value = JSON.stringify(body, null, 2);
+    }
+
+    function clearForm() {
+      document.getElementById('postRailKey').value = '';
+      document.getElementById('postRailTitle').value = '';
+      document.getElementById('postRailSubtitle').value = '';
+      document.getElementById('postRailBrandId').value = '';
+      // Reset page names to default (HOME selected)
+      const pageNamesSelect = document.getElementById('postRailPageNames');
+      Array.from(pageNamesSelect.options).forEach(opt => opt.selected = (opt.value === 'HOME'));
+      updatePageNamesSelectedTags();
+      document.getElementById('postRailOrder').value = '';
+      document.getElementById('postRailLimit').value = '10';
+      document.getElementById('postRailIsVisible').checked = true;
+      document.getElementById('postRailItemCodes').value = '';
+      document.getElementById('trackSearchInput').value = '';
+      clearSelectedTracks();
+      document.getElementById('postRailFilterIds').value = '';
+      document.getElementById('queryPopular').checked = false;
+      document.getElementById('queryTrending').checked = false;
+      document.getElementById('queryNewOnHoopr').checked = false;
+      document.getElementById('queryCampaign').checked = false;
+      document.getElementById('queryMovie').value = '';
+      document.getElementById('queryReleaseYearFrom').value = '';
+      document.getElementById('queryReleaseYearTo').value = '';
+      document.getElementById('queryType').value = '';
+      document.getElementById('queryOwnerCode').value = '';
+      document.getElementById('queryOwnerIds').value = '';
+      document.getElementById('queryExcludeOwnerIds').value = '';
+      document.getElementById('queryExcludeTiers').value = '';
+      document.getElementById('postRailAiUrl').value = '';
+      // AI Query fields
+      document.getElementById('aiQueryType').value = 'TRENDING';
+      document.getElementById('aiQueryToken').value = '';
+      document.getElementById('aiSearchQuery').value = '';
+      document.getElementById('aiBrandName').value = '';
+      document.getElementById('aiUserId').value = '';
+      // Clear multi-select filter selections (AI Query)
+      ['aiGenres', 'aiMoods', 'aiLanguages', 'aiUsecases', 'aiAssortment'].forEach(id => {
+        const select = document.getElementById(id);
+        Array.from(select.options).forEach(opt => opt.selected = false);
+        const container = document.getElementById(id + 'Selected');
+        if (container) container.innerHTML = '';
+      });
+      // Clear manual filter selections
+      ['manualGenres', 'manualMoods', 'manualLanguages', 'manualOwners', 'manualCategories'].forEach(id => {
+        const select = document.getElementById(id);
+        if (select) {
+          Array.from(select.options).forEach(opt => opt.selected = false);
+          const container = document.getElementById(id + 'Selected');
+          if (container) container.innerHTML = '';
+        }
+      });
+      document.getElementById('aiPage').value = '1';
+    }
+
+    function fillSampleManual() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'test-manual-rail';
+      document.getElementById('postRailTitle').value = 'Manual Track Selection';
+      document.getElementById('postRailSubtitle').value = 'Hand-picked tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'MANUAL';
+      document.getElementById('postRailItemCodes').value = 'TRACK001,TRACK002,TRACK003';
+      toggleSourceFields();
+    }
+
+    function fillSampleQueryFilter() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'test-filter-rail';
+      document.getElementById('postRailTitle').value = 'Tracks by Filter';
+      document.getElementById('postRailSubtitle').value = 'Filtered by genre/mood';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'QUERY';
+      document.getElementById('postRailFilterIds').value = 'genre-123,mood-456';
+      toggleSourceFields();
+      switchQueryTab('filters');
+    }
+
+    function fillSampleQueryNewOnHoopr() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'new-on-hoopr';
+      document.getElementById('postRailTitle').value = 'New on Hoopr';
+      document.getElementById('postRailSubtitle').value = 'Fresh tracks from this week';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'QUERY';
+      document.getElementById('postRailLimit').value = '20';
+      document.getElementById('queryNewOnHoopr').checked = true;
+      toggleSourceFields();
+      switchQueryTab('trackParams');
+    }
+
+    function fillSampleQueryPopular() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'popular-tracks';
+      document.getElementById('postRailTitle').value = 'Popular Tracks';
+      document.getElementById('postRailSubtitle').value = 'Most streamed tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'QUERY';
+      document.getElementById('postRailLimit').value = '15';
+      document.getElementById('queryPopular').checked = true;
+      document.getElementById('queryMovie').value = 'false';
+      toggleSourceFields();
+      switchQueryTab('trackParams');
+    }
+
+    function fillSampleAiTrending() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'ai-trending-songs';
+      document.getElementById('postRailTitle').value = 'Trending Now';
+      document.getElementById('postRailSubtitle').value = 'AI-powered trending tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'AI_QUERY';
+      document.getElementById('postRailLimit').value = '40';
+      document.getElementById('postRailBrandId').value = '13';
+      document.getElementById('aiQueryType').value = 'TRENDING';
+      toggleSourceFields();
+    }
+
+    function fillSampleAiPopular() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'ai-popular-songs';
+      document.getElementById('postRailTitle').value = 'Popular Hits';
+      document.getElementById('postRailSubtitle').value = 'AI-powered popular tracks';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'AI_QUERY';
+      document.getElementById('postRailLimit').value = '40';
+      document.getElementById('postRailBrandId').value = '13';
+      document.getElementById('aiQueryType').value = 'POPULAR';
+      toggleSourceFields();
+    }
+
+    function fillSampleAiFiltered() {
+      clearForm();
+      document.getElementById('postRailKey').value = 'ai-filtered-search';
+      document.getElementById('postRailTitle').value = 'AI Curated Mix';
+      document.getElementById('postRailSubtitle').value = 'Personalized track selection';
+      document.getElementById('postRailType').value = 'TRACKS';
+      document.getElementById('postRailSourceType').value = 'AI_QUERY';
+      document.getElementById('postRailLimit').value = '200';
+      document.getElementById('postRailBrandId').value = '20';
+      document.getElementById('aiQueryType').value = 'FILTERED';
+      document.getElementById('aiSearchQuery').value = 'woman power';
+      document.getElementById('aiBrandName').value = 'Hoopr';
+      document.getElementById('aiUserId').value = '24';
+      document.getElementById('aiGenres').value = 'Indian Contemporary, Ambient, Devotional';
+      document.getElementById('aiMoods').value = 'Action, Motivational';
+      document.getElementById('aiLanguages').value = 'English, Hindi';
+      document.getElementById('aiUsecases').value = 'Automobile, Bumpers';
+      document.getElementById('aiAssortment').value = 'chartbusters';
+      toggleSourceFields();
+    }
+
+    // DELETE Rail
+    async function deleteRail() {
+      const railId = document.getElementById('deleteRailId').value;
+      if (!railId) {
+        alert('Rail ID is required');
+        return;
+      }
+      if (!confirm(`Are you sure you want to permanently delete rail ${railId}? This cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails/${railId}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
+        const data = await res.json();
+        displayResponse('deleteRailResponse', res.status, data);
+      } catch (err) {
+        displayResponse('deleteRailResponse', 0, { error: err.message });
+      }
+    }
+
+    // Edit Rail Items
+    let currentRailItems = [];
+    let itemRowCounter = 0;
+
+    function createItemRow(item = null) {
+      const rowId = itemRowCounter++;
+      const div = document.createElement('div');
+      div.className = 'item-row';
+      div.id = `item-row-${rowId}`;
+      div.style.cssText = 'display: flex; gap: 10px; align-items: center; padding: 10px; background: white; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;';
+
+      div.innerHTML = `
+        <input type="hidden" class="item-id" value="${item?.id || ''}">
+        <div style="flex: 0 0 60px;">
+          <label style="font-size: 11px; margin: 0;">Order</label>
+          <input type="number" class="item-order" value="${item?.order ?? itemRowCounter - 1}" style="width: 50px; padding: 5px;">
+        </div>
+        <div style="flex: 1;">
+          <label style="font-size: 11px; margin: 0;">Item Code *</label>
+          <input type="text" class="item-code" value="${item?.itemCode || ''}" placeholder="e.g., TRACK001" style="padding: 5px;">
+        </div>
+        <div style="flex: 0 0 80px; text-align: center;">
+          <label style="font-size: 11px; margin: 0;">Locked</label>
+          <div><input type="checkbox" class="item-locked" ${item?.isLocked ? 'checked' : ''}></div>
+        </div>
+        <div style="flex: 0 0 80px;">
+          <button onclick="removeItemRow(${rowId})" style="background: #dc3545; padding: 5px 10px; font-size: 12px;">Remove</button>
+        </div>
+      `;
+
+      return div;
+    }
+
+    function addItemRow(item = null) {
+      const container = document.getElementById('itemsList');
+      container.appendChild(createItemRow(item));
+    }
+
+    function removeItemRow(rowId) {
+      const row = document.getElementById(`item-row-${rowId}`);
+      if (row) row.remove();
+    }
+
+    function clearItemsEditor() {
+      document.getElementById('itemsList').innerHTML = '';
+      currentRailItems = [];
+      itemRowCounter = 0;
+    }
+
+    async function loadRailItems() {
+      const railId = document.getElementById('editRailId').value;
+      if (!railId) {
+        alert('Rail ID is required');
+        return;
+      }
+
+      clearItemsEditor();
+
+      try {
+        // First fetch all rails to find this one by ID
+        const res = await fetch(`${getBaseUrl()}/rails`);
+        const data = await res.json();
+
+        if (data.data && Array.isArray(data.data)) {
+          const rail = data.data.find(r => r.id == railId);
+          if (rail && rail.items) {
+            rail.items.forEach(item => {
+              addItemRow({
+                id: item.id,
+                itemCode: item.itemCode,
+                order: item.order,
+                isLocked: item.isLocked || false
+              });
+            });
+            displayResponse('editRailItemsResponse', 200, { message: `Loaded ${rail.items.length} items from rail "${rail.title}"` });
+          } else {
+            displayResponse('editRailItemsResponse', 404, { message: 'Rail not found or has no items' });
+          }
+        }
+      } catch (err) {
+        displayResponse('editRailItemsResponse', 0, { error: err.message });
+      }
+    }
+
+    function collectItemsFromEditor() {
+      const rows = document.querySelectorAll('.item-row');
+      const items = [];
+
+      rows.forEach(row => {
+        const id = row.querySelector('.item-id').value;
+        const order = parseInt(row.querySelector('.item-order').value) || 0;
+        const itemCode = row.querySelector('.item-code').value.trim();
+        const isLocked = row.querySelector('.item-locked').checked;
+
+        if (itemCode) {
+          const item = { itemCode, order, isLocked };
+          if (id) item.id = parseInt(id);
+          items.push(item);
+        }
+      });
+
+      // Sort by order
+      items.sort((a, b) => a.order - b.order);
+
+      return items;
+    }
+
+    async function saveRailItems() {
+      const railId = document.getElementById('editRailId').value;
+      if (!railId) {
+        alert('Rail ID is required');
+        return;
+      }
+
+      const items = collectItemsFromEditor();
+      if (items.length === 0) {
+        if (!confirm('No items found. This will remove all items from the rail. Continue?')) {
+          return;
+        }
+      }
+
+      const body = { items };
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails/${railId}/items`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResponse('editRailItemsResponse', res.status, data);
+
+        // Reload items after save
+        if (res.ok) {
+          setTimeout(() => loadRailItems(), 500);
+        }
+      } catch (err) {
+        displayResponse('editRailItemsResponse', 0, { error: err.message });
+      }
+    }
+
+    // Reorder Rails
+    let railsForReorder = [];
+    let reorderRowCounter = 0;
+
+    function createReorderRow(rail) {
+      const rowId = reorderRowCounter++;
+      const div = document.createElement('div');
+      div.className = 'reorder-row';
+      div.id = `reorder-row-${rowId}`;
+      div.dataset.railId = rail.id;
+      div.style.cssText = 'display: flex; gap: 10px; align-items: center; padding: 10px; background: white; border-radius: 4px; margin-bottom: 8px; border: 1px solid #ddd;';
+
+      const brandLabel = rail.brandId ? `<span style="background: #e9ecef; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Brand: ${rail.brandId}</span>` : '<span style="background: #d4edda; padding: 2px 6px; border-radius: 3px; font-size: 11px;">Default</span>';
+
+      div.innerHTML = `
+        <div style="flex: 0 0 60px;">
+          <input type="number" class="rail-order" value="${rail.order}" style="width: 50px; padding: 5px; text-align: center;">
+        </div>
+        <div style="flex: 0 0 40px; display: flex; flex-direction: column; gap: 2px;">
+          <button onclick="moveRailUp(${rowId})" style="padding: 2px 8px; font-size: 10px; margin: 0;">▲</button>
+          <button onclick="moveRailDown(${rowId})" style="padding: 2px 8px; font-size: 10px; margin: 0;">▼</button>
+        </div>
+        <div style="flex: 0 0 60px; text-align: center;">
+          <span style="font-weight: 600; color: #666;">#${rail.id}</span>
+        </div>
+        <div style="flex: 1;">
+          <div style="font-weight: 600;">${rail.title}</div>
+          <div style="font-size: 12px; color: #666;">${rail.key} ${brandLabel}</div>
+        </div>
+        <div style="flex: 0 0 100px; text-align: right;">
+          <span style="font-size: 12px; color: #888;">${rail.items?.length || 0} items</span>
+        </div>
+      `;
+
+      return div;
+    }
+
+    function clearReorderEditor() {
+      document.getElementById('railsReorderList').innerHTML = '';
+      railsForReorder = [];
+      reorderRowCounter = 0;
+    }
+
+    async function loadRailsForReorder() {
+      const brandId = document.getElementById('reorderBrandId').value;
+      const pageName = document.getElementById('reorderPageName').value;
+
+      let url = `${getBaseUrl()}/rails`;
+      const params = [];
+      if (brandId) params.push(`brandId=${brandId}`);
+      if (pageName) params.push(`pageName=${pageName}`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+
+      clearReorderEditor();
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.data && Array.isArray(data.data)) {
+          railsForReorder = data.data;
+          // Sort by current order
+          railsForReorder.sort((a, b) => a.order - b.order);
+
+          const container = document.getElementById('railsReorderList');
+          railsForReorder.forEach(rail => {
+            container.appendChild(createReorderRow(rail));
+          });
+
+          displayResponse('reorderRailsResponse', 200, { message: `Loaded ${railsForReorder.length} rails` });
+        } else {
+          displayResponse('reorderRailsResponse', res.status, data);
+        }
+      } catch (err) {
+        displayResponse('reorderRailsResponse', 0, { error: err.message });
+      }
+    }
+
+    function moveRailUp(rowId) {
+      const row = document.getElementById(`reorder-row-${rowId}`);
+      const prevRow = row.previousElementSibling;
+      if (prevRow && prevRow.classList.contains('reorder-row')) {
+        // Swap order values
+        const currentOrder = row.querySelector('.rail-order');
+        const prevOrder = prevRow.querySelector('.rail-order');
+        const temp = currentOrder.value;
+        currentOrder.value = prevOrder.value;
+        prevOrder.value = temp;
+        // Move DOM element
+        row.parentNode.insertBefore(row, prevRow);
+      }
+    }
+
+    function moveRailDown(rowId) {
+      const row = document.getElementById(`reorder-row-${rowId}`);
+      const nextRow = row.nextElementSibling;
+      if (nextRow && nextRow.classList.contains('reorder-row')) {
+        // Swap order values
+        const currentOrder = row.querySelector('.rail-order');
+        const nextOrder = nextRow.querySelector('.rail-order');
+        const temp = currentOrder.value;
+        currentOrder.value = nextOrder.value;
+        nextOrder.value = temp;
+        // Move DOM element
+        row.parentNode.insertBefore(nextRow, row);
+      }
+    }
+
+    function autoNumberRails() {
+      const rows = document.querySelectorAll('.reorder-row');
+      rows.forEach((row, index) => {
+        row.querySelector('.rail-order').value = index;
+      });
+    }
+
+    function collectRailOrders() {
+      const rows = document.querySelectorAll('.reorder-row');
+      const railOrders = [];
+
+      rows.forEach(row => {
+        const id = parseInt(row.dataset.railId);
+        const order = parseInt(row.querySelector('.rail-order').value) || 0;
+        railOrders.push({ id, order });
+      });
+
+      return railOrders;
+    }
+
+    async function saveRailsOrder() {
+      const railOrders = collectRailOrders();
+      const pageName = document.getElementById('reorderPageName').value;
+
+      if (!pageName) {
+        alert('Page Name is required for reordering. Please select a page.');
+        return;
+      }
+
+      if (railOrders.length === 0) {
+        alert('No rails to reorder. Load rails first.');
+        return;
+      }
+
+      const body = { pageName, railOrders };
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails/reorder`, {
+          method: 'PATCH',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        displayResponse('reorderRailsResponse', res.status, data);
+
+        // Reload rails after save
+        if (res.ok) {
+          setTimeout(() => loadRailsForReorder(), 500);
+        }
+      } catch (err) {
+        displayResponse('reorderRailsResponse', 0, { error: err.message });
+      }
+    }
+
+    // =============================================================================
+    // Track Search Autocomplete
+    // =============================================================================
+    let selectedTracks = []; // Array of {trackCode, name}
+    let searchDebounceTimer = null;
+    let currentSearchIndex = -1;
+
+    // Initialize track search
+    function initTrackSearch() {
+      const searchInput = document.getElementById('trackSearchInput');
+      const dropdown = document.getElementById('trackSearchDropdown');
+
+      if (!searchInput || !dropdown) return;
+
+      // Handle input changes with debounce
+      searchInput.addEventListener('input', function() {
+        clearTimeout(searchDebounceTimer);
+        const query = this.value.trim();
+
+        if (query.length < 2) {
+          hideTrackDropdown();
+          return;
+        }
+
+        searchDebounceTimer = setTimeout(() => {
+          searchTracksApi(query);
+        }, 300);
+      });
+
+      // Handle keyboard navigation
+      searchInput.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.track-search-item');
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          currentSearchIndex = Math.min(currentSearchIndex + 1, items.length - 1);
+          updateSearchSelection(items);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          currentSearchIndex = Math.max(currentSearchIndex - 1, 0);
+          updateSearchSelection(items);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (currentSearchIndex >= 0 && items[currentSearchIndex]) {
+            const trackCode = items[currentSearchIndex].dataset.trackCode;
+            const trackName = items[currentSearchIndex].dataset.trackName;
+            addSelectedTrack(trackCode, trackName);
+          }
+        } else if (e.key === 'Escape') {
+          hideTrackDropdown();
+        }
+      });
+
+      // Hide dropdown when clicking outside
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.track-search-container')) {
+          hideTrackDropdown();
+        }
+      });
+
+      // Show dropdown on focus if there's a search term
+      searchInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 2 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+    }
+
+    // Search tracks via API
+    async function searchTracksApi(query) {
+      const dropdown = document.getElementById('trackSearchDropdown');
+
+      dropdown.innerHTML = '<div class="track-search-loading">Searching...</div>';
+      dropdown.classList.add('show');
+      currentSearchIndex = -1;
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/tracks/search?q=${encodeURIComponent(query)}&limit=20`);
+        const json = await res.json();
+
+        if (json.data && json.data.tracks && json.data.tracks.length > 0) {
+          renderTrackResults(json.data.tracks);
+        } else {
+          dropdown.innerHTML = '<div class="track-search-no-results">No tracks found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="track-search-no-results">Search error: ' + err.message + '</div>';
+      }
+    }
+
+    // Render search results in dropdown
+    function renderTrackResults(tracks) {
+      const dropdown = document.getElementById('trackSearchDropdown');
+      dropdown.innerHTML = '';
+
+      tracks.forEach(track => {
+        // Skip already selected tracks
+        if (selectedTracks.some(t => t.trackCode === track.trackCode)) {
+          return;
+        }
+
+        const item = document.createElement('div');
+        item.className = 'track-search-item';
+        item.dataset.trackCode = track.trackCode;
+        item.dataset.trackName = track.name;
+        item.textContent = track.name;
+
+        item.addEventListener('click', function() {
+          addSelectedTrack(track.trackCode, track.name);
+        });
+
+        dropdown.appendChild(item);
+      });
+
+      if (dropdown.children.length === 0) {
+        dropdown.innerHTML = '<div class="track-search-no-results">All matching tracks already selected</div>';
+      }
+    }
+
+    // Update visual selection for keyboard navigation
+    function updateSearchSelection(items) {
+      items.forEach((item, index) => {
+        item.classList.toggle('selected', index === currentSearchIndex);
+      });
+
+      // Scroll selected item into view
+      if (currentSearchIndex >= 0 && items[currentSearchIndex]) {
+        items[currentSearchIndex].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    // Add a track to the selected list
+    function addSelectedTrack(trackCode, trackName) {
+      // Check if already selected
+      if (selectedTracks.some(t => t.trackCode === trackCode)) {
+        return;
+      }
+
+      selectedTracks.push({ trackCode, trackName });
+      updateSelectedTracksDisplay();
+      updateItemCodesFromSelection();
+
+      // Clear search and hide dropdown
+      document.getElementById('trackSearchInput').value = '';
+      hideTrackDropdown();
+    }
+
+    // Remove a track from selection
+    function removeSelectedTrack(trackCode) {
+      selectedTracks = selectedTracks.filter(t => t.trackCode !== trackCode);
+      updateSelectedTracksDisplay();
+      updateItemCodesFromSelection();
+    }
+
+    // Update the visual display of selected tracks
+    function updateSelectedTracksDisplay() {
+      const container = document.getElementById('selectedTracksList');
+      container.innerHTML = '';
+
+      selectedTracks.forEach(track => {
+        const tag = document.createElement('span');
+        tag.className = 'selected-track-tag';
+        tag.innerHTML = `${track.trackName} <span class="remove-track" onclick="removeSelectedTrack('${track.trackCode}')">&times;</span>`;
+        container.appendChild(tag);
+      });
+    }
+
+    // Update the item codes input from selected tracks
+    function updateItemCodesFromSelection() {
+      const itemCodesInput = document.getElementById('postRailItemCodes');
+      const existingCodes = itemCodesInput.value.split(',').map(s => s.trim()).filter(Boolean);
+
+      // Get track codes from selection that aren't already in the input
+      const selectedCodes = selectedTracks.map(t => t.trackCode);
+
+      // Merge: keep manual entries that aren't in selected, add all selected
+      const manualOnlyCodes = existingCodes.filter(code => !selectedCodes.includes(code));
+      const allCodes = [...selectedCodes, ...manualOnlyCodes];
+
+      itemCodesInput.value = allCodes.join(',');
+    }
+
+    // Hide the dropdown
+    function hideTrackDropdown() {
+      const dropdown = document.getElementById('trackSearchDropdown');
+      dropdown.classList.remove('show');
+      currentSearchIndex = -1;
+    }
+
+    // Clear selected tracks (for use when clearing form)
+    function clearSelectedTracks() {
+      selectedTracks = [];
+      updateSelectedTracksDisplay();
+    }
+
+    // =============================================================================
+    // Copy Rail Functionality
+    // =============================================================================
+    let railsForCopy = [];
+    let copyingRailId = null;
+    let copyingRailInfo = null;
+    const ALL_PAGE_NAMES = ['HOME', 'CHARTBUSTERS', 'INTERNATIONAL', 'REGIONAL_AND_INDIE', 'HOOPR_ORIGINALS'];
+
+    async function loadRailsForCopy() {
+      const brandId = document.getElementById('copyRailBrandId').value.trim();
+      const pageName = document.getElementById('copyRailPageName').value;
+      const container = document.getElementById('railsCopyList');
+      container.innerHTML = '<p class="filter-loading">Loading rails...</p>';
+
+      let url = `${getBaseUrl()}/rails?pageName=${pageName}`;
+      if (brandId) url += `&brandId=${brandId}`;
+
+      try {
+        const res = await fetch(url, { headers: getAuthHeaders() });
+        const data = await res.json();
+
+        if (data.data && Array.isArray(data.data)) {
+          railsForCopy = data.data;
+          railsForCopy.sort((a, b) => a.order - b.order);
+
+          container.innerHTML = '';
+          if (railsForCopy.length === 0) {
+            container.innerHTML = '<p class="help">No rails found on this page.</p>';
+            return;
+          }
+
+          railsForCopy.forEach(rail => {
+            const div = document.createElement('div');
+            div.className = 'rail-copy-item';
+            div.innerHTML = `
+              <div class="rail-copy-info">
+                <div class="rail-copy-title">${rail.title}</div>
+                <div class="rail-copy-meta">
+                  Key: ${rail.key} | ID: ${rail.id} | Type: ${rail.type} | Items: ${rail.items?.length || 0}
+                </div>
+              </div>
+              <button class="copy-btn" onclick="openCopyModal(${rail.id}, '${rail.key}', '${rail.title}', '${rail.pageName}')">Copy</button>
+            `;
+            container.appendChild(div);
+          });
+
+          displayResponse('copyRailResponse', 200, { message: `Loaded ${railsForCopy.length} rails` });
+        } else {
+          container.innerHTML = '<p class="help">Failed to load rails.</p>';
+        }
+      } catch (err) {
+        container.innerHTML = '<p class="help">Error loading rails.</p>';
+        displayResponse('copyRailResponse', 0, { error: err.message });
+      }
+    }
+
+    function openCopyModal(railId, railKey, railTitle, sourcePageName) {
+      copyingRailId = railId;
+      copyingRailInfo = { key: railKey, title: railTitle, sourcePage: sourcePageName };
+
+      document.getElementById('copyModalRailInfo').textContent = `"${railTitle}" (${railKey}) from ${sourcePageName}`;
+
+      // Build checkboxes for target pages
+      const container = document.getElementById('targetPagesCheckboxes');
+      container.innerHTML = '';
+
+      ALL_PAGE_NAMES.forEach(pageName => {
+        const isSourcePage = pageName === sourcePageName;
+        const div = document.createElement('div');
+        div.className = 'page-checkbox-item' + (isSourcePage ? ' disabled' : '');
+        div.innerHTML = `
+          <input type="checkbox" id="copyPage_${pageName}" value="${pageName}" ${isSourcePage ? 'disabled' : ''}>
+          <label for="copyPage_${pageName}">${pageName}${isSourcePage ? ' (source page)' : ''}</label>
+        `;
+        container.appendChild(div);
+      });
+
+      document.getElementById('copyModal').style.display = 'flex';
+    }
+
+    function closeCopyModal() {
+      document.getElementById('copyModal').style.display = 'none';
+      copyingRailId = null;
+      copyingRailInfo = null;
+    }
+
+    function selectAllPages() {
+      document.querySelectorAll('#targetPagesCheckboxes input[type="checkbox"]:not(:disabled)').forEach(cb => cb.checked = true);
+    }
+
+    function deselectAllPages() {
+      document.querySelectorAll('#targetPagesCheckboxes input[type="checkbox"]').forEach(cb => cb.checked = false);
+    }
+
+    async function executeCopyRail() {
+      const selectedPages = [];
+      document.querySelectorAll('#targetPagesCheckboxes input[type="checkbox"]:checked').forEach(cb => {
+        selectedPages.push(cb.value);
+      });
+
+      if (selectedPages.length === 0) {
+        alert('Please select at least one target page.');
+        return;
+      }
+
+      const brandId = document.getElementById('copyRailBrandId').value.trim();
+      const body = {
+        railId: copyingRailId,
+        targetPageNames: selectedPages,
+      };
+      if (brandId) body.brandId = parseInt(brandId);
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/rails/copy`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        closeCopyModal();
+        displayResponse('copyRailResponse', res.status, data);
+
+        if (res.ok && data.data) {
+          const copied = data.data.copiedTo?.length || 0;
+          const skipped = data.data.skipped?.length || 0;
+          alert(`Rail copied successfully!\n\nCopied to: ${copied} page(s)\nSkipped: ${skipped} page(s)`);
+        }
+      } catch (err) {
+        displayResponse('copyRailResponse', 0, { error: err.message });
+      }
+    }
+
+    // =============================================================================
+    // Brand Search Autocomplete
+    // =============================================================================
+    let brandSearchDebounceTimer = null;
+
+    function initBrandSearch() {
+      // Initialize for create rail form
+      initBrandSearchFor('postRailBrandId', 'brandSearchDropdown');
+      // Initialize for copy rail form
+      initBrandSearchFor('copyRailBrandId', 'copyBrandSearchDropdown');
+    }
+
+    function initBrandSearchFor(inputId, dropdownId) {
+      const brandInput = document.getElementById(inputId);
+      const dropdown = document.getElementById(dropdownId);
+
+      if (!brandInput || !dropdown) return;
+
+      brandInput.addEventListener('input', function() {
+        clearTimeout(brandSearchDebounceTimer);
+        const query = this.value.trim();
+
+        if (query.length < 1) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        brandSearchDebounceTimer = setTimeout(() => {
+          searchBrandsApi(query, dropdown, brandInput);
+        }, 300);
+      });
+
+      brandInput.addEventListener('focus', function() {
+        if (this.value.trim().length >= 1 && dropdown.innerHTML !== '') {
+          dropdown.classList.add('show');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.brand-search-container')) {
+          document.querySelectorAll('.brand-search-dropdown').forEach(d => d.classList.remove('show'));
+        }
+      });
+    }
+
+    async function searchBrandsApi(query, dropdown, input) {
+      dropdown.innerHTML = '<div class="track-search-loading">Searching...</div>';
+      dropdown.classList.add('show');
+
+      try {
+        const res = await fetch(`${getBaseUrl()}/tracks/brands/search?q=${encodeURIComponent(query)}&limit=15`);
+        const json = await res.json();
+
+        if (json.data && json.data.brands && json.data.brands.length > 0) {
+          dropdown.innerHTML = '';
+          json.data.brands.forEach(brand => {
+            const item = document.createElement('div');
+            item.className = 'brand-search-item';
+            item.innerHTML = `${brand.name} <span class="brand-id">(ID: ${brand.id})</span>`;
+            item.addEventListener('click', function() {
+              input.value = brand.id;
+              dropdown.classList.remove('show');
+            });
+            dropdown.appendChild(item);
+          });
+        } else {
+          dropdown.innerHTML = '<div class="track-search-no-results">No brands found</div>';
+        }
+      } catch (err) {
+        dropdown.innerHTML = '<div class="track-search-no-results">Search error: ' + err.message + '</div>';
+      }
+    }
+
+    // Initialize track search on DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(loadFilters, 500);
+      setTimeout(loadOwners, 600);
+      initPageNamesMultiSelect();
+      initTrackSearch();
+      initBrandSearch();
+    });
+  </script>
+</body>
+</html>

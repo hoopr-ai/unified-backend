@@ -8,6 +8,7 @@ import {
   downloadLicensePdf,
   addVideoLink,
   getVideoLinks,
+  getMissingVideoLinks,
 } from "../controllers/licenses.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
@@ -70,6 +71,13 @@ router.get(
   "/video-links/:licenseId",
   authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
   getVideoLinks,
+);
+
+// Get missing video links count - requires authenticated user
+router.get(
+  "/missing-video-links",
+  authenticateWithSession({ roles: [UserRoles.USER, UserRoles.ADMIN] }),
+  getMissingVideoLinks,
 );
 
 export default router;

@@ -10,6 +10,7 @@ export enum UserRoles {
   USER = "USER",
   SALES = "SALES",
   SONGFEST = "SONGFEST",
+  IPRS = "IPRS",
 }
 
 export enum SessionStatus {

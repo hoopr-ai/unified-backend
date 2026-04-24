@@ -3,6 +3,7 @@ import {
   findPlaylistByCode,
   findTracksByPlaylistId,
   getRestrictedOwnersByBrandId,
+  searchPlaylistsByName,
 } from "../../persistence-service/exports";
 import { TrackModel } from "../../persistence-service/track/schemas/track.schema";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
@@ -189,4 +190,36 @@ export const getPlaylistDetailService = async (
     tracks,
   };
 
+};
+
+export interface SearchPlaylistsQuery {
+  name: string;
+  limit?: string;
+}
+
+export interface SearchPlaylistItem {
+  id: string;
+  playlistCode: string | null;
+  name: string;
+  name_slug: string | null;
+  description: string | null;
+}
+
+export const searchPlaylistsService = async (
+  query: SearchPlaylistsQuery,
+): Promise<SearchPlaylistItem[]> => {
+  const name = query.name?.trim();
+  if (!name || name.length < 1) {
+    return [];
+  }
+
+  const limit = query.limit ? parseInt(query.limit, 10) : 20;
+  const validLimit = limit > 0 && limit <= 50 ? limit : 20;
+
+  const results = await searchPlaylistsByName({
+    name,
+    limit: validLimit,
+  });
+
+  return results;
 };

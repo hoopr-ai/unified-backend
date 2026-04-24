@@ -13,11 +13,17 @@ import {
 import { UserModel } from "./modules.export";
 import type { UserRoles } from "../../../dto-service/modules.export";
 
+export interface RoleRestrictionEntry {
+  category?: string;
+  ownerCode?: string;
+}
+
 export interface UserRoleDetails {
   id?: number;
   userId: number;
   role: UserRoles;
   status: string;
+  restrictions?: RoleRestrictionEntry[] | null;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -50,6 +56,12 @@ export class UserRoleModel extends Model<UserRoleModel, UserRoleDetails> {
     allowNull: false,
   })
   status!: string;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  restrictions?: RoleRestrictionEntry[] | null;
 
   @CreatedAt
   @Column({

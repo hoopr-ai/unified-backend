@@ -8,6 +8,7 @@ import {
   downloadLicensePdfService,
   addVideoLinkService,
   getVideoLinksService,
+  getMissingVideoLinksService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -203,5 +204,20 @@ export const getVideoLinks = catchAsync(async (req: AuthRequest, res: Response) 
     status: HttpStatusCode.OK,
     data: response,
     message: "Video links retrieved successfully",
+  });
+});
+
+export const getMissingVideoLinks = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) {
+    return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+  }
+
+  const response = await getMissingVideoLinksService(userId);
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: response,
+    message: "Missing video links count retrieved successfully",
   });
 });

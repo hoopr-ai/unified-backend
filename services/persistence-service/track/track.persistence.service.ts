@@ -3,6 +3,7 @@ import {
   TrackArtistMappingModel,
   ArtistModel,
 } from "../artists/modules.export";
+import { OwnerModel } from "../owner/modules.export";
 import {
   PaginatedRawTracks,
   RawTrackWithMappings,
@@ -207,6 +208,15 @@ export const findAllTracks = async (
     logging: (sql: string) => console.log("SQL:", sql),
   });
 
+  // Debug: Log raw hookTimings data from first few tracks
+  if (rows.length > 0) {
+    rows.slice(0, 3).forEach((track, idx) => {
+      const rawVal = track.getDataValue("hookTimings");
+      const jsonVal = track.toJSON();
+      console.log(`[DEBUG findAllTracks] Track ${idx} (${track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+    });
+  }
+
   return {
     rows: rows.map(track => track.toJSON() as RawTrackWithMappings),
     count,
@@ -276,6 +286,15 @@ export const findTracksByTrackCodes = async (
     col: "id",
     include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
+
+  // Debug: Log raw hookTimings data from first few tracks
+  if (rows.length > 0) {
+    rows.slice(0, 3).forEach((track, idx) => {
+      const rawVal = track.getDataValue("hookTimings");
+      const jsonVal = track.toJSON();
+      console.log(`[DEBUG findTracksByTrackCodes] Track ${idx} (${track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+    });
+  }
 
   return {
     rows: rows.map(track => track.toJSON() as RawTrackWithMappings),
@@ -360,6 +379,15 @@ export const findAllTracksByIds = async (
     order: [["createdAt", "DESC"]],
     include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
+
+  // Debug: Log hookTimings for first few tracks
+  if (rows.length > 0) {
+    rows.slice(0, 3).forEach((track, idx) => {
+      const rawVal = track.getDataValue("hookTimings");
+      const jsonVal = track.toJSON();
+      console.log(`[DEBUG findAllTracksByIds] Track ${idx} (${track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+    });
+  }
 
   return rows.map((track) => track.toJSON() as RawTrackWithMappings);
 };
@@ -458,6 +486,13 @@ export const findTrackByTrackCode = async (
       ...getActiveCampaignInclude(),
     ],
   });
+
+  // Debug: Log hookTimings data for track detail
+  if (track) {
+    const rawVal = track.getDataValue("hookTimings");
+    const jsonVal = track.toJSON();
+    console.log(`[DEBUG findTrackByTrackCode] Track ${track.trackCode}: rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+  }
 
   return track ? (track.toJSON() as RawTrackWithMappings) : null;
 };
@@ -563,6 +598,17 @@ export const findTracksByFilter = async (
       ],
     });
 
+  // Debug: Log hookTimings for first few tracks in filter query
+  if (mappings.length > 0) {
+    mappings.slice(0, 3).forEach((mapping, idx) => {
+      if (mapping.track) {
+        const rawVal = mapping.track.getDataValue("hookTimings");
+        const jsonVal = mapping.track.toJSON();
+        console.log(`[DEBUG findTracksByFilter] Track ${idx} (${mapping.track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+      }
+    });
+  }
+
   return {
     rows: mappings.map((mapping) => ({
       trackId: mapping.trackId,
@@ -593,4 +639,223 @@ export const getUserUsedCampaignIds = async (
   }
 
   return usedCampaignIds;
+};
+
+// =============================================================================
+// LIGHTWEIGHT TRACK FETCH FOR RAILS (Optimized - minimal JOINs)
+// =============================================================================
+
+export interface LightweightTrack {
+  id: string;
+  trackCode: string;
+  name: string;
+  name_slug: string;
+  waveformLink: string | null;
+  mp3Link: string | null;
+  hasVocals: boolean | null;
+  trending: boolean | null;
+  hookTimings: unknown;
+  ownerId: string[] | null;
+  // Artist info (from single JOIN)
+  primaryArtists: Array<{ id: string; name: string; type: string | null }>;
+}
+
+/**
+ * Lightweight track fetch for rails - optimized for speed
+ * Only fetches essential fields with minimal JOINs (just artists)
+ * Skips: SKUs, campaigns, albums, owner lookups
+ */
+// =============================================================================
+// TRACK SEARCH (for autocomplete/search by name)
+// =============================================================================
+
+export interface TrackSearchResult {
+  trackCode: string;
+  name: string;
+  artistName: string | null;
+  ownerType: string | null;
+  ownerName: string | null;
+  artworkLink: string | null;
+}
+
+/**
+ * Search tracks by name (case-insensitive partial match)
+ * Returns lightweight results for autocomplete
+ */
+export const searchTracksByName = async (
+  searchQuery: string,
+  limit: number = 20,
+): Promise<TrackSearchResult[]> => {
+  if (!searchQuery || searchQuery.trim().length === 0) {
+    return [];
+  }
+
+  const searchTerm = searchQuery.trim();
+  // Escape special characters for LIKE pattern
+  const escapedTerm = searchTerm.replace(/[%_\\]/g, '\\$&');
+
+  const tracks = await TrackModel.findAll({
+    where: {
+      status: "ACTIVE",
+      [Op.or]: [
+        { name: { [Op.iLike]: `%${escapedTerm}%` } },
+        { trackCode: { [Op.iLike]: `%${escapedTerm}%` } },
+      ],
+    },
+    attributes: ["trackCode", "name", "ownerId", "artworkLink"],
+    include: [
+      {
+        model: TrackArtistMappingModel,
+        as: "trackArtistMappings",
+        required: false,
+        include: [
+          {
+            model: ArtistModel,
+            as: "artist",
+            attributes: ["id", "name"],
+            required: false,
+          },
+        ],
+      },
+    ],
+    order: [["name", "ASC"]],
+    limit,
+  });
+
+  // Collect all unique owner IDs
+  const allOwnerIds: string[] = [];
+  tracks.forEach((track: any) => {
+    if (track.ownerId && Array.isArray(track.ownerId) && track.ownerId.length > 0) {
+      allOwnerIds.push(track.ownerId[0]); // Get first owner
+    }
+  });
+  const uniqueOwnerIds = [...new Set(allOwnerIds)];
+
+  // Fetch owner info
+  const ownerMap = new Map<string, { type: string | null; username: string | null }>();
+  if (uniqueOwnerIds.length > 0) {
+    const owners = await OwnerModel.findAll({
+      where: { id: { [Op.in]: uniqueOwnerIds } },
+      attributes: ["id", "type", "username"],
+    });
+    owners.forEach((owner) => {
+      ownerMap.set(owner.id, {
+        type: owner.type || null,
+        username: owner.username || null,
+      });
+    });
+  }
+
+  return tracks.map((track: any) => {
+    // Get primary artist name (first artist)
+    let artistName: string | null = null;
+    if (track.trackArtistMappings && track.trackArtistMappings.length > 0) {
+      const firstMapping = track.trackArtistMappings[0];
+      if (firstMapping.artist) {
+        artistName = firstMapping.artist.name || null;
+      }
+    }
+
+    // Get owner info (first owner)
+    let ownerType: string | null = null;
+    let ownerName: string | null = null;
+    if (track.ownerId && Array.isArray(track.ownerId) && track.ownerId.length > 0) {
+      const ownerInfo = ownerMap.get(track.ownerId[0]);
+      if (ownerInfo) {
+        ownerType = ownerInfo.type;
+        ownerName = ownerInfo.username;
+      }
+    }
+
+    return {
+      trackCode: track.trackCode,
+      name: track.name,
+      artistName,
+      ownerType,
+      ownerName,
+      artworkLink: track.artworkLink || null,
+    };
+  });
+};
+
+export const findTracksLightweight = async (
+  trackCodes: string[],
+  excludeOwnerIds?: string[],
+): Promise<Map<string, LightweightTrack>> => {
+  const result = new Map<string, LightweightTrack>();
+  if (trackCodes.length === 0) return result;
+
+  const whereClause: any = {
+    trackCode: { [Op.in]: trackCodes },
+    status: "ACTIVE",
+  };
+
+  // Exclude restricted owners
+  if (excludeOwnerIds && excludeOwnerIds.length > 0) {
+    whereClause[Op.not] = {
+      ownerId: { [Op.overlap]: excludeOwnerIds },
+    };
+  }
+
+  // Single query with only artist JOIN (skip SKUs, campaigns)
+  const tracks = await TrackModel.findAll({
+    where: whereClause,
+    attributes: [
+      "id", "trackCode", "name", "name_slug",
+      "waveformLink", "mp3Link", "hasVocals", "trending",
+      "hookTimings", "ownerId"
+    ],
+    include: [
+      {
+        model: TrackArtistMappingModel,
+        as: "trackArtistMappings",
+        required: false,
+        attributes: ["artistId", "role", "isPrimary"],
+        where: { isPrimary: true },
+        include: [
+          {
+            model: ArtistModel,
+            as: "artist",
+            attributes: ["id", "name", "type"],
+            required: false,
+          },
+        ],
+      },
+    ],
+    raw: false,
+  });
+
+  // Build result map
+  for (const track of tracks) {
+    const json = track.toJSON() as any;
+    const primaryArtists: Array<{ id: string; name: string; type: string | null }> = [];
+
+    if (json.trackArtistMappings) {
+      for (const mapping of json.trackArtistMappings) {
+        if (mapping.artist) {
+          primaryArtists.push({
+            id: mapping.artist.id,
+            name: mapping.artist.name,
+            type: mapping.artist.type,
+          });
+        }
+      }
+    }
+
+    result.set(json.trackCode, {
+      id: json.id,
+      trackCode: json.trackCode,
+      name: json.name,
+      name_slug: json.name_slug,
+      waveformLink: json.waveformLink,
+      mp3Link: json.mp3Link,
+      hasVocals: json.hasVocals,
+      trending: json.trending,
+      hookTimings: json.hookTimings ?? [],
+      ownerId: json.ownerId,
+      primaryArtists,
+    });
+  }
+
+  return result;
 };
