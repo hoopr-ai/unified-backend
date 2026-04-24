@@ -61,3 +61,15 @@ export const ProfileRoleDescriptions: Record<ProfileRole, string> = {
 
 //make it 24 hours for now
 export const SESSION_TIMEOUT_MINUTES = 24 * 60;
+
+export enum AddressType {
+  BUSINESS = "BUSINESS",
+  BILLING = "BILLING",
+}
+
+export enum RedemptionStatus {
+  PENDING = "P",
+  APPROVED = "A",
+  REJECTED = "R",
+  COMPLETED = "C",
+}
