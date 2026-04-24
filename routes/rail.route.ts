@@ -8,6 +8,7 @@ import {
   editRailItems,
   reorderRails,
   copyRail,
+  refreshRails,
 } from "../controllers/rail.controller";
 import {
   authenticate,
@@ -27,6 +28,9 @@ router.patch("/reorder", authenticate, reorderRails);
 
 // POST /rails/copy - copy a rail to multiple target pages
 router.post("/copy", authenticate, copyRail);
+
+// POST /rails/refresh - trigger manual rail refresh job
+router.post("/refresh", authenticate, refreshRails);
 
 // GET /rails/:key - single rail by key
 router.get("/:key", optionalAuthenticate, getRailByKey);

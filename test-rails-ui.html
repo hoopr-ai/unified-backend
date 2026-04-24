@@ -406,6 +406,14 @@
     <div id="getRailsResponse"></div>
   </div>
 
+  <!-- POST /rails/refresh -->
+  <div class="section">
+    <h2>POST /rails/refresh - Trigger Rail Refresh Job</h2>
+    <p class="help">Manually trigger the rail refresh job to update AI-sourced rails (Trending, Popular, New Age Icons) and Brand Recommendations. This normally runs automatically every 6 hours.</p>
+    <button class="success" onclick="triggerRefresh()">Trigger Refresh</button>
+    <div id="refreshRailsResponse"></div>
+  </div>
+
   <!-- GET /rails/:key -->
   <div class="section">
     <h2>GET /rails/:key - Fetch Rail by Key</h2>
@@ -1220,6 +1228,20 @@
         displayResponse('getRailsResponse', res.status, data);
       } catch (err) {
         displayResponse('getRailsResponse', 0, { error: err.message });
+      }
+    }
+
+    async function triggerRefresh() {
+      const url = `${getBaseUrl()}/rails/refresh`;
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+        });
+        const data = await res.json();
+        displayResponse('refreshRailsResponse', res.status, data);
+      } catch (err) {
+        displayResponse('refreshRailsResponse', 0, { error: err.message });
       }
     }
 

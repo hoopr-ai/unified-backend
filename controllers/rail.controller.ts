@@ -12,6 +12,7 @@ import {
   ReorderRailsRequest,
 } from "../services/business-service/modules.export";
 import { copyRailToPages } from "../services/persistence-service/rail/rail.persistence.service";
+import { triggerManualRefresh } from "../services/scheduler-service";
 import {
   catchAsync,
   sendResponse,
@@ -428,5 +429,18 @@ export const copyRail = catchAsync(
         message: (err as Error).message,
       });
     }
+  },
+);
+
+// POST /rails/refresh - Trigger manual rail refresh job
+export const refreshRails = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    await triggerManualRefresh();
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: { message: "Rail refresh job queued" },
+      message: "Rail refresh job has been queued successfully",
+    });
   },
 );
