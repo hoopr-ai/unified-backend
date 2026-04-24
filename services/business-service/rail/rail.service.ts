@@ -239,12 +239,18 @@ const hydratePlaylists = async (
   const out = new Map<string, unknown>();
   if (itemCodes.length === 0) return out;
 
+  // Filter to only valid UUIDs for the id comparison
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const uuidCodes = itemCodes.filter(code => uuidRegex.test(code));
+
   const rows = await PlaylistModel.findAll({
     where: {
-      [Op.or]: [
-        { playlistCode: { [Op.in]: itemCodes } },
-        { id: { [Op.in]: itemCodes } },
-      ],
+      [Op.or]: uuidCodes.length > 0
+        ? [
+            { playlistCode: { [Op.in]: itemCodes } },
+            { id: { [Op.in]: uuidCodes } },
+          ]
+        : [{ playlistCode: { [Op.in]: itemCodes } }],
     },
     attributes: ["id", "playlistCode", "name", "name_slug", "description"],
   });

@@ -48,7 +48,6 @@ import {
   type UserSessionDetails,
 } from "../../persistence-service/exports";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
-import { countLicensesWithMissingVideoLinks } from "../../persistence-service/licenses/modules.export";
 import {
   AppError,
   createJWTToken,
@@ -68,8 +67,6 @@ import { SessionPayload } from "../../../middlewares/authenticate";
 
 interface LoginResponseWithSession extends LoginResponse {
   sessionId: number;
-  missingVideoLinksCount?: number;
-  missingLink?: boolean;
 }
 
 const buildLoginResponse = (
@@ -80,8 +77,6 @@ const buildLoginResponse = (
   refreshToken: string,
   sessionId: number,
   brandName?: string,
-  missingVideoLinksCount?: number,
-  missingLink?: boolean,
 ): LoginResponseWithSession => {
   return {
     id: user.id!,
@@ -98,8 +93,6 @@ const buildLoginResponse = (
     sessionId,
     brandId: user.brandId,
     brandName,
-    missingVideoLinksCount,
-    missingLink,
   };
 };
 
@@ -187,14 +180,6 @@ export const userLoginService = async (
   const brand = user.brandId ? await findBrandById(user.brandId) : null;
   const brandName = (brand as any)?.name ?? undefined;
 
-  // For ENTERPRISE users, count licenses with missing video links
-  let missingVideoLinksCount: number | undefined;
-  let missingLink: boolean | undefined;
-  if (user.platform === Platform.ENTERPRISE && user.brandId) {
-    missingVideoLinksCount = await countLicensesWithMissingVideoLinks(user.brandId);
-    missingLink = missingVideoLinksCount > 0;
-  }
-
   return buildLoginResponse(
     user,
     role,
@@ -203,8 +188,6 @@ export const userLoginService = async (
     refreshToken,
     session.id!,
     brandName,
-    missingVideoLinksCount,
-    missingLink,
   );
 };
 

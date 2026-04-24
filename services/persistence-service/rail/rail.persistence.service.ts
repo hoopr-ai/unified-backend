@@ -481,13 +481,30 @@ export const upsertRailWithItems = async (
 ): Promise<{ rail: RailDetails; items: RailItemDetails[] }> => {
   const transaction = await sequelize.transaction();
   try {
-    const [rail] = await RailModel.upsert(input as unknown as RailDetails, {
+    // Check if a rail with the same key, brandId, and pageName exists
+    const existingRail = await RailModel.findOne({
+      where: {
+        key: input.key,
+        brandId: input.brandId ?? (null as number | null),
+        pageName: input.pageName,
+      },
       transaction,
-      conflictFields: ["key", "brandId", "pageName"],
     });
 
-    await RailItemModel.destroy({
-      where: { railId: rail.id },
+    // If existing rail found, delete it and its items first
+    if (existingRail) {
+      await RailItemModel.destroy({
+        where: { railId: existingRail.id },
+        transaction,
+      });
+      await RailModel.destroy({
+        where: { id: existingRail.id },
+        transaction,
+      });
+    }
+
+    // Create a new rail
+    const rail = await RailModel.create(input as unknown as RailDetails, {
       transaction,
     });
 
