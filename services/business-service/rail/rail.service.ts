@@ -9,6 +9,10 @@ import {
   PaginatedRailsResponse,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
   PageName,
+  OwnerType,
+  isOwnerTypeAllowedForPage,
+  getAllowedOwnerTypesForPage,
+  itemTypeHasOwnerRestriction,
 } from "../../dto-service/modules.export";
 import {
   RailModel,
@@ -38,6 +42,8 @@ import {
   getRestrictedOwnersByBrandId,
   getOwnerIdsByNames,
   findAlbumByTrackId,
+  copyRailToPages,
+  CopyRailResult,
 } from "../../persistence-service/exports";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { fn, col, where } from "sequelize";
@@ -348,6 +354,49 @@ const extractSeeMore = (
   return seeMore ?? null;
 };
 
+// Get owner type from hydrated item data
+const getOwnerTypeFromItemData = (itemType: string, data: unknown): string | null => {
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+
+  if (itemType === RailItemType.TRACK) {
+    // Track has ownerType field from hydration
+    return (record.ownerType as string) ?? null;
+  }
+
+  if (itemType === RailItemType.LABEL) {
+    // Label has type field (owner type)
+    return (record.type as string) ?? null;
+  }
+
+  return null;
+};
+
+// Filter items based on page owner type restrictions
+const filterItemsByPageOwnerType = (
+  items: RailItemResponse[],
+  pageName: PageName,
+): RailItemResponse[] => {
+  const allowedTypes = getAllowedOwnerTypesForPage(pageName);
+
+  // HOME allows all types
+  if (allowedTypes === null) return items;
+
+  return items.filter((item) => {
+    // Only TRACK and LABEL have owner type restrictions
+    if (!itemTypeHasOwnerRestriction(item.itemType)) {
+      return true;
+    }
+
+    const ownerType = getOwnerTypeFromItemData(item.itemType, item.data);
+
+    // If owner type is not set, allow it (backwards compatibility)
+    if (!ownerType) return true;
+
+    return allowedTypes.includes(ownerType as OwnerType);
+  });
+};
+
 const buildRailResponse = (
   rail: RailModel,
   maps: HydrationMaps,
@@ -363,6 +412,10 @@ const buildRailResponse = (
       data: resolveItem(item, maps),
     }))
     .filter((entry) => entry.data !== null);
+
+  // Filter items by owner type for restricted pages (INTERNATIONAL, CHARTBUSTERS, etc.)
+  // HOME page has no restrictions
+  items = filterItemsByPageOwnerType(items, rail.pageName as PageName);
 
   // Apply item limit if specified
   if (itemLimit && itemLimit > 0 && items.length > itemLimit) {
@@ -966,6 +1019,182 @@ const resolveAiQueryTracks = async (
   return codes;
 };
 
+// -----------------------------------------------------------------------------
+// Owner Type Validation for Rail Items
+// -----------------------------------------------------------------------------
+
+interface ItemOwnerTypeInfo {
+  itemCode: string;
+  ownerType: string | null;
+}
+
+// Get owner types for track codes by looking up tracks -> albums -> owners
+const getOwnerTypesForTrackCodes = async (
+  trackCodes: string[],
+): Promise<Map<string, string | null>> => {
+  if (trackCodes.length === 0) return new Map();
+
+  const result = new Map<string, string | null>();
+
+  // Fetch tracks with their owner info
+  const tracksMap = await findTracksLightweight(trackCodes);
+
+  // Collect all owner IDs
+  const allOwnerIds: string[] = [];
+  for (const [, track] of tracksMap) {
+    if (track.ownerId && Array.isArray(track.ownerId)) {
+      allOwnerIds.push(...track.ownerId);
+    }
+  }
+  const uniqueOwnerIds = [...new Set(allOwnerIds)];
+
+  // Fetch owner types
+  const ownerTypeMap = new Map<string, string>();
+  if (uniqueOwnerIds.length > 0) {
+    const owners = await OwnerModel.findAll({
+      where: { id: { [Op.in]: uniqueOwnerIds } },
+      attributes: ["id", "type"],
+    });
+    for (const owner of owners) {
+      if (owner.type) ownerTypeMap.set(owner.id, owner.type);
+    }
+  }
+
+  // Map track codes to owner types
+  for (const [code, track] of tracksMap) {
+    let ownerType: string | null = null;
+    if (track.ownerId && Array.isArray(track.ownerId)) {
+      for (const oid of track.ownerId) {
+        const type = ownerTypeMap.get(oid);
+        if (type) {
+          ownerType = type;
+          break;
+        }
+      }
+    }
+    result.set(code, ownerType);
+  }
+
+  return result;
+};
+
+// Get owner types for label codes (labels are owners)
+const getOwnerTypesForLabelCodes = async (
+  labelCodes: string[],
+): Promise<Map<string, string | null>> => {
+  if (labelCodes.length === 0) return new Map();
+
+  const result = new Map<string, string | null>();
+
+  const owners = await OwnerModel.findAll({
+    where: { ownerCode: { [Op.in]: labelCodes } },
+    attributes: ["ownerCode", "type"],
+  });
+
+  for (const owner of owners) {
+    result.set(owner.ownerCode, owner.type ?? null);
+  }
+
+  // Set null for labels not found
+  for (const code of labelCodes) {
+    if (!result.has(code)) {
+      result.set(code, null);
+    }
+  }
+
+  return result;
+};
+
+// Validate that items are compatible with the target page
+interface ItemValidationError {
+  itemCode: string;
+  itemType: string;
+  ownerType: string;
+  pageName: PageName;
+  allowedTypes: OwnerType[];
+}
+
+const validateItemsForPage = async (
+  items: { itemType: string; itemCode: string }[],
+  pageName: PageName,
+): Promise<ItemValidationError[]> => {
+  const allowedTypes = getAllowedOwnerTypesForPage(pageName);
+
+  // HOME allows all types
+  if (allowedTypes === null) return [];
+
+  const errors: ItemValidationError[] = [];
+
+  // Separate items by type
+  const trackCodes = items
+    .filter((i) => i.itemType === RailItemType.TRACK)
+    .map((i) => i.itemCode);
+  const labelCodes = items
+    .filter((i) => i.itemType === RailItemType.LABEL)
+    .map((i) => i.itemCode);
+
+  // Get owner types for tracks and labels
+  const [trackOwnerTypes, labelOwnerTypes] = await Promise.all([
+    getOwnerTypesForTrackCodes(trackCodes),
+    getOwnerTypesForLabelCodes(labelCodes),
+  ]);
+
+  // Check tracks
+  for (const code of trackCodes) {
+    const ownerType = trackOwnerTypes.get(code);
+    if (ownerType && !allowedTypes.includes(ownerType as OwnerType)) {
+      errors.push({
+        itemCode: code,
+        itemType: RailItemType.TRACK,
+        ownerType,
+        pageName,
+        allowedTypes,
+      });
+    }
+  }
+
+  // Check labels
+  for (const code of labelCodes) {
+    const ownerType = labelOwnerTypes.get(code);
+    if (ownerType && !allowedTypes.includes(ownerType as OwnerType)) {
+      errors.push({
+        itemCode: code,
+        itemType: RailItemType.LABEL,
+        ownerType,
+        pageName,
+        allowedTypes,
+      });
+    }
+  }
+
+  return errors;
+};
+
+// Format validation errors into a readable message
+const formatValidationErrors = (errors: ItemValidationError[]): string => {
+  if (errors.length === 0) return "";
+
+  const grouped = new Map<PageName, ItemValidationError[]>();
+  for (const err of errors) {
+    const list = grouped.get(err.pageName) || [];
+    list.push(err);
+    grouped.set(err.pageName, list);
+  }
+
+  const messages: string[] = [];
+  for (const [pageName, errs] of grouped) {
+    const allowedTypes = errs[0].allowedTypes.join(", ");
+    const itemList = errs
+      .map((e) => `${e.itemType}:${e.itemCode} (owner type: ${e.ownerType})`)
+      .join(", ");
+    messages.push(
+      `Page ${pageName} only allows owner types [${allowedTypes}], but found incompatible items: ${itemList}`,
+    );
+  }
+
+  return messages.join("; ");
+};
+
 const buildItemsForUpsert = async (
   req: UpsertRailRequest,
 ): Promise<{ itemType: string; itemCode: string; order: number }[]> => {
@@ -1006,6 +1235,20 @@ export const upsertRailService = async (
 
   // Build items once (same items for all pages)
   const items = await buildItemsForUpsert(req);
+
+  // Validate items against all target pages
+  // Only TRACK and LABEL items need validation (other types have no owner restriction)
+  const itemsToValidate = items.filter((i) => itemTypeHasOwnerRestriction(i.itemType));
+  if (itemsToValidate.length > 0) {
+    const allErrors: ItemValidationError[] = [];
+    for (const pageName of pageNames) {
+      const errors = await validateItemsForPage(itemsToValidate, pageName);
+      allErrors.push(...errors);
+    }
+    if (allErrors.length > 0) {
+      throw new Error(`Owner type validation failed: ${formatValidationErrors(allErrors)}`);
+    }
+  }
 
   // Build sourceConfig once
   const sourceConfig: Record<string, unknown> = {};
@@ -1121,6 +1364,22 @@ export const editRailItemsService = async (
     throw new Error(`Unknown rail type: ${rail.type}`);
   }
 
+  // Validate new items (items without id) against the rail's page owner type restrictions
+  // Only TRACK and LABEL items need validation
+  if (itemTypeHasOwnerRestriction(itemType)) {
+    const newItems = req.items
+      .filter((i) => i.id == null) // Only validate new items
+      .map((i) => ({ itemType, itemCode: i.itemCode }));
+
+    if (newItems.length > 0) {
+      const pageName = rail.pageName as PageName;
+      const errors = await validateItemsForPage(newItems, pageName);
+      if (errors.length > 0) {
+        throw new Error(`Owner type validation failed: ${formatValidationErrors(errors)}`);
+      }
+    }
+  }
+
   // Build items for update
   const itemsToUpdate: UpdateRailItemInput[] = req.items.map((item) => ({
     id: item.id,
@@ -1174,4 +1433,52 @@ export const reorderRailsService = async (
 
   await bulkUpdateRailOrders(req.railOrders, req.pageName, brandIds[0]);
   return { updated: req.railOrders.length, pageName: req.pageName };
+};
+
+// -----------------------------------------------------------------------------
+// Copy a rail to multiple target pages (with owner type validation)
+// -----------------------------------------------------------------------------
+
+export interface CopyRailRequest {
+  railId: number;
+  targetPageNames: PageName[];
+  brandId?: number | null;
+}
+
+export const copyRailService = async (
+  req: CopyRailRequest,
+): Promise<CopyRailResult> => {
+  // First, get the source rail with its items
+  const sourceRail = await findRailById(req.railId);
+  if (!sourceRail) {
+    throw new Error(`Rail with ID ${req.railId} not found`);
+  }
+
+  const sourceItems = sourceRail.items || [];
+
+  // Only validate TRACK and LABEL items
+  const itemsToValidate = sourceItems
+    .filter((item) => itemTypeHasOwnerRestriction(item.itemType))
+    .map((item) => ({ itemType: item.itemType, itemCode: item.itemCode }));
+
+  // Validate items against each target page
+  if (itemsToValidate.length > 0) {
+    const allErrors: ItemValidationError[] = [];
+    for (const targetPageName of req.targetPageNames) {
+      // Skip validation if target page is same as source (will be skipped anyway)
+      if (targetPageName === sourceRail.pageName) continue;
+
+      const errors = await validateItemsForPage(itemsToValidate, targetPageName);
+      allErrors.push(...errors);
+    }
+
+    if (allErrors.length > 0) {
+      throw new Error(
+        `Cannot copy rail: Owner type validation failed. ${formatValidationErrors(allErrors)}`,
+      );
+    }
+  }
+
+  // All validations passed, proceed with copy
+  return copyRailToPages(req.railId, req.targetPageNames, req.brandId);
 };

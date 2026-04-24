@@ -10,8 +10,9 @@ import {
   EditRailItemsRequest,
   reorderRailsService,
   ReorderRailsRequest,
+  copyRailService,
+  CopyRailRequest,
 } from "../services/business-service/modules.export";
-import { copyRailToPages } from "../services/persistence-service/rail/rail.persistence.service";
 import { triggerManualRefresh } from "../services/scheduler-service";
 import {
   catchAsync,
@@ -397,7 +398,7 @@ const validateCopyRailBody = (body: unknown): { railId: number; targetPageNames:
   };
 };
 
-// POST /rails/copy - Copy a rail to multiple target pages
+// POST /rails/copy - Copy a rail to multiple target pages (with owner type validation)
 export const copyRail = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const parsed = validateCopyRailBody(req.body);
@@ -411,11 +412,11 @@ export const copyRail = catchAsync(
     }
 
     try {
-      const result = await copyRailToPages(
-        parsed.railId,
-        parsed.targetPageNames,
-        parsed.brandId,
-      );
+      const result = await copyRailService({
+        railId: parsed.railId,
+        targetPageNames: parsed.targetPageNames,
+        brandId: parsed.brandId,
+      });
 
       sendResponse(res, {
         status: HttpStatusCode.OK,
@@ -423,10 +424,15 @@ export const copyRail = catchAsync(
         message: `Rail copied to ${result.copiedTo.length} page(s)${result.skipped.length > 0 ? `, ${result.skipped.length} skipped` : ""}`,
       });
     } catch (err) {
+      const errorMessage = (err as Error).message;
+      // Return BAD_REQUEST for validation errors, NOT_FOUND for other errors
+      const statusCode = errorMessage.includes("Owner type validation failed")
+        ? HttpStatusCode.BAD_REQUEST
+        : HttpStatusCode.NOT_FOUND;
       sendResponse(res, {
-        status: HttpStatusCode.NOT_FOUND,
+        status: statusCode,
         data: null,
-        message: (err as Error).message,
+        message: errorMessage,
       });
     }
   },
