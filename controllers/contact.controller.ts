@@ -8,7 +8,7 @@ import {
 import { HttpStatusCode } from "../services/dto-service/modules.export";
 
 export const contactUs = catchAsync(async (req: Request, res: Response) => {
-  const { fullName, mobile, email, brandName, message } = req.body;
+  const { fullName, countryCode, mobile, email, brandName, message } = req.body;
 
   if (!fullName || !email) {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Full name and email are required", {});
@@ -19,11 +19,24 @@ export const contactUs = catchAsync(async (req: Request, res: Response) => {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Please provide a valid email address", {});
   }
 
+  let mobileNumber: string | undefined;
   if (mobile !== undefined && mobile !== null && mobile !== "") {
     const mobileStr = String(mobile).replace(/\s+/g, "");
-    if (!/^\d{10}$/.test(mobileStr)) {
-      return sendError(res, HttpStatusCode.BAD_REQUEST, "Mobile number must be exactly 10 digits", {});
+    const countryCodeStr = countryCode ? String(countryCode).replace(/\s+/g, "") : "";
+
+    if (!/^\d+$/.test(mobileStr)) {
+      return sendError(res, HttpStatusCode.BAD_REQUEST, "Mobile number must contain only digits", {});
     }
+
+    // For India (+91 or 91), mobile number must be exactly 10 digits
+    if (countryCodeStr === "+91" || countryCodeStr === "91") {
+      if (mobileStr.length !== 10) {
+        return sendError(res, HttpStatusCode.BAD_REQUEST, "Indian mobile number must be exactly 10 digits", {});
+      }
+    }
+
+    // Combine country code and mobile number
+    mobileNumber = countryCodeStr ? `${countryCodeStr}${mobileStr}` : mobileStr;
   }
 
   if (fullName.trim().length < 2) {
