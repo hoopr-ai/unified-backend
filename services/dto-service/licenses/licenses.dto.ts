@@ -26,6 +26,7 @@ export interface TokenBalanceItem {
 }
 
 export interface AssignTokensResponse {
+  id: number;
   brandId: number;
   type: string;
   tokenBalance: number;
