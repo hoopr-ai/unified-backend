@@ -10,6 +10,7 @@ import {
   getTokenDeductionsService,
   getTokenSummaryByTypeService,
   setTokenAssignedPriceService,
+  getDeductionsByAllocationService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -217,5 +218,25 @@ export const getTokenSummary = catchAsync(async (req: Request, res: Response) =>
     status: HttpStatusCode.OK,
     data: { summary },
     message: "Token summary fetched successfully",
+  });
+});
+
+/**
+ * Get deductions for a specific token allocation (Admin)
+ * GET /tokens/:tokenAssignedId/deductions
+ */
+export const getDeductionsByAllocation = catchAsync(async (req: Request, res: Response) => {
+  const tokenAssignedId = Number(req.params.tokenAssignedId);
+
+  if (!Number.isInteger(tokenAssignedId) || tokenAssignedId <= 0) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid tokenAssignedId", {});
+  }
+
+  const result = await getDeductionsByAllocationService(tokenAssignedId);
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: result,
+    message: "Deductions for allocation fetched successfully",
   });
 });
