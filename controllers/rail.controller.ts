@@ -3,6 +3,7 @@ import {
   getRailsService,
   getRailsPaginatedService,
   getRailByKeyService,
+  getRailSeeAllService,
   upsertRailService,
   UpsertRailRequest,
   deleteRailService,
@@ -110,6 +111,60 @@ export const getRailByKey = catchAsync(
   },
 );
 
+// GET /rails/:railId/see-all?page=1&limit=50&reExecute=false
+// Returns paginated, fully-hydrated items for a single rail.
+// - MANUAL rails: paginate stored rail_items by order ASC.
+// - QUERY rails: paginate stored rail_items, OR re-run the stored query when reExecute=true.
+// - AI_QUERY rails: paginate stored rail_items, OR re-execute (hard cap 200) when reExecute=true.
+export const getRailSeeAll = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const railId = Number(req.params.railId);
+    if (!Number.isFinite(railId) || railId <= 0) {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: "Invalid railId",
+      });
+      return;
+    }
+
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(
+      100,
+      Math.max(1, parseInt(req.query.limit as string, 10) || 50),
+    );
+    const reExecute = true; // req.query.reExecute === "true"; // For now, always re-execute to ensure fresh results. Can add query param later if we want to allow cached results.
+    const userId = req.session?.userId;
+
+    const user = userId ? await findUserById(userId) : null;
+    const viewerBrandId = user?.brandId ?? undefined;
+
+    const result = await getRailSeeAllService(
+      railId,
+      page,
+      limit,
+      reExecute,
+      userId,
+      viewerBrandId,
+    );
+
+    if (!result) {
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: ResponseMessages.RailNotFound,
+      });
+      return;
+    }
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: ResponseMessages.GetRailSuccess,
+    });
+  },
+);
+
 const VALID_RAIL_TYPES = new Set<string>(Object.values(RailType));
 const VALID_SOURCE_TYPES = new Set<string>(Object.values(RailSourceType));
 const VALID_PAGE_NAMES = new Set<string>(Object.values(PageName));
@@ -194,6 +249,8 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
 // POST /rails - Create or update a rail (upsert on key + brandId)
 export const upsertRail = catchAsync(
   async (req: AuthRequest, res: Response) => {
+    console.log("HERE");
+    
     const parsed = validateUpsertBody(req.body);
     if (typeof parsed === "string") {
       sendResponse(res, {

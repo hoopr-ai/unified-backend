@@ -3,6 +3,7 @@ import {
   getRails,
   getRailsBatch,
   getRailByKey,
+  getRailSeeAll,
   upsertRail,
   deleteRail,
   editRailItems,
@@ -41,6 +42,10 @@ router.post("/brand-recommend", authenticate, triggerBrandRecommendation);
 // POST /rails/clear-cache - clear Redis cache for rails
 // Body: { pattern?: string, flushAll?: boolean }
 router.post("/clear-cache", clearRailsCache);
+
+// GET /rails/:railId/see-all - paginated full content for one rail
+// Must be declared before "/:key" so it isn't shadowed.
+router.get("/:railId/see-all", optionalAuthenticate, getRailSeeAll);
 
 // GET /rails/:key - single rail by key
 router.get("/:key", optionalAuthenticate, getRailByKey);

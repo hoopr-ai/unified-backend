@@ -333,6 +333,29 @@ export const findRailById = async (
   });
 };
 
+// Find a rail by ID without loading items (used by see-all where items are paginated separately)
+export const findRailByIdWithoutItems = async (
+  railId: number,
+): Promise<RailModel | null> => {
+  return RailModel.findOne({ where: { id: railId } });
+};
+
+// Paginated fetch of rail items for a given rail, ordered by `order` ASC.
+export const findRailItemsPaginated = async (
+  railId: number,
+  page: number,
+  limit: number,
+): Promise<{ rows: RailItemModel[]; count: number }> => {
+  const offset = (page - 1) * limit;
+  const { rows, count } = await RailItemModel.findAndCountAll({
+    where: { railId },
+    order: [["order", "ASC"]],
+    limit,
+    offset,
+  });
+  return { rows, count };
+};
+
 // Hard delete a rail and its items
 export const deleteRailById = async (
   railId: number,

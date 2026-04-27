@@ -43,3 +43,24 @@ export interface PaginatedRailsResponse {
     hasMore: boolean;
   };
 }
+
+export interface RailSeeAllResponse {
+  rail: {
+    id: number;
+    key: string;
+    title: string;
+    subtitle?: string | null;
+    type: RailType;
+    subType?: string | null;
+    sourceType: RailSourceType;
+    pageName?: string;
+  };
+  items: RailItemResponse[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}

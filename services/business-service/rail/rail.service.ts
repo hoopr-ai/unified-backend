@@ -7,6 +7,7 @@ import {
   RailItemResponse,
   RailSeeMoreDescriptor,
   PaginatedRailsResponse,
+  RailSeeAllResponse,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
   PageName,
   OwnerType,
@@ -25,6 +26,8 @@ import {
   findRailByKeyAndBrand,
   findRailByKeyBrandAndPage,
   findRailById,
+  findRailByIdWithoutItems,
+  findRailItemsPaginated,
   getMaxRailOrder,
   getMinRailOrder,
   upsertRailWithItems,
@@ -37,6 +40,8 @@ import {
   findAllTracks,
   findTrackIdsByAlbumType,
   findTracksLightweight,
+  findChartTrackCodes,
+  ChartTrackSource,
   FilterModel,
   PlaylistModel,
   getRestrictedOwnersByBrandId,
@@ -944,6 +949,44 @@ const resolveQueryTracks = async (
   throw new Error("query must have either filterIds or track filter parameters (popular, trending, newOnHoopr, etc.)");
 };
 
+// Resolve track codes for TRENDING/POPULAR rails from the chart_tracks table.
+// Replaces former AI calls to /smash/trendingSongs and /smash/popularSongs.
+// - Orders by chart_rank ASC (1 = highest)
+// - Filters out tracks belonging to brand-restricted owners
+// - Filters out inactive tracks (handled by findChartTrackCodes + findTracksLightweight)
+export const resolveChartTracks = async (
+  source: ChartTrackSource,
+  limit: number,
+  brandId?: number | null,
+  offset: number = 0,
+): Promise<string[]> => {
+  if (limit <= 0) return [];
+
+  let excludeOwnerIds: string[] | undefined;
+  if (brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
+
+  // Over-fetch to absorb tracks dropped by brand exclusion
+  const fetchSize = Math.min(500, limit * 3 + 50);
+  const candidateCodes = await findChartTrackCodes(source, fetchSize, offset);
+  if (candidateCodes.length === 0) return [];
+
+  const allowed = await findTracksLightweight(candidateCodes, excludeOwnerIds);
+
+  const ordered: string[] = [];
+  for (const code of candidateCodes) {
+    if (allowed.has(code)) {
+      ordered.push(code);
+      if (ordered.length >= limit) break;
+    }
+  }
+  return ordered;
+};
+
 // AI_QUERY path: call AI service based on queryType
 const resolveAiQueryTracks = async (
   req: UpsertRailRequest,
@@ -955,32 +998,20 @@ const resolveAiQueryTracks = async (
   const aiServiceUrl = process.env.AI_SERVICE_URL;
   const aiQuery = req.aiQuery;
 
+  // TRENDING/POPULAR are now sourced from the chart_tracks table (no external AI call)
+  if (aiQuery.queryType === 'TRENDING') {
+    return resolveChartTracks(ChartTrackSource.TRENDING, aiQuery.limit ?? 40, req.brandId);
+  }
+  if (aiQuery.queryType === 'POPULAR') {
+    return resolveChartTracks(ChartTrackSource.POPULAR, aiQuery.limit ?? 40, req.brandId);
+  }
+
   let url: string;
   let method: string = "GET";
   let body: string | undefined;
   let headers: Record<string, string> = {};
 
-  if (aiQuery.queryType === 'TRENDING') {
-    // GET /smash/trendingSongs?limit=X&brandId=Y
-    if (!aiServiceUrl) {
-      throw new Error("AI_SERVICE_URL environment variable is required for TRENDING query");
-    }
-    const params = new URLSearchParams();
-    params.set('limit', String(aiQuery.limit ?? 40));
-    if (req.brandId) params.set('brandId', String(req.brandId));
-    url = `${aiServiceUrl}/smash/trendingSongs?${params.toString()}`;
-    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
-  } else if (aiQuery.queryType === 'POPULAR') {
-    // GET /smash/popularSongs?limit=X&brandId=Y
-    if (!aiServiceUrl) {
-      throw new Error("AI_SERVICE_URL environment variable is required for POPULAR query");
-    }
-    const params = new URLSearchParams();
-    params.set('limit', String(aiQuery.limit ?? 40));
-    if (req.brandId) params.set('brandId', String(req.brandId));
-    url = `${aiServiceUrl}/smash/popularSongs?${params.toString()}`;
-    if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
-  } else if (aiQuery.queryType === 'FILTERED') {
+  if (aiQuery.queryType === 'FILTERED') {
     // POST /smash/aienterpriseSearch with body
     if (!aiServiceUrl) {
       throw new Error("AI_SERVICE_URL environment variable is required for FILTERED query");
@@ -1528,4 +1559,367 @@ export const copyRailService = async (
 
   // All validations passed, proceed with copy
   return copyRailToPages(req.railId, req.targetPageNames, req.brandId);
+};
+
+// -----------------------------------------------------------------------------
+// See-All endpoint: paginated full content of a single rail
+// -----------------------------------------------------------------------------
+
+const SEE_ALL_AI_QUERY_HARD_CAP = 200;
+
+interface RailSourceConfigQuery {
+  filterIds?: string[];
+  ownerIds?: string[];
+  excludeOwnerIds?: string[];
+  excludeTiers?: string[];
+  popular?: boolean;
+  trending?: boolean;
+  newOnHoopr?: boolean;
+  movie?: boolean;
+  type?: string[];
+  ownerCode?: string[];
+  campaign?: boolean;
+  releaseYearFrom?: number;
+  releaseYearTo?: number;
+}
+
+interface RailSourceConfigAiQuery {
+  queryType?: 'TRENDING' | 'POPULAR' | 'FILTERED' | 'NEW_AGE_ICONS' | 'BRAND_RECOMMENDED';
+  limit?: number;
+  q?: string;
+  brandName?: string;
+  userId?: string;
+  filters?: Array<{
+    type: string;
+    value: string[] | string;
+  }>;
+  url?: string;
+  body?: Record<string, unknown>;
+  headers?: Record<string, string>;
+}
+
+// Re-execute QUERY rail with pagination support
+const resolveQueryTracksPaginated = async (
+  query: RailSourceConfigQuery,
+  page: number,
+  limit: number,
+  brandId?: number | null,
+): Promise<{ codes: string[]; total: number }> => {
+  const hasFilterIds = Array.isArray(query.filterIds) && query.filterIds.length > 0;
+  const hasTrackFilters = query.popular || query.trending || query.newOnHoopr ||
+    query.movie !== undefined || query.campaign || query.type || query.ownerCode ||
+    query.releaseYearFrom || query.releaseYearTo;
+
+  let excludeOwnerIds: string[] | undefined;
+  if (brandId) {
+    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
+  if (query.excludeOwnerIds && query.excludeOwnerIds.length > 0) {
+    excludeOwnerIds = excludeOwnerIds
+      ? [...new Set([...excludeOwnerIds, ...query.excludeOwnerIds])]
+      : query.excludeOwnerIds;
+  }
+
+  if (hasFilterIds) {
+    const result = await findTracksByFilter({
+      filterIds: query.filterIds!,
+      page,
+      limit,
+      ownerIds: query.ownerIds,
+      excludeOwnerIds,
+      excludeTiers: query.excludeTiers,
+    });
+    const codes: string[] = [];
+    for (const row of result.rows ?? []) {
+      const track = (row as unknown as { track?: { trackCode?: string } }).track;
+      const code = track?.trackCode;
+      if (code && !codes.includes(code)) codes.push(code);
+    }
+    return { codes, total: result.count ?? codes.length };
+  }
+
+  if (hasTrackFilters) {
+    const whereClause: Record<string, unknown> = {};
+
+    if (query.trending === true) {
+      whereClause.trending = true;
+    }
+    if (query.popular === true) {
+      whereClause[Op.or as any] = [
+        { jioSaavanStream: { [Op.gt]: "0" } },
+        { jioSaavanStream: null },
+      ];
+      const movieTrackIds = await findTrackIdsByAlbumType("movie");
+      if (query.movie === true) {
+        if (movieTrackIds.length === 0) return { codes: [], total: 0 };
+        whereClause.id = { [Op.in]: movieTrackIds };
+      } else if (query.movie === false) {
+        if (movieTrackIds.length > 0) {
+          whereClause.id = { [Op.notIn]: movieTrackIds };
+        }
+      }
+    }
+    if (query.newOnHoopr === true) {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      whereClause.createdAt = { [Op.gte]: oneWeekAgo };
+    }
+    if (query.releaseYearFrom || query.releaseYearTo) {
+      const releaseDateCondition: any = {};
+      if (query.releaseYearFrom) {
+        releaseDateCondition[Op.gte] = new Date(`${query.releaseYearFrom}-01-01`);
+      }
+      if (query.releaseYearTo) {
+        releaseDateCondition[Op.lt] = new Date(`${query.releaseYearTo + 1}-01-01`);
+      }
+      whereClause.releaseDate = releaseDateCondition;
+    }
+
+    const [ownerIdsByType, ownerIdsByCode] = await Promise.all([
+      resolveOwnerIdsByType(query.type),
+      resolveOwnerIdsByOwnerCode(query.ownerCode),
+    ]);
+    const ownerIds = intersectOwnerIds(ownerIdsByType, ownerIdsByCode);
+    if (ownerIds && ownerIds.length === 0) {
+      return { codes: [], total: 0 };
+    }
+
+    const rawData = await findAllTracks(
+      page,
+      limit,
+      whereClause,
+      ownerIds,
+      excludeOwnerIds,
+      query.popular === true,
+      query.campaign === true,
+      query.excludeTiers,
+    );
+
+    return {
+      codes: rawData.rows.map((track) => track.trackCode),
+      total: (rawData as unknown as { count?: number }).count ?? rawData.rows.length,
+    };
+  }
+
+  return { codes: [], total: 0 };
+};
+
+// Build hydrated, owner-type-filtered RailItemResponse[] for a list of (itemType, itemCode) pairs.
+// Used by the see-all service after it has paginated raw codes.
+const buildSeeAllItems = async (
+  itemPairs: Array<{ itemType: RailItemType; itemCode: string; order: number }>,
+  pageName: PageName | undefined,
+  userId?: number,
+  viewerBrandId?: number,
+): Promise<RailItemResponse[]> => {
+  const trackCodes: string[] = [];
+  const filterCodes: string[] = [];
+  const playlistCodes: string[] = [];
+  const labelCodes: string[] = [];
+  for (const p of itemPairs) {
+    if (p.itemType === RailItemType.TRACK) trackCodes.push(p.itemCode);
+    else if (p.itemType === RailItemType.PLAYLIST) playlistCodes.push(p.itemCode);
+    else if (p.itemType === RailItemType.LABEL) labelCodes.push(p.itemCode);
+    else filterCodes.push(p.itemCode);
+  }
+
+  const [tracks, filters, playlists, labels] = await Promise.all([
+    hydrateTracks(trackCodes, userId, viewerBrandId),
+    hydrateFilters(filterCodes),
+    hydratePlaylists(playlistCodes),
+    hydrateLabels(labelCodes),
+  ]);
+  const maps: HydrationMaps = { tracks, filters, playlists, labels };
+
+  let items: RailItemResponse[] = itemPairs
+    .map((p) => {
+      const dummy = {
+        itemType: p.itemType,
+        itemCode: p.itemCode,
+        order: p.order,
+      } as unknown as RailItemModel;
+      return {
+        itemType: p.itemType,
+        itemCode: p.itemCode,
+        order: p.order,
+        data: resolveItem(dummy, maps),
+      };
+    })
+    .filter((entry) => entry.data !== null);
+
+  if (pageName) {
+    items = filterItemsByPageOwnerType(items, pageName);
+  }
+
+  return items;
+};
+
+export const getRailSeeAllService = async (
+  railId: number,
+  page: number,
+  limit: number,
+  reExecute: boolean,
+  userId?: number,
+  viewerBrandId?: number,
+): Promise<RailSeeAllResponse | null> => {
+  const rail = await findRailByIdWithoutItems(railId);
+  if (!rail) return null;
+
+  const railHeader: RailSeeAllResponse["rail"] = {
+    id: Number(rail.id),
+    key: rail.key,
+    title: rail.title,
+    subtitle: rail.subtitle ?? null,
+    type: rail.type,
+    subType: rail.subType ?? null,
+    sourceType: rail.sourceType,
+    pageName: rail.pageName,
+  };
+
+  const pageNameForFilter = rail.pageName as PageName | undefined;
+
+  // Helper to build the response envelope
+  const envelope = (
+    items: RailItemResponse[],
+    total: number,
+  ): RailSeeAllResponse => {
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
+    return {
+      rail: railHeader,
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore: page < totalPages,
+      },
+    };
+  };
+
+  // Path A: paginate snapshotted rail_items
+  // Used for MANUAL always, and for QUERY/AI_QUERY when reExecute=false
+  const paginateSnapshot = async (): Promise<RailSeeAllResponse> => {
+    const { rows, count } = await findRailItemsPaginated(railId, page, limit);
+    const pairs = rows.map((r) => ({
+      itemType: r.itemType as RailItemType,
+      itemCode: r.itemCode,
+      order: r.order,
+    }));
+    const items = await buildSeeAllItems(
+      pairs,
+      pageNameForFilter,
+      userId,
+      viewerBrandId,
+    );
+    return envelope(items, count);
+  };
+
+  if (rail.sourceType === RailSourceType.MANUAL || !reExecute) {
+    return paginateSnapshot();
+  }
+
+  // Path B: re-execute QUERY rail
+  if (rail.sourceType === RailSourceType.QUERY) {
+    const cfg = (rail.sourceConfig ?? {}) as { query?: RailSourceConfigQuery };
+    if (!cfg.query) {
+      return paginateSnapshot();
+    }
+    const { codes, total } = await resolveQueryTracksPaginated(
+      cfg.query,
+      page,
+      limit,
+      viewerBrandId ?? rail.brandId ?? null,
+    );
+    const pairs = codes.map((code, idx) => ({
+      itemType: RailItemType.TRACK,
+      itemCode: code,
+      order: (page - 1) * limit + idx,
+    }));
+    const items = await buildSeeAllItems(
+      pairs,
+      pageNameForFilter,
+      userId,
+      viewerBrandId,
+    );
+    return envelope(items, total);
+  }
+
+  // Path C: re-execute AI_QUERY rail (hard-capped at SEE_ALL_AI_QUERY_HARD_CAP)
+  if (rail.sourceType === RailSourceType.AI_QUERY) {
+    const cfg = (rail.sourceConfig ?? {}) as { aiQuery?: RailSourceConfigAiQuery };
+    const aiQuery = cfg.aiQuery;
+    if (!aiQuery) {
+      return paginateSnapshot();
+    }
+
+    let allCodes: string[] = [];
+    if (aiQuery.queryType === 'TRENDING') {
+      allCodes = await resolveChartTracks(
+        ChartTrackSource.TRENDING,
+        SEE_ALL_AI_QUERY_HARD_CAP,
+        viewerBrandId ?? rail.brandId ?? null,
+      );
+    } else if (aiQuery.queryType === 'POPULAR') {
+      allCodes = await resolveChartTracks(
+        ChartTrackSource.POPULAR,
+        SEE_ALL_AI_QUERY_HARD_CAP,
+        viewerBrandId ?? rail.brandId ?? null,
+      );
+    } else {
+      // For FILTERED / NEW_AGE_ICONS / BRAND_RECOMMENDED / legacy URL,
+      // re-run the AI service once with the hard cap, then slice locally.
+      const upsertReq: UpsertRailRequest = {
+        key: rail.key,
+        title: rail.title,
+        type: rail.type as RailType,
+        sourceType: rail.sourceType as RailSourceType,
+        brandId: viewerBrandId ?? rail.brandId ?? null,
+        aiQuery: {
+          queryType: (aiQuery.queryType ?? 'FILTERED') as
+            | 'TRENDING' | 'POPULAR' | 'FILTERED' | 'NEW_AGE_ICONS' | 'BRAND_RECOMMENDED',
+          limit: SEE_ALL_AI_QUERY_HARD_CAP,
+          q: aiQuery.q,
+          brandName: aiQuery.brandName,
+          userId: aiQuery.userId,
+          filters: aiQuery.filters as UpsertRailRequest["aiQuery"] extends infer T
+            ? T extends { filters?: infer F } ? F : never
+            : never,
+          url: aiQuery.url,
+          body: aiQuery.body,
+          headers: aiQuery.headers,
+          page: 1,
+        },
+      };
+      try {
+        allCodes = await resolveAiQueryTracks(upsertReq);
+      } catch (err) {
+        console.error(`[SeeAll] AI re-execute failed for rail ${railId}:`, err);
+        return paginateSnapshot();
+      }
+    }
+
+    const total = Math.min(allCodes.length, SEE_ALL_AI_QUERY_HARD_CAP);
+    const cappedCodes = allCodes.slice(0, total);
+    const start = (page - 1) * limit;
+    const slice = cappedCodes.slice(start, start + limit);
+
+    const pairs = slice.map((code, idx) => ({
+      itemType: RailItemType.TRACK,
+      itemCode: code,
+      order: start + idx,
+    }));
+    const items = await buildSeeAllItems(
+      pairs,
+      pageNameForFilter,
+      userId,
+      viewerBrandId,
+    );
+    return envelope(items, total);
+  }
+
+  return paginateSnapshot();
 };
