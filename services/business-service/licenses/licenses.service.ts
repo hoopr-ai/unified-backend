@@ -27,7 +27,7 @@ import {
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
-import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { OwnerModel, getOwnersByIds } from "../../persistence-service/owner/modules.export";
 import { Op } from "sequelize";
 import {
   AppError,
@@ -636,6 +636,7 @@ export const downloadLicensePdfService = async (
 
 export interface OwnerWiseTokenBreakdown {
   ownerIds: string[];
+  ownerDetails: { id: string; name: string }[];
   totalAssignedToken: number;
   tokensUsed: number;
   tokenBalance: number;
@@ -676,6 +677,20 @@ export const getTokenDetailsService = async (
     getDistinctTokenAssignedTypes(),
   ]);
 
+  // Collect all unique owner IDs to fetch their details in a single query
+  const allOwnerIds = new Set<string>();
+  for (const token of tokens) {
+    if (token.ownerIds && Array.isArray(token.ownerIds)) {
+      for (const ownerId of token.ownerIds) {
+        allOwnerIds.add(ownerId);
+      }
+    }
+  }
+
+  // Fetch all owner details in one batch query
+  const ownerDetailsList = await getOwnersByIds(Array.from(allOwnerIds));
+  const ownerDetailsMap = new Map(ownerDetailsList.map((o) => [o.id, o]));
+
   // Aggregate tokens by type and also collect owner-wise breakdown
   const aggregatedTokenMap = new Map<string, {
     totalAssignedToken: number;
@@ -685,8 +700,12 @@ export const getTokenDetailsService = async (
 
   for (const token of tokens) {
     const existing = aggregatedTokenMap.get(token.type);
+    const tokenOwnerIds = token.ownerIds || [];
+    const ownerDetails = tokenOwnerIds.map((id: string) => ownerDetailsMap.get(id) || { id, name: "" });
+
     const breakdown: OwnerWiseTokenBreakdown = {
-      ownerIds: token.ownerIds || [],
+      ownerIds: tokenOwnerIds,
+      ownerDetails,
       totalAssignedToken: token.totalAssignedToken,
       tokensUsed: token.totalAssignedToken - token.tokenBalance,
       tokenBalance: token.tokenBalance,
