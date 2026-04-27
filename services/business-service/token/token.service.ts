@@ -9,6 +9,7 @@ import {
   getAllDeductionsWithFilters,
   findTokenAssignedById,
   setTokenAssignedPrice,
+  getTokenDeductionsByTokenAssignedId,
   TokenDeductionReason,
 } from "../../persistence-service/token/modules.export";
 import { findBrandById } from "../../persistence-service/brand/brand.persistence.service";
@@ -331,4 +332,39 @@ export const getTokenSummaryByTypeService = async (): Promise<TokenTypeSummary[]
   }
 
   return summaries;
+};
+
+/**
+ * Get deductions for a specific token allocation
+ */
+export const getDeductionsByAllocationService = async (
+  tokenAssignedId: number
+): Promise<{
+  tokenAssignedId: number;
+  deductions: Array<{
+    id: number;
+    deductedTokenCount: number;
+    reason: string;
+    licenseId: number | null;
+    deductedAt: Date;
+  }>;
+}> => {
+  // Validate tokenAssignedId exists
+  const tokenAssigned = await findTokenAssignedById(tokenAssignedId);
+  if (!tokenAssigned) {
+    throw new AppError("Token allocation not found", 404);
+  }
+
+  const deductions = await getTokenDeductionsByTokenAssignedId(tokenAssignedId);
+
+  return {
+    tokenAssignedId,
+    deductions: deductions.map((d: any) => ({
+      id: d.id,
+      deductedTokenCount: d.deductedTokenCount,
+      reason: d.reason,
+      licenseId: d.licenseId || null,
+      deductedAt: d.deductedAt,
+    })),
+  };
 };

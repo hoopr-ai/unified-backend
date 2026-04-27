@@ -10,6 +10,7 @@ import {
   getTokenDeductions,
   getTokenSummary,
   setTokenAssignedPrice,
+  getDeductionsByAllocation,
 } from "../controllers/token.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
@@ -113,5 +114,11 @@ router.patch(
   validateRequest(setTokenAssignedPriceSchema),
   setTokenAssignedPrice
 );
+
+/**
+ * GET /tokens/:tokenAssignedId/deductions
+ * Get all deductions for a specific token allocation
+ */
+router.get("/:tokenAssignedId/deductions", adminAuth, getDeductionsByAllocation);
 
 export default router;
