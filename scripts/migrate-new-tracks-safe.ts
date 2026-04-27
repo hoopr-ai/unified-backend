@@ -15,11 +15,17 @@ import { ArtistType } from "../services/dto-service/modules.export";
 
 // ============ SOURCE DATABASE ============
 const SOURCE_DB_CONFIG = {
-  host: "34.100.172.44",
-  port: 5432,
-  user: "s-prod",
-  password: "ROUG2gact4whif_oorn",
-  database: "S-PROD",
+  // host: "34.100.172.44",
+  // port: 5432,
+  // user: "s-prod",
+  // password: "ROUG2gact4whif_oorn",
+  // database: "S-PROD",
+  host: process.env.DB_HOST || "34.47.153.109",
+  user: process.env.DB_USER || "unified-prod",
+  password: process.env.DB_PASSWORD || 'X"E6o+`{yvN|c30R',
+  database: process.env.DB_NAME || "unified-backend-prod",
+  port: parseInt(process.env.DB_PORT || "5432"),
+  ssl: { rejectUnauthorized: false },
 };
 
 // ============ TARGET DATABASE ============
