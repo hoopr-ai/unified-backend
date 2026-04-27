@@ -10,9 +10,11 @@ import {
   Default,
   Index,
   HasMany,
+  ForeignKey,
 } from "sequelize-typescript";
 import { RailType, RailSourceType, PageName } from "../../../dto-service/modules.export";
 import { RailItemModel } from "./rail-item.schema";
+import { UserModel } from "../../user/schemas/user.schema";
 
 export interface RailSeeMoreDescriptor {
   service: string;
@@ -39,6 +41,7 @@ export interface RailDetails {
   sourceConfig?: RailSourceConfig | null;
   order: number;
   isVisible: boolean;
+  updatedById?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -127,6 +130,14 @@ export class RailModel extends Model<RailModel, RailDetails> {
     allowNull: false,
   })
   isVisible!: boolean;
+
+  @Index({ name: "idx_rails_updated_by_id" })
+  @ForeignKey(() => UserModel)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  updatedById?: number | null;
 
   @CreatedAt
   @Column({

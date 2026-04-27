@@ -307,6 +307,7 @@ export interface UpsertRailInput {
   sourceConfig?: Record<string, unknown> | null;
   order: number;
   isVisible: boolean;
+  updatedById?: number | null;
 }
 
 export interface RailItemInput {
@@ -403,6 +404,7 @@ export interface UpdateRailItemInput {
 export const updateRailItems = async (
   railId: number,
   items: UpdateRailItemInput[],
+  updatedById?: number | null,
 ): Promise<RailItemDetails[]> => {
   // Get rail info for cache invalidation
   const rail = await RailModel.findByPk(railId, { attributes: ['brandId', 'pageName'] });
@@ -460,6 +462,12 @@ export const updateRailItems = async (
       );
     }
 
+    // Stamp the parent rail so updatedById/updatedAt reflect this edit
+    await RailModel.update(
+      { updatedById: updatedById ?? null },
+      { where: { id: railId }, transaction },
+    );
+
     await transaction.commit();
 
     // Invalidate cache for this rail's brand and page
@@ -485,10 +493,14 @@ export const bulkUpdateRailOrders = async (
   railOrders: { id: number; order: number }[],
   pageName?: PageName,
   brandId?: number | null,
+  updatedById?: number | null,
 ): Promise<void> => {
   await Promise.all(
     railOrders.map(({ id, order }) =>
-      RailModel.update({ order }, { where: { id } })
+      RailModel.update(
+        { order, updatedById: updatedById ?? null },
+        { where: { id } },
+      )
     )
   );
 
@@ -576,6 +588,7 @@ export const copyRailToPages = async (
   railId: number,
   targetPageNames: PageName[],
   brandId?: number | null,
+  updatedById?: number | null,
 ): Promise<CopyRailResult> => {
   const result: CopyRailResult = {
     sourceRailId: railId,
@@ -636,6 +649,7 @@ export const copyRailToPages = async (
           sourceConfig: sourceRail.sourceConfig,
           order: newOrder,
           isVisible: sourceRail.isVisible,
+          updatedById: updatedById ?? null,
         } as RailDetails,
         { transaction },
       );

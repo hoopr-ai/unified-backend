@@ -1307,6 +1307,7 @@ const buildItemsForUpsert = async (
 
 export const upsertRailService = async (
   req: UpsertRailRequest,
+  updatedById?: number | null,
 ): Promise<UpsertRailResult> => {
   const brandId = req.brandId ?? null;
   const pageNames = req.pageNames ?? [PageName.HOME];
@@ -1379,6 +1380,7 @@ export const upsertRailService = async (
         sourceConfig: finalSourceConfig,
         order,
         isVisible: req.isVisible ?? true,
+        updatedById: updatedById ?? null,
       },
       items,
     );
@@ -1429,6 +1431,7 @@ export interface EditRailItemsResult {
 export const editRailItemsService = async (
   railId: number,
   req: EditRailItemsRequest,
+  updatedById?: number | null,
 ): Promise<EditRailItemsResult | null> => {
   // Verify rail exists
   const rail = await findRailById(railId);
@@ -1467,7 +1470,7 @@ export const editRailItemsService = async (
     isLocked: item.isLocked ?? false,
   }));
 
-  const updatedItems = await updateRailItems(railId, itemsToUpdate);
+  const updatedItems = await updateRailItems(railId, itemsToUpdate, updatedById);
 
   return {
     railId,
@@ -1489,6 +1492,7 @@ export interface ReorderRailsRequest {
 
 export const reorderRailsService = async (
   req: ReorderRailsRequest,
+  updatedById?: number | null,
 ): Promise<{ updated: number; pageName: PageName }> => {
   if (!req.railOrders || req.railOrders.length === 0) {
     return { updated: 0, pageName: req.pageName };
@@ -1509,7 +1513,7 @@ export const reorderRailsService = async (
   // Get unique brandIds for cache invalidation
   const brandIds = [...new Set(rails.map(r => r.brandId))];
 
-  await bulkUpdateRailOrders(req.railOrders, req.pageName, brandIds[0]);
+  await bulkUpdateRailOrders(req.railOrders, req.pageName, brandIds[0], updatedById);
   return { updated: req.railOrders.length, pageName: req.pageName };
 };
 
@@ -1525,6 +1529,7 @@ export interface CopyRailRequest {
 
 export const copyRailService = async (
   req: CopyRailRequest,
+  updatedById?: number | null,
 ): Promise<CopyRailResult> => {
   // First, get the source rail with its items
   const sourceRail = await findRailById(req.railId);
@@ -1558,7 +1563,7 @@ export const copyRailService = async (
   }
 
   // All validations passed, proceed with copy
-  return copyRailToPages(req.railId, req.targetPageNames, req.brandId);
+  return copyRailToPages(req.railId, req.targetPageNames, req.brandId, updatedById);
 };
 
 // -----------------------------------------------------------------------------

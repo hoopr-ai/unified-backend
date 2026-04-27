@@ -4,3 +4,4 @@ package-lock.json
 /node_modules
 /dist
 newrelic_agent.log
+.claude
