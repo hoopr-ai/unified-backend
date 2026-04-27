@@ -29,3 +29,22 @@ export const getOwnerIdsByNames = async (
 
   return owners.map((owner) => owner.id);
 };
+
+/**
+ * Get owner details (id and username) by owner IDs
+ */
+export const getOwnersByIds = async (
+  ownerIds: string[],
+): Promise<{ id: string; name: string }[]> => {
+  if (!ownerIds || ownerIds.length === 0) return [];
+
+  const owners = await OwnerModel.findAll({
+    where: { id: { [Op.in]: ownerIds } },
+    attributes: ["id", "username"],
+  });
+
+  return owners.map((owner) => ({
+    id: owner.id,
+    name: owner.username || "",
+  }));
+};
