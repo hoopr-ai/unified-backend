@@ -83,16 +83,20 @@ export const getTokensByBrand = catchAsync(async (req: Request, res: Response) =
  * Assign tokens to a brand (Admin)
  * POST /tokens/assign
  */
-export const assignTokens = catchAsync(async (req: Request, res: Response) => {
+export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) => {
   const { brandId, tokens, type, expiryDate, ownerIds } = req.body;
+  const updatedById = req.session?.userId ?? null;
 
-  const result = await assignTokensAdminService({
-    brandId,
-    tokens,
-    type,
-    expiryDate: expiryDate ? new Date(expiryDate) : undefined,
-    ownerIds,
-  });
+  const result = await assignTokensAdminService(
+    {
+      brandId,
+      tokens,
+      type,
+      expiryDate: expiryDate ? new Date(expiryDate) : undefined,
+      ownerIds,
+    },
+    updatedById,
+  );
 
   sendResponse(res, {
     status: HttpStatusCode.CREATED,
@@ -105,15 +109,19 @@ export const assignTokens = catchAsync(async (req: Request, res: Response) => {
  * Deduct tokens from a brand (Admin - internal deduction)
  * POST /tokens/deduct
  */
-export const deductTokens = catchAsync(async (req: Request, res: Response) => {
+export const deductTokens = catchAsync(async (req: AuthRequest, res: Response) => {
   const { brandId, type, amount, tokenAssignedId } = req.body;
+  const updatedById = req.session?.userId ?? null;
 
-  const result = await deductTokensAdminService({
-    brandId,
-    type,
-    amount,
-    tokenAssignedId,
-  });
+  const result = await deductTokensAdminService(
+    {
+      brandId,
+      type,
+      amount,
+      tokenAssignedId,
+    },
+    updatedById,
+  );
 
   sendResponse(res, {
     status: HttpStatusCode.OK,

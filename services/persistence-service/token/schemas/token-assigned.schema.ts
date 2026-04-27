@@ -13,6 +13,7 @@ import {
   Index,
 } from "sequelize-typescript";
 import { BrandModel } from "../../brand/schemas/modules.export";
+import { UserModel } from "../../user/schemas/user.schema";
 
 export interface TokenAssignedDetails {
   id?: number;
@@ -23,6 +24,7 @@ export interface TokenAssignedDetails {
   type: string;
   ownerIds?: string[];
   tokenHistoryId?: number; // Reference to original token_history entry (for migration traceability)
+  updatedById?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -84,6 +86,14 @@ export class TokenAssignedModel extends Model<TokenAssignedModel, TokenAssignedD
     allowNull: true,
   })
   tokenHistoryId?: number;
+
+  @Index({ name: "idx_token_assigned_updated_by_id" })
+  @ForeignKey(() => UserModel)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  updatedById?: number | null;
 
   @CreatedAt
   @Column({
