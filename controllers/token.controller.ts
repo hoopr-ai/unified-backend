@@ -9,6 +9,7 @@ import {
   getBrandsWithTokensService,
   getTokenDeductionsService,
   getTokenSummaryByTypeService,
+  setTokenAssignedPriceService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -102,6 +103,29 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
     status: HttpStatusCode.CREATED,
     data: result,
     message: "Tokens assigned successfully",
+  });
+});
+
+/**
+ * Set per-token price on a token_assigned row (Admin)
+ * Only succeeds if the row does not already have a price.
+ * PATCH /tokens/:tokenAssignedId/price
+ */
+export const setTokenAssignedPrice = catchAsync(async (req: AuthRequest, res: Response) => {
+  const tokenAssignedId = Number(req.params.tokenAssignedId);
+  if (!Number.isInteger(tokenAssignedId) || tokenAssignedId <= 0) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid tokenAssignedId", {});
+  }
+
+  const { pricePerToken } = req.body;
+  const updatedById = req.session?.userId ?? null;
+
+  const result = await setTokenAssignedPriceService(tokenAssignedId, pricePerToken, updatedById);
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: result,
+    message: "Token price set successfully",
   });
 });
 

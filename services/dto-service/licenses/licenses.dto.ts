@@ -8,6 +8,7 @@ export interface AssignTokensRequest {
   type: string;
   expiryDate?: Date;
   ownerIds?: string[];
+  pricePerToken?: number;
 }
 
 export interface LicenseResponse {
@@ -33,6 +34,7 @@ export interface AssignTokensResponse {
   totalAssignedToken: number;
   expiryDate?: Date;
   ownerIds?: string[];
+  pricePerToken?: number | null;
 }
 
 export interface LicenseHistoryItem {

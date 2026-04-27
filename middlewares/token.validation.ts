@@ -1,5 +1,9 @@
 import Joi from "joi";
-import type { AssignTokensRequest, DeductTokensRequest } from "../services/dto-service/modules.export";
+import type {
+  AssignTokensRequest,
+  DeductTokensRequest,
+  SetTokenAssignedPriceRequest,
+} from "../services/dto-service/modules.export";
 
 export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
   brandId: Joi.number().integer().positive().required().messages({
@@ -18,6 +22,16 @@ export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
     "date.base": "expiryDate must be a valid date",
   }),
   ownerIds: Joi.array().items(Joi.string()).optional(),
+  pricePerToken: Joi.number().positive().precision(4).optional().messages({
+    "number.positive": "pricePerToken must be a positive number",
+  }),
+});
+
+export const setTokenAssignedPriceSchema = Joi.object<SetTokenAssignedPriceRequest>({
+  pricePerToken: Joi.number().positive().precision(4).required().messages({
+    "any.required": "pricePerToken is required",
+    "number.positive": "pricePerToken must be a positive number",
+  }),
 });
 
 export const deductTokensRequestSchema = Joi.object<DeductTokensRequest>({
