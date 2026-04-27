@@ -8,6 +8,7 @@ import {
   getBrandsWithTokens,
   getAllDeductionsWithFilters,
   findTokenAssignedById,
+  setTokenAssignedPrice,
   TokenDeductionReason,
 } from "../../persistence-service/token/modules.export";
 import { findBrandById } from "../../persistence-service/brand/brand.persistence.service";
@@ -114,7 +115,7 @@ export const assignTokensAdminService = async (
   data: AssignTokensRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  const { brandId, tokens, type, expiryDate, ownerIds } = data;
+  const { brandId, tokens, type, expiryDate, ownerIds, pricePerToken } = data;
 
   // Validate tokens amount
   if (tokens <= 0) {
@@ -124,6 +125,10 @@ export const assignTokensAdminService = async (
   // Validate type
   if (!type || type.trim() === "") {
     throw new AppError("Token type is required", 400);
+  }
+
+  if (pricePerToken !== undefined && pricePerToken !== null && pricePerToken <= 0) {
+    throw new AppError("pricePerToken must be greater than 0", 400);
   }
 
   // Validate brand exists
@@ -139,7 +144,8 @@ export const assignTokensAdminService = async (
     tokens,
     expiryDate,
     ownerIds,
-    updatedById
+    updatedById,
+    pricePerToken ?? null
   );
 
   return {
@@ -150,6 +156,42 @@ export const assignTokensAdminService = async (
     totalAssignedToken: tokenAssigned.totalAssignedToken,
     expiryDate: tokenAssigned.expiryDate,
     ownerIds: tokenAssigned.ownerIds,
+    pricePerToken: tokenAssigned.pricePerToken ?? null,
+  };
+};
+
+/**
+ * Set the per-token price on a token_assigned row. Only allowed if the
+ * row does not already have a price (one-time set; protects pricing history).
+ */
+export const setTokenAssignedPriceService = async (
+  tokenAssignedId: number,
+  pricePerToken: number,
+  updatedById?: number | null
+): Promise<AssignTokensResponse> => {
+  if (!Number.isFinite(pricePerToken) || pricePerToken <= 0) {
+    throw new AppError("pricePerToken must be greater than 0", 400);
+  }
+
+  const result = await setTokenAssignedPrice(tokenAssignedId, pricePerToken, updatedById);
+
+  if (result.status === "not_found") {
+    throw new AppError("Token allocation not found", 404);
+  }
+  if (result.status === "already_set") {
+    throw new AppError("Price for this token allocation is already set", 409);
+  }
+
+  const token = result.token!;
+  return {
+    id: token.id,
+    brandId: token.brandId,
+    type: token.type,
+    tokenBalance: token.tokenBalance,
+    totalAssignedToken: token.totalAssignedToken,
+    expiryDate: token.expiryDate,
+    ownerIds: token.ownerIds,
+    pricePerToken: token.pricePerToken ?? null,
   };
 };
 
