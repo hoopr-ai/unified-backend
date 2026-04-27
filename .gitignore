@@ -5,3 +5,4 @@ package-lock.json
 /dist
 newrelic_agent.log
 .claude
+.env.migration.example
