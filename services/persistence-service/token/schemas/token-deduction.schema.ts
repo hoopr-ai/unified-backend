@@ -12,6 +12,7 @@ import {
   Index,
 } from "sequelize-typescript";
 import { TokenAssignedModel } from "./token-assigned.schema";
+import { UserModel } from "../../user/schemas/user.schema";
 
 export enum TokenDeductionReason {
   LICENSE_PURCHASE = "LICENSE_PURCHASE",
@@ -26,6 +27,7 @@ export interface TokenDeductionDetails {
   licenseId?: number;
   tokenHistoryId?: number; // Reference to original token_history entry (for migration traceability)
   deductedAt: Date;
+  updatedById?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -79,6 +81,14 @@ export class TokenDeductionModel extends Model<TokenDeductionModel, TokenDeducti
     allowNull: false,
   })
   deductedAt!: Date;
+
+  @Index({ name: "idx_token_deduction_updated_by_id" })
+  @ForeignKey(() => UserModel)
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  updatedById?: number | null;
 
   @CreatedAt
   @Column({

@@ -47,37 +47,37 @@ router.get(
  * GET /tokens
  * Get all tokens with optional filters (brandId, type, page, limit)
  */
-router.get("/", getTokens);
+router.get("/", adminAuth, getTokens);
 
 /**
  * GET /tokens/types
  * Get all distinct token types
  */
-router.get("/types", getTokenTypes);
+router.get("/types", adminAuth, getTokenTypes);
 
 /**
  * GET /tokens/brands
  * Get all brands with tokens summary
  */
-router.get("/brands", getBrandsWithTokens);
+router.get("/brands", adminAuth, getBrandsWithTokens);
 
 /**
  * GET /tokens/summary
  * Get token summary by type (aggregate stats)
  */
-router.get("/summary", getTokenSummary);
+router.get("/summary", adminAuth, getTokenSummary);
 
 /**
  * GET /tokens/deductions
  * Get token deductions with filters
  */
-router.get("/deductions", getTokenDeductions);
+router.get("/deductions", adminAuth, getTokenDeductions);
 
 /**
  * GET /tokens/brand/:brandId
  * Get token details for a specific brand
  */
-router.get("/brand/:brandId", getTokensByBrand);
+router.get("/brand/:brandId", adminAuth, getTokensByBrand);
 
 /**
  * POST /tokens/assign
@@ -85,7 +85,7 @@ router.get("/brand/:brandId", getTokensByBrand);
  */
 router.post(
   "/assign",
-  // adminAuth,
+  adminAuth,
   validateRequest(assignTokensRequestSchema),
   assignTokens
 );
@@ -96,7 +96,7 @@ router.post(
  */
 router.post(
   "/deduct",
-  // adminAuth,
+  adminAuth,
   validateRequest(deductTokensRequestSchema),
   deductTokens
 );

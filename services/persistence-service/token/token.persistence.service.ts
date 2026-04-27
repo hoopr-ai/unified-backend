@@ -339,7 +339,8 @@ export const addTokensAssignedByType = async (
   type: string,
   amount: number,
   expiryDate?: Date,
-  ownerIds?: string[]
+  ownerIds?: string[],
+  updatedById?: number | null
 ): Promise<TokenAssignedModel> => {
   return await TokenAssignedModel.create({
     brandId,
@@ -348,6 +349,7 @@ export const addTokensAssignedByType = async (
     tokenBalance: amount,
     expiryDate,
     ownerIds: ownerIds || [],
+    updatedById: updatedById ?? null,
   });
 };
 
@@ -655,7 +657,8 @@ export const deductTokenAssignedForAdmin = async (
   type: string,
   amount: number = 1,
   reason: TokenDeductionReason = TokenDeductionReason.INTERNAL_DEDUCTION,
-  tokenAssignedId?: number
+  tokenAssignedId?: number,
+  updatedById?: number | null
 ): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number }> => {
   const transaction = await sequelize.transaction();
   try {
@@ -693,9 +696,12 @@ export const deductTokenAssignedForAdmin = async (
       return { success: false, remainingTokens: 0 };
     }
 
-    // Deduct from token_assigned
+    // Deduct from token_assigned + record who performed the deduction
     await TokenAssignedModel.update(
-      { tokenBalance: sequelize.literal(`"tokenBalance" - ${amount}`) },
+      {
+        tokenBalance: sequelize.literal(`"tokenBalance" - ${amount}`),
+        updatedById: updatedById ?? null,
+      },
       { where: { id: matchingToken.id }, transaction }
     );
 
@@ -705,6 +711,7 @@ export const deductTokenAssignedForAdmin = async (
       deductedTokenCount: amount,
       reason,
       deductedAt: new Date(),
+      updatedById: updatedById ?? null,
     }, { transaction });
 
     await transaction.commit();

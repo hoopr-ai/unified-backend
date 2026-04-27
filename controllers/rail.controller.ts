@@ -249,8 +249,6 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
 // POST /rails - Create or update a rail (upsert on key + brandId)
 export const upsertRail = catchAsync(
   async (req: AuthRequest, res: Response) => {
-    console.log("HERE");
-    
     const parsed = validateUpsertBody(req.body);
     if (typeof parsed === "string") {
       sendResponse(res, {
@@ -261,7 +259,8 @@ export const upsertRail = catchAsync(
       return;
     }
 
-    const result = await upsertRailService(parsed);
+    const updatedById = req.session?.userId ?? null;
+    const result = await upsertRailService(parsed, updatedById);
 
     sendResponse(res, {
       status: HttpStatusCode.OK,
@@ -355,7 +354,8 @@ export const editRailItems = catchAsync(
       return;
     }
 
-    const result = await editRailItemsService(railId, parsed);
+    const updatedById = req.session?.userId ?? null;
+    const result = await editRailItemsService(railId, parsed, updatedById);
 
     if (!result) {
       sendResponse(res, {
@@ -415,7 +415,8 @@ export const reorderRails = catchAsync(
       return;
     }
 
-    const result = await reorderRailsService(parsed);
+    const updatedById = req.session?.userId ?? null;
+    const result = await reorderRailsService(parsed, updatedById);
 
     sendResponse(res, {
       status: HttpStatusCode.OK,
@@ -470,11 +471,15 @@ export const copyRail = catchAsync(
     }
 
     try {
-      const result = await copyRailService({
-        railId: parsed.railId,
-        targetPageNames: parsed.targetPageNames,
-        brandId: parsed.brandId,
-      });
+      const updatedById = req.session?.userId ?? null;
+      const result = await copyRailService(
+        {
+          railId: parsed.railId,
+          targetPageNames: parsed.targetPageNames,
+          brandId: parsed.brandId,
+        },
+        updatedById,
+      );
 
       sendResponse(res, {
         status: HttpStatusCode.OK,

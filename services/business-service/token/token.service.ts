@@ -111,7 +111,8 @@ export const getTokenDetailsByBrandService = async (
  * Assign tokens to a brand (Admin API)
  */
 export const assignTokensAdminService = async (
-  data: AssignTokensRequest
+  data: AssignTokensRequest,
+  updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
   const { brandId, tokens, type, expiryDate, ownerIds } = data;
 
@@ -137,7 +138,8 @@ export const assignTokensAdminService = async (
     type.trim().toLowerCase(),
     tokens,
     expiryDate,
-    ownerIds
+    ownerIds,
+    updatedById
   );
 
   return {
@@ -155,7 +157,8 @@ export const assignTokensAdminService = async (
  * Deduct tokens from a brand (Admin API - internal deduction)
  */
 export const deductTokensAdminService = async (
-  data: DeductTokensRequest
+  data: DeductTokensRequest,
+  updatedById?: number | null
 ): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number }> => {
   const { brandId, type, amount, tokenAssignedId } = data;
 
@@ -188,7 +191,8 @@ export const deductTokensAdminService = async (
     type.trim().toLowerCase(),
     amount,
     TokenDeductionReason.INTERNAL_DEDUCTION,
-    tokenAssignedId
+    tokenAssignedId,
+    updatedById
   );
 
   if (!result.success) {
