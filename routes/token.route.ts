@@ -9,12 +9,15 @@ import {
   getBrandsWithTokens,
   getTokenDeductions,
   getTokenSummary,
+  setTokenAssignedPrice,
+  getDeductionsByAllocation,
 } from "../controllers/token.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
   assignTokensRequestSchema,
   deductTokensRequestSchema,
+  setTokenAssignedPriceSchema,
 } from "../middlewares/token.validation";
 import { UserRoles } from "../services/dto-service/modules.export";
 
@@ -100,5 +103,22 @@ router.post(
   validateRequest(deductTokensRequestSchema),
   deductTokens
 );
+
+/**
+ * PATCH /tokens/:tokenAssignedId/price
+ * Set the per-token price on a token_assigned row (one-time set)
+ */
+router.patch(
+  "/:tokenAssignedId/price",
+  adminAuth,
+  validateRequest(setTokenAssignedPriceSchema),
+  setTokenAssignedPrice
+);
+
+/**
+ * GET /tokens/:tokenAssignedId/deductions
+ * Get all deductions for a specific token allocation
+ */
+router.get("/:tokenAssignedId/deductions", adminAuth, getDeductionsByAllocation);
 
 export default router;

@@ -1,5 +1,9 @@
 // Note: AssignTokensRequest, AssignTokensResponse, and TokenBalanceItem are defined in licenses.dto.ts
 
+export interface SetTokenAssignedPriceRequest {
+  pricePerToken: number;
+}
+
 export interface DeductTokensRequest {
   brandId: number;
   type: string;

@@ -9,6 +9,8 @@ import {
   getBrandsWithTokensService,
   getTokenDeductionsService,
   getTokenSummaryByTypeService,
+  setTokenAssignedPriceService,
+  getDeductionsByAllocationService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -106,6 +108,29 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
 });
 
 /**
+ * Set per-token price on a token_assigned row (Admin)
+ * Only succeeds if the row does not already have a price.
+ * PATCH /tokens/:tokenAssignedId/price
+ */
+export const setTokenAssignedPrice = catchAsync(async (req: AuthRequest, res: Response) => {
+  const tokenAssignedId = Number(req.params.tokenAssignedId);
+  if (!Number.isInteger(tokenAssignedId) || tokenAssignedId <= 0) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid tokenAssignedId", {});
+  }
+
+  const { pricePerToken } = req.body;
+  const updatedById = req.session?.userId ?? null;
+
+  const result = await setTokenAssignedPriceService(tokenAssignedId, pricePerToken, updatedById);
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: result,
+    message: "Token price set successfully",
+  });
+});
+
+/**
  * Deduct tokens from a brand (Admin - internal deduction)
  * POST /tokens/deduct
  */
@@ -193,5 +218,25 @@ export const getTokenSummary = catchAsync(async (req: Request, res: Response) =>
     status: HttpStatusCode.OK,
     data: { summary },
     message: "Token summary fetched successfully",
+  });
+});
+
+/**
+ * Get deductions for a specific token allocation (Admin)
+ * GET /tokens/:tokenAssignedId/deductions
+ */
+export const getDeductionsByAllocation = catchAsync(async (req: Request, res: Response) => {
+  const tokenAssignedId = Number(req.params.tokenAssignedId);
+
+  if (!Number.isInteger(tokenAssignedId) || tokenAssignedId <= 0) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid tokenAssignedId", {});
+  }
+
+  const result = await getDeductionsByAllocationService(tokenAssignedId);
+
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: result,
+    message: "Deductions for allocation fetched successfully",
   });
 });
