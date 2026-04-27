@@ -1,6 +1,9 @@
 import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails } from "./schemas/modules.export";
+import { BrandModel } from "../brand/schemas/modules.export";
 import { sequelize } from "../database";
 import { fn, col, literal, Op } from "sequelize";
+
+export { TokenDeductionReason };
 
 export const getDistinctTokenTypes = async (): Promise<string[]> => {
   const results = await TokenModel.findAll({
@@ -525,6 +528,196 @@ export const createInternalDeduction = async (
 
     await transaction.commit();
     return { success: true, deduction };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+};
+
+// ============================================
+// ADMIN/CMS FUNCTIONS
+// ============================================
+
+export interface TokenListFilters {
+  brandId?: number;
+  type?: string;
+  page?: number;
+  limit?: number;
+}
+
+export const findTokenAssignedById = async (id: number): Promise<TokenAssignedModel | null> => {
+  return await TokenAssignedModel.findByPk(id);
+};
+
+export const getAllTokensWithFilters = async (
+  filters: TokenListFilters
+): Promise<{ rows: TokenAssignedModel[]; count: number }> => {
+  const { brandId, type, page = 1, limit = 20 } = filters;
+  const offset = (page - 1) * limit;
+
+  const where: any = {};
+  if (brandId) where.brandId = brandId;
+  if (type) where.type = type;
+
+  const { rows, count } = await TokenAssignedModel.findAndCountAll({
+    where,
+    include: [
+      {
+        model: BrandModel,
+        as: "brand",
+        attributes: ["id", "name"],
+      },
+    ],
+    order: [["createdAt", "DESC"]],
+    limit,
+    offset,
+  });
+
+  return { rows, count };
+};
+
+export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandName: string; totalTokens: number }[]> => {
+  const results = await TokenAssignedModel.findAll({
+    attributes: [
+      "brandId",
+      [fn("SUM", col("tokenBalance")), "totalTokens"],
+    ],
+    include: [
+      {
+        model: BrandModel,
+        as: "brand",
+        attributes: ["name"],
+      },
+    ],
+    group: ["brandId", "brand.id"],
+    raw: true,
+    nest: true,
+  });
+
+  return results.map((r: any) => ({
+    brandId: Number(r.brandId),
+    brandName: r.brand?.name || "Unknown",
+    totalTokens: Number(r.totalTokens) || 0,
+  }));
+};
+
+export const getAllDeductionsWithFilters = async (
+  filters: {
+    brandId?: number;
+    type?: string;
+    reason?: TokenDeductionReason;
+    page?: number;
+    limit?: number;
+  }
+): Promise<{ rows: TokenDeductionModel[]; count: number }> => {
+  const { brandId, type, reason, page = 1, limit = 20 } = filters;
+  const offset = (page - 1) * limit;
+
+  // Build token_assigned filter
+  const tokenAssignedWhere: any = {};
+  if (brandId) tokenAssignedWhere.brandId = brandId;
+  if (type) tokenAssignedWhere.type = type;
+
+  // Build deduction filter
+  const deductionWhere: any = {};
+  if (reason) deductionWhere.reason = reason;
+
+  const { rows, count } = await TokenDeductionModel.findAndCountAll({
+    where: deductionWhere,
+    include: [
+      {
+        model: TokenAssignedModel,
+        as: "tokenAssigned",
+        where: Object.keys(tokenAssignedWhere).length > 0 ? tokenAssignedWhere : undefined,
+        attributes: ["id", "type", "brandId"],
+        include: [
+          {
+            model: BrandModel,
+            as: "brand",
+            attributes: ["id", "name"],
+          },
+        ],
+      },
+    ],
+    order: [["deductedAt", "DESC"]],
+    limit,
+    offset,
+  });
+
+  return { rows, count };
+};
+
+/**
+ * Deduct tokens for internal/admin use (supports specifying a specific tokenAssignedId)
+ */
+export const deductTokenAssignedForAdmin = async (
+  brandId: number,
+  type: string,
+  amount: number = 1,
+  reason: TokenDeductionReason = TokenDeductionReason.INTERNAL_DEDUCTION,
+  tokenAssignedId?: number
+): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number }> => {
+  const transaction = await sequelize.transaction();
+  try {
+    let matchingToken: TokenAssignedModel | null = null;
+
+    if (tokenAssignedId) {
+      // Deduct from specific token
+      matchingToken = await TokenAssignedModel.findOne({
+        where: {
+          id: tokenAssignedId,
+          brandId,
+          type,
+          tokenBalance: { [Op.gte]: amount },
+        },
+        lock: transaction.LOCK.UPDATE,
+        transaction,
+      });
+    } else {
+      // Find first token with sufficient balance (FIFO)
+      const tokens = await TokenAssignedModel.findAll({
+        where: {
+          brandId,
+          type,
+          tokenBalance: { [Op.gte]: amount },
+        },
+        order: [["createdAt", "ASC"]],
+        lock: transaction.LOCK.UPDATE,
+        transaction,
+      });
+      matchingToken = tokens[0] || null;
+    }
+
+    if (!matchingToken) {
+      await transaction.rollback();
+      return { success: false, remainingTokens: 0 };
+    }
+
+    // Deduct from token_assigned
+    await TokenAssignedModel.update(
+      { tokenBalance: sequelize.literal(`"tokenBalance" - ${amount}`) },
+      { where: { id: matchingToken.id }, transaction }
+    );
+
+    // Create deduction record
+    await TokenDeductionModel.create({
+      tokenAssignedId: matchingToken.id,
+      deductedTokenCount: amount,
+      reason,
+      deductedAt: new Date(),
+    }, { transaction });
+
+    await transaction.commit();
+
+    const updatedToken = await TokenAssignedModel.findByPk(matchingToken.id, {
+      attributes: ["tokenBalance"],
+    });
+
+    return {
+      success: true,
+      remainingTokens: updatedToken?.tokenBalance ?? 0,
+      tokenAssignedId: matchingToken.id,
+    };
   } catch (error) {
     await transaction.rollback();
     throw error;

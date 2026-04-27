@@ -7,6 +7,8 @@ import {
   RailItemInput,
 } from "../../persistence-service/rail/rail.persistence.service";
 import { findAllTracks } from "../../persistence-service/track/track.persistence.service";
+import { ChartTrackSource } from "../../persistence-service/track/schemas/chart-tracks.schema";
+import { resolveChartTracks } from "../../business-service/rail/rail.service";
 import { logger } from "../../helper-service/logger";
 
 const REFRESHABLE_AI_QUERY_TYPES = ["TRENDING", "POPULAR", "NEW_AGE_ICONS", "BRAND_RECOMMENDED"];
@@ -41,6 +43,14 @@ async function fetchAiQueryTracks(
   brandId?: number,
   filters?: AiQueryFilter[]
 ): Promise<string[]> {
+  // TRENDING/POPULAR are sourced from the chart_tracks table — no AI service needed.
+  if (queryType === "TRENDING") {
+    return resolveChartTracks(ChartTrackSource.TRENDING, limit, brandId);
+  }
+  if (queryType === "POPULAR") {
+    return resolveChartTracks(ChartTrackSource.POPULAR, limit, brandId);
+  }
+
   if (!AI_SERVICE_URL) {
     throw new Error("AI_SERVICE_URL not configured");
   }
@@ -53,15 +63,7 @@ async function fetchAiQueryTracks(
     Accept: "application/json",
   };
 
-  if (queryType === "TRENDING") {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (brandId) params.set("brandId", String(brandId));
-    url = `${AI_SERVICE_URL}/smash/trendingSongs?${params.toString()}`;
-  } else if (queryType === "POPULAR") {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (brandId) params.set("brandId", String(brandId));
-    url = `${AI_SERVICE_URL}/smash/popularSongs?${params.toString()}`;
-  } else if (queryType === "NEW_AGE_ICONS") {
+  if (queryType === "NEW_AGE_ICONS") {
     method = "POST";
     body = JSON.stringify({ limit, page: 1 });
     url = `${AI_SERVICE_URL}/smash/curatedArtistTracks`;

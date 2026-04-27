@@ -12,3 +12,4 @@ export * from "./album/album.service";
 export * from "./faq/faq.service";
 export * from "./company-lookup/company-lookup.service";
 export * from "./rail/modules.export";
+export * from "./token/modules.export";

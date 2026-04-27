@@ -1,4 +1,5 @@
 import { TrackModel } from "./schemas/track.schema";
+import { ChartTrackModel, ChartTrackSource } from "./schemas/chart-tracks.schema";
 import {
   TrackArtistMappingModel,
   ArtistModel,
@@ -858,4 +859,44 @@ export const findTracksLightweight = async (
   }
 
   return result;
+};
+
+// Fetch trackcodes from chart_tracks for a given source (POPULAR/TRENDING),
+// ordered strictly by chart_rank ASC. Only returns codes whose tracks are status=ACTIVE.
+export const findChartTrackCodes = async (
+  source: ChartTrackSource,
+  limit: number,
+  offset: number = 0,
+): Promise<string[]> => {
+  if (limit <= 0) return [];
+
+  const rows = await ChartTrackModel.findAll({
+    where: { source },
+    attributes: ["trackcode", "chart_rank"],
+    order: [["chart_rank", "ASC"]],
+    limit,
+    offset,
+    raw: true,
+  });
+
+  const codes = rows
+    .map((r) => (r as unknown as { trackcode?: string }).trackcode)
+    .filter((c): c is string => typeof c === "string" && c.length > 0);
+
+  if (codes.length === 0) return [];
+
+  const activeRows = await TrackModel.findAll({
+    where: {
+      trackCode: { [Op.in]: codes },
+      status: "ACTIVE",
+    } as any,
+    attributes: ["trackCode"],
+    raw: true,
+  });
+
+  const activeSet = new Set(
+    activeRows.map((r) => (r as unknown as { trackCode: string }).trackCode),
+  );
+
+  return codes.filter((c) => activeSet.has(c));
 };
