@@ -8,7 +8,7 @@ import {
   UserLikedTrackModel,
   UserStreamHistoryModel,
 } from "./user/modules.export";
-import { TrackModel, FeaturedTracksModel } from "./track/modules.export";
+import { TrackModel, FeaturedTracksModel, ChartTrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
 import { ArtistModel, TrackArtistMappingModel } from "./artists/modules.export";
@@ -104,6 +104,7 @@ sequelize.addModels([
   TokenDeductionModel,
   OccasionModel,
   FeaturedTracksModel,
+  ChartTrackModel,
   KeywordModel,
   TrackKeywordMappingModel,
   CampaignModel,
