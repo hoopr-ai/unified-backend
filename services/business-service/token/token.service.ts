@@ -338,18 +338,59 @@ export const getTokenDeductionsService = async (
     limit,
   });
 
+  // Collect all unique track ownerIds from all deductions
+  const allOwnerIds = new Set<string>();
+  for (const deduction of rows) {
+    const track = (deduction as any).license?.track;
+    if (track?.ownerId && Array.isArray(track.ownerId)) {
+      for (const id of track.ownerId) {
+        allOwnerIds.add(id);
+      }
+    }
+  }
+
+  // Fetch owner details in one query
+  const ownerDetailsMap = new Map<string, { id: string; name: string; type: string | null }>();
+  if (allOwnerIds.size > 0) {
+    const owners = await getOwnersByIds(Array.from(allOwnerIds));
+    for (const owner of owners) {
+      ownerDetailsMap.set(owner.id, owner);
+    }
+  }
+
   return {
-    deductions: rows.map((deduction: any) => ({
-      id: deduction.id,
-      tokenAssignedId: deduction.tokenAssignedId,
-      type: deduction.tokenAssigned?.type || "",
-      brandId: deduction.tokenAssigned?.brandId || 0,
-      brandName: deduction.tokenAssigned?.brand?.name || null,
-      deductedTokenCount: deduction.deductedTokenCount,
-      reason: deduction.reason,
-      licenseId: deduction.licenseId,
-      deductedAt: deduction.deductedAt,
-    })),
+    deductions: rows.map((deduction: any) => {
+      const license = deduction.license;
+      const track = license?.track;
+      const user = license?.user;
+
+      return {
+        id: deduction.id,
+        tokenAssignedId: deduction.tokenAssignedId,
+        type: deduction.tokenAssigned?.type || "",
+        brandId: deduction.tokenAssigned?.brandId || 0,
+        brandName: deduction.tokenAssigned?.brand?.name || null,
+        deductedTokenCount: deduction.deductedTokenCount,
+        reason: deduction.reason,
+        licenseId: deduction.licenseId,
+        deductedAt: deduction.deductedAt,
+        trackDetails: track ? {
+          id: track.id,
+          trackCode: track.trackCode,
+          name: track.name || null,
+          sourceLink: track.sourceLink || null,
+          waveformLink: track.waveformLink || null,
+          mp3Link: track.mp3Link || null,
+        } : null,
+        trackOwnerDetails: track?.ownerId?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
+        purchasedBy: user ? {
+          id: user.id,
+          firstName: user.firstName || null,
+          lastName: user.lastName || null,
+          email: user.email,
+        } : null,
+      };
+    }),
     pagination: {
       page,
       limit,
