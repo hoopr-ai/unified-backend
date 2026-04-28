@@ -140,10 +140,10 @@ export const assignTokensAdminService = async (
     throw new AppError("Brand not found", 404);
   }
 
-  // Create token assignment
+  // Create token assignment (preserve original type case)
   const tokenAssigned = await addTokensAssignedByType(
     brandId,
-    type.trim().toLowerCase(),
+    type.trim(),
     tokens,
     expiryDate,
     ownerIds,
@@ -159,7 +159,9 @@ export const assignTokensAdminService = async (
     totalAssignedToken: tokenAssigned.totalAssignedToken,
     expiryDate: tokenAssigned.expiryDate,
     ownerIds: tokenAssigned.ownerIds,
-    pricePerToken: tokenAssigned.pricePerToken ?? null,
+    pricePerToken: tokenAssigned.pricePerToken != null
+      ? parseFloat(Number(tokenAssigned.pricePerToken).toFixed(2))
+      : null,
   };
 };
 
