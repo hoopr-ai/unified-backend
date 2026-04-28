@@ -46,6 +46,7 @@ export const getTokensListService = async (
       tokensUsed: token.totalAssignedToken - token.tokenBalance,
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
+      pricePerToken: token.pricePerToken ?? null,
       createdAt: token.createdAt,
     })),
     pagination: {
@@ -83,6 +84,7 @@ export const getTokenDetailsByBrandService = async (
       tokensUsed: token.totalAssignedToken - token.tokenBalance,
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
+      pricePerToken: token.pricePerToken ?? null,
       createdAt: token.createdAt,
     };
 
@@ -162,8 +164,7 @@ export const assignTokensAdminService = async (
 };
 
 /**
- * Set the per-token price on a token_assigned row. Only allowed if the
- * row does not already have a price (one-time set; protects pricing history).
+ * Set or update the per-token price on a token_assigned row.
  */
 export const setTokenAssignedPriceService = async (
   tokenAssignedId: number,
@@ -178,9 +179,6 @@ export const setTokenAssignedPriceService = async (
 
   if (result.status === "not_found") {
     throw new AppError("Token allocation not found", 404);
-  }
-  if (result.status === "already_set") {
-    throw new AppError("Price for this token allocation is already set", 409);
   }
 
   const token = result.token!;
