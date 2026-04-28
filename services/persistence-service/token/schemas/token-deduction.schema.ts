@@ -13,6 +13,7 @@ import {
 } from "sequelize-typescript";
 import { TokenAssignedModel } from "./token-assigned.schema";
 import { UserModel } from "../../user/schemas/user.schema";
+import { LicenseModel } from "../../licenses/schemas/licenses.schema";
 
 export enum TokenDeductionReason {
   LICENSE_PURCHASE = "LICENSE_PURCHASE",
@@ -105,4 +106,7 @@ export class TokenDeductionModel extends Model<TokenDeductionModel, TokenDeducti
 
   @BelongsTo(() => TokenAssignedModel)
   tokenAssigned!: TokenAssignedModel;
+
+  @BelongsTo(() => LicenseModel)
+  license?: LicenseModel;
 }
