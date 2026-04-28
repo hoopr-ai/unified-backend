@@ -86,7 +86,7 @@ export const getTokensByBrand = catchAsync(async (req: Request, res: Response) =
  * POST /tokens/assign
  */
 export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { brandId, tokens, type, expiryDate, ownerIds } = req.body;
+  const { brandId, tokens, type, expiryDate, ownerIds, pricePerToken } = req.body;
   const updatedById = req.session?.userId ?? null;
 
   const result = await assignTokensAdminService(
@@ -96,6 +96,7 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
       type,
       expiryDate: expiryDate ? new Date(expiryDate) : undefined,
       ownerIds,
+      pricePerToken,
     },
     updatedById,
   );
