@@ -108,8 +108,7 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
 });
 
 /**
- * Set per-token price on a token_assigned row (Admin)
- * Only succeeds if the row does not already have a price.
+ * Set or update per-token price on a token_assigned row (Admin)
  * PATCH /tokens/:tokenAssignedId/price
  */
 export const setTokenAssignedPrice = catchAsync(async (req: AuthRequest, res: Response) => {
