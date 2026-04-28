@@ -13,6 +13,7 @@ import {
   TokenDeductionReason,
 } from "../../persistence-service/token/modules.export";
 import { findBrandById } from "../../persistence-service/brand/brand.persistence.service";
+import { getOwnersByIds } from "../../persistence-service/owner/owner.persistence.service";
 import { AppError } from "../../helper-service/AppError";
 import type {
   AssignTokensRequest,
@@ -35,6 +36,25 @@ export const getTokensListService = async (
   const page = filters.page || 1;
   const limit = filters.limit || 20;
 
+  // Collect all unique ownerIds from all tokens
+  const allOwnerIds = new Set<string>();
+  for (const token of rows) {
+    if (token.ownerIds && Array.isArray(token.ownerIds)) {
+      for (const id of token.ownerIds) {
+        allOwnerIds.add(id);
+      }
+    }
+  }
+
+  // Fetch owner details in one query
+  const ownerDetailsMap = new Map<string, { id: string; name: string; type: string | null }>();
+  if (allOwnerIds.size > 0) {
+    const owners = await getOwnersByIds(Array.from(allOwnerIds));
+    for (const owner of owners) {
+      ownerDetailsMap.set(owner.id, owner);
+    }
+  }
+
   return {
     tokens: rows.map((token: any) => ({
       id: token.id,
@@ -46,6 +66,7 @@ export const getTokensListService = async (
       tokensUsed: token.totalAssignedToken - token.tokenBalance,
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
+      ownerDetails: token.ownerIds?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
       pricePerToken: token.pricePerToken ?? null,
       createdAt: token.createdAt,
     })),
@@ -67,6 +88,25 @@ export const getTokenDetailsByBrandService = async (
   const tokenDetails = await getAllTokenAssignedDetails(brandId);
   const tokenBalances = await getAllTokenAssignedBalances(brandId);
 
+  // Collect all unique ownerIds
+  const allOwnerIds = new Set<string>();
+  for (const token of tokenDetails) {
+    if (token.ownerIds && Array.isArray(token.ownerIds)) {
+      for (const id of token.ownerIds) {
+        allOwnerIds.add(id);
+      }
+    }
+  }
+
+  // Fetch owner details in one query
+  const ownerDetailsMap = new Map<string, { id: string; name: string; type: string | null }>();
+  if (allOwnerIds.size > 0) {
+    const owners = await getOwnersByIds(Array.from(allOwnerIds));
+    for (const owner of owners) {
+      ownerDetailsMap.set(owner.id, owner);
+    }
+  }
+
   // Aggregate by type
   const typeMap = new Map<string, {
     totalAssignedToken: number;
@@ -84,6 +124,7 @@ export const getTokenDetailsByBrandService = async (
       tokensUsed: token.totalAssignedToken - token.tokenBalance,
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
+      ownerDetails: token.ownerIds?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
       pricePerToken: token.pricePerToken ?? null,
       createdAt: token.createdAt,
     };
@@ -151,6 +192,11 @@ export const assignTokensAdminService = async (
     pricePerToken ?? null
   );
 
+  // Fetch owner details if ownerIds exist
+  const ownerDetails = tokenAssigned.ownerIds && tokenAssigned.ownerIds.length > 0
+    ? await getOwnersByIds(tokenAssigned.ownerIds)
+    : [];
+
   return {
     id: tokenAssigned.id,
     brandId: tokenAssigned.brandId,
@@ -159,6 +205,7 @@ export const assignTokensAdminService = async (
     totalAssignedToken: tokenAssigned.totalAssignedToken,
     expiryDate: tokenAssigned.expiryDate,
     ownerIds: tokenAssigned.ownerIds,
+    ownerDetails,
     pricePerToken: tokenAssigned.pricePerToken != null
       ? parseFloat(Number(tokenAssigned.pricePerToken).toFixed(2))
       : null,
@@ -184,6 +231,12 @@ export const setTokenAssignedPriceService = async (
   }
 
   const token = result.token!;
+
+  // Fetch owner details if ownerIds exist
+  const ownerDetails = token.ownerIds && token.ownerIds.length > 0
+    ? await getOwnersByIds(token.ownerIds)
+    : [];
+
   return {
     id: token.id,
     brandId: token.brandId,
@@ -192,6 +245,7 @@ export const setTokenAssignedPriceService = async (
     totalAssignedToken: token.totalAssignedToken,
     expiryDate: token.expiryDate,
     ownerIds: token.ownerIds,
+    ownerDetails,
     pricePerToken: token.pricePerToken ?? null,
   };
 };
