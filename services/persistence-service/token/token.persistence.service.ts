@@ -1,4 +1,4 @@
-import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails } from "./schemas/modules.export";
+import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails, DealType } from "./schemas/modules.export";
 import { BrandModel } from "../brand/schemas/modules.export";
 import { LicenseModel } from "../licenses/schemas/licenses.schema";
 import { TrackModel } from "../track/schemas/track.schema";
@@ -6,7 +6,7 @@ import { UserModel } from "../user/schemas/user.schema";
 import { sequelize } from "../database";
 import { fn, col, literal, Op } from "sequelize";
 
-export { TokenDeductionReason };
+export { TokenDeductionReason, DealType };
 
 export const getDistinctTokenTypes = async (): Promise<string[]> => {
   const results = await TokenModel.findAll({
@@ -332,7 +332,10 @@ export const getAllTokenAssignedDetails = async (
     brandId: token.brandId,
     type: token.type,
     ownerIds: token.ownerIds,
-    pricePerToken: token.pricePerToken ?? null,
+    pricePerPack: token.pricePerPack ?? null,
+    dealType: token.dealType ?? null,
+    iprsShare: token.iprsShare ?? null,
+    hooprShare: token.hooprShare ?? null,
     createdAt: token.createdAt,
     updatedAt: token.updatedAt,
   }));
@@ -345,7 +348,10 @@ export const addTokensAssignedByType = async (
   expiryDate?: Date,
   ownerIds?: string[],
   updatedById?: number | null,
-  pricePerToken?: number | null
+  dealType?: DealType | string | null,
+  pricePerPack?: number | null,
+  iprsShare?: number | null,
+  hooprShare?: number | null
 ): Promise<TokenAssignedModel> => {
   return await TokenAssignedModel.create({
     brandId,
@@ -355,17 +361,27 @@ export const addTokensAssignedByType = async (
     expiryDate,
     ownerIds: ownerIds || [],
     updatedById: updatedById ?? null,
-    pricePerToken: pricePerToken ?? null,
+    dealType: dealType as DealType ?? null,
+    pricePerPack: pricePerPack ?? null,
+    iprsShare: iprsShare ?? null,
+    hooprShare: hooprShare ?? null,
   });
 };
 
+export interface SetTokenAssignedPriceData {
+  dealType: "bulk" | "pricePerTrack";
+  pricePerPack: number;
+  iprsShare?: number | null;
+  hooprShare?: number | null;
+}
+
 /**
- * Set or update the per-token price on a token_assigned row.
+ * Set or update the pricing details on a token_assigned row.
  * Returns the updated row, or not_found if the row does not exist.
  */
 export const setTokenAssignedPrice = async (
   tokenAssignedId: number,
-  pricePerToken: number,
+  pricingData: SetTokenAssignedPriceData,
   updatedById?: number | null
 ): Promise<{ status: "updated" | "not_found"; token?: TokenAssignedModel }> => {
   const transaction = await sequelize.transaction();
@@ -382,7 +398,10 @@ export const setTokenAssignedPrice = async (
 
     await TokenAssignedModel.update(
       {
-        pricePerToken,
+        dealType: pricingData.dealType as DealType,
+        pricePerPack: pricingData.pricePerPack,
+        iprsShare: pricingData.iprsShare ?? null,
+        hooprShare: pricingData.hooprShare ?? null,
         updatedById: updatedById ?? null,
       },
       { where: { id: tokenAssignedId }, transaction }

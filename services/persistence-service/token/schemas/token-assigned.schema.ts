@@ -15,6 +15,11 @@ import {
 import { BrandModel } from "../../brand/schemas/modules.export";
 import { UserModel } from "../../user/schemas/user.schema";
 
+export enum DealType {
+  BULK = "bulk",
+  PRICE_PER_TRACK = "pricePerTrack",
+}
+
 export interface TokenAssignedDetails {
   id?: number;
   totalAssignedToken: number;
@@ -24,7 +29,10 @@ export interface TokenAssignedDetails {
   type: string;
   ownerIds?: string[];
   tokenHistoryId?: number; // Reference to original token_history entry (for migration traceability)
-  pricePerToken?: number | null;
+  pricePerPack?: number | null;
+  dealType?: DealType | null;
+  iprsShare?: number | null;
+  hooprShare?: number | null;
   updatedById?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -92,11 +100,37 @@ export class TokenAssignedModel extends Model<TokenAssignedModel, TokenAssignedD
     type: DataType.DECIMAL(12, 2),
     allowNull: true,
     get() {
-      const value = this.getDataValue("pricePerToken");
+      const value = this.getDataValue("pricePerPack");
       return value === null || value === undefined ? null : parseFloat(Number(value).toFixed(2));
     },
   })
-  pricePerToken?: number | null;
+  pricePerPack?: number | null;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(DealType)),
+    allowNull: true,
+  })
+  dealType?: DealType | null;
+
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+    get() {
+      const value = this.getDataValue("iprsShare");
+      return value === null || value === undefined ? null : parseFloat(Number(value).toFixed(2));
+    },
+  })
+  iprsShare?: number | null;
+
+  @Column({
+    type: DataType.DECIMAL(12, 2),
+    allowNull: true,
+    get() {
+      const value = this.getDataValue("hooprShare");
+      return value === null || value === undefined ? null : parseFloat(Number(value).toFixed(2));
+    },
+  })
+  hooprShare?: number | null;
 
   @Index({ name: "idx_token_assigned_updated_by_id" })
   @ForeignKey(() => UserModel)

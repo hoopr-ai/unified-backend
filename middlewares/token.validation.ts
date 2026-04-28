@@ -22,15 +22,54 @@ export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
     "date.base": "expiryDate must be a valid date",
   }),
   ownerIds: Joi.array().items(Joi.string()).optional(),
-  pricePerToken: Joi.number().positive().precision(2).optional().messages({
-    "number.positive": "pricePerToken must be a positive number",
+  dealType: Joi.string().valid("bulk", "pricePerTrack").optional().messages({
+    "any.only": "dealType must be either 'bulk' or 'pricePerTrack'",
+  }),
+  pricePerPack: Joi.number().positive().precision(2).optional().messages({
+    "number.positive": "pricePerPack must be a positive number",
+  }),
+  iprsShare: Joi.when("dealType", {
+    is: "bulk",
+    then: Joi.number().min(0).precision(2).required().messages({
+      "any.required": "iprsShare is required when dealType is bulk",
+      "number.min": "iprsShare must be a non-negative number",
+    }),
+    otherwise: Joi.forbidden(),
+  }),
+  hooprShare: Joi.when("dealType", {
+    is: "bulk",
+    then: Joi.number().min(0).precision(2).required().messages({
+      "any.required": "hooprShare is required when dealType is bulk",
+      "number.min": "hooprShare must be a non-negative number",
+    }),
+    otherwise: Joi.forbidden(),
   }),
 });
 
 export const setTokenAssignedPriceSchema = Joi.object<SetTokenAssignedPriceRequest>({
-  pricePerToken: Joi.number().positive().precision(2).required().messages({
-    "any.required": "pricePerToken is required",
-    "number.positive": "pricePerToken must be a positive number",
+  dealType: Joi.string().valid("bulk", "pricePerTrack").required().messages({
+    "any.required": "dealType is required",
+    "any.only": "dealType must be either 'bulk' or 'pricePerTrack'",
+  }),
+  pricePerPack: Joi.number().positive().precision(2).required().messages({
+    "any.required": "pricePerPack is required",
+    "number.positive": "pricePerPack must be a positive number",
+  }),
+  iprsShare: Joi.when("dealType", {
+    is: "bulk",
+    then: Joi.number().min(0).precision(2).required().messages({
+      "any.required": "iprsShare is required when dealType is bulk",
+      "number.min": "iprsShare must be a non-negative number",
+    }),
+    otherwise: Joi.forbidden(),
+  }),
+  hooprShare: Joi.when("dealType", {
+    is: "bulk",
+    then: Joi.number().min(0).precision(2).required().messages({
+      "any.required": "hooprShare is required when dealType is bulk",
+      "number.min": "hooprShare must be a non-negative number",
+    }),
+    otherwise: Joi.forbidden(),
   }),
 });
 

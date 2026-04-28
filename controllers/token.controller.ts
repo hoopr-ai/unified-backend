@@ -86,7 +86,7 @@ export const getTokensByBrand = catchAsync(async (req: Request, res: Response) =
  * POST /tokens/assign
  */
 export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { brandId, tokens, type, expiryDate, ownerIds, pricePerToken } = req.body;
+  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare } = req.body;
   const updatedById = req.session?.userId ?? null;
 
   const result = await assignTokensAdminService(
@@ -96,7 +96,10 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
       type,
       expiryDate: expiryDate ? new Date(expiryDate) : undefined,
       ownerIds,
-      pricePerToken,
+      dealType,
+      pricePerPack,
+      iprsShare: dealType === "bulk" ? iprsShare : null,
+      hooprShare: dealType === "bulk" ? hooprShare : null,
     },
     updatedById,
   );
@@ -109,7 +112,7 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
 });
 
 /**
- * Set or update per-token price on a token_assigned row (Admin)
+ * Set or update pricing details on a token_assigned row (Admin)
  * PATCH /tokens/:tokenAssignedId/price
  */
 export const setTokenAssignedPrice = catchAsync(async (req: AuthRequest, res: Response) => {
@@ -118,15 +121,24 @@ export const setTokenAssignedPrice = catchAsync(async (req: AuthRequest, res: Re
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid tokenAssignedId", {});
   }
 
-  const { pricePerToken } = req.body;
+  const { dealType, pricePerPack, iprsShare, hooprShare } = req.body;
   const updatedById = req.session?.userId ?? null;
 
-  const result = await setTokenAssignedPriceService(tokenAssignedId, pricePerToken, updatedById);
+  const result = await setTokenAssignedPriceService(
+    tokenAssignedId,
+    {
+      dealType,
+      pricePerPack,
+      iprsShare: dealType === "bulk" ? iprsShare : null,
+      hooprShare: dealType === "bulk" ? hooprShare : null,
+    },
+    updatedById
+  );
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: result,
-    message: "Token price set successfully",
+    message: "Token pricing set successfully",
   });
 });
 

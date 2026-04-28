@@ -8,13 +8,18 @@ export interface LicenseTrackRequest {
   trackCode: string;
 }
 
+export type DealType = "bulk" | "pricePerTrack";
+
 export interface AssignTokensRequest {
   brandId: number;
   tokens: number;
   type: string;
   expiryDate?: Date;
   ownerIds?: string[];
-  pricePerToken?: number;
+  dealType?: DealType;
+  pricePerPack?: number;
+  iprsShare?: number | null;
+  hooprShare?: number | null;
 }
 
 export interface LicenseResponse {
@@ -41,7 +46,10 @@ export interface AssignTokensResponse {
   expiryDate?: Date;
   ownerIds?: string[];
   ownerDetails?: OwnerDetail[];
-  pricePerToken?: number | null;
+  pricePerPack?: number | null;
+  dealType?: DealType | null;
+  iprsShare?: number | null;
+  hooprShare?: number | null;
 }
 
 export interface LicenseHistoryItem {
