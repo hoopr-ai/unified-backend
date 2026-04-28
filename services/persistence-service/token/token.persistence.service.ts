@@ -1,8 +1,5 @@
 import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails } from "./schemas/modules.export";
 import { BrandModel } from "../brand/schemas/modules.export";
-import { LicenseModel } from "../licenses/schemas/licenses.schema";
-import { TrackModel } from "../track/schemas/track.schema";
-import { UserModel } from "../user/schemas/user.schema";
 import { sequelize } from "../database";
 import { fn, col, literal, Op } from "sequelize";
 
@@ -682,26 +679,6 @@ export const getAllDeductionsWithFilters = async (
             model: BrandModel,
             as: "brand",
             attributes: ["id", "name"],
-          },
-        ],
-      },
-      {
-        model: LicenseModel,
-        as: "license",
-        required: false,
-        attributes: ["id", "trackCode", "userId", "licensedAt"],
-        include: [
-          {
-            model: TrackModel,
-            as: "track",
-            required: false,
-            attributes: ["id", "trackCode", "name", "sourceLink", "waveformLink", "mp3Link", "ownerId"],
-          },
-          {
-            model: UserModel,
-            as: "user",
-            required: false,
-            attributes: ["id", "firstName", "lastName", "email"],
           },
         ],
       },
