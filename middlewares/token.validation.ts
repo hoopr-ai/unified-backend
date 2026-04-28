@@ -22,13 +22,13 @@ export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
     "date.base": "expiryDate must be a valid date",
   }),
   ownerIds: Joi.array().items(Joi.string()).optional(),
-  pricePerToken: Joi.number().positive().precision(4).optional().messages({
+  pricePerToken: Joi.number().positive().precision(2).optional().messages({
     "number.positive": "pricePerToken must be a positive number",
   }),
 });
 
 export const setTokenAssignedPriceSchema = Joi.object<SetTokenAssignedPriceRequest>({
-  pricePerToken: Joi.number().positive().precision(4).required().messages({
+  pricePerToken: Joi.number().positive().precision(2).required().messages({
     "any.required": "pricePerToken is required",
     "number.positive": "pricePerToken must be a positive number",
   }),

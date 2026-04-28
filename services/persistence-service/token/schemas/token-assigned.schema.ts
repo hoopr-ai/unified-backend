@@ -89,8 +89,12 @@ export class TokenAssignedModel extends Model<TokenAssignedModel, TokenAssignedD
   tokenHistoryId?: number;
 
   @Column({
-    type: DataType.DECIMAL(12, 4),
+    type: DataType.DECIMAL(12, 2),
     allowNull: true,
+    get() {
+      const value = this.getDataValue("pricePerToken");
+      return value === null || value === undefined ? null : parseFloat(Number(value).toFixed(2));
+    },
   })
   pricePerToken?: number | null;
 
