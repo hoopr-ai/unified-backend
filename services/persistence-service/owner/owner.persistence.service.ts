@@ -31,21 +31,22 @@ export const getOwnerIdsByNames = async (
 };
 
 /**
- * Get owner details (id and username) by owner IDs
+ * Get owner details (id, username, type) by owner IDs
  */
 export const getOwnersByIds = async (
   ownerIds: string[],
-): Promise<{ id: string; name: string }[]> => {
+): Promise<{ id: string; name: string; type: string | null }[]> => {
   if (!ownerIds || ownerIds.length === 0) return [];
 
   const owners = await OwnerModel.findAll({
     where: { id: { [Op.in]: ownerIds } },
-    attributes: ["id", "username"],
+    attributes: ["id", "username", "type"],
   });
 
   return owners.map((owner) => ({
     id: owner.id,
     name: owner.username || "",
+    type: owner.type || null,
   }));
 };
 
@@ -55,7 +56,7 @@ export const getOwnersByIds = async (
 export const searchOwnersByName = async (
   searchQuery: string,
   limit: number = 20,
-): Promise<{ id: string; name: string }[]> => {
+): Promise<{ id: string; name: string; type: string | null }[]> => {
   if (!searchQuery || searchQuery.trim().length === 0) return [];
 
   const searchTerm = searchQuery.trim();

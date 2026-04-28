@@ -1,4 +1,5 @@
 // Note: AssignTokensRequest, AssignTokensResponse, and TokenBalanceItem are defined in licenses.dto.ts
+import type { OwnerDetail } from "../licenses/licenses.dto";
 
 export interface SetTokenAssignedPriceRequest {
   pricePerToken: number;
@@ -22,6 +23,8 @@ export interface TokenListItem {
   tokensUsed: number;
   expiryDate?: Date;
   ownerIds?: string[];
+  ownerDetails?: OwnerDetail[];
+  pricePerToken?: number | null;
   createdAt: Date;
 }
 

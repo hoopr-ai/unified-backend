@@ -1,3 +1,9 @@
+export interface OwnerDetail {
+  id: string;
+  name: string;
+  type: string | null;
+}
+
 export interface LicenseTrackRequest {
   trackCode: string;
 }
@@ -34,6 +40,7 @@ export interface AssignTokensResponse {
   totalAssignedToken: number;
   expiryDate?: Date;
   ownerIds?: string[];
+  ownerDetails?: OwnerDetail[];
   pricePerToken?: number | null;
 }
 
