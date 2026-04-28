@@ -38,22 +38,6 @@ export interface TokenListResponse {
   };
 }
 
-export interface TrackDetailForDeduction {
-  id: string;
-  trackCode: string;
-  name: string | null;
-  sourceLink: string | null;
-  waveformLink: string | null;
-  mp3Link: string | null;
-}
-
-export interface PurchaserDetail {
-  id: number;
-  firstName: string | null;
-  lastName: string | null;
-  email: string;
-}
-
 export interface TokenDeductionItem {
   id: number;
   tokenAssignedId: number;
@@ -64,9 +48,6 @@ export interface TokenDeductionItem {
   reason: string;
   licenseId?: number;
   deductedAt: Date;
-  trackDetails?: TrackDetailForDeduction | null;
-  trackOwnerDetails?: OwnerDetail[];
-  purchasedBy?: PurchaserDetail | null;
 }
 
 export interface TokenDeductionListResponse {
