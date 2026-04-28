@@ -275,17 +275,17 @@ export const deductTokensAdminService = async (
     if (!token) {
       throw new AppError("Token allocation not found", 404);
     }
-    if (token.brandId !== brandId) {
+    if (token.brandId != brandId) {
       throw new AppError("Token allocation does not belong to this brand", 400);
     }
-    if (token.type !== type.trim().toLowerCase()) {
+    if (token.type != type) {
       throw new AppError("Token type mismatch", 400);
     }
   }
 
   const result = await deductTokenAssignedForAdmin(
     brandId,
-    type.trim().toLowerCase(),
+    type,
     amount,
     TokenDeductionReason.INTERNAL_DEDUCTION,
     tokenAssignedId,
