@@ -1,8 +1,13 @@
 // Note: AssignTokensRequest, AssignTokensResponse, and TokenBalanceItem are defined in licenses.dto.ts
 import type { OwnerDetail } from "../licenses/licenses.dto";
 
+export type DealType = "bulk" | "pricePerTrack";
+
 export interface SetTokenAssignedPriceRequest {
-  pricePerToken: number;
+  dealType: DealType;
+  pricePerPack: number;
+  iprsShare?: number | null;
+  hooprShare?: number | null;
 }
 
 export interface DeductTokensRequest {
@@ -24,7 +29,10 @@ export interface TokenListItem {
   expiryDate?: Date;
   ownerIds?: string[];
   ownerDetails?: OwnerDetail[];
-  pricePerToken?: number | null;
+  pricePerPack?: number | null;
+  dealType?: DealType | null;
+  iprsShare?: number | null;
+  hooprShare?: number | null;
   createdAt: Date;
 }
 

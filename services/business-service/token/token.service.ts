@@ -24,6 +24,7 @@ import type {
   BrandTokenSummary,
   TokenTypeSummary,
   TokenListFilters,
+  SetTokenAssignedPriceRequest,
 } from "../../dto-service/modules.export";
 
 /**
@@ -67,7 +68,10 @@ export const getTokensListService = async (
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
       ownerDetails: token.ownerIds?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
-      pricePerToken: token.pricePerToken ?? null,
+      pricePerPack: token.pricePerPack ?? null,
+      dealType: token.dealType ?? null,
+      iprsShare: token.iprsShare ?? null,
+      hooprShare: token.hooprShare ?? null,
       createdAt: token.createdAt,
     })),
     pagination: {
@@ -125,7 +129,10 @@ export const getTokenDetailsByBrandService = async (
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
       ownerDetails: token.ownerIds?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
-      pricePerToken: token.pricePerToken ?? null,
+      pricePerPack: token.pricePerPack ?? null,
+      dealType: token.dealType ?? null,
+      iprsShare: token.iprsShare ?? null,
+      hooprShare: token.hooprShare ?? null,
       createdAt: token.createdAt,
     };
 
@@ -159,7 +166,7 @@ export const assignTokensAdminService = async (
   data: AssignTokensRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  const { brandId, tokens, type, expiryDate, ownerIds, pricePerToken } = data;
+  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare } = data;
 
   // Validate tokens amount
   if (tokens <= 0) {
@@ -171,8 +178,8 @@ export const assignTokensAdminService = async (
     throw new AppError("Token type is required", 400);
   }
 
-  if (pricePerToken !== undefined && pricePerToken !== null && pricePerToken <= 0) {
-    throw new AppError("pricePerToken must be greater than 0", 400);
+  if (pricePerPack !== undefined && pricePerPack !== null && pricePerPack <= 0) {
+    throw new AppError("pricePerPack must be greater than 0", 400);
   }
 
   // Validate brand exists
@@ -189,7 +196,10 @@ export const assignTokensAdminService = async (
     expiryDate,
     ownerIds,
     updatedById,
-    pricePerToken ?? null
+    dealType ?? null,
+    pricePerPack ?? null,
+    dealType === "bulk" ? (iprsShare ?? null) : null,
+    dealType === "bulk" ? (hooprShare ?? null) : null
   );
 
   // Fetch owner details if ownerIds exist
@@ -206,25 +216,48 @@ export const assignTokensAdminService = async (
     expiryDate: tokenAssigned.expiryDate,
     ownerIds: tokenAssigned.ownerIds,
     ownerDetails,
-    pricePerToken: tokenAssigned.pricePerToken != null
-      ? parseFloat(Number(tokenAssigned.pricePerToken).toFixed(2))
+    pricePerPack: tokenAssigned.pricePerPack != null
+      ? parseFloat(Number(tokenAssigned.pricePerPack).toFixed(2))
       : null,
+    dealType: tokenAssigned.dealType ?? null,
+    iprsShare: tokenAssigned.iprsShare ?? null,
+    hooprShare: tokenAssigned.hooprShare ?? null,
   };
 };
 
 /**
- * Set or update the per-token price on a token_assigned row.
+ * Set or update the pricing details on a token_assigned row.
  */
 export const setTokenAssignedPriceService = async (
   tokenAssignedId: number,
-  pricePerToken: number,
+  pricingData: SetTokenAssignedPriceRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  if (!Number.isFinite(pricePerToken) || pricePerToken <= 0) {
-    throw new AppError("pricePerToken must be greater than 0", 400);
+  const { dealType, pricePerPack, iprsShare, hooprShare } = pricingData;
+
+  if (!Number.isFinite(pricePerPack) || pricePerPack <= 0) {
+    throw new AppError("pricePerPack must be greater than 0", 400);
   }
 
-  const result = await setTokenAssignedPrice(tokenAssignedId, pricePerToken, updatedById);
+  if (dealType === "bulk") {
+    if (iprsShare === undefined || iprsShare === null || !Number.isFinite(iprsShare) || iprsShare < 0) {
+      throw new AppError("iprsShare must be a non-negative number when dealType is bulk", 400);
+    }
+    if (hooprShare === undefined || hooprShare === null || !Number.isFinite(hooprShare) || hooprShare < 0) {
+      throw new AppError("hooprShare must be a non-negative number when dealType is bulk", 400);
+    }
+  }
+
+  const result = await setTokenAssignedPrice(
+    tokenAssignedId,
+    {
+      dealType,
+      pricePerPack,
+      iprsShare: dealType === "bulk" ? iprsShare : null,
+      hooprShare: dealType === "bulk" ? hooprShare : null,
+    },
+    updatedById
+  );
 
   if (result.status === "not_found") {
     throw new AppError("Token allocation not found", 404);
@@ -246,7 +279,10 @@ export const setTokenAssignedPriceService = async (
     expiryDate: token.expiryDate,
     ownerIds: token.ownerIds,
     ownerDetails,
-    pricePerToken: token.pricePerToken ?? null,
+    pricePerPack: token.pricePerPack ?? null,
+    dealType: token.dealType ?? null,
+    iprsShare: token.iprsShare ?? null,
+    hooprShare: token.hooprShare ?? null,
   };
 };
 
