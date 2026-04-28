@@ -1,7 +1,5 @@
 // Note: AssignTokensRequest, AssignTokensResponse, and TokenBalanceItem are defined in licenses.dto.ts
-import type { OwnerDetail } from "../licenses/licenses.dto";
-
-export type DealType = "bulk" | "pricePerTrack";
+import type { OwnerDetail, DealType } from "../licenses/licenses.dto";
 
 export interface SetTokenAssignedPriceRequest {
   dealType: DealType;
