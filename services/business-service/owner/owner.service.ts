@@ -1,4 +1,7 @@
-import { findAllOwners } from "../../persistence-service/owner/owner.persistence.service";
+import {
+  findAllOwners,
+  searchOwnersByName,
+} from "../../persistence-service/owner/owner.persistence.service";
 import { GetAllOwnersResponseData } from "../../dto-service/owners/owners.dto";
 
 export const getAllOwnersService = async (
@@ -30,4 +33,12 @@ export const getAllOwnersService = async (
       hasPrevPage: page > 1,
     },
   };
+};
+
+export const searchOwnersService = async (
+  query: string,
+  limitStr?: string,
+): Promise<{ id: string; name: string }[]> => {
+  const limit = Math.min(Math.max(parseInt(limitStr || "20", 10) || 20, 1), 50);
+  return searchOwnersByName(query, limit);
 };
