@@ -65,6 +65,7 @@ export class TokenDeductionModel extends Model<TokenDeductionModel, TokenDeducti
   reason!: TokenDeductionReason;
 
   @Index({ name: "idx_token_deduction_license_id" })
+  @ForeignKey(() => LicenseModel)
   @Column({
     type: DataType.BIGINT,
     allowNull: true,
