@@ -48,3 +48,31 @@ export const getOwnersByIds = async (
     name: owner.username || "",
   }));
 };
+
+/**
+ * Search owners by name (case-insensitive partial match on username field)
+ */
+export const searchOwnersByName = async (
+  searchQuery: string,
+  limit: number = 20,
+): Promise<{ id: string; name: string }[]> => {
+  if (!searchQuery || searchQuery.trim().length === 0) return [];
+
+  const searchTerm = searchQuery.trim();
+  const escapedTerm = searchTerm.replace(/[%_\\]/g, "\\$&");
+
+  const owners = await OwnerModel.findAll({
+    where: {
+      username: { [Op.iLike]: `%${escapedTerm}%` },
+    },
+    attributes: ["id", "username"],
+    order: [["username", "ASC"]],
+    limit,
+  });
+
+  return owners.map((owner) => ({
+    id: owner.id,
+    name: owner.username || "",
+    type: owner.type || null,
+  }));
+};
