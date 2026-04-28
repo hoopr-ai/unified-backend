@@ -329,6 +329,7 @@ export const getAllTokenAssignedDetails = async (
     brandId: token.brandId,
     type: token.type,
     ownerIds: token.ownerIds,
+    pricePerToken: token.pricePerToken ?? null,
     createdAt: token.createdAt,
     updatedAt: token.updatedAt,
   }));
@@ -356,15 +357,14 @@ export const addTokensAssignedByType = async (
 };
 
 /**
- * Set the per-token price on a token_assigned row, but only if it isn't
- * already set. Returns the updated row, or null if the row does not exist
- * or already has a price.
+ * Set or update the per-token price on a token_assigned row.
+ * Returns the updated row, or not_found if the row does not exist.
  */
 export const setTokenAssignedPrice = async (
   tokenAssignedId: number,
   pricePerToken: number,
   updatedById?: number | null
-): Promise<{ status: "updated" | "not_found" | "already_set"; token?: TokenAssignedModel }> => {
+): Promise<{ status: "updated" | "not_found"; token?: TokenAssignedModel }> => {
   const transaction = await sequelize.transaction();
   try {
     const token = await TokenAssignedModel.findByPk(tokenAssignedId, {
@@ -375,11 +375,6 @@ export const setTokenAssignedPrice = async (
     if (!token) {
       await transaction.rollback();
       return { status: "not_found" };
-    }
-
-    if (token.pricePerToken !== null && token.pricePerToken !== undefined) {
-      await transaction.rollback();
-      return { status: "already_set", token };
     }
 
     await TokenAssignedModel.update(

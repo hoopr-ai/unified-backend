@@ -106,7 +106,7 @@ router.post(
 
 /**
  * PATCH /tokens/:tokenAssignedId/price
- * Set the per-token price on a token_assigned row (one-time set)
+ * Set or update the per-token price on a token_assigned row
  */
 router.patch(
   "/:tokenAssignedId/price",
