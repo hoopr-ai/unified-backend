@@ -6,6 +6,7 @@ import {
   getTrackDetailsByCode,
   searchTracks,
   searchBrandsController,
+  getRandomTrackPreview,
 } from "../controllers/track.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import { getTracksByCodesRequestSchema } from "../middlewares/track.validation";
@@ -15,6 +16,8 @@ const router = Router();
 
 router.get("/search", searchTracks);
 router.get("/brands/search", searchBrandsController);
+// Public API - Random track preview with short-lived signed URL (10-30 seconds)
+router.get("/random-preview", getRandomTrackPreview);
 router.post("/", optionalAuthenticate, getAllTracks);
 router.post("/by-codes", optionalAuthenticate, validateRequest(getTracksByCodesRequestSchema), getTracksByCodes);
 router.get("/:trackCode", optionalAuthenticate, getTrackDetailsByCode);

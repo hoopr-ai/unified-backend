@@ -10,6 +10,16 @@ interface GCSSignedUrlResult {
   downloadLink: string;
 }
 
+interface GCSPreviewSignedUrlOptions {
+  trackId: string;
+  expiresInSeconds?: number;
+}
+
+interface GCSPreviewSignedUrlResult {
+  previewUrl: string;
+  expiresInSeconds: number;
+}
+
 let storageInstance: Storage | null = null;
 
 const getStorageInstance = (): Storage => {
@@ -137,4 +147,41 @@ export const uploadBufferToGCS = async (
   });
 
   return signedUrl;
+};
+
+/**
+ * Generate a short-lived signed URL for track preview (expires in seconds)
+ * Used for public APIs that need time-limited access to audio files
+ */
+export const generateGCSPreviewSignedUrl = async (
+  options: GCSPreviewSignedUrlOptions
+): Promise<GCSPreviewSignedUrlResult> => {
+  const { trackId, expiresInSeconds = 30 } = options;
+
+  const bucketName = process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const storage = getStorageInstance();
+  const gcsFilePath = `musics/${trackId}/${trackId}-mp3.mp3`;
+
+  const bucket = storage.bucket(bucketName);
+  const file = bucket.file(gcsFilePath);
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    throw new Error(`File not found in GCS: gs://${bucketName}/${gcsFilePath}`);
+  }
+
+  const [signedUrl] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + expiresInSeconds * 1000,
+    responseType: "audio/mpeg",
+  });
+
+  return {
+    previewUrl: signedUrl,
+    expiresInSeconds,
+  };
 };

@@ -6,6 +6,7 @@ import {
   getTrackDetailsByCodeService,
   searchTracksService,
   GetTracksByFilterQuery,
+  getRandomTrackPreviewService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -215,6 +216,41 @@ export const searchBrandsController = catchAsync(
       status: HttpStatusCode.OK,
       data: { brands: results },
       message: "Brands fetched successfully",
+    });
+  },
+);
+
+/**
+ * Get a random track preview with short-lived signed URL
+ * Public API - no authentication required
+ * Returns a random track from owner with ownerCode='2' with a signed URL valid for 10-30 seconds
+ */
+export const getRandomTrackPreview = catchAsync(
+  async (req: Request, res: Response) => {
+    // Owner code is fixed to '2' as per requirement
+    const ownerCode = "2";
+
+    // Allow configurable expiry between 10-30 seconds, default 30
+    const requestedExpiry = parseInt(req.query.expiry as string, 10);
+    const expiresInSeconds = Number.isNaN(requestedExpiry)
+      ? 30
+      : Math.min(Math.max(requestedExpiry, 10), 30);
+
+    const result = await getRandomTrackPreviewService(ownerCode, expiresInSeconds);
+
+    if (!result) {
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: "No tracks available for preview",
+      });
+      return;
+    }
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: "Random track preview fetched successfully",
     });
   },
 );

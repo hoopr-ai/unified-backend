@@ -941,3 +941,49 @@ export const searchTracksService = async (
 ): Promise<TrackSearchResult[]> => {
   return searchTracksByName(query, limit);
 };
+
+// Random track preview response interface
+export interface RandomTrackPreviewResponse {
+  trackCode: string;
+  name: string;
+  artworkLink: string | null;
+  primaryArtist: string | null;
+  previewUrl: string;
+  expiresInSeconds: number;
+}
+
+// Get random track preview with short-lived signed URL
+export const getRandomTrackPreviewService = async (
+  ownerCode: string,
+  expiresInSeconds: number = 30,
+): Promise<RandomTrackPreviewResponse | null> => {
+  const { findRandomTrackByOwnerCode } = await import(
+    "../../persistence-service/exports"
+  );
+  const { generateGCSPreviewSignedUrl } = await import(
+    "../../helper-service/gcs.helper"
+  );
+
+  // Find a random track with the given owner code
+  const track = await findRandomTrackByOwnerCode(ownerCode);
+
+  if (!track) {
+    return null;
+  }
+
+  // Generate a short-lived signed URL for the track
+  const { previewUrl, expiresInSeconds: expiry } =
+    await generateGCSPreviewSignedUrl({
+      trackId: track.id,
+      expiresInSeconds,
+    });
+
+  return {
+    trackCode: track.trackCode,
+    name: track.name,
+    artworkLink: track.artworkLink,
+    primaryArtist: track.primaryArtist,
+    previewUrl,
+    expiresInSeconds: expiry,
+  };
+};
