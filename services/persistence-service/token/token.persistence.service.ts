@@ -1,12 +1,13 @@
-import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails, DealType } from "./schemas/modules.export";
+import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails } from "./schemas/modules.export";
 import { BrandModel } from "../brand/schemas/modules.export";
 import { LicenseModel } from "../licenses/schemas/licenses.schema";
 import { TrackModel } from "../track/schemas/track.schema";
 import { UserModel } from "../user/schemas/user.schema";
 import { sequelize } from "../database";
 import { fn, col, literal, Op } from "sequelize";
+import { DealType } from "../../dto-service/modules.export";
 
-export { TokenDeductionReason, DealType };
+export { TokenDeductionReason };
 
 export const getDistinctTokenTypes = async (): Promise<string[]> => {
   const results = await TokenModel.findAll({

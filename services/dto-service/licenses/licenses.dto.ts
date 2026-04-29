@@ -1,6 +1,7 @@
-import { DealType } from "../../persistence-service/token/schemas/token-assigned.schema";
-
-export { DealType };
+export enum DealType {
+  BULK = "bulk",
+  PRICE_PER_TRACK = "pricePerTrack",
+}
 
 export interface OwnerDetail {
   id: string;
