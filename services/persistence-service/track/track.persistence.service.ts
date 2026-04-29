@@ -934,7 +934,7 @@ export const findRandomTrackByOwnerCode = async (
     where: {
       status: "ACTIVE",
       ownerId: { [Op.overlap]: ownerIds },
-      mp3Link: { [Op.ne]: null }, // Ensure track has an mp3 file
+      mp3Link: { [Op.ne]: null as unknown as string }, // Ensure track has an mp3 file
     },
     attributes: ["id", "trackCode", "name", "artworkLink"],
     include: [
