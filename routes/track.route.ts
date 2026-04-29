@@ -7,6 +7,7 @@ import {
   searchTracks,
   searchBrandsController,
   getRandomTrackPreview,
+  streamTrackPreview,
 } from "../controllers/track.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import { getTracksByCodesRequestSchema } from "../middlewares/track.validation";
@@ -18,6 +19,9 @@ router.get("/search", searchTracks);
 router.get("/brands/search", searchBrandsController);
 // Public API - Random track preview with short-lived signed URL (10-30 seconds)
 router.get("/random-preview", getRandomTrackPreview);
+// Public API - Stream track preview (first ~15 seconds, ~600KB)
+// Cached by browser/CDN to minimize server bandwidth
+router.get("/preview-stream/:trackCode", streamTrackPreview);
 router.post("/", optionalAuthenticate, getAllTracks);
 router.post("/by-codes", optionalAuthenticate, validateRequest(getTracksByCodesRequestSchema), getTracksByCodes);
 router.get("/:trackCode", optionalAuthenticate, getTrackDetailsByCode);

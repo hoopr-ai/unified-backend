@@ -11,6 +11,7 @@ import {
 import {
   catchAsync,
   sendResponse,
+  createPreviewStream,
 } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import {
@@ -19,7 +20,7 @@ import {
   HttpStatusCode,
 } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
-import { findUserById } from "../services/persistence-service/exports";
+import { findUserById, findTrackIdByCode } from "../services/persistence-service/exports";
 import { searchBrands } from "../services/persistence-service/brand/brand.persistence.service";
 
 interface AuthRequest extends Request {
@@ -251,6 +252,57 @@ export const getRandomTrackPreview = catchAsync(
       status: HttpStatusCode.OK,
       data: result,
       message: "Random track preview fetched successfully",
+    });
+  },
+);
+
+/**
+ * Stream track preview (first ~15 seconds)
+ * Public API - streams limited audio data directly
+ * Server enforces byte limit (~600KB) to prevent full file download
+ * Includes Cache-Control headers for browser/CDN caching
+ */
+export const streamTrackPreview = catchAsync(
+  async (req: Request, res: Response) => {
+    const trackCode = req.params.trackCode as string;
+
+    if (!trackCode) {
+      res.status(HttpStatusCode.BAD_REQUEST).send("Track code is required");
+      return;
+    }
+
+    // Find track ID by code
+    const trackId = await findTrackIdByCode(trackCode);
+    if (!trackId) {
+      res.status(HttpStatusCode.NOT_FOUND).send("Track not found");
+      return;
+    }
+
+    // Create preview stream (limited to ~600KB / ~15 seconds)
+    const result = await createPreviewStream({ trackId });
+    if (!result) {
+      res.status(HttpStatusCode.NOT_FOUND).send("Audio file not found");
+      return;
+    }
+
+    const { stream, contentLength } = result;
+
+    // Set headers for streaming and caching
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Length", contentLength);
+    res.setHeader("Accept-Ranges", "bytes");
+    // Cache for 1 hour in browser and CDN - reduces server load on repeat plays
+    res.setHeader("Cache-Control", "public, max-age=3600");
+
+    // Pipe the stream to response
+    stream.pipe(res);
+
+    // Handle stream errors
+    stream.on("error", (err) => {
+      console.error("Stream error:", err);
+      if (!res.headersSent) {
+        res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).send("Stream error");
+      }
     });
   },
 );
