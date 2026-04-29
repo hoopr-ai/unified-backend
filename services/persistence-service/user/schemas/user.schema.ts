@@ -12,7 +12,7 @@ import {
   BelongsTo,
   HasMany,
 } from "sequelize-typescript";
-import type { UserStatus } from "../../../dto-service/modules.export";
+import type { UserStatus, AccountType } from "../../../dto-service/modules.export";
 import { BrandModel } from "../../brand/schemas/modules.export";
 import { UserRoleModel } from "./user-role.schema";
 
@@ -27,6 +27,7 @@ export interface UserDetails {
   mobile?: string;
   countryCode?: string;
   platform: string;
+  accountType?: AccountType;
   profileRole?: string;
   createdBy?: number;
   createdAt: Date;
@@ -117,6 +118,13 @@ export class UserModel extends Model<UserModel, UserDetails> {
     allowNull: true,
   })
   profileRole?: string;
+
+  @Column({
+    type: DataType.STRING(20),
+    allowNull: true,
+    defaultValue: "LABEL",
+  })
+  accountType?: AccountType;
 
   get isProfileComplete(): boolean {
     return !!(this.firstName && this.lastName && this.mobile && this.countryCode && this.profileRole);

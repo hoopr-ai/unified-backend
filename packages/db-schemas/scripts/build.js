@@ -97,6 +97,11 @@ const schemaFiles = [
   'persistence-service/project/schemas/project-track.schema.ts',
   'persistence-service/project/schemas/project-video.schema.ts',
   'persistence-service/project/schemas/sound-project.schema.ts',
+  'persistence-service/user/schemas/artist-profile.schema.ts',
+  'persistence-service/user/schemas/artist-upload.schema.ts',
+  'persistence-service/user/schemas/brief.schema.ts',
+  'persistence-service/user/schemas/user-form.schema.ts',
+  'persistence-service/user/schemas/utm-source.schema.ts',
 ];
 
 function getFileName(filePath) {

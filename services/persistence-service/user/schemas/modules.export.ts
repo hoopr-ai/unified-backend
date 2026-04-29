@@ -8,3 +8,8 @@ export * from "./bank-details.schema";
 export * from "./user-entity-details.schema";
 export * from "./user-address.schema";
 export * from "./user-redemption.schema";
+export * from "./artist-profile.schema";
+export * from "./artist-upload.schema";
+export * from "./brief.schema";
+export * from "./user-form.schema";
+export * from "./utm-source.schema";
