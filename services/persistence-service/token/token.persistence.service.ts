@@ -337,6 +337,7 @@ export const getAllTokenAssignedDetails = async (
     dealType: token.dealType ?? null,
     iprsShare: token.iprsShare ?? null,
     hooprShare: token.hooprShare ?? null,
+    keyName: token.keyName ?? null,
     createdAt: token.createdAt,
     updatedAt: token.updatedAt,
   }));
@@ -406,6 +407,7 @@ export const setTokenAssignedPrice = async (
         pricePerPack: pricingData.pricePerPack,
         iprsShare: pricingData.iprsShare ?? null,
         hooprShare: pricingData.hooprShare ?? null,
+        keyName: pricingData.keyName !== undefined ? pricingData.keyName : token.keyName,
         updatedById: updatedById ?? null,
       },
       { where: { id: tokenAssignedId }, transaction }
