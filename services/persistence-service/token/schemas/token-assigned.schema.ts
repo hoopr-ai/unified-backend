@@ -14,11 +14,7 @@ import {
 } from "sequelize-typescript";
 import { BrandModel } from "../../brand/schemas/modules.export";
 import { UserModel } from "../../user/schemas/user.schema";
-
-export enum DealType {
-  BULK = "bulk",
-  PRICE_PER_TRACK = "pricePerTrack",
-}
+import { DealType } from "../../../dto-service/modules.export";
 
 export interface TokenAssignedDetails {
   id?: number;
