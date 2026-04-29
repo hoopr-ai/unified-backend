@@ -1,12 +1,13 @@
-import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails, DealType } from "./schemas/modules.export";
+import { TokenModel, type TokenDetails, TokenAssignedModel, type TokenAssignedDetails, TokenDeductionModel, TokenDeductionReason, type TokenDeductionDetails } from "./schemas/modules.export";
 import { BrandModel } from "../brand/schemas/modules.export";
 import { LicenseModel } from "../licenses/schemas/licenses.schema";
 import { TrackModel } from "../track/schemas/track.schema";
 import { UserModel } from "../user/schemas/user.schema";
 import { sequelize } from "../database";
 import { fn, col, literal, Op } from "sequelize";
+import { DealType } from "../../dto-service/modules.export";
 
-export { TokenDeductionReason, DealType };
+export { TokenDeductionReason };
 
 export const getDistinctTokenTypes = async (): Promise<string[]> => {
   const results = await TokenModel.findAll({
@@ -336,6 +337,7 @@ export const getAllTokenAssignedDetails = async (
     dealType: token.dealType ?? null,
     iprsShare: token.iprsShare ?? null,
     hooprShare: token.hooprShare ?? null,
+    keyName: token.keyName ?? null,
     createdAt: token.createdAt,
     updatedAt: token.updatedAt,
   }));
@@ -351,7 +353,8 @@ export const addTokensAssignedByType = async (
   dealType?: DealType | string | null,
   pricePerPack?: number | null,
   iprsShare?: number | null,
-  hooprShare?: number | null
+  hooprShare?: number | null,
+  keyName?: string | null
 ): Promise<TokenAssignedModel> => {
   return await TokenAssignedModel.create({
     brandId,
@@ -365,6 +368,7 @@ export const addTokensAssignedByType = async (
     pricePerPack: pricePerPack ?? null,
     iprsShare: iprsShare ?? null,
     hooprShare: hooprShare ?? null,
+    keyName: keyName ?? null,
   });
 };
 
@@ -373,6 +377,7 @@ export interface SetTokenAssignedPriceData {
   pricePerPack: number;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 /**
@@ -402,6 +407,7 @@ export const setTokenAssignedPrice = async (
         pricePerPack: pricingData.pricePerPack,
         iprsShare: pricingData.iprsShare ?? null,
         hooprShare: pricingData.hooprShare ?? null,
+        keyName: pricingData.keyName !== undefined ? pricingData.keyName : token.keyName,
         updatedById: updatedById ?? null,
       },
       { where: { id: tokenAssignedId }, transaction }

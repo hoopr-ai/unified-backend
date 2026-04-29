@@ -6,6 +6,7 @@ export interface SetTokenAssignedPriceRequest {
   pricePerPack: number;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 export interface DeductTokensRequest {
@@ -31,6 +32,7 @@ export interface TokenListItem {
   dealType?: DealType | null;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
   createdAt: Date;
 }
 

@@ -941,3 +941,44 @@ export const searchTracksService = async (
 ): Promise<TrackSearchResult[]> => {
   return searchTracksByName(query, limit);
 };
+
+// Random track preview response interface
+export interface RandomTrackPreviewResponse {
+  trackCode: string;
+  name: string;
+  artworkLink: string | null;
+  primaryArtist: string | null;
+  previewUrl: string;
+  expiresInSeconds: number;
+}
+
+// Get random track preview with streaming URL (limited to ~15 seconds)
+export const getRandomTrackPreviewService = async (
+  ownerCode: string,
+  _expiresInSeconds: number = 30,
+): Promise<RandomTrackPreviewResponse | null> => {
+  const { findRandomTrackByOwnerCode } = await import(
+    "../../persistence-service/exports"
+  );
+
+  // Find a random track with the given owner code
+  const track = await findRandomTrackByOwnerCode(ownerCode);
+
+  if (!track) {
+    return null;
+  }
+
+  // Return streaming endpoint URL instead of signed URL
+  // The stream endpoint enforces ~15 second limit server-side
+  // Browser/CDN caching (1 hour) minimizes server bandwidth
+  const previewUrl = `/tracks/preview-stream/${track.trackCode}`;
+
+  return {
+    trackCode: track.trackCode,
+    name: track.name,
+    artworkLink: track.artworkLink,
+    primaryArtist: track.primaryArtist,
+    previewUrl,
+    expiresInSeconds: 3600, // Cache duration (1 hour)
+  };
+};

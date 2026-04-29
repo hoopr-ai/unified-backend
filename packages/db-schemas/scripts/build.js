@@ -157,18 +157,36 @@ function transformDtoImports(content) {
     'from "../enums/index"'
   );
 
+  // Transform ../../persistence-service/*/schemas/*.schema to ../models/*.schema
+  result = result.replace(
+    /from ["']\.\.\/\.\.\/persistence-service\/[^/]+\/schemas\/([^"']+)\.schema["']/g,
+    'from "../models/$1.schema"'
+  );
+
+  // Transform DealType import/re-export to just a type import (to avoid duplicate exports)
+  // The DealType is already exported from models/token-assigned.schema, so we just need a type import
+  result = result.replace(
+    /^import\s*\{\s*DealType\s*\}\s*from\s*["']([^"']+)["'];\s*\nexport\s*\{\s*DealType\s*\};\s*\n/gm,
+    'import type { DealType } from "$1";\n'
+  );
+
   return result;
 }
 
 function transformSchemaImports(content) {
   let result = content;
 
-  // Transform dto-service imports to enums (but StreamType goes to dto)
+  // Transform dto-service imports to enums (but some types go to dto)
   // ../../../dto-service/modules.export -> ../enums/index (for most enums)
-  // But if importing StreamType, need to go to ../dto/track-stream.dto
+  // But StreamType and DealType need to go to their respective dto files
   result = result.replace(
     /import\s*\{\s*StreamType\s*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/dto-service\/modules\.export["']/g,
     'import { StreamType } from "../dto/track-stream.dto"'
+  );
+
+  result = result.replace(
+    /import\s*\{\s*DealType\s*\}\s*from\s*["']\.\.\/\.\.\/\.\.\/dto-service\/modules\.export["']/g,
+    'import { DealType } from "../dto/licenses.dto"'
   );
 
   result = result.replace(

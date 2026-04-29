@@ -1,3 +1,8 @@
+export enum DealType {
+  BULK = "bulk",
+  PRICE_PER_TRACK = "pricePerTrack",
+}
+
 export interface OwnerDetail {
   id: string;
   name: string;
@@ -7,8 +12,6 @@ export interface OwnerDetail {
 export interface LicenseTrackRequest {
   trackCode: string;
 }
-
-export type DealType = "bulk" | "pricePerTrack";
 
 export interface AssignTokensRequest {
   brandId: number;
@@ -20,6 +23,7 @@ export interface AssignTokensRequest {
   pricePerPack?: number;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 export interface LicenseResponse {
@@ -50,6 +54,7 @@ export interface AssignTokensResponse {
   dealType?: DealType | null;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 export interface LicenseHistoryItem {
