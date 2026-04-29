@@ -23,6 +23,7 @@ export interface AssignTokensRequest {
   pricePerPack?: number;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 export interface LicenseResponse {
@@ -53,6 +54,7 @@ export interface AssignTokensResponse {
   dealType?: DealType | null;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 export interface LicenseHistoryItem {

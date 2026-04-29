@@ -337,6 +337,7 @@ export const getAllTokenAssignedDetails = async (
     dealType: token.dealType ?? null,
     iprsShare: token.iprsShare ?? null,
     hooprShare: token.hooprShare ?? null,
+    keyName: token.keyName ?? null,
     createdAt: token.createdAt,
     updatedAt: token.updatedAt,
   }));
@@ -352,7 +353,8 @@ export const addTokensAssignedByType = async (
   dealType?: DealType | string | null,
   pricePerPack?: number | null,
   iprsShare?: number | null,
-  hooprShare?: number | null
+  hooprShare?: number | null,
+  keyName?: string | null
 ): Promise<TokenAssignedModel> => {
   return await TokenAssignedModel.create({
     brandId,
@@ -366,6 +368,7 @@ export const addTokensAssignedByType = async (
     pricePerPack: pricePerPack ?? null,
     iprsShare: iprsShare ?? null,
     hooprShare: hooprShare ?? null,
+    keyName: keyName ?? null,
   });
 };
 
@@ -374,6 +377,7 @@ export interface SetTokenAssignedPriceData {
   pricePerPack: number;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 /**
@@ -403,6 +407,7 @@ export const setTokenAssignedPrice = async (
         pricePerPack: pricingData.pricePerPack,
         iprsShare: pricingData.iprsShare ?? null,
         hooprShare: pricingData.hooprShare ?? null,
+        keyName: pricingData.keyName !== undefined ? pricingData.keyName : token.keyName,
         updatedById: updatedById ?? null,
       },
       { where: { id: tokenAssignedId }, transaction }
