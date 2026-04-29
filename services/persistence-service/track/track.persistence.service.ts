@@ -13,7 +13,7 @@ import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel, SkuType } from "../sku/modules.export";
 import { CampaignModel, CampaignStatus } from "../campaign/modules.export";
 import { SoundProjectModel } from "../project/modules.export";
-import { Op, Sequelize } from "sequelize";
+import { Op, Sequelize, fn, col, where } from "sequelize";
 
 // Reusable include configuration for artist mappings
 const getArtistInclude = () => [
@@ -899,4 +899,83 @@ export const findChartTrackCodes = async (
   );
 
   return codes.filter((c) => activeSet.has(c));
+};
+
+/**
+ * Find a random active track by owner code (case-insensitive)
+ * Returns track id, trackCode, name for preview API
+ */
+export interface RandomTrackPreviewResult {
+  id: string;
+  trackCode: string;
+  name: string;
+  artworkLink: string | null;
+  primaryArtist: string | null;
+}
+
+export const findRandomTrackByOwnerCode = async (
+  ownerCode: string,
+): Promise<RandomTrackPreviewResult | null> => {
+  // Find owner(s) with the given ownerCode (case-insensitive)
+  const owners = await OwnerModel.findAll({
+    where: where(fn("LOWER", col("ownerCode")), ownerCode.toLowerCase()),
+    attributes: ["id"],
+  });
+
+  if (owners.length === 0) {
+    return null;
+  }
+
+  const ownerIds = owners.map((o) => o.id);
+
+  // Find a random active track that belongs to these owners
+  // Using RANDOM() for PostgreSQL to get a random row
+  const track = await TrackModel.findOne({
+    where: {
+      status: "ACTIVE",
+      ownerId: { [Op.overlap]: ownerIds },
+      mp3Link: { [Op.ne]: null }, // Ensure track has an mp3 file
+    },
+    attributes: ["id", "trackCode", "name", "artworkLink"],
+    include: [
+      {
+        model: TrackArtistMappingModel,
+        as: "trackArtistMappings",
+        required: false,
+        where: { isPrimary: true },
+        include: [
+          {
+            model: ArtistModel,
+            as: "artist",
+            attributes: ["name"],
+            required: false,
+          },
+        ],
+      },
+    ],
+    order: Sequelize.literal("RANDOM()"),
+  });
+
+  if (!track) {
+    return null;
+  }
+
+  const trackJson = track.toJSON() as any;
+
+  // Extract primary artist name
+  let primaryArtist: string | null = null;
+  if (trackJson.trackArtistMappings && trackJson.trackArtistMappings.length > 0) {
+    const mapping = trackJson.trackArtistMappings[0];
+    if (mapping.artist) {
+      primaryArtist = mapping.artist.name || null;
+    }
+  }
+
+  return {
+    id: trackJson.id,
+    trackCode: trackJson.trackCode,
+    name: trackJson.name,
+    artworkLink: trackJson.artworkLink || null,
+    primaryArtist,
+  };
 };
