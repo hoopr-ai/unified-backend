@@ -29,6 +29,8 @@ export interface UserDetails {
   platform: string;
   accountType?: AccountType;
   profileRole?: string;
+  emailVerified?: boolean;
+  mobileVerified?: boolean;
   createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
@@ -125,6 +127,20 @@ export class UserModel extends Model<UserModel, UserDetails> {
     defaultValue: "LABEL",
   })
   accountType?: AccountType;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  emailVerified!: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  mobileVerified!: boolean;
 
   get isProfileComplete(): boolean {
     return !!(this.firstName && this.lastName && this.mobile && this.countryCode && this.profileRole);
