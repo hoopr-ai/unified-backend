@@ -185,3 +185,50 @@ export const generateGCSPreviewSignedUrl = async (
     expiresInSeconds,
   };
 };
+
+// ~600KB covers 15 seconds at 320kbps (highest common MP3 bitrate)
+const PREVIEW_BYTE_LIMIT = 614400;
+
+interface StreamPreviewOptions {
+  trackId: string;
+}
+
+/**
+ * Stream the first ~15 seconds of a track (limited to ~600KB)
+ * Returns a readable stream with only the preview portion
+ */
+export const createPreviewStream = async (
+  options: StreamPreviewOptions
+): Promise<{ stream: NodeJS.ReadableStream; contentLength: number } | null> => {
+  const { trackId } = options;
+
+  const bucketName = process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const storage = getStorageInstance();
+  const gcsFilePath = `musics/${trackId}/${trackId}-mp3.mp3`;
+
+  const bucket = storage.bucket(bucketName);
+  const file = bucket.file(gcsFilePath);
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    return null;
+  }
+
+  // Get file metadata to determine actual content length
+  const [metadata] = await file.getMetadata();
+  const fileSize = parseInt(metadata.size as string, 10);
+  const contentLength = Math.min(fileSize, PREVIEW_BYTE_LIMIT);
+
+  // Create a read stream limited to preview bytes only
+  // This means server only downloads ~600KB from GCS, not the full file
+  const stream = file.createReadStream({
+    start: 0,
+    end: contentLength - 1,
+  });
+
+  return { stream, contentLength };
+};

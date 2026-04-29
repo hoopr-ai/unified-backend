@@ -979,3 +979,20 @@ export const findRandomTrackByOwnerCode = async (
     primaryArtist,
   };
 };
+
+/**
+ * Find track ID by trackCode for streaming preview
+ */
+export const findTrackIdByCode = async (
+  trackCode: string,
+): Promise<string | null> => {
+  const track = await TrackModel.findOne({
+    where: {
+      trackCode,
+      status: "ACTIVE",
+    },
+    attributes: ["id"],
+  });
+
+  return track ? track.id : null;
+};

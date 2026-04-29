@@ -952,16 +952,13 @@ export interface RandomTrackPreviewResponse {
   expiresInSeconds: number;
 }
 
-// Get random track preview with short-lived signed URL
+// Get random track preview with streaming URL (limited to ~15 seconds)
 export const getRandomTrackPreviewService = async (
   ownerCode: string,
-  expiresInSeconds: number = 30,
+  _expiresInSeconds: number = 30,
 ): Promise<RandomTrackPreviewResponse | null> => {
   const { findRandomTrackByOwnerCode } = await import(
     "../../persistence-service/exports"
-  );
-  const { generateGCSPreviewSignedUrl } = await import(
-    "../../helper-service/gcs.helper"
   );
 
   // Find a random track with the given owner code
@@ -971,12 +968,10 @@ export const getRandomTrackPreviewService = async (
     return null;
   }
 
-  // Generate a short-lived signed URL for the track
-  const { previewUrl, expiresInSeconds: expiry } =
-    await generateGCSPreviewSignedUrl({
-      trackId: track.id,
-      expiresInSeconds,
-    });
+  // Return streaming endpoint URL instead of signed URL
+  // The stream endpoint enforces ~15 second limit server-side
+  // Browser/CDN caching (1 hour) minimizes server bandwidth
+  const previewUrl = `/tracks/preview-stream/${track.trackCode}`;
 
   return {
     trackCode: track.trackCode,
@@ -984,6 +979,6 @@ export const getRandomTrackPreviewService = async (
     artworkLink: track.artworkLink,
     primaryArtist: track.primaryArtist,
     previewUrl,
-    expiresInSeconds: expiry,
+    expiresInSeconds: 3600, // Cache duration (1 hour)
   };
 };
