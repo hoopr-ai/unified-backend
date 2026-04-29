@@ -1,6 +1,6 @@
 {
   "name": "@hoopr-ai/db-schemas",
-  "version": "3.1.0",
+  "version": "3.1.2",
   "description": "Shared database schemas and DTOs for Hoopr backend services",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
