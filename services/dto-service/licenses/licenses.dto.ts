@@ -1,3 +1,7 @@
+import { DealType } from "../../persistence-service/token/schemas/token-assigned.schema";
+
+export { DealType };
+
 export interface OwnerDetail {
   id: string;
   name: string;
@@ -7,8 +11,6 @@ export interface OwnerDetail {
 export interface LicenseTrackRequest {
   trackCode: string;
 }
-
-export type DealType = "bulk" | "pricePerTrack";
 
 export interface AssignTokensRequest {
   brandId: number;
