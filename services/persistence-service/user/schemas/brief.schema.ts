@@ -20,10 +20,10 @@ export interface BriefAttributes {
   resultDate?: Date | null;
   category?: string | null;
   prize?: string | null;
-  benefits?: string | null;
+  benefits?: string[] | null;
   genre?: string | null;
   language?: string | null;
-  rules?: string | null;
+  rules?: string[] | null;
   directorNotes?: string | null;
   backingTrackAudioName?: string | null;
   backingTrackYoutubeLink?: string | null;
@@ -69,8 +69,8 @@ export class BriefModel extends Model<BriefModel, BriefAttributes> {
   @Column({ type: DataType.STRING(255), allowNull: true })
   prize?: string | null;
 
-  @Column({ type: DataType.TEXT, allowNull: true })
-  benefits?: string | null;
+  @Column({ type: DataType.ARRAY(DataType.TEXT), allowNull: true })
+  benefits?: string[] | null;
 
   @Column({ type: DataType.STRING(255), allowNull: true })
   genre?: string | null;
@@ -78,8 +78,8 @@ export class BriefModel extends Model<BriefModel, BriefAttributes> {
   @Column({ type: DataType.STRING(255), allowNull: true })
   language?: string | null;
 
-  @Column({ type: DataType.TEXT, allowNull: true })
-  rules?: string | null;
+  @Column({ type: DataType.ARRAY(DataType.TEXT), allowNull: true })
+  rules?: string[] | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   directorNotes?: string | null;

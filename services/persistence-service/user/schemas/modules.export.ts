@@ -13,3 +13,4 @@ export * from "./artist-upload.schema";
 export * from "./brief.schema";
 export * from "./user-form.schema";
 export * from "./utm-source.schema";
+export * from "./brief.schema";
