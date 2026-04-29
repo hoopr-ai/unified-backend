@@ -44,6 +44,9 @@ export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
     }),
     otherwise: Joi.forbidden(),
   }),
+  keyName: Joi.string().trim().max(255).allow(null, "").optional().messages({
+    "string.max": "keyName must be at most 255 characters",
+  }),
 });
 
 export const setTokenAssignedPriceSchema = Joi.object<SetTokenAssignedPriceRequest>({
@@ -70,6 +73,9 @@ export const setTokenAssignedPriceSchema = Joi.object<SetTokenAssignedPriceReque
       "number.min": "hooprShare must be a non-negative number",
     }),
     otherwise: Joi.forbidden(),
+  }),
+  keyName: Joi.string().trim().max(255).allow(null, "").optional().messages({
+    "string.max": "keyName must be at most 255 characters",
   }),
 });
 

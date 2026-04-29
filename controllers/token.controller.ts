@@ -87,7 +87,7 @@ export const getTokensByBrand = catchAsync(async (req: Request, res: Response) =
  * POST /tokens/assign
  */
 export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare } = req.body;
+  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName } = req.body;
   const updatedById = req.session?.userId ?? null;
 
   const result = await assignTokensAdminService(
@@ -101,6 +101,7 @@ export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) =
       pricePerPack,
       iprsShare: dealType === "bulk" ? iprsShare : null,
       hooprShare: dealType === "bulk" ? hooprShare : null,
+      keyName: keyName || null,
     },
     updatedById,
   );
@@ -122,7 +123,7 @@ export const setTokenAssignedPrice = catchAsync(async (req: AuthRequest, res: Re
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid tokenAssignedId", {});
   }
 
-  const { dealType, pricePerPack, iprsShare, hooprShare } = req.body;
+  const { dealType, pricePerPack, iprsShare, hooprShare, keyName } = req.body;
   const updatedById = req.session?.userId ?? null;
 
   const result = await setTokenAssignedPriceService(
@@ -132,6 +133,7 @@ export const setTokenAssignedPrice = catchAsync(async (req: AuthRequest, res: Re
       pricePerPack,
       iprsShare: dealType === "bulk" ? iprsShare : null,
       hooprShare: dealType === "bulk" ? hooprShare : null,
+      keyName,
     },
     updatedById
   );

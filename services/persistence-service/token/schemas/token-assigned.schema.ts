@@ -29,6 +29,7 @@ export interface TokenAssignedDetails {
   dealType?: DealType | null;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
   updatedById?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -127,6 +128,12 @@ export class TokenAssignedModel extends Model<TokenAssignedModel, TokenAssignedD
     },
   })
   hooprShare?: number | null;
+
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  keyName?: string | null;
 
   @Index({ name: "idx_token_assigned_updated_by_id" })
   @ForeignKey(() => UserModel)

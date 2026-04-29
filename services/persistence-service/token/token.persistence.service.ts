@@ -352,7 +352,8 @@ export const addTokensAssignedByType = async (
   dealType?: DealType | string | null,
   pricePerPack?: number | null,
   iprsShare?: number | null,
-  hooprShare?: number | null
+  hooprShare?: number | null,
+  keyName?: string | null
 ): Promise<TokenAssignedModel> => {
   return await TokenAssignedModel.create({
     brandId,
@@ -366,6 +367,7 @@ export const addTokensAssignedByType = async (
     pricePerPack: pricePerPack ?? null,
     iprsShare: iprsShare ?? null,
     hooprShare: hooprShare ?? null,
+    keyName: keyName ?? null,
   });
 };
 
@@ -374,6 +376,7 @@ export interface SetTokenAssignedPriceData {
   pricePerPack: number;
   iprsShare?: number | null;
   hooprShare?: number | null;
+  keyName?: string | null;
 }
 
 /**

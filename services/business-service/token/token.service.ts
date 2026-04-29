@@ -72,6 +72,7 @@ export const getTokensListService = async (
       dealType: token.dealType ?? null,
       iprsShare: token.iprsShare ?? null,
       hooprShare: token.hooprShare ?? null,
+      keyName: token.keyName ?? null,
       createdAt: token.createdAt,
     })),
     pagination: {
@@ -133,6 +134,7 @@ export const getTokenDetailsByBrandService = async (
       dealType: token.dealType ?? null,
       iprsShare: token.iprsShare ?? null,
       hooprShare: token.hooprShare ?? null,
+      keyName: token.keyName ?? null,
       createdAt: token.createdAt,
     };
 
@@ -166,7 +168,7 @@ export const assignTokensAdminService = async (
   data: AssignTokensRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare } = data;
+  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName } = data;
 
   // Validate tokens amount
   if (tokens <= 0) {
@@ -199,7 +201,8 @@ export const assignTokensAdminService = async (
     dealType ?? null,
     pricePerPack ?? null,
     dealType === "bulk" ? (iprsShare ?? null) : null,
-    dealType === "bulk" ? (hooprShare ?? null) : null
+    dealType === "bulk" ? (hooprShare ?? null) : null,
+    keyName ?? null
   );
 
   // Fetch owner details if ownerIds exist
@@ -222,6 +225,7 @@ export const assignTokensAdminService = async (
     dealType: tokenAssigned.dealType ?? null,
     iprsShare: tokenAssigned.iprsShare ?? null,
     hooprShare: tokenAssigned.hooprShare ?? null,
+    keyName: tokenAssigned.keyName ?? null,
   };
 };
 
@@ -233,7 +237,7 @@ export const setTokenAssignedPriceService = async (
   pricingData: SetTokenAssignedPriceRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  const { dealType, pricePerPack, iprsShare, hooprShare } = pricingData;
+  const { dealType, pricePerPack, iprsShare, hooprShare, keyName } = pricingData;
 
   if (!Number.isFinite(pricePerPack) || pricePerPack <= 0) {
     throw new AppError("pricePerPack must be greater than 0", 400);
@@ -255,6 +259,7 @@ export const setTokenAssignedPriceService = async (
       pricePerPack,
       iprsShare: dealType === "bulk" ? iprsShare : null,
       hooprShare: dealType === "bulk" ? hooprShare : null,
+      keyName,
     },
     updatedById
   );
@@ -283,6 +288,7 @@ export const setTokenAssignedPriceService = async (
     dealType: token.dealType ?? null,
     iprsShare: token.iprsShare ?? null,
     hooprShare: token.hooprShare ?? null,
+    keyName: token.keyName ?? null,
   };
 };
 
