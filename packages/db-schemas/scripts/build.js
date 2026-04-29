@@ -157,6 +157,19 @@ function transformDtoImports(content) {
     'from "../enums/index"'
   );
 
+  // Transform ../../persistence-service/*/schemas/*.schema to ../models/*.schema
+  result = result.replace(
+    /from ["']\.\.\/\.\.\/persistence-service\/[^/]+\/schemas\/([^"']+)\.schema["']/g,
+    'from "../models/$1.schema"'
+  );
+
+  // Transform DealType import/re-export to just a type import (to avoid duplicate exports)
+  // The DealType is already exported from models/token-assigned.schema, so we just need a type import
+  result = result.replace(
+    /^import\s*\{\s*DealType\s*\}\s*from\s*["']([^"']+)["'];\s*\nexport\s*\{\s*DealType\s*\};\s*\n/gm,
+    'import type { DealType } from "$1";\n'
+  );
+
   return result;
 }
 
