@@ -289,6 +289,24 @@ for (const file of schemaFiles) {
   }
 }
 
+// Copy local schemas (studio-specific schemas not sourced from unified-backend services)
+const LOCAL_SCHEMAS = join(ROOT, 'local-schemas');
+const localSchemaFiles = [];
+if (existsSync(LOCAL_SCHEMAS)) {
+  console.log('Copying local schemas...');
+  const files = readdirSync(LOCAL_SCHEMAS).filter(f => f.endsWith('.schema.ts'));
+  for (const file of files) {
+    const srcPath = join(LOCAL_SCHEMAS, file);
+    let content = readFileSync(srcPath, 'utf-8');
+    // Rewrite import paths: ../src/models/X -> ./X  and  ../src/enums/X -> ../enums/X
+    content = content.replace(/from ["']\.\.\/src\/models\/([^"']+)["']/g, 'from "./$1"');
+    content = content.replace(/from ["']\.\.\/src\/enums\/([^"']+)["']/g, 'from "../enums/$1"');
+    writeFileSync(join(SRC, 'models', file), content);
+    localSchemaFiles.push(file);
+    console.log(`  ✓ ${file}`);
+  }
+}
+
 // Create index files
 console.log('Creating index files...');
 
@@ -306,11 +324,13 @@ const dtoExports = dtoFiles
   .join('\n');
 writeFileSync(join(SRC, 'dto', 'index.ts'), dtoExports + '\n');
 
-// Models index
-const modelExports = schemaFiles
-  .filter(f => existsSync(join(UNIFIED_BACKEND, 'services', f)))
-  .map(f => `export * from "./${getFileName(f).replace('.ts', '')}";`)
-  .join('\n');
+// Models index — unified-backend schemas + local schemas
+const modelExports = [
+  ...schemaFiles
+    .filter(f => existsSync(join(UNIFIED_BACKEND, 'services', f)))
+    .map(f => `export * from "./${getFileName(f).replace('.ts', '')}";`),
+  ...localSchemaFiles.map(f => `export * from "./${f.replace('.ts', '')}";`),
+].join('\n');
 writeFileSync(join(SRC, 'models', 'index.ts'), modelExports + '\n');
 
 // Main index

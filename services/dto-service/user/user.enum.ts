@@ -75,3 +75,10 @@ export enum RedemptionStatus {
   REJECTED = "R",
   COMPLETED = "C",
 }
+
+export enum ArtistUploadStatus {
+  PENDING = "PENDING",
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
+  PUBLISHED = "PUBLISHED",
+}
