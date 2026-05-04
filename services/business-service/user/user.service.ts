@@ -167,7 +167,7 @@ export const userLoginService = async (
   });
 
   // Send welcome email on first login (profile not yet completed)
-  if (!user.isProfileComplete) {
+  if (!user.isProfileComplete && data.platform === Platform.ENTERPRISE) {
     const firstName = user.firstName || "";
     sendFirstLoginWelcomeEmail(user.email, firstName).catch((err) => {
       logger.error("Failed to send first login welcome email", {
