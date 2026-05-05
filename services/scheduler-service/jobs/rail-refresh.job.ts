@@ -1,4 +1,4 @@
-import { Op } from "sequelize";
+import { Op, fn, col, where } from "sequelize";
 import { RailModel } from "../../persistence-service/rail/schemas/rail.schema";
 import { RailSourceType, RailItemType } from "../../dto-service/modules.export";
 import {
@@ -6,10 +6,12 @@ import {
   UpsertRailInput,
   RailItemInput,
 } from "../../persistence-service/rail/rail.persistence.service";
-import { findAllTracks } from "../../persistence-service/track/track.persistence.service";
+import { findAllTracks, findTracksByFilter } from "../../persistence-service/track/track.persistence.service";
 import { ChartTrackSource } from "../../persistence-service/track/schemas/chart-tracks.schema";
 import { resolveChartTracks } from "../../business-service/rail/rail.service";
 import { logger } from "../../helper-service/logger";
+import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { findTrackIdsByAlbumType } from "../../persistence-service/albums/albums.persistence.service";
 
 const REFRESHABLE_AI_QUERY_TYPES = ["TRENDING", "POPULAR", "NEW_AGE_ICONS", "BRAND_RECOMMENDED"];
 const BRAND_RECOMMENDED_KEY_PREFIX = "brand_recommended_";
@@ -100,7 +102,172 @@ async function fetchAiQueryTracks(
     .filter((code): code is string => !!code);
 }
 
-async function fetchNewOnHooprTracks(limit: number = 40): Promise<string[]> {
+// Query filter interface matching rail.service.ts structure
+interface QueryConfig {
+  filterIds?: string[];
+  ownerIds?: string[];
+  excludeOwnerIds?: string[];
+  excludeTiers?: string[];
+  popular?: boolean;
+  trending?: boolean;
+  newOnHoopr?: boolean;
+  movie?: boolean;
+  type?: string[];       // owner type filter (e.g., ["Chartbusters"])
+  ownerCode?: string[];  // owner code filter
+  campaign?: boolean;
+  releaseYearFrom?: number;
+  releaseYearTo?: number;
+}
+
+// Resolve owner IDs from type filter
+async function resolveOwnerIdsByType(
+  types?: string[],
+): Promise<string[] | undefined> {
+  if (!types || types.length === 0) return undefined;
+  const filteredTypes = types.filter((t) => t.trim() !== "");
+  if (filteredTypes.length === 0) return undefined;
+
+  const normalize = (str: string) =>
+    str.trim().replace(/[\s_]+/g, "").toLowerCase();
+  const normalizedTypes = new Set(filteredTypes.map(normalize));
+  const allOwners = await OwnerModel.findAll({
+    where: { type: { [Op.ne]: null } } as any,
+    attributes: ["id", "type"],
+  });
+  const matchedOwners = allOwners.filter((o) =>
+    normalizedTypes.has(normalize(o.type!)),
+  );
+  const ownerIds = matchedOwners.map((o) => o.id);
+  return ownerIds.length > 0 ? ownerIds : [];
+}
+
+// Resolve owner IDs from ownerCode filter
+async function resolveOwnerIdsByOwnerCode(
+  ownerCodes?: string[],
+): Promise<string[] | undefined> {
+  if (!ownerCodes || ownerCodes.length === 0) return undefined;
+  const filteredCodes = ownerCodes.map((c) => c.trim()).filter((c) => c !== "");
+  if (filteredCodes.length === 0) return undefined;
+
+  const lowerCodes = filteredCodes.map((c) => c.toLowerCase());
+  const owners = await OwnerModel.findAll({
+    where: where(fn("LOWER", col("ownerCode")), { [Op.in]: lowerCodes }) as any,
+    attributes: ["id"],
+  });
+  const ownerIds = owners.map((o) => o.id);
+  return ownerIds.length > 0 ? ownerIds : [];
+}
+
+// Intersect two owner ID arrays
+function intersectOwnerIds(
+  a: string[] | undefined,
+  b: string[] | undefined,
+): string[] | undefined {
+  if (!a && !b) return undefined;
+  if (!a) return b;
+  if (!b) return a;
+  const setB = new Set(b);
+  return a.filter((id) => setB.has(id));
+}
+
+// Fetch tracks based on query config with all filters applied
+async function fetchQueryTracks(query: QueryConfig, limit: number = 40): Promise<string[]> {
+  const hasFilterIds = Array.isArray(query.filterIds) && query.filterIds.length > 0;
+  const hasTrackFilters = query.popular || query.trending || query.newOnHoopr ||
+    query.movie !== undefined || query.campaign || query.type || query.ownerCode ||
+    query.releaseYearFrom || query.releaseYearTo;
+
+  // If filterIds are provided, use findTracksByFilter
+  if (hasFilterIds) {
+    const result = await findTracksByFilter({
+      filterIds: query.filterIds!,
+      page: 1,
+      limit,
+      ownerIds: query.ownerIds,
+      excludeOwnerIds: query.excludeOwnerIds,
+      excludeTiers: query.excludeTiers,
+    });
+
+    const codes: string[] = [];
+    for (const row of result.rows ?? []) {
+      const track = (row as unknown as { track?: { trackCode?: string } }).track;
+      const code = track?.trackCode;
+      if (code && !codes.includes(code)) codes.push(code);
+    }
+    return codes;
+  }
+
+  // If no filterIds but has track filters, use findAllTracks
+  if (hasTrackFilters) {
+    const whereClause: Record<string, unknown> = {};
+
+    if (query.trending == true) {
+      whereClause.trending = true;
+    }
+
+    if (query.popular == true) {
+      whereClause[Op.or as any] = [
+        { jioSaavanStream: { [Op.gt]: "0" } },
+        { jioSaavanStream: null },
+      ];
+
+      // Filter by album type based on movie parameter
+      const movieTrackIds = await findTrackIdsByAlbumType("movie");
+      if (query.movie == true) {
+        if (movieTrackIds.length === 0) return [];
+        whereClause.id = { [Op.in]: movieTrackIds };
+      } else if (query.movie === false) {
+        if (movieTrackIds.length > 0) {
+          whereClause.id = { [Op.notIn]: movieTrackIds };
+        }
+      }
+    }
+
+    if (query.newOnHoopr == true) {
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 100);
+      whereClause.createdAt = { [Op.gte]: oneWeekAgo };
+    }
+
+    if (query.releaseYearFrom || query.releaseYearTo) {
+      const releaseDateCondition: any = {};
+      if (query.releaseYearFrom) {
+        releaseDateCondition[Op.gte] = new Date(`${query.releaseYearFrom}-01-01`);
+      }
+      if (query.releaseYearTo) {
+        releaseDateCondition[Op.lt] = new Date(`${query.releaseYearTo + 1}-01-01`);
+      }
+      whereClause.releaseDate = releaseDateCondition;
+    }
+
+    // Resolve owner IDs from type and ownerCode filters
+    const [ownerIdsByType] = await Promise.all([
+      resolveOwnerIdsByType(query.type),
+    ]);
+    const ownerIds = ownerIdsByType; // If we had multiple owner ID sources, we would intersect them here
+
+    // If type or ownerCode filters were specified but no matching owners found, return empty
+    if (ownerIds && ownerIds.length === 0) {
+      return [];
+    }
+
+    console.log("whereClause", whereClause, "=============", query.newOnHoopr);
+    
+    const rawData = await findAllTracks(
+      1,
+      limit,
+      whereClause,
+      ownerIds,
+      query.excludeOwnerIds,
+      query.popular == true,
+      query.campaign == true,
+      query.excludeTiers,
+    );
+
+    return rawData.rows.map((track) => track.trackCode);
+  }
+
+  // Fallback: just newOnHoopr without other filters
   const oneWeekAgo = new Date();
   oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
@@ -205,14 +372,22 @@ async function refreshRail(rail: RailModel): Promise<RefreshResult> {
 
       trackCodes = await fetchAiQueryTracks("BRAND_RECOMMENDED", 40, brandId, filters);
     } else if (rail.sourceType === RailSourceType.QUERY) {
-      // QUERY rail with newOnHoopr
+      // QUERY rail - apply all query filters from sourceConfig
       const config = rail.sourceConfig as {
-        query?: { newOnHoopr?: boolean };
+        query?: QueryConfig;
         limit?: number;
       } | null;
-      const limit = config?.limit ?? 40;
 
-      trackCodes = await fetchNewOnHooprTracks(limit);
+      if (config?.query?.newOnHoopr == true) {
+        const limit = config?.limit ?? 40;
+        logger.info(`[RailRefresh] Refreshing QUERY rail ${rail.key} with filters: ${JSON.stringify(config.query)}`);
+        trackCodes = await fetchQueryTracks(config.query, limit);
+      } else {
+        logger.warn(`[RailRefresh] QUERY rail ${rail.key} has no query config, skipping`);
+        result.success = true;
+        result.itemCount = 0;
+        return result;
+      }
     } else {
       // AI_QUERY rail
       const config = rail.sourceConfig as {
