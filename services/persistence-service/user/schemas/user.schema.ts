@@ -31,6 +31,7 @@ export interface UserDetails {
   createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
+  lastLoginAt?: Date | null;
   readonly isProfileComplete?: boolean;
 }
 
@@ -134,6 +135,12 @@ export class UserModel extends Model<UserModel, UserDetails> {
     allowNull: true,
   })
   updatedAt?: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  lastLoginAt?: Date | null;
 
   @BelongsTo(() => BrandModel)
   brand?: BrandModel;
