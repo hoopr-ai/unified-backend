@@ -12,6 +12,13 @@ import { brandRecommendWorker } from "./workers/brand-recommend.worker";
 import { logger } from "../helper-service/logger";
 
 export async function initializeScheduler(): Promise<void> {
+  // Local-dev escape hatch. The scheduler awaits BullMQ ops that block forever when Redis is
+  // unreachable, which prevents app.listen() from being called. Setting SKIP_SCHEDULER=true in
+  // .env lets the HTTP server boot without Redis. Unset in every deployed env — behavior unchanged.
+  if (process.env.SKIP_SCHEDULER === "true") {
+    logger.info("[Scheduler] SKIP_SCHEDULER=true — scheduler not initialized.");
+    return;
+  }
   try {
     await scheduleRailRefresh();
     logger.info("[Scheduler] Rail refresh job scheduled (every 6 hours)");

@@ -280,6 +280,20 @@ export async function connectDatabase() {
       `);
       console.log("📦 Python-managed columns ensured.");
 
+      // 3b. Idempotently add users.lastLoginAt (used only by INTERNAL admin CMS list view).
+      // Nullable + no default — non-INTERNAL flows never read or write it.
+      await sequelize.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'users' AND column_name = 'lastLoginAt'
+          ) THEN
+            ALTER TABLE users ADD COLUMN "lastLoginAt" TIMESTAMP WITH TIME ZONE NULL;
+          END IF;
+        END $$;
+      `);
+      console.log("📦 users.lastLoginAt ensured.");
+
       // 4. Ensure triggers + functions exist (idempotent — CREATE OR REPLACE / IF NOT EXISTS)
       await sequelize.query(ENSURE_TRIGGERS_SQL);
       console.log("🔁 Triggers ensured.");
