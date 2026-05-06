@@ -30,6 +30,7 @@ import {
   updateUserPassword,
   updateUserProfile,
   updateUserProfilePartial,
+  touchUserLastLogin,
   findUserById,
   findUsersByBrandId,
   findAllActiveUsersByBrandId,
@@ -165,6 +166,18 @@ export const userLoginService = async (
     userId: user.id,
     route: "/login",
   });
+
+  // INTERNAL admin CMS needs a "last login" column to surface onboarded-but-never-logged-in
+  // users. Fire-and-forget so a write hiccup never regresses login latency. Strictly gated
+  // on INTERNAL — ENTERPRISE / SOUND_TRACKING_APP / STUDIO logins do not touch this column.
+  if (data.platform === Platform.INTERNAL) {
+    touchUserLastLogin(user.id!).catch((err) => {
+      logger.error("Failed to update lastLoginAt for INTERNAL user", {
+        userId: user.id,
+        error: err.message,
+      });
+    });
+  }
 
   // Send welcome email on first login (profile not yet completed)
   if (!user.isProfileComplete && data.platform === Platform.ENTERPRISE) {

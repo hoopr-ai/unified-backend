@@ -1,0 +1,44 @@
+import { createActivity, type UserActivityDetails } from "../../persistence-service/exports";
+import { logger } from "../../helper-service/logger";
+
+interface InternalAuditParams {
+  actorId: number;
+  actorSessionId: number;
+  action: "create_internal_user" | "reset_internal_user_password";
+  targetUserId: number;
+  role?: string;
+  endpoint: string;
+  method: string;
+  ipAddress?: string;
+}
+
+// Writes an explicit audit row with the spec's action codes (create_internal_user /
+// reset_internal_user_password). The generic activityLoggerMiddleware also writes a
+// user_activities row for every authenticated request — that's fine, this is the
+// auditable record with the precise action code the spec asks for.
+//
+// Fire-and-forget. An audit-write failure must never fail the underlying admin operation.
+export const recordInternalUserAudit = (p: InternalAuditParams): void => {
+  const data: UserActivityDetails = {
+    userId: p.actorId,
+    sessionId: p.actorSessionId,
+    action: p.action,
+    endpoint: p.endpoint,
+    method: p.method,
+    statusCode: 200,
+    ipAddress: p.ipAddress,
+    metadata: {
+      targetUserId: p.targetUserId,
+      ...(p.role ? { role: p.role } : {}),
+    },
+    createdAt: new Date(),
+  };
+  createActivity(data).catch((err) => {
+    logger.error("internal_user_audit_failed", {
+      action: p.action,
+      actorId: p.actorId,
+      targetUserId: p.targetUserId,
+      error: String(err),
+    });
+  });
+};
