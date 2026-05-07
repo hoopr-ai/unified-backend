@@ -1,6 +1,8 @@
 .env
+.env.migration
 package-lock.json
 /node_modules
 /dist
 newrelic_agent.log
 .claude
+.env.migration.example

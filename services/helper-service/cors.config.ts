@@ -11,12 +11,15 @@ export const getCorsOptions = (): CorsOptions => {
     "http://localhost:5173",
     "http://localhost:5173/",
     "https://internal.hoopr.ai",
+    "https://dev-internal.hoopr.ai",
     "https://internal.hoopr.ai/",
     "http://localhost:3002",
     "http://localhost:3000",
+    "http://localhost:3003",
     "http://localhost:5174",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3001",
+    "http://127.0.0.1:3003",
     "http://127.0.0.1:5174",
     "https://dev-enterprise.hoopr.ai",
     "https://smash.hoopr.ai",
@@ -24,6 +27,9 @@ export const getCorsOptions = (): CorsOptions => {
     "https://api-smash.hoopr.ai",
     "https://api-dev-soundtracking.hoopr.ai",
   ].filter((origin): origin is string => Boolean(origin));
+
+  const isDev = process.env.NODE_ENV !== "production";
+  const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
   return {
     origin: (origin, callback) => {
@@ -36,6 +42,12 @@ export const getCorsOptions = (): CorsOptions => {
         return callback(null, true);
       }
 
+      // Dev-only: allow any localhost/127.0.0.1 port and file:// (origin === "null")
+      if (isDev && (localhostRegex.test(origin) || origin === "null")) {
+        return callback(null, true);
+      }
+
+      console.warn("[CORS] blocked origin:", origin);
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,

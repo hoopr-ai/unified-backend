@@ -4,6 +4,13 @@ export enum UserStatus {
   DELETED = "DELETED",
 }
 
+export enum ArtistUploadStatus {
+  PENDING = "PENDING",
+  APPROVED = "APPROVED",
+  REJECTED = "REJECTED",
+  PUBLISHED = "PUBLISHED",
+}
+
 export enum UserRoles {
   MASTER = "MASTER",
   ADMIN = "ADMIN",
@@ -13,6 +20,8 @@ export enum UserRoles {
   IPRS = "IPRS",
   MUSIC = "MUSIC",
   MARKETING = "MARKETING",
+  ARTIST = "ARTIST",
+  LABEL = "LABEL",
 }
 
 export enum SessionStatus {
@@ -75,11 +84,4 @@ export enum RedemptionStatus {
   APPROVED = "A",
   REJECTED = "R",
   COMPLETED = "C",
-}
-
-export enum ArtistUploadStatus {
-  PENDING = "PENDING",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-  PUBLISHED = "PUBLISHED",
 }

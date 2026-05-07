@@ -28,6 +28,8 @@ export interface UserDetails {
   countryCode?: string;
   platform: string;
   profileRole?: string;
+  emailVerified?: boolean;
+  mobileVerified?: boolean;
   createdBy?: number;
   createdAt: Date;
   updatedAt?: Date;
@@ -118,6 +120,20 @@ export class UserModel extends Model<UserModel, UserDetails> {
     allowNull: true,
   })
   profileRole?: string;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  emailVerified!: boolean;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  mobileVerified!: boolean;
 
   get isProfileComplete(): boolean {
     return !!(this.firstName && this.lastName && this.mobile && this.countryCode && this.profileRole);
