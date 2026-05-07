@@ -4,11 +4,6 @@ export enum UserStatus {
   DELETED = "DELETED",
 }
 
-export enum AccountType {
-  LABEL = "LABEL",
-  ARTIST = "ARTIST",
-}
-
 export enum ArtistUploadStatus {
   PENDING = "PENDING",
   APPROVED = "APPROVED",
