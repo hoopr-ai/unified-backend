@@ -25,6 +25,8 @@ export enum UserRoles {
   IPRS = "IPRS",
   MUSIC = "MUSIC",
   MARKETING = "MARKETING",
+  ARTIST = "ARTIST",
+  LABEL = "LABEL",
 }
 
 export enum SessionStatus {
