@@ -87,21 +87,23 @@ export const getTokensByBrand = catchAsync(async (req: Request, res: Response) =
  * POST /tokens/assign
  */
 export const assignTokens = catchAsync(async (req: AuthRequest, res: Response) => {
-  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName } = req.body;
+  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName, isUnlimited } = req.body;
   const updatedById = req.session?.userId ?? null;
+  const unlimited = isUnlimited === true;
 
   const result = await assignTokensAdminService(
     {
       brandId,
-      tokens,
+      tokens: unlimited ? undefined : tokens,
       type,
-      expiryDate: expiryDate ? new Date(expiryDate) : undefined,
+      expiryDate: !unlimited && expiryDate ? new Date(expiryDate) : undefined,
       ownerIds,
-      dealType,
-      pricePerPack,
-      iprsShare: dealType === "bulk" ? iprsShare : null,
-      hooprShare: dealType === "bulk" ? hooprShare : null,
+      dealType: unlimited ? undefined : dealType,
+      pricePerPack: unlimited ? undefined : pricePerPack,
+      iprsShare: unlimited ? null : (dealType === "bulk" ? iprsShare : null),
+      hooprShare: unlimited ? null : (dealType === "bulk" ? hooprShare : null),
       keyName: keyName || null,
+      isUnlimited: unlimited,
     },
     updatedById,
   );

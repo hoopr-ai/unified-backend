@@ -64,7 +64,7 @@ export const getTokensListService = async (
       type: token.type,
       totalAssignedToken: token.totalAssignedToken,
       tokenBalance: token.tokenBalance,
-      tokensUsed: token.totalAssignedToken - token.tokenBalance,
+      tokensUsed: token.isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
       ownerDetails: token.ownerIds?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
@@ -73,6 +73,7 @@ export const getTokensListService = async (
       iprsShare: token.iprsShare ?? null,
       hooprShare: token.hooprShare ?? null,
       keyName: token.keyName ?? null,
+      isUnlimited: token.isUnlimited === true,
       createdAt: token.createdAt,
     })),
     pagination: {
@@ -120,13 +121,23 @@ export const getTokenDetailsByBrandService = async (
     allocations: any[];
   }>();
 
+  // Track whether any allocation under a type is unlimited; if so, the type-level
+  // aggregates are meaningless (you can't sum a finite number with infinity), so
+  // we set a hasUnlimited flag and zero out the rolled-up balance/used numbers.
+  const typeHasUnlimited = new Map<string, boolean>();
+
   for (const token of tokenDetails) {
     const existing = typeMap.get(token.type);
+    const isUnlimited = token.isUnlimited === true;
+    if (isUnlimited) {
+      typeHasUnlimited.set(token.type, true);
+    }
+
     const allocation = {
       id: token.id,
       totalAssignedToken: token.totalAssignedToken,
       tokenBalance: token.tokenBalance,
-      tokensUsed: token.totalAssignedToken - token.tokenBalance,
+      tokensUsed: isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
       expiryDate: token.expiryDate,
       ownerIds: token.ownerIds,
       ownerDetails: token.ownerIds?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
@@ -135,19 +146,22 @@ export const getTokenDetailsByBrandService = async (
       iprsShare: token.iprsShare ?? null,
       hooprShare: token.hooprShare ?? null,
       keyName: token.keyName ?? null,
+      isUnlimited,
       createdAt: token.createdAt,
     };
 
     if (existing) {
-      existing.totalAssignedToken += token.totalAssignedToken;
-      existing.tokenBalance += token.tokenBalance;
-      existing.tokensUsed += (token.totalAssignedToken - token.tokenBalance);
+      if (!isUnlimited) {
+        existing.totalAssignedToken += token.totalAssignedToken;
+        existing.tokenBalance += token.tokenBalance;
+        existing.tokensUsed += (token.totalAssignedToken - token.tokenBalance);
+      }
       existing.allocations.push(allocation);
     } else {
       typeMap.set(token.type, {
-        totalAssignedToken: token.totalAssignedToken,
-        tokenBalance: token.tokenBalance,
-        tokensUsed: token.totalAssignedToken - token.tokenBalance,
+        totalAssignedToken: isUnlimited ? 0 : token.totalAssignedToken,
+        tokenBalance: isUnlimited ? 0 : token.tokenBalance,
+        tokensUsed: isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
         allocations: [allocation],
       });
     }
@@ -155,6 +169,7 @@ export const getTokenDetailsByBrandService = async (
 
   const tokens = Array.from(typeMap.entries()).map(([type, data]) => ({
     type,
+    isUnlimited: typeHasUnlimited.get(type) === true,
     ...data,
   }));
 
@@ -168,20 +183,22 @@ export const assignTokensAdminService = async (
   data: AssignTokensRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName } = data;
-
-  // Validate tokens amount
-  if (tokens <= 0) {
-    throw new AppError("Token amount must be greater than 0", 400);
-  }
+  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName, isUnlimited } = data;
+  const unlimited = isUnlimited === true;
 
   // Validate type
   if (!type || type.trim() === "") {
     throw new AppError("Token type is required", 400);
   }
 
-  if (pricePerPack !== undefined && pricePerPack !== null && pricePerPack <= 0) {
-    throw new AppError("pricePerPack must be greater than 0", 400);
+  if (!unlimited) {
+    if (tokens === undefined || tokens === null || tokens <= 0) {
+      throw new AppError("Token amount must be greater than 0", 400);
+    }
+
+    if (pricePerPack !== undefined && pricePerPack !== null && pricePerPack <= 0) {
+      throw new AppError("pricePerPack must be greater than 0", 400);
+    }
   }
 
   // Validate brand exists
@@ -194,15 +211,16 @@ export const assignTokensAdminService = async (
   const tokenAssigned = await addTokensAssignedByType(
     brandId,
     type.trim(),
-    tokens,
-    expiryDate,
+    unlimited ? 0 : tokens!,
+    unlimited ? undefined : expiryDate,
     ownerIds,
     updatedById,
-    dealType ?? null,
-    pricePerPack ?? null,
-    dealType === "bulk" ? (iprsShare ?? null) : null,
-    dealType === "bulk" ? (hooprShare ?? null) : null,
-    keyName ?? null
+    unlimited ? null : (dealType ?? null),
+    unlimited ? null : (pricePerPack ?? null),
+    unlimited ? null : (dealType === "bulk" ? (iprsShare ?? null) : null),
+    unlimited ? null : (dealType === "bulk" ? (hooprShare ?? null) : null),
+    keyName ?? null,
+    unlimited
   );
 
   // Fetch owner details if ownerIds exist
@@ -226,6 +244,7 @@ export const assignTokensAdminService = async (
     iprsShare: tokenAssigned.iprsShare ?? null,
     hooprShare: tokenAssigned.hooprShare ?? null,
     keyName: tokenAssigned.keyName ?? null,
+    isUnlimited: tokenAssigned.isUnlimited,
   };
 };
 
@@ -250,6 +269,16 @@ export const setTokenAssignedPriceService = async (
     if (hooprShare === undefined || hooprShare === null || !Number.isFinite(hooprShare) || hooprShare < 0) {
       throw new AppError("hooprShare must be a non-negative number when dealType is bulk", 400);
     }
+  }
+
+  // Pricing is meaningless for unlimited allocations and was forbidden at assign time;
+  // reject any attempt to back-fill it here so the two paths stay consistent.
+  const existing = await findTokenAssignedById(tokenAssignedId);
+  if (!existing) {
+    throw new AppError("Token allocation not found", 404);
+  }
+  if (existing.isUnlimited) {
+    throw new AppError("Pricing cannot be set on an unlimited token allocation", 400);
   }
 
   const result = await setTokenAssignedPrice(
@@ -289,6 +318,7 @@ export const setTokenAssignedPriceService = async (
     iprsShare: token.iprsShare ?? null,
     hooprShare: token.hooprShare ?? null,
     keyName: token.keyName ?? null,
+    isUnlimited: token.isUnlimited === true,
   };
 };
 

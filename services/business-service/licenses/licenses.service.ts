@@ -187,6 +187,7 @@ export const licenseTrackService = async (
 
   // Token deduction is skipped entirely for SOUND_TRACKING_APP.
   let remainingTokens = 0;
+  let deductionWasUnlimited = false;
   if (!isSoundTrackingApp) {
     const deduction = await deductTokenAssignedByType(
       brandId!,
@@ -205,6 +206,7 @@ export const licenseTrackService = async (
     }
 
     remainingTokens = deduction.remainingTokens;
+    deductionWasUnlimited = deduction.isUnlimited === true;
 
     if (deduction.tokenAssignedId) {
       await LicenseModel.update(
@@ -288,6 +290,11 @@ export const licenseTrackService = async (
       });
     }
   } else {
+    // For unlimited allocations there is no meaningful "credits remaining" number;
+    // surface 0 in the email payload (the FE/template should treat unlimited rows
+    // separately) and never trigger low-credits alerts.
+    const creditsRemainingForEmail = deductionWasUnlimited ? 0 : remainingTokens;
+
     // Notify entire brand team about the track download
     findAllActiveUsersByBrandId(brandId!)
       .then((teamMembers) => {
@@ -297,7 +304,7 @@ export const licenseTrackService = async (
               recipientFirstName: member.firstName || "",
               trackName: track.name || trackCode,
               assortmentType: matchingTokenType!,
-              creditsRemaining: remainingTokens,
+              creditsRemaining: creditsRemainingForEmail,
               downloadedByFullName,
             }).catch((err) => {
               logger.error("Failed to send track download notification email", {
@@ -315,8 +322,9 @@ export const licenseTrackService = async (
         });
       });
 
-    // Send low credits alert to whole team if remaining tokens drop below 2
-    if (remainingTokens < 2) {
+    // Send low credits alert to whole team if remaining tokens drop below 2.
+    // Skip for unlimited allocations — they never run out.
+    if (!deductionWasUnlimited && remainingTokens < 2) {
       findAllActiveUsersByBrandId(brandId!)
         .then((teamMembers) => {
           teamMembers.forEach((member) => {
@@ -346,7 +354,11 @@ export const licenseTrackService = async (
   return {
     id: createdLicense.id!,
     downloadLink: gcsResult.downloadLink,
-    remainingTokens,
+    // Unlimited allocations don't have a meaningful balance — return 0 with the
+    // unlimitedTokens flag so the FE can render "Unlimited" without leaking the
+    // MAX_SAFE_INTEGER sentinel from the persistence layer.
+    remainingTokens: deductionWasUnlimited ? 0 : remainingTokens,
+    unlimitedTokens: deductionWasUnlimited || undefined,
     trackId: track.id,
     trackName: track.name,
     campaignId: campaignIdToApply ?? null,
@@ -695,6 +707,7 @@ export interface OwnerWiseTokenBreakdown {
   tokensUsed: number;
   tokenBalance: number;
   expiryDate?: Date;
+  isUnlimited?: boolean;
 }
 
 export interface TokenDetailsItem {
@@ -702,6 +715,7 @@ export interface TokenDetailsItem {
   tokensUsed: number;
   tokenBalance: number;
   type: string;
+  isUnlimited?: boolean;
   ownerWiseBreakdown?: OwnerWiseTokenBreakdown[];
 }
 
@@ -745,10 +759,14 @@ export const getTokenDetailsService = async (
   const ownerDetailsList = await getOwnersByIds(Array.from(allOwnerIds));
   const ownerDetailsMap = new Map(ownerDetailsList.map((o) => [o.id, o]));
 
-  // Aggregate tokens by type and also collect owner-wise breakdown
+  // Aggregate tokens by type and also collect owner-wise breakdown.
+  // Once a type has any unlimited allocation, the rolled-up totals are no longer
+  // meaningful — we mark the type as unlimited and stop summing finite numbers
+  // into it. The FE should render "Unlimited" instead of a balance figure.
   const aggregatedTokenMap = new Map<string, {
     totalAssignedToken: number;
     tokenBalance: number;
+    isUnlimited: boolean;
     ownerWiseBreakdown: OwnerWiseTokenBreakdown[];
   }>();
 
@@ -756,24 +774,31 @@ export const getTokenDetailsService = async (
     const existing = aggregatedTokenMap.get(token.type);
     const tokenOwnerIds = token.ownerIds || [];
     const ownerDetails = tokenOwnerIds.map((id: string) => ownerDetailsMap.get(id) || { id, name: "" });
+    const tokenIsUnlimited = token.isUnlimited === true;
 
     const breakdown: OwnerWiseTokenBreakdown = {
       ownerIds: tokenOwnerIds,
       ownerDetails,
       totalAssignedToken: token.totalAssignedToken,
-      tokensUsed: token.totalAssignedToken - token.tokenBalance,
+      tokensUsed: tokenIsUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
       tokenBalance: token.tokenBalance,
       expiryDate: token.expiryDate,
+      isUnlimited: tokenIsUnlimited,
     };
 
     if (existing) {
-      existing.totalAssignedToken += token.totalAssignedToken;
-      existing.tokenBalance += token.tokenBalance;
+      if (tokenIsUnlimited) {
+        existing.isUnlimited = true;
+      } else if (!existing.isUnlimited) {
+        existing.totalAssignedToken += token.totalAssignedToken;
+        existing.tokenBalance += token.tokenBalance;
+      }
       existing.ownerWiseBreakdown.push(breakdown);
     } else {
       aggregatedTokenMap.set(token.type, {
-        totalAssignedToken: token.totalAssignedToken,
-        tokenBalance: token.tokenBalance,
+        totalAssignedToken: tokenIsUnlimited ? 0 : token.totalAssignedToken,
+        tokenBalance: tokenIsUnlimited ? 0 : token.tokenBalance,
+        isUnlimited: tokenIsUnlimited,
         ownerWiseBreakdown: [breakdown],
       });
     }
@@ -794,9 +819,10 @@ export const getTokenDetailsService = async (
       if (token) {
         return {
           totalAssignedToken: token.totalAssignedToken,
-          tokensUsed: token.totalAssignedToken - token.tokenBalance,
+          tokensUsed: token.isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
           tokenBalance: token.tokenBalance,
           type,
+          isUnlimited: token.isUnlimited,
           // Only include ownerWiseBreakdown for Chartbusters type
           ...(isChartbusters && { ownerWiseBreakdown: token.ownerWiseBreakdown }),
         };
@@ -806,6 +832,7 @@ export const getTokenDetailsService = async (
         tokensUsed: 0,
         tokenBalance: 0,
         type,
+        isUnlimited: false,
         ...(isChartbusters && { ownerWiseBreakdown: [] }),
       };
     })

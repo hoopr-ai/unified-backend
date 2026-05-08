@@ -33,6 +33,7 @@ export interface TokenListItem {
   iprsShare?: number | null;
   hooprShare?: number | null;
   keyName?: string | null;
+  isUnlimited: boolean;
   createdAt: Date;
 }
 
