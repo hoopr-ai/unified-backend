@@ -15,7 +15,7 @@ import {
   sendResponse,
   sendError,
 } from "../services/helper-service/modules.export";
-import { HttpStatusCode } from "../services/dto-service/modules.export";
+import { HttpStatusCode, Platform } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
@@ -28,9 +28,22 @@ export const licenseTrack = catchAsync(async (req: AuthRequest, res: Response) =
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
   }
   const trackCode = req.params.trackCode as string;
+  const platform = req.session?.platform;
+
+  // campaignId is only honored for SOUND_TRACKING_APP; ignored on every other platform.
+  let campaignId: number | undefined;
+  if (platform === Platform.SOUND_TRACKING_APP && req.body?.campaignId !== undefined) {
+    const parsed = Number(req.body.campaignId);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return sendError(res, HttpStatusCode.BAD_REQUEST, "campaignId must be a positive integer", {});
+    }
+    campaignId = parsed;
+  }
+
   const response = await licenseTrackService(userId, {
     trackCode: trackCode,
-  });
+    campaignId,
+  }, platform);
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,

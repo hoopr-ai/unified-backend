@@ -11,6 +11,7 @@ export interface OwnerDetail {
 
 export interface LicenseTrackRequest {
   trackCode: string;
+  campaignId?: number;
 }
 
 export interface AssignTokensRequest {
@@ -32,6 +33,7 @@ export interface LicenseResponse {
   remainingTokens: number;
   trackId: string;
   trackName?: string;
+  campaignId?: number | null;
 }
 
 export interface TokenBalanceItem {
