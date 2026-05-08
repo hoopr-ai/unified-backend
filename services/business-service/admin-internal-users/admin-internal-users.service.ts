@@ -1,4 +1,5 @@
 import bcrypt from "bcrypt";
+import { UniqueConstraintError } from "sequelize";
 import {
   Platform,
   UserRoles,
@@ -9,17 +10,17 @@ import {
   findInternalUserByEmailCI,
   findInternalUserById,
   findInternalUsersPaginated,
-  updateInternalUserPassword,
+  deactivateInternalUserById,
+  reactivateInternalUserById,
   saveUser,
   saveUserRole,
+  deactivateAllUserSessions,
   type UserDetails,
   type UserRoleDetails,
 } from "../../persistence-service/user/modules.export";
-import { UniqueConstraintError } from "sequelize";
 import { generateInternalUserPassword } from "./password.helper";
-import { sendInternalUserCredentialsEmail } from "./email.helper";
+import { sendInternalUserWelcomeEmail } from "./email.helper";
 import { recordInternalUserAudit } from "./audit.helper";
-import { tryAcquireResetRateLimit } from "./rate-limit.helper";
 
 const INTERNAL_CMS_URL =
   process.env.INTERNAL_CMS_URL || "https://internal.hoopr.ai";
@@ -65,6 +66,11 @@ interface ActorContext {
 // ---------------------------------------------------------------------------
 // CREATE
 // ---------------------------------------------------------------------------
+//
+// v2: tempPassword is NOT generated for the user. Login is OTP-based; the password column
+// gets a random unguessable hash so the NOT NULL constraint is satisfied and the user can
+// optionally set a real password later via the existing /user/forgot-password OTP→reset
+// chain. The admin never sees a password and never emails one.
 
 export interface CreateInternalUserInput {
   firstName: string;
@@ -82,7 +88,6 @@ export interface CreateInternalUserResult {
   role: AllowedFeRole;
   mobile: string | null;
   createdAt: Date;
-  tempPassword: string;
   emailSent: boolean;
 }
 
@@ -104,12 +109,12 @@ export const createInternalUserService = async (
     );
   }
 
-  // Generate, hash, persist. Failures here are treated as 502 per spec — the user record
-  // could not be safely created, so the caller should retry.
-  const tempPassword = generateInternalUserPassword();
+  // Random unguessable hash for the password column. Never returned, never emailed.
+  // The user can choose to set a real password later via /user/forgot-password.
+  const placeholderSecret = generateInternalUserPassword();
   let hashedPassword: string;
   try {
-    hashedPassword = await bcrypt.hash(tempPassword, 10);
+    hashedPassword = await bcrypt.hash(placeholderSecret, 10);
   } catch (err) {
     throw new AppError(`Password hashing failed: ${(err as Error).message}`, 502);
   }
@@ -121,7 +126,7 @@ export const createInternalUserService = async (
     firstName,
     lastName,
     mobile,
-    status: UserStatus.ACTIVE, // spec: activated=true
+    status: UserStatus.ACTIVE,
     createdBy: actor.actorId,
     createdAt: new Date(),
   };
@@ -130,7 +135,6 @@ export const createInternalUserService = async (
   try {
     savedUser = await saveUser(newUserDetails);
   } catch (err) {
-    // A race between two parallel creates with the same email surfaces as a 409.
     if (err instanceof UniqueConstraintError) {
       throw new AppError(
         "An internal user with that email already exists.",
@@ -156,14 +160,12 @@ export const createInternalUserService = async (
     );
   }
 
-  // Email — non-blocking for the create. Spec: still return 201 with tempPassword
-  // even if SMTP transiently fails so the admin can DM the password as a fallback.
-  const emailSent = await sendInternalUserCredentialsEmail({
+  // Welcome email points at the OTP login flow. Non-blocking — a failed send doesn't
+  // abort the create, the row exists either way.
+  const emailSent = await sendInternalUserWelcomeEmail({
     firstName,
     email,
-    tempPassword,
     loginUrl: INTERNAL_CMS_URL,
-    isReset: false,
   });
 
   recordInternalUserAudit({
@@ -185,7 +187,6 @@ export const createInternalUserService = async (
     role: input.role,
     mobile: mobile ?? null,
     createdAt: savedUser.createdAt,
-    tempPassword,
     emailSent,
   };
 };
@@ -246,8 +247,7 @@ export const listInternalUsersService = async (
       mobile: u.mobile ?? null,
       createdAt: u.createdAt,
       lastLoginAt: u.lastLoginAt ?? null,
-      // v1: DELETED users count as deactivated. v2 may add a dedicated flag — at that
-      // point this expression updates without changing the response shape.
+      // status=DELETED is the deactivation signal. Admin reactivate flips it back.
       deactivated: u.status === UserStatus.DELETED,
     };
   });
@@ -264,81 +264,95 @@ export const listInternalUsersService = async (
 };
 
 // ---------------------------------------------------------------------------
-// RESET PASSWORD
+// DEACTIVATE
 // ---------------------------------------------------------------------------
+//
+// Sets the user's status to DELETED. The existing findActiveUser filter rejects DELETED
+// rows on login, so password-based login is automatically blocked. We also kill all
+// active sessions so they can't ride out an existing JWT past deactivation.
 
-export interface ResetInternalUserPasswordResult {
+export interface DeactivateInternalUserResult {
   id: number;
-  tempPassword: string;
-  emailSent: boolean;
-  // 0 when allowed; otherwise this many seconds until the next attempt is allowed.
-  retryAfterSeconds?: number;
-  rateLimited?: boolean;
+  deactivated: true;
 }
 
-export const resetInternalUserPasswordService = async (
+export const deactivateInternalUserService = async (
   targetUserId: number,
   actor: ActorContext
-): Promise<ResetInternalUserPasswordResult> => {
+): Promise<DeactivateInternalUserResult> => {
   const target = await findInternalUserById(targetUserId);
   if (!target) {
     throw new AppError("Internal user not found.", 404);
   }
-
-  // 60s-per-target rate limit. We check rate limit AFTER the existence check so a
-  // 404 always beats a 429 — otherwise an attacker could probe for valid IDs by the
-  // 429-vs-404 timing. (Existence check is admin-only anyway, but defence in depth.)
-  const rl = await tryAcquireResetRateLimit(targetUserId);
-  if (!rl.allowed) {
-    return {
-      id: targetUserId,
-      tempPassword: "",
-      emailSent: false,
-      rateLimited: true,
-      retryAfterSeconds: rl.retryAfterSeconds,
-    };
+  if (target.status === UserStatus.DELETED) {
+    throw new AppError("User is already deactivated.", 409);
   }
 
-  const tempPassword = generateInternalUserPassword();
-  let hashedPassword: string;
-  try {
-    hashedPassword = await bcrypt.hash(tempPassword, 10);
-  } catch (err) {
-    throw new AppError(`Password hashing failed: ${(err as Error).message}`, 502);
+  // Admin can't deactivate themselves — would lock them out of the CMS mid-session.
+  if (target.id === actor.actorId) {
+    throw new AppError("You cannot deactivate your own account.", 400);
   }
 
-  try {
-    await updateInternalUserPassword(targetUserId, hashedPassword);
-  } catch (err) {
-    throw new AppError(
-      `Failed to update password: ${(err as Error).message}`,
-      502
-    );
+  const changed = await deactivateInternalUserById(targetUserId);
+  if (!changed) {
+    // Race with another deactivation, or status was already DELETED.
+    throw new AppError("Could not deactivate user.", 502);
   }
 
-  const emailSent = await sendInternalUserCredentialsEmail({
-    firstName: target.firstName?.trim() || "there",
-    email: target.email,
-    tempPassword,
-    loginUrl: INTERNAL_CMS_URL,
-    isReset: true,
-  });
+  // Revoke any active sessions immediately. Prevents a deactivated user from continuing to
+  // act on an existing token until it expires.
+  await deactivateAllUserSessions(targetUserId);
 
   recordInternalUserAudit({
     actorId: actor.actorId,
     actorSessionId: actor.actorSessionId,
-    action: "reset_internal_user_password",
+    action: "deactivate_internal_user",
     targetUserId,
     endpoint: actor.endpoint,
     method: actor.method,
     ipAddress: actor.ip,
   });
 
-  return {
-    id: targetUserId,
-    tempPassword,
-    emailSent,
-  };
+  return { id: targetUserId, deactivated: true };
+};
+
+// ---------------------------------------------------------------------------
+// REACTIVATE
+// ---------------------------------------------------------------------------
+
+export interface ReactivateInternalUserResult {
+  id: number;
+  deactivated: false;
+}
+
+export const reactivateInternalUserService = async (
+  targetUserId: number,
+  actor: ActorContext
+): Promise<ReactivateInternalUserResult> => {
+  const target = await findInternalUserById(targetUserId);
+  if (!target) {
+    throw new AppError("Internal user not found.", 404);
+  }
+  if (target.status !== UserStatus.DELETED) {
+    throw new AppError("User is not currently deactivated.", 409);
+  }
+
+  const changed = await reactivateInternalUserById(targetUserId);
+  if (!changed) {
+    throw new AppError("Could not reactivate user.", 502);
+  }
+
+  recordInternalUserAudit({
+    actorId: actor.actorId,
+    actorSessionId: actor.actorSessionId,
+    action: "reactivate_internal_user",
+    targetUserId,
+    endpoint: actor.endpoint,
+    method: actor.method,
+    ipAddress: actor.ip,
+  });
+
+  return { id: targetUserId, deactivated: false };
 };
 
 export { ALLOWED_FE_ROLES, isAllowedFeRole };

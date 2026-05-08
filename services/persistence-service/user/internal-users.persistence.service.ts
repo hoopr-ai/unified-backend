@@ -28,14 +28,50 @@ export const findInternalUserById = async (
   });
 };
 
-export const updateInternalUserPassword = async (
-  userId: number,
-  hashedPassword: string
-): Promise<void> => {
-  await UserModel.update(
-    { password: hashedPassword },
-    { where: { id: userId, platform: Platform.INTERNAL } }
+// Soft deactivate. Sets status=DELETED so login (which filters status IN [ACTIVE, INVITED])
+// rejects them automatically. Also marks their user_roles inactive so any future reactivation
+// is explicit. Returns true if a row was actually changed.
+export const deactivateInternalUserById = async (
+  userId: number
+): Promise<boolean> => {
+  const [affectedUserRows] = await UserModel.update(
+    { status: UserStatus.DELETED },
+    {
+      where: {
+        id: userId,
+        platform: Platform.INTERNAL,
+        status: { [Op.ne]: UserStatus.DELETED },
+      },
+    }
   );
+  await UserRoleModel.update(
+    { status: UserStatus.DELETED },
+    { where: { userId, status: UserStatus.ACTIVE } }
+  );
+  return affectedUserRows > 0;
+};
+
+// Reactivate a previously deactivated INTERNAL user. Restores status=ACTIVE on the user row
+// and on whatever role row was active when they were deactivated. Returns true if changed.
+export const reactivateInternalUserById = async (
+  userId: number
+): Promise<boolean> => {
+  const [affectedUserRows] = await UserModel.update(
+    { status: UserStatus.ACTIVE },
+    {
+      where: {
+        id: userId,
+        platform: Platform.INTERNAL,
+        status: UserStatus.DELETED,
+      },
+    }
+  );
+  // The deactivate flow flipped role status to DELETED for matching rows. Flip them back.
+  await UserRoleModel.update(
+    { status: UserStatus.ACTIVE },
+    { where: { userId, status: UserStatus.DELETED } }
+  );
+  return affectedUserRows > 0;
 };
 
 interface FindInternalUsersParams {

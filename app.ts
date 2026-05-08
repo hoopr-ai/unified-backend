@@ -25,6 +25,7 @@ import contactRoutes from "./routes/contact.route";
 import companyLookupRoutes from "./routes/company-lookup.route";
 import railRoutes from "./routes/rail.route";
 import adminInternalUsersRoutes from "./routes/admin-internal-users.route";
+import internalLoginRoutes from "./routes/internal-login.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -43,6 +44,10 @@ await initializeBusinessService();
 
 app.use(activityLoggerMiddleware());
 
+// Mount the more-specific /user/internal-login BEFORE /user so Express resolves it
+// directly and never falls through userRoutes. Defence-in-depth — userRoutes has no
+// catch-all today, but a future addition there must not silently shadow login OTP.
+app.use("/user/internal-login", internalLoginRoutes);
 app.use("/user", userRoutes);
 app.use("/filters", filterRoutes);
 app.use("/tracks", trackRoutes);

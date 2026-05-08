@@ -6,7 +6,8 @@ import { createInternalUserSchema } from "../middlewares/admin-internal-users.va
 import {
   createInternalUser,
   listInternalUsers,
-  resetInternalUserPassword,
+  deactivateInternalUser,
+  reactivateInternalUser,
 } from "../controllers/admin-internal-users.controller";
 
 const router = Router();
@@ -28,10 +29,19 @@ router.post(
 
 router.get("/", requireInternalAdmin, listInternalUsers);
 
+// v2: deactivate / reactivate. Replaces the v1 reset-password endpoint — admins no longer
+// touch passwords. Users set their own (optional) password via the existing
+// /user/forgot-password OTP→reset flow.
 router.post(
-  "/:id/reset-password",
+  "/:id/deactivate",
   requireInternalAdmin,
-  resetInternalUserPassword
+  deactivateInternalUser
+);
+
+router.post(
+  "/:id/reactivate",
+  requireInternalAdmin,
+  reactivateInternalUser
 );
 
 export default router;

@@ -9,7 +9,8 @@ import { HttpStatusCode } from "../services/dto-service/constants/modules.export
 import {
   createInternalUserService,
   listInternalUsersService,
-  resetInternalUserPasswordService,
+  deactivateInternalUserService,
+  reactivateInternalUserService,
   type AllowedFeRole,
 } from "../services/business-service/admin-internal-users/modules.export";
 import { listInternalUsersQuerySchema } from "../middlewares/admin-internal-users.validation";
@@ -19,17 +20,27 @@ interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
-const requireActor = (req: AuthRequest): {
-  actorId: number;
-  actorSessionId: number;
-} => {
+const requireActor = (
+  req: AuthRequest
+): { actorId: number; actorSessionId: number } => {
   const actorId = req.session?.userId;
   const actorSessionId = req.session?.sessionId;
   if (!actorId || !actorSessionId) {
-    // authenticateWithSession should have set both. If not, treat as unauthenticated.
     throw new AppError("Unauthorized", 401);
   }
   return { actorId, actorSessionId };
+};
+
+const parseTargetId = (req: AuthRequest): number => {
+  const idParam = req.params.id;
+  const targetUserId = parseInt(
+    typeof idParam === "string" ? idParam : "",
+    10
+  );
+  if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+    throw new AppError("Invalid user id.", 400);
+  }
+  return targetUserId;
 };
 
 // POST /admin/internal-users
@@ -61,10 +72,7 @@ export const listInternalUsers = catchAsync(
       convert: true,
     });
     if (error) {
-      throw new AppError(
-        error.details.map((d) => d.message).join(", "),
-        400
-      );
+      throw new AppError(error.details.map((d) => d.message).join(", "), 400);
     }
 
     const result = await listInternalUsersService({
@@ -82,20 +90,13 @@ export const listInternalUsers = catchAsync(
   }
 );
 
-// POST /admin/internal-users/:id/reset-password
-export const resetInternalUserPassword = catchAsync(
+// POST /admin/internal-users/:id/deactivate
+export const deactivateInternalUser = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const { actorId, actorSessionId } = requireActor(req);
-    const idParam = req.params.id;
-    const targetUserId = parseInt(
-      typeof idParam === "string" ? idParam : "",
-      10
-    );
-    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
-      throw new AppError("Invalid user id.", 400);
-    }
+    const targetUserId = parseTargetId(req);
 
-    const result = await resetInternalUserPasswordService(targetUserId, {
+    const result = await deactivateInternalUserService(targetUserId, {
       actorId,
       actorSessionId,
       ip: getClientIp(req),
@@ -103,25 +104,32 @@ export const resetInternalUserPassword = catchAsync(
       method: req.method,
     });
 
-    if (result.rateLimited) {
-      res.setHeader("Retry-After", String(result.retryAfterSeconds ?? 60));
-      sendResponse(res, {
-        status: HttpStatusCode.TOO_MANY_REQUESTS,
-        code: 1,
-        data: { retryAfterSeconds: result.retryAfterSeconds },
-        message: "Password reset rate limit exceeded for this user.",
-      });
-      return;
-    }
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: "Internal user deactivated.",
+    });
+  }
+);
+
+// POST /admin/internal-users/:id/reactivate
+export const reactivateInternalUser = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const { actorId, actorSessionId } = requireActor(req);
+    const targetUserId = parseTargetId(req);
+
+    const result = await reactivateInternalUserService(targetUserId, {
+      actorId,
+      actorSessionId,
+      ip: getClientIp(req),
+      endpoint: req.originalUrl,
+      method: req.method,
+    });
 
     sendResponse(res, {
       status: HttpStatusCode.OK,
-      data: {
-        id: result.id,
-        tempPassword: result.tempPassword,
-        emailSent: result.emailSent,
-      },
-      message: "Password reset.",
+      data: result,
+      message: "Internal user reactivated.",
     });
   }
 );
