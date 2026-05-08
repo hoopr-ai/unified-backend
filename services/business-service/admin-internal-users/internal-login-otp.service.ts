@@ -3,7 +3,7 @@ import {
   redisClient,
   createJWTToken,
 } from "../../helper-service/modules.export";
-import { sendOtpEmail } from "../../helper-service/email.service";
+import { sendInternalLoginOtpEmail } from "./email.helper";
 import { logger } from "../../helper-service/logger";
 import {
   Platform,
@@ -99,7 +99,7 @@ export const sendInternalLoginOtpService = async (
   );
 
   try {
-    await sendOtpEmail(email, otp);
+    await sendInternalLoginOtpEmail(email, otp);
   } catch (err) {
     logger.error("Failed to send INTERNAL login OTP", {
       email,
