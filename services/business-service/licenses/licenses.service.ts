@@ -811,6 +811,36 @@ export const getTokenDetailsService = async (
     "hoopr originals": 4,
   };
 
+  // Merge breakdowns that share the same set of owners (order-insensitive).
+  // Multiple token rows can target the same owner set; the FE wants one row per
+  // owner-set in the response, so we sum totals and drop expiryDate (sources
+  // may have differing expiries and a single date would be misleading).
+  const mergeBreakdownsByOwnerSet = (
+    breakdowns: OwnerWiseTokenBreakdown[],
+  ): OwnerWiseTokenBreakdown[] => {
+    const grouped = new Map<string, OwnerWiseTokenBreakdown>();
+    for (const b of breakdowns) {
+      const key = [...b.ownerIds].sort().join("|");
+      const existing = grouped.get(key);
+      if (!existing) {
+        const { expiryDate: _drop, ...rest } = b;
+        grouped.set(key, { ...rest });
+        continue;
+      }
+      if (b.isUnlimited) {
+        existing.isUnlimited = true;
+        existing.totalAssignedToken = 0;
+        existing.tokensUsed = 0;
+        existing.tokenBalance = 0;
+      } else if (!existing.isUnlimited) {
+        existing.totalAssignedToken += b.totalAssignedToken;
+        existing.tokensUsed += b.tokensUsed;
+        existing.tokenBalance += b.tokenBalance;
+      }
+    }
+    return Array.from(grouped.values());
+  };
+
   const mergedTokens = allTokenTypes
     .map((type) => {
       const token = aggregatedTokenMap.get(type);
@@ -824,7 +854,9 @@ export const getTokenDetailsService = async (
           type,
           isUnlimited: token.isUnlimited,
           // Only include ownerWiseBreakdown for Chartbusters type
-          ...(isChartbusters && { ownerWiseBreakdown: token.ownerWiseBreakdown }),
+          ...(isChartbusters && {
+            ownerWiseBreakdown: mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown),
+          }),
         };
       }
       return {
