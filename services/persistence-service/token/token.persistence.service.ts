@@ -434,6 +434,25 @@ export const setTokenAssignedPrice = async (
   }
 };
 
+// Ranking tier for token-row selection. Lower tier wins.
+//   0 = owner-assigned with finite balance (token's ownerIds includes the track owner)
+//   1 = generic with finite balance (token's ownerIds is empty)
+//   2 = unlimited (any), used only when no finite row qualifies
+// Within a tier, oldest createdAt wins.
+const tokenSelectionTier = (
+  token: TokenAssignedModel,
+  trackOwnerIds: ReadonlySet<string>,
+): number => {
+  if (token.isUnlimited) return 2;
+  const tokenOwnerIds = token.ownerIds || [];
+  if (tokenOwnerIds.length === 0) return 1;
+  for (const oid of tokenOwnerIds) {
+    if (trackOwnerIds.has(oid)) return 0;
+  }
+  // Owner-restricted row that doesn't match any track owner — not eligible.
+  return -1;
+};
+
 export const deductTokenAssignedByType = async (
   brandId: number,
   type: string,
@@ -444,8 +463,8 @@ export const deductTokenAssignedByType = async (
 ): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number; isUnlimited?: boolean }> => {
   const transaction = await sequelize.transaction();
   try {
-    // Eligible rows are either unlimited (always) or have sufficient balance (FIFO).
-    // Order: unlimited first, then oldest finite row.
+    // Pull every potentially-eligible row (unlimited OR sufficient finite balance),
+    // then rank in code so we can apply the assigned > generic > unlimited preference.
     const tokens = await TokenAssignedModel.findAll({
       where: {
         brandId,
@@ -455,8 +474,8 @@ export const deductTokenAssignedByType = async (
           { tokenBalance: { [Op.gte]: amount } },
         ],
       },
-      attributes: ["id", "tokenBalance", "ownerIds", "isUnlimited"],
-      order: [["isUnlimited", "DESC"], ["createdAt", "ASC"]],
+      attributes: ["id", "tokenBalance", "ownerIds", "isUnlimited", "createdAt"],
+      order: [["createdAt", "ASC"]],
       lock: transaction.LOCK.UPDATE,
       transaction,
     });
@@ -466,16 +485,19 @@ export const deductTokenAssignedByType = async (
       return { success: false, remainingTokens: 0 };
     }
 
-    // Find the first matching token based on ownerIds restriction
+    const trackOwnerIdSet = new Set<string>(trackOwnerId ? [trackOwnerId] : []);
+
+    // Pick by tier (assigned-finite > generic-finite > unlimited); rows are already
+    // ordered by createdAt ASC, so the first hit per tier is the oldest.
     let matchingToken: TokenAssignedModel | null = null;
+    let bestTier = Number.POSITIVE_INFINITY;
     for (const token of tokens) {
-      const tokenOwnerIds = token.ownerIds || [];
-      if (tokenOwnerIds.length === 0) {
+      const tier = tokenSelectionTier(token, trackOwnerIdSet);
+      if (tier === -1) continue;
+      if (tier < bestTier) {
+        bestTier = tier;
         matchingToken = token;
-        break;
-      } else if (trackOwnerId && tokenOwnerIds.includes(trackOwnerId)) {
-        matchingToken = token;
-        break;
+        if (bestTier === 0) break; // Best possible tier — stop scanning.
       }
     }
 
@@ -536,28 +558,86 @@ export const findValidTokenAssignedForOwner = async (
   trackOwnerId: string,
   minBalance: number = 1
 ): Promise<TokenAssignedModel | null> => {
+  const result = await findBestTokenAssignedForTrackOwners(
+    brandId,
+    [{ ownerId: trackOwnerId, type }],
+    minBalance,
+  );
+  return result?.token ?? null;
+};
+
+// Picks the best-ranked eligible token row across all (ownerId, type) pairs that
+// belong to a track. Ranking: owner-assigned-finite > generic-finite > unlimited;
+// oldest createdAt within each tier. Returns the matched token along with the
+// specific ownerId that satisfied the assignment (used by the deduction path so
+// the audit trail reflects which owner the spend was attributed to).
+export const findBestTokenAssignedForTrackOwners = async (
+  brandId: number,
+  trackOwners: ReadonlyArray<{ ownerId: string; type: string }>,
+  minBalance: number = 1,
+): Promise<{ token: TokenAssignedModel; matchedOwnerId: string; matchedType: string } | null> => {
+  if (trackOwners.length === 0) return null;
+
+  // type → set of trackOwnerIds with that type. Tokens are scoped by (brandId, type),
+  // so we query once per distinct type and rank globally across the union.
+  const ownersByType = new Map<string, Set<string>>();
+  for (const { ownerId, type } of trackOwners) {
+    if (!type) continue;
+    let set = ownersByType.get(type);
+    if (!set) {
+      set = new Set<string>();
+      ownersByType.set(type, set);
+    }
+    set.add(ownerId);
+  }
+  if (ownersByType.size === 0) return null;
+
   const tokens = await TokenAssignedModel.findAll({
     where: {
       brandId,
-      type,
+      type: { [Op.in]: Array.from(ownersByType.keys()) },
       [Op.or]: [
         { isUnlimited: true },
         { tokenBalance: { [Op.gte]: minBalance } },
       ],
     },
-    // Unlimited allocations should be considered before finite ones so a brand's
-    // unlimited grant always wins when present.
-    order: [["isUnlimited", "DESC"], ["createdAt", "ASC"]],
+    order: [["createdAt", "ASC"]],
   });
 
+  let best: { token: TokenAssignedModel; matchedOwnerId: string; matchedType: string } | null = null;
+  let bestTier = Number.POSITIVE_INFINITY;
+
   for (const token of tokens) {
-    const tokenOwnerIds = token.ownerIds || [];
-    if (tokenOwnerIds.length === 0 || tokenOwnerIds.includes(trackOwnerId)) {
-      return token;
+    const ownerIdsForThisType = ownersByType.get(token.type);
+    if (!ownerIdsForThisType) continue;
+
+    const tier = tokenSelectionTier(token, ownerIdsForThisType);
+    if (tier === -1) continue;
+    if (tier >= bestTier) continue;
+
+    // Pick which trackOwnerId to attribute this spend to.
+    // Tier 0 (assigned): the first owner from the token's ownerIds that's also a track owner.
+    // Tier 1/2 (generic/unlimited): no specific assignment — use any track owner with this type.
+    let matchedOwnerId: string | null = null;
+    if (tier === 0) {
+      for (const oid of token.ownerIds || []) {
+        if (ownerIdsForThisType.has(oid)) {
+          matchedOwnerId = oid;
+          break;
+        }
+      }
+    } else {
+      // ownersByType always has at least one entry per type we queried.
+      matchedOwnerId = ownerIdsForThisType.values().next().value as string;
     }
+    if (!matchedOwnerId) continue;
+
+    bestTier = tier;
+    best = { token, matchedOwnerId, matchedType: token.type };
+    if (bestTier === 0) break;
   }
 
-  return null;
+  return best;
 };
 
 export const createTokenAssigned = async (
