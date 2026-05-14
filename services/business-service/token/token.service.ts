@@ -381,9 +381,18 @@ export const getTokenTypesService = async (): Promise<string[]> => {
 
 /**
  * Get all brands with tokens summary
+ *
+ * `showInternalBrands` defaults to false at the controller layer; we keep it
+ * defaulting to undefined here and let the persistence helper decide so any
+ * non-HTTP caller of this service keeps the original exclude-by-default
+ * behaviour.
  */
-export const getBrandsWithTokensService = async (): Promise<BrandTokenSummary[]> => {
-  return await getBrandsWithTokens();
+export const getBrandsWithTokensService = async (
+  options: { showInternalBrands?: boolean } = {}
+): Promise<BrandTokenSummary[]> => {
+  return await getBrandsWithTokens({
+    excludeInternalBrands: options.showInternalBrands === true ? false : true,
+  });
 };
 
 /**
@@ -482,8 +491,12 @@ export const getTokenDeductionsService = async (
  * is set on the response so the FE can render "Unlimited" instead of treating
  * the resulting numbers as the full picture.
  */
-export const getTokenSummaryByTypeService = async (): Promise<TokenTypeSummary[]> => {
-  const aggregates = await getTokenSummaryAggregatedByType();
+export const getTokenSummaryByTypeService = async (
+  options: { showInternalBrands?: boolean } = {}
+): Promise<TokenTypeSummary[]> => {
+  const aggregates = await getTokenSummaryAggregatedByType({
+    excludeInternalBrands: options.showInternalBrands === true ? false : true,
+  });
 
   return aggregates.map(({ type, totalAssigned, totalBalance, hasUnlimited }) => ({
     type,
