@@ -113,6 +113,7 @@ export interface TokenListFilters {
   type?: string;
   page?: number;
   limit?: number;
+  showInternalBrands?: boolean;
 }
 
 export interface TokenDeductionFilters {
@@ -121,4 +122,5 @@ export interface TokenDeductionFilters {
   reason?: string;
   page?: number;
   limit?: number;
+  showInternalBrands?: boolean;
 }

@@ -34,7 +34,10 @@ import type {
 export const getTokensListService = async (
   filters: TokenListFilters
 ): Promise<TokenListResponse> => {
-  const { rows, count } = await getAllTokensWithFilters(filters);
+  const { rows, count } = await getAllTokensWithFilters({
+    ...filters,
+    excludeInternalBrands: filters.showInternalBrands === true ? false : true,
+  });
   const page = filters.page || 1;
   const limit = filters.limit || 20;
 
@@ -411,6 +414,7 @@ export const getTokenDeductionsService = async (
     reason?: string;
     page?: number;
     limit?: number;
+    showInternalBrands?: boolean;
   }
 ): Promise<TokenDeductionListResponse> => {
   const page = filters.page || 1;
@@ -424,6 +428,7 @@ export const getTokenDeductionsService = async (
     reason: reasonEnum,
     page,
     limit,
+    excludeInternalBrands: filters.showInternalBrands === true ? false : true,
   });
 
   // Collect all unique track ownerIds from all deductions

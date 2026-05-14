@@ -126,6 +126,7 @@ export const getTokensQuerySchema = Joi.object({
   type: Joi.string().trim().optional(),
   page: Joi.number().integer().min(1).optional().default(1),
   limit: Joi.number().integer().min(1).max(100).optional().default(20),
+  showInternalBrands: Joi.boolean().optional(),
 });
 
 export const getDeductionsQuerySchema = Joi.object({
@@ -134,4 +135,5 @@ export const getDeductionsQuerySchema = Joi.object({
   reason: Joi.string().valid("LICENSE_PURCHASE", "INTERNAL_DEDUCTION").optional(),
   page: Joi.number().integer().min(1).optional().default(1),
   limit: Joi.number().integer().min(1).max(100).optional().default(20),
+  showInternalBrands: Joi.boolean().optional(),
 });
