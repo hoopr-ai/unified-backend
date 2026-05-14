@@ -680,6 +680,31 @@ export const getAllTokensWithFilters = async (
   return { rows, count };
 };
 
+export const getTokenSummaryAggregatedByType = async (): Promise<
+  { type: string; totalAssigned: number; totalBalance: number; hasUnlimited: boolean }[]
+> => {
+  // Aggregate per type in SQL so totals cover every row, not a paginated slice.
+  // Unlimited rows contribute 0 to the sums; hasUnlimited surfaces them via BOOL_OR
+  // so the FE can render "Unlimited" instead of misreading the finite-only totals.
+  const results = await TokenAssignedModel.findAll({
+    attributes: [
+      "type",
+      [fn("SUM", literal('CASE WHEN "isUnlimited" = false THEN "totalAssignedToken" ELSE 0 END')), "totalAssigned"],
+      [fn("SUM", literal('CASE WHEN "isUnlimited" = false THEN "tokenBalance" ELSE 0 END')), "totalBalance"],
+      [fn("BOOL_OR", col("isUnlimited")), "hasUnlimited"],
+    ],
+    group: ["type"],
+    raw: true,
+  });
+
+  return results.map((r: any) => ({
+    type: r.type as string,
+    totalAssigned: Number(r.totalAssigned) || 0,
+    totalBalance: Number(r.totalBalance) || 0,
+    hasUnlimited: r.hasUnlimited === true || r.hasUnlimited === "t" || r.hasUnlimited === "true",
+  }));
+};
+
 export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
   // SUM tokenBalance across finite allocations only (isUnlimited = false). The
   // hasUnlimited flag is a separate aggregate so the FE can render an

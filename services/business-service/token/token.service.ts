@@ -5,6 +5,7 @@ import {
   getAllTokenAssignedDetails,
   getAllTokenAssignedBalances,
   getDistinctTokenAssignedTypes,
+  getTokenSummaryAggregatedByType,
   getBrandsWithTokens,
   getAllDeductionsWithFilters,
   findTokenAssignedById,
@@ -482,35 +483,15 @@ export const getTokenDeductionsService = async (
  * the resulting numbers as the full picture.
  */
 export const getTokenSummaryByTypeService = async (): Promise<TokenTypeSummary[]> => {
-  const types = await getDistinctTokenAssignedTypes();
-  const summaries: TokenTypeSummary[] = [];
+  const aggregates = await getTokenSummaryAggregatedByType();
 
-  for (const type of types) {
-    const { rows } = await getAllTokensWithFilters({ type });
-
-    let totalAssigned = 0;
-    let totalBalance = 0;
-    let hasUnlimited = false;
-
-    for (const token of rows) {
-      if (token.isUnlimited) {
-        hasUnlimited = true;
-        continue;
-      }
-      totalAssigned += token.totalAssignedToken;
-      totalBalance += token.tokenBalance;
-    }
-
-    summaries.push({
-      type,
-      totalAssigned,
-      totalBalance,
-      totalUsed: totalAssigned - totalBalance,
-      hasUnlimited,
-    });
-  }
-
-  return summaries;
+  return aggregates.map(({ type, totalAssigned, totalBalance, hasUnlimited }) => ({
+    type,
+    totalAssigned,
+    totalBalance,
+    totalUsed: totalAssigned - totalBalance,
+    hasUnlimited,
+  }));
 };
 
 /**
