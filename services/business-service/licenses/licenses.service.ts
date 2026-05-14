@@ -22,7 +22,7 @@ import {
   deductTokenAssignedByType,
   findTokensAssignedByBrandId,
   getDistinctTokenAssignedTypes,
-  findValidTokenAssignedForOwner,
+  findBestTokenAssignedForTrackOwners,
   TokenDeductionReason,
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
@@ -142,31 +142,29 @@ export const licenseTrackService = async (
       throw new AppError("Track has no owners assigned", 400);
     }
 
-    // Find a valid token for any owner of the track (token_assigned table)
-    for (const owner of owners) {
-      const ownerType = owner.type;
-      if (!ownerType) continue;
+    // Evaluate every (ownerId, ownerType) pair on the track together so the
+    // ranking (owner-assigned-finite > generic-finite > unlimited, oldest within
+    // each tier) holds globally — not just within whichever track owner happened
+    // to be iterated first.
+    const trackOwnersForLookup = owners
+      .filter((o) => !!o.type)
+      .map((o) => ({ ownerId: o.id, type: o.type as string }));
 
-      const validToken = await findValidTokenAssignedForOwner(
-        brandId!,
-        ownerType,
-        owner.id,
-        TOKEN_COST_PER_LICENSE,
-      );
+    const bestMatch = await findBestTokenAssignedForTrackOwners(
+      brandId!,
+      trackOwnersForLookup,
+      TOKEN_COST_PER_LICENSE,
+    );
 
-      if (validToken) {
-        matchingTokenType = ownerType;
-        matchingOwnerId = owner.id;
-        break;
-      }
-    }
-
-    if (!matchingTokenType || matchingOwnerId === null) {
+    if (!bestMatch) {
       throw new AppError(
         `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
         400,
       );
     }
+
+    matchingTokenType = bestMatch.matchedType;
+    matchingOwnerId = bestMatch.matchedOwnerId;
   }
 
   // Generate GCS signed URL for the track
@@ -852,6 +850,7 @@ export const getTokenDetailsService = async (
       const isChartbusters = type.toLowerCase() === "chartbusters";
 
       if (token) {
+        const mergeBreakdownsByOwner =  mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown)
         return {
           totalAssignedToken: token.isUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.totalAssignedToken,
           tokensUsed: token.isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
@@ -859,9 +858,7 @@ export const getTokenDetailsService = async (
           type,
           isUnlimited: token.isUnlimited,
           // Only include ownerWiseBreakdown for Chartbusters type
-          ...(isChartbusters && {
-            ownerWiseBreakdown: mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown),
-          }),
+          ...(isChartbusters && ( mergeBreakdownsByOwner.length > 1 || mergeBreakdownsByOwner.length == 1 && mergeBreakdownsByOwner[0].ownerIds.length > 0 ) && { ownerWiseBreakdown: mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown) }),
         };
       }
       return {

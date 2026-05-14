@@ -208,18 +208,23 @@ export const assignTokensAdminService = async (
     throw new AppError("Brand not found", 404);
   }
 
-  // Create token assignment (preserve original type case)
+  // Create token assignment (preserve original type case).
+  // Unlimited grants still carry a bulk pricing block (Pack + IPRS + Hoopr)
+  // and an optional expiry — the validator enforces dealType='bulk' and
+  // requires pricePerPack for unlimited rows. Only the token count is
+  // stored as 0 (the row models an infinite balance).
+  const effectiveDealType = unlimited ? "bulk" : (dealType ?? null);
   const tokenAssigned = await addTokensAssignedByType(
     brandId,
     type.trim(),
     unlimited ? 0 : tokens!,
-    unlimited ? undefined : expiryDate,
+    expiryDate,
     ownerIds,
     updatedById,
-    unlimited ? null : (dealType ?? null),
-    unlimited ? null : (pricePerPack ?? null),
-    unlimited ? null : (dealType === "bulk" ? (iprsShare ?? null) : null),
-    unlimited ? null : (dealType === "bulk" ? (hooprShare ?? null) : null),
+    effectiveDealType,
+    pricePerPack ?? null,
+    effectiveDealType === "bulk" ? (iprsShare ?? null) : null,
+    effectiveDealType === "bulk" ? (hooprShare ?? null) : null,
     keyName ?? null,
     unlimited
   );
@@ -272,14 +277,15 @@ export const setTokenAssignedPriceService = async (
     }
   }
 
-  // Pricing is meaningless for unlimited allocations and was forbidden at assign time;
-  // reject any attempt to back-fill it here so the two paths stay consistent.
+  // Unlimited allocations also carry a bulk pricing block, but per-track
+  // pricing on an unlimited row doesn't make sense (no token count to
+  // multiply by) — block that explicitly so the two surfaces stay coherent.
   const existing = await findTokenAssignedById(tokenAssignedId);
   if (!existing) {
     throw new AppError("Token allocation not found", 404);
   }
-  if (existing.isUnlimited) {
-    throw new AppError("Pricing cannot be set on an unlimited token allocation", 400);
+  if (existing.isUnlimited && dealType !== "bulk") {
+    throw new AppError("Unlimited allocations only support bulk pricing", 400);
   }
 
   const result = await setTokenAssignedPrice(
