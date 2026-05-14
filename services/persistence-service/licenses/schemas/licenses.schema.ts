@@ -15,12 +15,13 @@ import {
 import { BrandModel } from "../../brand/schemas/modules.export";
 import { UserModel } from "../../user/schemas/modules.export";
 import { TrackModel } from "../../track/schemas/modules.export";
+import { CampaignModel } from "../../campaign/schemas/campaign.schema";
 import { LicenseTypeModel } from "./licenseType.schema";
 import { VideoLinkModel } from "./videoLinks.schema";
 
 export interface LicenseDetails {
   id?: number;
-  brandId: number;
+  brandId?: number | null;
   userId: number;
   trackCode: string;
   tokenCost: number;
@@ -33,6 +34,7 @@ export interface LicenseDetails {
   price?: number;
   smashVisible?: boolean;
   tokenId?: number;
+  campaignId?: number | null;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -51,9 +53,9 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
   @ForeignKey(() => BrandModel)
   @Column({
     type: DataType.BIGINT,
-    allowNull: false,
+    allowNull: true,
   })
-  brandId!: number;
+  brandId?: number | null;
 
   @Index({ name: "idx_licenses_user_id" })
   @ForeignKey(() => UserModel)
@@ -135,6 +137,14 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
   })
   tokenId?: number;
 
+  @Index({ name: "idx_licenses_campaign_id" })
+  @ForeignKey(() => CampaignModel)
+  @Column({
+    type: DataType.BIGINT,
+    allowNull: true,
+  })
+  campaignId?: number | null;
+
   @CreatedAt
   @Column({
     type: DataType.DATE,
@@ -159,6 +169,9 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
 
   @BelongsTo(() => LicenseTypeModel)
   licenseType?: LicenseTypeModel;
+
+  @BelongsTo(() => CampaignModel)
+  campaign?: CampaignModel;
 
   @HasMany(() => VideoLinkModel)
   videoLinks!: VideoLinkModel[];

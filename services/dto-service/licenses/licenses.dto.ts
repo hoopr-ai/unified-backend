@@ -11,11 +11,12 @@ export interface OwnerDetail {
 
 export interface LicenseTrackRequest {
   trackCode: string;
+  campaignId?: number;
 }
 
 export interface AssignTokensRequest {
   brandId: number;
-  tokens: number;
+  tokens?: number;
   type: string;
   expiryDate?: Date;
   ownerIds?: string[];
@@ -24,14 +25,17 @@ export interface AssignTokensRequest {
   iprsShare?: number | null;
   hooprShare?: number | null;
   keyName?: string | null;
+  isUnlimited?: boolean;
 }
 
 export interface LicenseResponse {
   id: number;
   downloadLink: string;
   remainingTokens: number;
+  unlimitedTokens?: boolean;
   trackId: string;
   trackName?: string;
+  campaignId?: number | null;
 }
 
 export interface TokenBalanceItem {
@@ -55,6 +59,7 @@ export interface AssignTokensResponse {
   iprsShare?: number | null;
   hooprShare?: number | null;
   keyName?: string | null;
+  isUnlimited: boolean;
 }
 
 export interface LicenseHistoryItem {

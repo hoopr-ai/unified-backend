@@ -28,7 +28,8 @@ import {
 import { TrackModel } from "../../persistence-service/track/modules.export";
 import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
 import { OwnerModel, getOwnersByIds } from "../../persistence-service/owner/modules.export";
-import { Op } from "sequelize";
+import { CampaignModel, CampaignStatus } from "../../persistence-service/campaign/modules.export";
+import { Op, literal } from "sequelize";
 import {
   AppError,
   generateGCSSignedUrl,
@@ -47,16 +48,56 @@ import type {
   DownloadTrackRequest,
   DownloadTrackResponse,
 } from "../../dto-service/licenses/modules.export";
+import { Platform } from "../../dto-service/modules.export";
 
 const TOKEN_COST_PER_LICENSE = 1;
 
 export const licenseTrackService = async (
   userId: number,
   data: LicenseTrackRequest,
+  platform?: Platform,
 ): Promise<LicenseResponse> => {
-  const { trackCode } = data;
+  const { trackCode, campaignId: requestedCampaignId } = data;
+  const isSoundTrackingApp = platform === Platform.SOUND_TRACKING_APP;
 
-  // Get user's brand
+  // campaignId is only honored for SOUND_TRACKING_APP. Defense-in-depth: even if a
+  // non-SOUND_TRACKING_APP request slips one in via the service layer, we drop it.
+  const campaignIdToApply = isSoundTrackingApp ? requestedCampaignId : undefined;
+
+  // Validate + atomically reserve a campaign slot before creating any license record.
+  // A single conditional UPDATE handles "exists, ACTIVE, in-window, has slots" race-safely:
+  // if affectedRows === 0, one of those conditions failed.
+  if (campaignIdToApply !== undefined) {
+    const now = new Date();
+    const [affectedRows] = await CampaignModel.update(
+      { currentUsage: literal('"currentUsage" + 1') } as any,
+      {
+        where: {
+          id: campaignIdToApply,
+          status: CampaignStatus.ACTIVE,
+          validFrom: { [Op.lte]: now },
+          validTill: { [Op.gte]: now },
+          currentUsage: { [Op.lt]: literal('"totalUsage"') },
+        },
+      },
+    );
+
+    if (affectedRows === 0) {
+      // Distinguish between "doesn't exist" and "exists but ineligible" for a clearer message.
+      const campaign = await CampaignModel.findByPk(campaignIdToApply, {
+        attributes: ["id", "status", "validFrom", "validTill", "currentUsage", "totalUsage"],
+      });
+      if (!campaign) {
+        throw new AppError("Campaign not found", 404);
+      }
+      throw new AppError(
+        "Campaign is not active, has expired, or has reached its usage limit",
+        400,
+      );
+    }
+  }
+
+  // Get user (brand only required for non-SOUND_TRACKING_APP platforms)
   const user = await UserModel.findByPk(userId, {
     attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile"],
   });
@@ -65,11 +106,11 @@ export const licenseTrackService = async (
     throw new AppError("User not found", 404);
   }
 
-  if (!user.brandId) {
+  if (!isSoundTrackingApp && !user.brandId) {
     throw new AppError("User is not associated with any brand", 400);
   }
 
-  const brandId = user.brandId;
+  const brandId: number | null = isSoundTrackingApp ? null : user.brandId!;
 
   // Get track details including ownerId
   const track = await TrackModel.findOne({
@@ -84,99 +125,95 @@ export const licenseTrackService = async (
     throw new AppError("Track audio file is not available for download", 400);
   }
 
-  // Get owner types for the track
+  // Get owners for the track (used for PDF metadata; token matching is skipped for SOUND_TRACKING_APP)
   const ownerIds = track.ownerId || [];
-  if (ownerIds.length === 0) {
-    throw new AppError("Track has no owners assigned", 400);
-  }
+  const owners = ownerIds.length > 0
+    ? await OwnerModel.findAll({
+        where: { id: { [Op.in]: ownerIds } },
+        attributes: ["id", "type"],
+      })
+    : [];
 
-  const owners = await OwnerModel.findAll({
-    where: { id: { [Op.in]: ownerIds } },
-    attributes: ["id", "type"],
-  });
-
-  let trackOwnerTypes = [
-    ...new Set(owners.map((owner) => owner.type).filter(Boolean)),
-  ] as string[];
-
-  if (trackOwnerTypes.length === 0) {
-    trackOwnerTypes = ["Hoopr"]; //need to update later
-    // throw new AppError("Track owners do not have valid types", 400);
-  }
-
-  // Find a matching token type (track owner type matches brand's token type)
-  // Also consider ownerIds restriction on tokens
-  // Using NEW token_assigned table
   let matchingTokenType: string | null = null;
   let matchingOwnerId: string | null = null;
 
-  // Try to find a valid token for each owner of the track
-  for (const owner of owners) {
-    const ownerType = owner.type;
-    if (!ownerType) continue;
-
-    // Check if there's a valid token for this owner type and owner ID
-    // Using NEW token_assigned table
-    const validToken = await findValidTokenAssignedForOwner(
-      brandId,
-      ownerType,
-      owner.id,
-      TOKEN_COST_PER_LICENSE,
-    );
-
-    if (validToken) {
-      matchingTokenType = ownerType;
-      matchingOwnerId = owner.id;
-      break;
+  if (!isSoundTrackingApp) {
+    if (ownerIds.length === 0) {
+      throw new AppError("Track has no owners assigned", 400);
     }
-  }
 
-  if (!matchingTokenType || matchingOwnerId === null) {
-    throw new AppError(
-      `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
-      400,
-    );
+    // Find a valid token for any owner of the track (token_assigned table)
+    for (const owner of owners) {
+      const ownerType = owner.type;
+      if (!ownerType) continue;
+
+      const validToken = await findValidTokenAssignedForOwner(
+        brandId!,
+        ownerType,
+        owner.id,
+        TOKEN_COST_PER_LICENSE,
+      );
+
+      if (validToken) {
+        matchingTokenType = ownerType;
+        matchingOwnerId = owner.id;
+        break;
+      }
+    }
+
+    if (!matchingTokenType || matchingOwnerId === null) {
+      throw new AppError(
+        `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
+        400,
+      );
+    }
   }
 
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
-  // Create license record first to get the licenseId for deduction tracking
+  // Create license record. brandId is null for SOUND_TRACKING_APP (no brand association).
   const licenseDetails: LicenseDetails = {
     brandId,
     userId,
     trackCode: track.trackCode,
-    tokenCost: TOKEN_COST_PER_LICENSE,
+    tokenCost: isSoundTrackingApp ? 0 : TOKEN_COST_PER_LICENSE,
     licensedAt: new Date(),
     createdAt: new Date(),
+    campaignId: campaignIdToApply ?? null,
   };
 
   const createdLicense = await createLicenseRecord(licenseDetails);
 
-  // Deduct token from the matching type using NEW token_assigned table
-  // This also creates a token_deduction record linked to the license
-  const { success, remainingTokens, tokenAssignedId } = await deductTokenAssignedByType(
-    brandId,
-    matchingTokenType,
-    TOKEN_COST_PER_LICENSE,
-    matchingOwnerId,
-    TokenDeductionReason.LICENSE_PURCHASE,
-    createdLicense.id,
-  );
-
-  if (!success) {
-    throw new AppError(
-      "Failed to process token deduction. Insufficient tokens.",
-      400,
+  // Token deduction is skipped entirely for SOUND_TRACKING_APP.
+  let remainingTokens = 0;
+  let deductionWasUnlimited = false;
+  if (!isSoundTrackingApp) {
+    const deduction = await deductTokenAssignedByType(
+      brandId!,
+      matchingTokenType!,
+      TOKEN_COST_PER_LICENSE,
+      matchingOwnerId!,
+      TokenDeductionReason.LICENSE_PURCHASE,
+      createdLicense.id,
     );
-  }
 
-  // Update license with tokenId (link to token_assigned)
-  if (tokenAssignedId) {
-    await LicenseModel.update(
-      { tokenId: tokenAssignedId },
-      { where: { id: createdLicense.id } },
-    );
+    if (!deduction.success) {
+      throw new AppError(
+        "Failed to process token deduction. Insufficient tokens.",
+        400,
+      );
+    }
+
+    remainingTokens = deduction.remainingTokens;
+    deductionWasUnlimited = deduction.isUnlimited === true;
+
+    if (deduction.tokenAssignedId) {
+      await LicenseModel.update(
+        { tokenId: deduction.tokenAssignedId },
+        { where: { id: createdLicense.id } },
+      );
+    }
   }
 
   // Generate and store license PDF asynchronously
@@ -234,47 +271,43 @@ export const licenseTrackService = async (
     }
   })();
 
-  // Notify entire team about the track download
   const downloadedByFullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "";
 
-  findAllActiveUsersByBrandId(brandId)
-    .then((teamMembers) => {
-      teamMembers.forEach((member) => {
-        if (member.email) {
-          sendTrackDownloadNotificationEmail(member.email, {
-            recipientFirstName: member.firstName || "",
-            trackName: track.name || trackCode,
-            assortmentType: matchingTokenType!,
-            creditsRemaining: remainingTokens,
-            downloadedByFullName,
-          }).catch((err) => {
-            logger.error("Failed to send track download notification email", {
-              recipientEmail: member.email,
-              error: err.message,
-            });
-          });
-        }
+  if (isSoundTrackingApp) {
+    // SOUND_TRACKING_APP: notify only the licensing user (no brand team, no low-credit alerts).
+    if (user.email) {
+      sendTrackDownloadNotificationEmail(user.email, {
+        recipientFirstName: user.firstName || "",
+        trackName: track.name || trackCode,
+        assortmentType: "",
+        creditsRemaining: 0,
+        downloadedByFullName,
+      }).catch((err) => {
+        logger.error("Failed to send track download notification email", {
+          recipientEmail: user.email,
+          error: err.message,
+        });
       });
-    })
-    .catch((err) => {
-      logger.error("Failed to fetch team members for track download notification", {
-        brandId,
-        error: err.message,
-      });
-    });
+    }
+  } else {
+    // For unlimited allocations there is no meaningful "credits remaining" number;
+    // surface 0 in the email payload (the FE/template should treat unlimited rows
+    // separately) and never trigger low-credits alerts.
+    const creditsRemainingForEmail = deductionWasUnlimited ? 0 : remainingTokens;
 
-  // Send low credits alert to whole team if remaining tokens drop below 2
-  if (remainingTokens < 2) {
-    findAllActiveUsersByBrandId(brandId)
+    // Notify entire brand team about the track download
+    findAllActiveUsersByBrandId(brandId!)
       .then((teamMembers) => {
         teamMembers.forEach((member) => {
           if (member.email) {
-            sendLowCreditsAlertEmail(member.email, {
+            sendTrackDownloadNotificationEmail(member.email, {
               recipientFirstName: member.firstName || "",
+              trackName: track.name || trackCode,
               assortmentType: matchingTokenType!,
-              creditsRemaining: remainingTokens,
+              creditsRemaining: creditsRemainingForEmail,
+              downloadedByFullName,
             }).catch((err) => {
-              logger.error("Failed to send low credits alert email", {
+              logger.error("Failed to send track download notification email", {
                 recipientEmail: member.email,
                 error: err.message,
               });
@@ -283,19 +316,52 @@ export const licenseTrackService = async (
         });
       })
       .catch((err) => {
-        logger.error("Failed to fetch team members for low credits alert", {
+        logger.error("Failed to fetch team members for track download notification", {
           brandId,
           error: err.message,
         });
       });
+
+    // Send low credits alert to whole team if remaining tokens drop below 2.
+    // Skip for unlimited allocations — they never run out.
+    if (!deductionWasUnlimited && remainingTokens < 2) {
+      findAllActiveUsersByBrandId(brandId!)
+        .then((teamMembers) => {
+          teamMembers.forEach((member) => {
+            if (member.email) {
+              sendLowCreditsAlertEmail(member.email, {
+                recipientFirstName: member.firstName || "",
+                assortmentType: matchingTokenType!,
+                creditsRemaining: remainingTokens,
+              }).catch((err) => {
+                logger.error("Failed to send low credits alert email", {
+                  recipientEmail: member.email,
+                  error: err.message,
+                });
+              });
+            }
+          });
+        })
+        .catch((err) => {
+          logger.error("Failed to fetch team members for low credits alert", {
+            brandId,
+            error: err.message,
+          });
+        });
+    }
   }
 
   return {
     id: createdLicense.id!,
     downloadLink: gcsResult.downloadLink,
-    remainingTokens,
+    // Unlimited allocations don't have a meaningful balance — return 0 with the
+    // unlimitedTokens flag so the FE can render "Unlimited" without leaking the
+    // MAX_SAFE_INTEGER sentinel from the persistence layer.
+    remainingTokens: deductionWasUnlimited ? 0 : remainingTokens,
+    unlimitedTokens: deductionWasUnlimited || undefined,
     trackId: track.id,
     trackName: track.name,
+    campaignId: campaignIdToApply ?? null,
   };
 };
 
@@ -641,6 +707,7 @@ export interface OwnerWiseTokenBreakdown {
   tokensUsed: number;
   tokenBalance: number;
   expiryDate?: Date;
+  isUnlimited?: boolean;
 }
 
 export interface TokenDetailsItem {
@@ -648,6 +715,7 @@ export interface TokenDetailsItem {
   tokensUsed: number;
   tokenBalance: number;
   type: string;
+  isUnlimited?: boolean;
   ownerWiseBreakdown?: OwnerWiseTokenBreakdown[];
 }
 
@@ -691,35 +759,51 @@ export const getTokenDetailsService = async (
   const ownerDetailsList = await getOwnersByIds(Array.from(allOwnerIds));
   const ownerDetailsMap = new Map(ownerDetailsList.map((o) => [o.id, o]));
 
-  // Aggregate tokens by type and also collect owner-wise breakdown
+  // Aggregate tokens by type and also collect owner-wise breakdown.
+  // Once a type has any unlimited allocation, the rolled-up totals are no longer
+  // meaningful — we mark the type as unlimited and stop summing finite numbers
+  // into it. The FE should render "Unlimited" instead of a balance figure.
   const aggregatedTokenMap = new Map<string, {
     totalAssignedToken: number;
     tokenBalance: number;
+    isUnlimited: boolean;
     ownerWiseBreakdown: OwnerWiseTokenBreakdown[];
   }>();
+
+  // Sentinel value the FE expects when a token allocation is unlimited.
+  // Sent in place of real totals so the UI can render a fixed "9999" without
+  // a separate unlimited flag check in every consumer.
+  const UNLIMITED_TOKEN_DISPLAY = 9999;
 
   for (const token of tokens) {
     const existing = aggregatedTokenMap.get(token.type);
     const tokenOwnerIds = token.ownerIds || [];
     const ownerDetails = tokenOwnerIds.map((id: string) => ownerDetailsMap.get(id) || { id, name: "" });
+    const tokenIsUnlimited = token.isUnlimited === true;
 
     const breakdown: OwnerWiseTokenBreakdown = {
       ownerIds: tokenOwnerIds,
       ownerDetails,
-      totalAssignedToken: token.totalAssignedToken,
-      tokensUsed: token.totalAssignedToken - token.tokenBalance,
-      tokenBalance: token.tokenBalance,
+      totalAssignedToken: tokenIsUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.totalAssignedToken,
+      tokensUsed: tokenIsUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
+      tokenBalance: tokenIsUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.tokenBalance,
       expiryDate: token.expiryDate,
+      isUnlimited: tokenIsUnlimited,
     };
 
     if (existing) {
-      existing.totalAssignedToken += token.totalAssignedToken;
-      existing.tokenBalance += token.tokenBalance;
+      if (tokenIsUnlimited) {
+        existing.isUnlimited = true;
+      } else if (!existing.isUnlimited) {
+        existing.totalAssignedToken += token.totalAssignedToken;
+        existing.tokenBalance += token.tokenBalance;
+      }
       existing.ownerWiseBreakdown.push(breakdown);
     } else {
       aggregatedTokenMap.set(token.type, {
-        totalAssignedToken: token.totalAssignedToken,
-        tokenBalance: token.tokenBalance,
+        totalAssignedToken: tokenIsUnlimited ? 0 : token.totalAssignedToken,
+        tokenBalance: tokenIsUnlimited ? 0 : token.tokenBalance,
+        isUnlimited: tokenIsUnlimited,
         ownerWiseBreakdown: [breakdown],
       });
     }
@@ -732,6 +816,36 @@ export const getTokenDetailsService = async (
     "hoopr originals": 4,
   };
 
+  // Merge breakdowns that share the same set of owners (order-insensitive).
+  // Multiple token rows can target the same owner set; the FE wants one row per
+  // owner-set in the response, so we sum totals and drop expiryDate (sources
+  // may have differing expiries and a single date would be misleading).
+  const mergeBreakdownsByOwnerSet = (
+    breakdowns: OwnerWiseTokenBreakdown[],
+  ): OwnerWiseTokenBreakdown[] => {
+    const grouped = new Map<string, OwnerWiseTokenBreakdown>();
+    for (const b of breakdowns) {
+      const key = [...b.ownerIds].sort().join("|");
+      const existing = grouped.get(key);
+      if (!existing) {
+        const { expiryDate: _drop, ...rest } = b;
+        grouped.set(key, { ...rest });
+        continue;
+      }
+      if (b.isUnlimited) {
+        existing.isUnlimited = true;
+        existing.totalAssignedToken = UNLIMITED_TOKEN_DISPLAY;
+        existing.tokensUsed = 0;
+        existing.tokenBalance = UNLIMITED_TOKEN_DISPLAY;
+      } else if (!existing.isUnlimited) {
+        existing.totalAssignedToken += b.totalAssignedToken;
+        existing.tokensUsed += b.tokensUsed;
+        existing.tokenBalance += b.tokenBalance;
+      }
+    }
+    return Array.from(grouped.values());
+  };
+
   const mergedTokens = allTokenTypes
     .map((type) => {
       const token = aggregatedTokenMap.get(type);
@@ -739,12 +853,15 @@ export const getTokenDetailsService = async (
 
       if (token) {
         return {
-          totalAssignedToken: token.totalAssignedToken,
-          tokensUsed: token.totalAssignedToken - token.tokenBalance,
-          tokenBalance: token.tokenBalance,
+          totalAssignedToken: token.isUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.totalAssignedToken,
+          tokensUsed: token.isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
+          tokenBalance: token.isUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.tokenBalance,
           type,
+          isUnlimited: token.isUnlimited,
           // Only include ownerWiseBreakdown for Chartbusters type
-          ...(isChartbusters && { ownerWiseBreakdown: token.ownerWiseBreakdown }),
+          ...(isChartbusters && {
+            ownerWiseBreakdown: mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown),
+          }),
         };
       }
       return {
@@ -752,6 +869,7 @@ export const getTokenDetailsService = async (
         tokensUsed: 0,
         tokenBalance: 0,
         type,
+        isUnlimited: false,
         ...(isChartbusters && { ownerWiseBreakdown: [] }),
       };
     })

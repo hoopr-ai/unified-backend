@@ -9,6 +9,10 @@ import { DealType } from "../../dto-service/modules.export";
 
 export { TokenDeductionReason };
 
+// Sentinel returned in deduction results when the matched allocation is unlimited.
+// Callers should treat this as "no balance limit" and skip any low-balance UX.
+export const UNLIMITED_TOKEN_BALANCE = Number.MAX_SAFE_INTEGER;
+
 export const getDistinctTokenTypes = async (): Promise<string[]> => {
   const results = await TokenModel.findAll({
     attributes: [[fn("DISTINCT", col("type")), "type"]],
@@ -338,6 +342,7 @@ export const getAllTokenAssignedDetails = async (
     iprsShare: token.iprsShare ?? null,
     hooprShare: token.hooprShare ?? null,
     keyName: token.keyName ?? null,
+    isUnlimited: token.isUnlimited,
     createdAt: token.createdAt,
     updatedAt: token.updatedAt,
   }));
@@ -354,21 +359,26 @@ export const addTokensAssignedByType = async (
   pricePerPack?: number | null,
   iprsShare?: number | null,
   hooprShare?: number | null,
-  keyName?: string | null
+  keyName?: string | null,
+  isUnlimited: boolean = false
 ): Promise<TokenAssignedModel> => {
+  // For unlimited rows we still set totalAssignedToken/tokenBalance to 0 — the
+  // balance column is never read for unlimited rows (deduction logic short-circuits
+  // on the isUnlimited flag), so we keep a sentinel rather than a misleading number.
   return await TokenAssignedModel.create({
     brandId,
     type,
-    totalAssignedToken: amount,
-    tokenBalance: amount,
-    expiryDate,
+    totalAssignedToken: isUnlimited ? 0 : amount,
+    tokenBalance: isUnlimited ? 0 : amount,
+    expiryDate: isUnlimited ? undefined : expiryDate,
     ownerIds: ownerIds || [],
     updatedById: updatedById ?? null,
-    dealType: dealType as DealType ?? null,
-    pricePerPack: pricePerPack ?? null,
-    iprsShare: iprsShare ?? null,
-    hooprShare: hooprShare ?? null,
+    dealType: isUnlimited ? null : (dealType as DealType ?? null),
+    pricePerPack: isUnlimited ? null : (pricePerPack ?? null),
+    iprsShare: isUnlimited ? null : (iprsShare ?? null),
+    hooprShare: isUnlimited ? null : (hooprShare ?? null),
     keyName: keyName ?? null,
+    isUnlimited,
   });
 };
 
@@ -430,18 +440,22 @@ export const deductTokenAssignedByType = async (
   trackOwnerId?: string,
   reason: TokenDeductionReason = TokenDeductionReason.LICENSE_PURCHASE,
   licenseId?: number
-): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number }> => {
+): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number; isUnlimited?: boolean }> => {
   const transaction = await sequelize.transaction();
   try {
-    // Find all tokens matching brandId + type with sufficient balance, ordered by createdAt ASC (oldest first - FIFO)
+    // Eligible rows are either unlimited (always) or have sufficient balance (FIFO).
+    // Order: unlimited first, then oldest finite row.
     const tokens = await TokenAssignedModel.findAll({
       where: {
         brandId,
         type,
-        tokenBalance: { [Op.gte]: amount },
+        [Op.or]: [
+          { isUnlimited: true },
+          { tokenBalance: { [Op.gte]: amount } },
+        ],
       },
-      attributes: ["id", "tokenBalance", "ownerIds"],
-      order: [["createdAt", "ASC"]],
+      attributes: ["id", "tokenBalance", "ownerIds", "isUnlimited"],
+      order: [["isUnlimited", "DESC"], ["createdAt", "ASC"]],
       lock: transaction.LOCK.UPDATE,
       transaction,
     });
@@ -470,11 +484,14 @@ export const deductTokenAssignedByType = async (
       return { success: false, remainingTokens: totalBalance };
     }
 
-    // Deduct from token_assigned
-    await TokenAssignedModel.update(
-      { tokenBalance: sequelize.literal(`"tokenBalance" - ${amount}`) },
-      { where: { id: matchingToken.id }, transaction }
-    );
+    // For unlimited allocations, skip the balance decrement entirely — but still
+    // write the audit row so per-license traceability is preserved.
+    if (!matchingToken.isUnlimited) {
+      await TokenAssignedModel.update(
+        { tokenBalance: sequelize.literal(`"tokenBalance" - ${amount}`) },
+        { where: { id: matchingToken.id }, transaction }
+      );
+    }
 
     // Create deduction record in token_deduction table
     await TokenDeductionModel.create({
@@ -487,6 +504,15 @@ export const deductTokenAssignedByType = async (
 
     await transaction.commit();
 
+    if (matchingToken.isUnlimited) {
+      return {
+        success: true,
+        remainingTokens: UNLIMITED_TOKEN_BALANCE,
+        tokenAssignedId: matchingToken.id,
+        isUnlimited: true,
+      };
+    }
+
     const updatedToken = await TokenAssignedModel.findByPk(matchingToken.id, {
       attributes: ["tokenBalance"],
     });
@@ -495,6 +521,7 @@ export const deductTokenAssignedByType = async (
       success: true,
       remainingTokens: updatedToken?.tokenBalance ?? 0,
       tokenAssignedId: matchingToken.id,
+      isUnlimited: false,
     };
   } catch (error) {
     await transaction.rollback();
@@ -512,9 +539,14 @@ export const findValidTokenAssignedForOwner = async (
     where: {
       brandId,
       type,
-      tokenBalance: { [Op.gte]: minBalance },
+      [Op.or]: [
+        { isUnlimited: true },
+        { tokenBalance: { [Op.gte]: minBalance } },
+      ],
     },
-    order: [["createdAt", "ASC"]],
+    // Unlimited allocations should be considered before finite ones so a brand's
+    // unlimited grant always wins when present.
+    order: [["isUnlimited", "DESC"], ["createdAt", "ASC"]],
   });
 
   for (const token of tokens) {
@@ -648,11 +680,15 @@ export const getAllTokensWithFilters = async (
   return { rows, count };
 };
 
-export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandName: string; totalTokens: number }[]> => {
+export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
+  // SUM tokenBalance across finite allocations only (isUnlimited = false). The
+  // hasUnlimited flag is a separate aggregate so the FE can render an
+  // "Unlimited" badge next to a brand whose totals would otherwise read 0.
   const results = await TokenAssignedModel.findAll({
     attributes: [
       "brandId",
-      [fn("SUM", col("tokenBalance")), "totalTokens"],
+      [fn("SUM", literal('CASE WHEN "isUnlimited" = false THEN "tokenBalance" ELSE 0 END')), "totalTokens"],
+      [fn("BOOL_OR", col("isUnlimited")), "hasUnlimited"],
     ],
     include: [
       {
@@ -670,6 +706,7 @@ export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandNam
     brandId: Number(r.brandId),
     brandName: r.brand?.name || "Unknown",
     totalTokens: Number(r.totalTokens) || 0,
+    hasUnlimited: r.hasUnlimited === true || r.hasUnlimited === "t" || r.hasUnlimited === "true",
   }));
 };
 
@@ -749,32 +786,38 @@ export const deductTokenAssignedForAdmin = async (
   reason: TokenDeductionReason = TokenDeductionReason.INTERNAL_DEDUCTION,
   tokenAssignedId?: number,
   updatedById?: number | null
-): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number }> => {
+): Promise<{ success: boolean; remainingTokens: number; tokenAssignedId?: number; isUnlimited?: boolean }> => {
   const transaction = await sequelize.transaction();
   try {
     let matchingToken: TokenAssignedModel | null = null;
 
     if (tokenAssignedId) {
-      // Deduct from specific token
+      // Specific allocation: must be unlimited or have enough balance.
       matchingToken = await TokenAssignedModel.findOne({
         where: {
           id: tokenAssignedId,
           brandId,
           type,
-          tokenBalance: { [Op.gte]: amount },
+          [Op.or]: [
+            { isUnlimited: true },
+            { tokenBalance: { [Op.gte]: amount } },
+          ],
         },
         lock: transaction.LOCK.UPDATE,
         transaction,
       });
     } else {
-      // Find first token with sufficient balance (FIFO)
+      // Prefer unlimited allocations, otherwise oldest finite row with enough balance.
       const tokens = await TokenAssignedModel.findAll({
         where: {
           brandId,
           type,
-          tokenBalance: { [Op.gte]: amount },
+          [Op.or]: [
+            { isUnlimited: true },
+            { tokenBalance: { [Op.gte]: amount } },
+          ],
         },
-        order: [["createdAt", "ASC"]],
+        order: [["isUnlimited", "DESC"], ["createdAt", "ASC"]],
         lock: transaction.LOCK.UPDATE,
         transaction,
       });
@@ -786,14 +829,21 @@ export const deductTokenAssignedForAdmin = async (
       return { success: false, remainingTokens: 0 };
     }
 
-    // Deduct from token_assigned + record who performed the deduction
-    await TokenAssignedModel.update(
-      {
-        tokenBalance: sequelize.literal(`"tokenBalance" - ${amount}`),
-        updatedById: updatedById ?? null,
-      },
-      { where: { id: matchingToken.id }, transaction }
-    );
+    // Skip balance decrement for unlimited rows; still record auditor.
+    if (matchingToken.isUnlimited) {
+      await TokenAssignedModel.update(
+        { updatedById: updatedById ?? null },
+        { where: { id: matchingToken.id }, transaction }
+      );
+    } else {
+      await TokenAssignedModel.update(
+        {
+          tokenBalance: sequelize.literal(`"tokenBalance" - ${amount}`),
+          updatedById: updatedById ?? null,
+        },
+        { where: { id: matchingToken.id }, transaction }
+      );
+    }
 
     // Create deduction record
     await TokenDeductionModel.create({
@@ -806,6 +856,15 @@ export const deductTokenAssignedForAdmin = async (
 
     await transaction.commit();
 
+    if (matchingToken.isUnlimited) {
+      return {
+        success: true,
+        remainingTokens: UNLIMITED_TOKEN_BALANCE,
+        tokenAssignedId: matchingToken.id,
+        isUnlimited: true,
+      };
+    }
+
     const updatedToken = await TokenAssignedModel.findByPk(matchingToken.id, {
       attributes: ["tokenBalance"],
     });
@@ -814,6 +873,7 @@ export const deductTokenAssignedForAdmin = async (
       success: true,
       remainingTokens: updatedToken?.tokenBalance ?? 0,
       tokenAssignedId: matchingToken.id,
+      isUnlimited: false,
     };
   } catch (error) {
     await transaction.rollback();

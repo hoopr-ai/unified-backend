@@ -10,39 +10,76 @@ export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
     "any.required": "brandId is required",
     "number.positive": "brandId must be a positive number",
   }),
-  tokens: Joi.number().integer().positive().required().messages({
-    "any.required": "tokens is required",
-    "number.positive": "tokens must be a positive number",
+  isUnlimited: Joi.boolean().optional().default(false),
+  tokens: Joi.when("isUnlimited", {
+    is: true,
+    then: Joi.forbidden().messages({
+      "any.unknown": "tokens cannot be set when isUnlimited is true",
+    }),
+    otherwise: Joi.number().integer().positive().required().messages({
+      "any.required": "tokens is required",
+      "number.positive": "tokens must be a positive number",
+    }),
   }),
   type: Joi.string().trim().min(1).max(255).required().messages({
     "any.required": "type is required",
     "string.empty": "type cannot be empty",
   }),
-  expiryDate: Joi.date().optional().messages({
-    "date.base": "expiryDate must be a valid date",
+  expiryDate: Joi.when("isUnlimited", {
+    is: true,
+    then: Joi.forbidden().messages({
+      "any.unknown": "expiryDate cannot be set when isUnlimited is true",
+    }),
+    otherwise: Joi.date().optional().messages({
+      "date.base": "expiryDate must be a valid date",
+    }),
   }),
   ownerIds: Joi.array().items(Joi.string()).optional(),
-  dealType: Joi.string().valid("bulk", "pricePerTrack").optional().messages({
-    "any.only": "dealType must be either 'bulk' or 'pricePerTrack'",
-  }),
-  pricePerPack: Joi.number().positive().precision(2).optional().messages({
-    "number.positive": "pricePerPack must be a positive number",
-  }),
-  iprsShare: Joi.when("dealType", {
-    is: "bulk",
-    then: Joi.number().min(0).precision(2).required().messages({
-      "any.required": "iprsShare is required when dealType is bulk",
-      "number.min": "iprsShare must be a non-negative number",
+  dealType: Joi.when("isUnlimited", {
+    is: true,
+    then: Joi.forbidden().messages({
+      "any.unknown": "dealType cannot be set when isUnlimited is true",
     }),
-    otherwise: Joi.forbidden(),
-  }),
-  hooprShare: Joi.when("dealType", {
-    is: "bulk",
-    then: Joi.number().min(0).precision(2).required().messages({
-      "any.required": "hooprShare is required when dealType is bulk",
-      "number.min": "hooprShare must be a non-negative number",
+    otherwise: Joi.string().valid("bulk", "pricePerTrack").optional().messages({
+      "any.only": "dealType must be either 'bulk' or 'pricePerTrack'",
     }),
-    otherwise: Joi.forbidden(),
+  }),
+  pricePerPack: Joi.when("isUnlimited", {
+    is: true,
+    then: Joi.forbidden().messages({
+      "any.unknown": "pricePerPack cannot be set when isUnlimited is true",
+    }),
+    otherwise: Joi.number().positive().precision(2).optional().messages({
+      "number.positive": "pricePerPack must be a positive number",
+    }),
+  }),
+  iprsShare: Joi.when("isUnlimited", {
+    is: true,
+    then: Joi.forbidden().messages({
+      "any.unknown": "iprsShare cannot be set when isUnlimited is true",
+    }),
+    otherwise: Joi.when("dealType", {
+      is: "bulk",
+      then: Joi.number().min(0).precision(2).required().messages({
+        "any.required": "iprsShare is required when dealType is bulk",
+        "number.min": "iprsShare must be a non-negative number",
+      }),
+      otherwise: Joi.forbidden(),
+    }),
+  }),
+  hooprShare: Joi.when("isUnlimited", {
+    is: true,
+    then: Joi.forbidden().messages({
+      "any.unknown": "hooprShare cannot be set when isUnlimited is true",
+    }),
+    otherwise: Joi.when("dealType", {
+      is: "bulk",
+      then: Joi.number().min(0).precision(2).required().messages({
+        "any.required": "hooprShare is required when dealType is bulk",
+        "number.min": "hooprShare must be a non-negative number",
+      }),
+      otherwise: Joi.forbidden(),
+    }),
   }),
   keyName: Joi.string().trim().max(255).allow(null, "").optional().messages({
     "string.max": "keyName must be at most 255 characters",

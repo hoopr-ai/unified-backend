@@ -30,6 +30,7 @@ export interface TokenAssignedDetails {
   iprsShare?: number | null;
   hooprShare?: number | null;
   keyName?: string | null;
+  isUnlimited?: boolean;
   updatedById?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -134,6 +135,13 @@ export class TokenAssignedModel extends Model<TokenAssignedModel, TokenAssignedD
     allowNull: true,
   })
   keyName?: string | null;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  isUnlimited!: boolean;
 
   @Index({ name: "idx_token_assigned_updated_by_id" })
   @ForeignKey(() => UserModel)

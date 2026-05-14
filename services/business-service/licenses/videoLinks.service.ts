@@ -62,7 +62,7 @@ export const addVideoLinkService = async (
             trackCode,
             status: "ACTIVE",
             userId,
-            brandId: license.brandId,
+            brandId: license.brandId ?? undefined,
         };
 
         const created = await createVideoLink(videoLinkDetails);
