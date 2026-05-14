@@ -44,16 +44,21 @@ export const getTokenDetails = catchAsync(async (req: AuthRequest, res: Response
 
 /**
  * Get all tokens with filters (Admin)
- * GET /tokens?brandId=123&type=chartbusters&page=1&limit=20
+ * GET /tokens?brandId=123&type=chartbusters&page=1&limit=20&showInternalBrands=true
+ *
+ * Internal brands (Hoopr, Nova Media Co.) are excluded by default to match the
+ * other CMS token listings. Pass `showInternalBrands=true` to include them.
  */
 export const getTokens = catchAsync(async (req: Request, res: Response) => {
   const { brandId, type, page, limit } = req.query;
+  const showInternalBrands = req.query.showInternalBrands === "true";
 
   const filters = {
     brandId: brandId ? Number(brandId) : undefined,
     type: type as string | undefined,
     page: page ? Number(page) : 1,
     limit: limit ? Number(limit) : 20,
+    showInternalBrands,
   };
 
   const result = await getTokensListService(filters);
@@ -208,10 +213,13 @@ export const getBrandsWithTokens = catchAsync(async (req: Request, res: Response
 
 /**
  * Get token deductions with filters (Admin)
- * GET /tokens/deductions?brandId=123&type=chartbusters&reason=LICENSE_PURCHASE&page=1&limit=20
+ * GET /tokens/deductions?brandId=123&type=chartbusters&reason=LICENSE_PURCHASE&page=1&limit=20&showInternalBrands=true
+ *
+ * Internal brands are excluded by default — see getBrandsWithTokens above.
  */
 export const getTokenDeductions = catchAsync(async (req: Request, res: Response) => {
   const { brandId, type, reason, page, limit } = req.query;
+  const showInternalBrands = req.query.showInternalBrands === "true";
 
   const filters = {
     brandId: brandId ? Number(brandId) : undefined,
@@ -219,6 +227,7 @@ export const getTokenDeductions = catchAsync(async (req: Request, res: Response)
     reason: reason as string | undefined,
     page: page ? Number(page) : 1,
     limit: limit ? Number(limit) : 20,
+    showInternalBrands,
   };
 
   const result = await getTokenDeductionsService(filters);

@@ -728,6 +728,7 @@ export interface TokenListFilters {
   type?: string;
   page?: number;
   limit?: number;
+  excludeInternalBrands?: boolean;
 }
 
 export const findTokenAssignedById = async (id: number): Promise<TokenAssignedModel | null> => {
@@ -739,6 +740,7 @@ export const getAllTokensWithFilters = async (
 ): Promise<{ rows: TokenAssignedModel[]; count: number }> => {
   const { brandId, type, page = 1, limit = 20 } = filters;
   const offset = (page - 1) * limit;
+  const excludeInternal = filters.excludeInternalBrands ?? true;
 
   const where: any = {};
   if (brandId) where.brandId = brandId;
@@ -751,11 +753,16 @@ export const getAllTokensWithFilters = async (
         model: BrandModel,
         as: "brand",
         attributes: ["id", "name"],
+        required: excludeInternal,
+        where: excludeInternal
+          ? { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } }
+          : undefined,
       },
     ],
     order: [["createdAt", "DESC"]],
     limit,
     offset,
+    distinct: true,
   });
 
   return { rows, count };
@@ -856,10 +863,12 @@ export const getAllDeductionsWithFilters = async (
     reason?: TokenDeductionReason;
     page?: number;
     limit?: number;
+    excludeInternalBrands?: boolean;
   }
 ): Promise<{ rows: TokenDeductionModel[]; count: number }> => {
   const { brandId, type, reason, page = 1, limit = 20 } = filters;
   const offset = (page - 1) * limit;
+  const excludeInternal = filters.excludeInternalBrands ?? true;
 
   // Build token_assigned filter
   const tokenAssignedWhere: any = {};
@@ -872,10 +881,12 @@ export const getAllDeductionsWithFilters = async (
 
   const { rows, count } = await TokenDeductionModel.findAndCountAll({
     where: deductionWhere,
+    distinct: true,
     include: [
       {
         model: TokenAssignedModel,
         as: "tokenAssigned",
+        required: true,
         where: Object.keys(tokenAssignedWhere).length > 0 ? tokenAssignedWhere : undefined,
         attributes: ["id", "type", "brandId"],
         include: [
@@ -883,6 +894,10 @@ export const getAllDeductionsWithFilters = async (
             model: BrandModel,
             as: "brand",
             attributes: ["id", "name"],
+            required: excludeInternal,
+            where: excludeInternal
+              ? { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } }
+              : undefined,
           },
         ],
       },
