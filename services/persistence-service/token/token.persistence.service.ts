@@ -6,6 +6,7 @@ import { UserModel } from "../user/schemas/user.schema";
 import { sequelize } from "../database";
 import { fn, col, literal, Op } from "sequelize";
 import { DealType } from "../../dto-service/modules.export";
+import { INTERNAL_BRAND_NAMES } from "../../helper-service/internal-brands.helper";
 
 export { TokenDeductionReason };
 
@@ -680,20 +681,41 @@ export const getAllTokensWithFilters = async (
   return { rows, count };
 };
 
-export const getTokenSummaryAggregatedByType = async (): Promise<
+export const getTokenSummaryAggregatedByType = async (
+  options: { excludeInternalBrands?: boolean } = {}
+): Promise<
   { type: string; totalAssigned: number; totalBalance: number; hasUnlimited: boolean }[]
 > => {
   // Aggregate per type in SQL so totals cover every row, not a paginated slice.
   // Unlimited rows contribute 0 to the sums; hasUnlimited surfaces them via BOOL_OR
   // so the FE can render "Unlimited" instead of misreading the finite-only totals.
+  //
+  // When excludeInternalBrands is on, we join brands and drop any row whose brand
+  // name matches the internal-brand list (Hoopr / Nova Media Co.) so internal
+  // allocations don't inflate the public-facing type totals.
+  const excludeInternal = options.excludeInternalBrands ?? true;
+
+  const include = excludeInternal
+    ? [
+        {
+          model: BrandModel,
+          as: "brand",
+          attributes: [] as string[],
+          required: true,
+          where: { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } },
+        },
+      ]
+    : undefined;
+
   const results = await TokenAssignedModel.findAll({
     attributes: [
       "type",
-      [fn("SUM", literal('CASE WHEN "isUnlimited" = false THEN "totalAssignedToken" ELSE 0 END')), "totalAssigned"],
-      [fn("SUM", literal('CASE WHEN "isUnlimited" = false THEN "tokenBalance" ELSE 0 END')), "totalBalance"],
-      [fn("BOOL_OR", col("isUnlimited")), "hasUnlimited"],
+      [fn("SUM", literal('CASE WHEN "TokenAssignedModel"."isUnlimited" = false THEN "TokenAssignedModel"."totalAssignedToken" ELSE 0 END')), "totalAssigned"],
+      [fn("SUM", literal('CASE WHEN "TokenAssignedModel"."isUnlimited" = false THEN "TokenAssignedModel"."tokenBalance" ELSE 0 END')), "totalBalance"],
+      [fn("BOOL_OR", col("TokenAssignedModel.isUnlimited")), "hasUnlimited"],
     ],
-    group: ["type"],
+    include,
+    group: ["TokenAssignedModel.type"],
     raw: true,
   });
 
@@ -705,24 +727,36 @@ export const getTokenSummaryAggregatedByType = async (): Promise<
   }));
 };
 
-export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
+export const getBrandsWithTokens = async (
+  options: { excludeInternalBrands?: boolean } = {}
+): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
   // SUM tokenBalance across finite allocations only (isUnlimited = false). The
   // hasUnlimited flag is a separate aggregate so the FE can render an
   // "Unlimited" badge next to a brand whose totals would otherwise read 0.
+  //
+  // When excludeInternalBrands is on (default), internal Hoopr-owned brands are
+  // filtered out of the listing so the CMS doesn't show them alongside real
+  // partner brands.
+  const excludeInternal = options.excludeInternalBrands ?? true;
+
   const results = await TokenAssignedModel.findAll({
     attributes: [
       "brandId",
-      [fn("SUM", literal('CASE WHEN "isUnlimited" = false THEN "tokenBalance" ELSE 0 END')), "totalTokens"],
-      [fn("BOOL_OR", col("isUnlimited")), "hasUnlimited"],
+      [fn("SUM", literal('CASE WHEN "TokenAssignedModel"."isUnlimited" = false THEN "TokenAssignedModel"."tokenBalance" ELSE 0 END')), "totalTokens"],
+      [fn("BOOL_OR", col("TokenAssignedModel.isUnlimited")), "hasUnlimited"],
     ],
     include: [
       {
         model: BrandModel,
         as: "brand",
         attributes: ["name"],
+        required: excludeInternal,
+        where: excludeInternal
+          ? { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } }
+          : undefined,
       },
     ],
-    group: ["brandId", "brand.id"],
+    group: ["TokenAssignedModel.brandId", "brand.id"],
     raw: true,
     nest: true,
   });
