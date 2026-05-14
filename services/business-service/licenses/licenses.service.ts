@@ -850,6 +850,7 @@ export const getTokenDetailsService = async (
       const isChartbusters = type.toLowerCase() === "chartbusters";
 
       if (token) {
+        const mergeBreakdownsByOwner =  mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown)
         return {
           totalAssignedToken: token.isUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.totalAssignedToken,
           tokensUsed: token.isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
@@ -857,9 +858,7 @@ export const getTokenDetailsService = async (
           type,
           isUnlimited: token.isUnlimited,
           // Only include ownerWiseBreakdown for Chartbusters type
-          ...(isChartbusters && {
-            ownerWiseBreakdown: mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown),
-          }),
+          ...(isChartbusters && ( mergeBreakdownsByOwner.length > 1 || mergeBreakdownsByOwner.length == 1 && mergeBreakdownsByOwner[0].ownerIds.length > 0 ) && { ownerWiseBreakdown: mergeBreakdownsByOwnerSet(token.ownerWiseBreakdown) }),
         };
       }
       return {
