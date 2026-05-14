@@ -92,6 +92,10 @@ export interface BrandTokenSummary {
   brandId: number;
   brandName: string;
   totalTokens: number;
+  // True if at least one allocation under this brand is unlimited. Aggregated
+  // totals exclude unlimited rows (you can't sum infinity into a number), so
+  // this flag lets the UI render an "Unlimited" badge instead of misreading 0.
+  hasUnlimited: boolean;
 }
 
 export interface TokenTypeSummary {
@@ -99,6 +103,9 @@ export interface TokenTypeSummary {
   totalAssigned: number;
   totalBalance: number;
   totalUsed: number;
+  // True if at least one allocation of this type is unlimited. See note on
+  // BrandTokenSummary.hasUnlimited.
+  hasUnlimited: boolean;
 }
 
 export interface TokenListFilters {

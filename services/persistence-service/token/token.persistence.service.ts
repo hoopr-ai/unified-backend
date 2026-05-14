@@ -680,11 +680,15 @@ export const getAllTokensWithFilters = async (
   return { rows, count };
 };
 
-export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandName: string; totalTokens: number }[]> => {
+export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
+  // SUM tokenBalance across finite allocations only (isUnlimited = false). The
+  // hasUnlimited flag is a separate aggregate so the FE can render an
+  // "Unlimited" badge next to a brand whose totals would otherwise read 0.
   const results = await TokenAssignedModel.findAll({
     attributes: [
       "brandId",
-      [fn("SUM", col("tokenBalance")), "totalTokens"],
+      [fn("SUM", literal('CASE WHEN "isUnlimited" = false THEN "tokenBalance" ELSE 0 END')), "totalTokens"],
+      [fn("BOOL_OR", col("isUnlimited")), "hasUnlimited"],
     ],
     include: [
       {
@@ -702,6 +706,7 @@ export const getBrandsWithTokens = async (): Promise<{ brandId: number; brandNam
     brandId: Number(r.brandId),
     brandName: r.brand?.name || "Unknown",
     totalTokens: Number(r.totalTokens) || 0,
+    hasUnlimited: r.hasUnlimited === true || r.hasUnlimited === "t" || r.hasUnlimited === "true",
   }));
 };
 

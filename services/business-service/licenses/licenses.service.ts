@@ -770,6 +770,11 @@ export const getTokenDetailsService = async (
     ownerWiseBreakdown: OwnerWiseTokenBreakdown[];
   }>();
 
+  // Sentinel value the FE expects when a token allocation is unlimited.
+  // Sent in place of real totals so the UI can render a fixed "9999" without
+  // a separate unlimited flag check in every consumer.
+  const UNLIMITED_TOKEN_DISPLAY = 9999;
+
   for (const token of tokens) {
     const existing = aggregatedTokenMap.get(token.type);
     const tokenOwnerIds = token.ownerIds || [];
@@ -779,9 +784,9 @@ export const getTokenDetailsService = async (
     const breakdown: OwnerWiseTokenBreakdown = {
       ownerIds: tokenOwnerIds,
       ownerDetails,
-      totalAssignedToken: token.totalAssignedToken,
+      totalAssignedToken: tokenIsUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.totalAssignedToken,
       tokensUsed: tokenIsUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
-      tokenBalance: token.tokenBalance,
+      tokenBalance: tokenIsUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.tokenBalance,
       expiryDate: token.expiryDate,
       isUnlimited: tokenIsUnlimited,
     };
@@ -829,9 +834,9 @@ export const getTokenDetailsService = async (
       }
       if (b.isUnlimited) {
         existing.isUnlimited = true;
-        existing.totalAssignedToken = 0;
+        existing.totalAssignedToken = UNLIMITED_TOKEN_DISPLAY;
         existing.tokensUsed = 0;
-        existing.tokenBalance = 0;
+        existing.tokenBalance = UNLIMITED_TOKEN_DISPLAY;
       } else if (!existing.isUnlimited) {
         existing.totalAssignedToken += b.totalAssignedToken;
         existing.tokensUsed += b.tokensUsed;
@@ -848,9 +853,9 @@ export const getTokenDetailsService = async (
 
       if (token) {
         return {
-          totalAssignedToken: token.totalAssignedToken,
+          totalAssignedToken: token.isUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.totalAssignedToken,
           tokensUsed: token.isUnlimited ? 0 : token.totalAssignedToken - token.tokenBalance,
-          tokenBalance: token.tokenBalance,
+          tokenBalance: token.isUnlimited ? UNLIMITED_TOKEN_DISPLAY : token.tokenBalance,
           type,
           isUnlimited: token.isUnlimited,
           // Only include ownerWiseBreakdown for Chartbusters type

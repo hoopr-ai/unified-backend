@@ -474,6 +474,12 @@ export const getTokenDeductionsService = async (
 
 /**
  * Get token summary by type (aggregate stats)
+ *
+ * Unlimited allocations are excluded from totalAssigned / totalBalance /
+ * totalUsed — they have no finite balance to sum (their schema-side counters
+ * are forced to 0). When at least one row of a type is unlimited, `hasUnlimited`
+ * is set on the response so the FE can render "Unlimited" instead of treating
+ * the resulting numbers as the full picture.
  */
 export const getTokenSummaryByTypeService = async (): Promise<TokenTypeSummary[]> => {
   const types = await getDistinctTokenAssignedTypes();
@@ -484,8 +490,13 @@ export const getTokenSummaryByTypeService = async (): Promise<TokenTypeSummary[]
 
     let totalAssigned = 0;
     let totalBalance = 0;
+    let hasUnlimited = false;
 
     for (const token of rows) {
+      if (token.isUnlimited) {
+        hasUnlimited = true;
+        continue;
+      }
       totalAssigned += token.totalAssignedToken;
       totalBalance += token.tokenBalance;
     }
@@ -495,6 +506,7 @@ export const getTokenSummaryByTypeService = async (): Promise<TokenTypeSummary[]
       totalAssigned,
       totalBalance,
       totalUsed: totalAssigned - totalBalance,
+      hasUnlimited,
     });
   }
 
