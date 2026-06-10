@@ -294,6 +294,21 @@ export async function connectDatabase() {
       `);
       console.log("📦 users.lastLoginAt ensured.");
 
+      // 3c. Idempotently add playlists.imageLink (cover artwork URL set by the
+      // internal Playlist CMS upload flow). Nullable — playlists without an
+      // uploaded cover fall back to the CDN-by-code convention on the client.
+      await sequelize.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'playlists' AND column_name = 'imageLink'
+          ) THEN
+            ALTER TABLE playlists ADD COLUMN "imageLink" VARCHAR(1024) NULL;
+          END IF;
+        END $$;
+      `);
+      console.log("📦 playlists.imageLink ensured.");
+
       // 4. Ensure triggers + functions exist (idempotent — CREATE OR REPLACE / IF NOT EXISTS)
       await sequelize.query(ENSURE_TRIGGERS_SQL);
       console.log("🔁 Triggers ensured.");
