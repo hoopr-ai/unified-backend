@@ -18,7 +18,7 @@ import {
 } from "../../dto-service/modules.export";
 import {
   findUserByEmailAndPlatform,
-  findUserRole,
+  findUserRoleWithRestrictions,
   createSession,
   touchUserLastLogin,
   type UserSessionDetails,
@@ -187,7 +187,7 @@ export const verifyInternalLoginOtpService = async (
   await redisClient.del(KEY_VERIFY_ATTEMPTS(email));
   await redisClient.del(KEY_RESEND(email));
 
-  const role = await findUserRole(user.id!);
+  const { role, functionalities } = await findUserRoleWithRestrictions(user.id!);
   const token = createJWTToken(
     {
       userId: user.id,
@@ -236,6 +236,9 @@ export const verifyInternalLoginOtpService = async (
     mobile: user.mobile ?? null,
     countryCode: user.countryCode ?? null,
     role,
+    // Admins carry no list (their row's restrictions is null) → []. The FE
+    // grants admins everything by role, so the empty list is never consulted.
+    functionalities,
     isProfileComplete: user.isProfileComplete ?? false,
     expiresIn: AccessTokenExpiryInSeconds,
     token,

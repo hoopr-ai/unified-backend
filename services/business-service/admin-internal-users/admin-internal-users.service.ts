@@ -14,10 +14,13 @@ import {
   reactivateInternalUserById,
   saveUser,
   saveUserRole,
+  findUserRole,
+  updateInternalUserFunctionalities,
   deactivateAllUserSessions,
   type UserDetails,
   type UserRoleDetails,
 } from "../../persistence-service/user/modules.export";
+import { isAllowedFunctionality, extractFunctionalities } from "./functionalities";
 import { generateInternalUserPassword } from "./password.helper";
 import { sendInternalUserWelcomeEmail } from "./email.helper";
 import { recordInternalUserAudit } from "./audit.helper";
@@ -78,6 +81,8 @@ export interface CreateInternalUserInput {
   email: string;
   mobile?: string | null;
   role: AllowedFeRole;
+  // CMS items this user may access. Ignored for admin (admin sees everything).
+  functionalities?: string[];
 }
 
 export interface CreateInternalUserResult {
@@ -87,6 +92,7 @@ export interface CreateInternalUserResult {
   lastName: string;
   role: AllowedFeRole;
   mobile: string | null;
+  functionalities: string[];
   createdAt: Date;
   emailSent: boolean;
 }
@@ -145,10 +151,14 @@ export const createInternalUserService = async (
   }
 
   const dbRole = FE_TO_DB_ROLE[input.role];
+  // Admins carry no grant list — access is by role. Everyone else gets exactly
+  // what was passed (empty list = no access until an admin grants something).
+  const functionalities = input.role === "admin" ? [] : input.functionalities ?? [];
   const userRoleDetails: UserRoleDetails = {
     userId: savedUser.id!,
     role: dbRole,
     status: UserStatus.ACTIVE,
+    restrictions: input.role === "admin" ? null : { functionalities },
     createdAt: new Date(),
   };
   try {
@@ -186,6 +196,7 @@ export const createInternalUserService = async (
     lastName,
     role: input.role,
     mobile: mobile ?? null,
+    functionalities,
     createdAt: savedUser.createdAt,
     emailSent,
   };
@@ -209,6 +220,7 @@ interface ListedInternalUser {
   lastName: string | null;
   role: AllowedFeRole | null;
   mobile: string | null;
+  functionalities: string[];
   createdAt: Date;
   lastLoginAt: Date | null;
   deactivated: boolean;
@@ -236,7 +248,8 @@ export const listInternalUsersService = async (
   });
 
   const users: ListedInternalUser[] = rows.map((u) => {
-    const firstActiveRole = u.userRoles && u.userRoles.length > 0 ? u.userRoles[0].role : null;
+    const firstActiveRoleRow = u.userRoles && u.userRoles.length > 0 ? u.userRoles[0] : null;
+    const firstActiveRole = firstActiveRoleRow?.role ?? null;
     const feRole = firstActiveRole ? DB_TO_FE_ROLE[firstActiveRole] ?? null : null;
     return {
       id: u.id!,
@@ -245,6 +258,7 @@ export const listInternalUsersService = async (
       lastName: u.lastName ?? null,
       role: feRole,
       mobile: u.mobile ?? null,
+      functionalities: extractFunctionalities(firstActiveRoleRow?.restrictions),
       createdAt: u.createdAt,
       lastLoginAt: u.lastLoginAt ?? null,
       // status=DELETED is the deactivation signal. Admin reactivate flips it back.
@@ -353,6 +367,62 @@ export const reactivateInternalUserService = async (
   });
 
   return { id: targetUserId, deactivated: false };
+};
+
+// ---------------------------------------------------------------------------
+// UPDATE FUNCTIONALITIES
+// ---------------------------------------------------------------------------
+//
+// Replaces a non-admin user's functionality grant list wholesale. Admins are
+// rejected — they have full access by role and carry no list.
+
+export interface UpdateInternalUserFunctionalitiesResult {
+  id: number;
+  functionalities: string[];
+}
+
+export const updateInternalUserFunctionalitiesService = async (
+  targetUserId: number,
+  functionalities: string[],
+  actor: ActorContext
+): Promise<UpdateInternalUserFunctionalitiesResult> => {
+  const target = await findInternalUserById(targetUserId);
+  if (!target) {
+    throw new AppError("Internal user not found.", 404);
+  }
+
+  // Defence-in-depth beyond Joi: never trust the list past the catalog.
+  const invalid = functionalities.filter((f) => !isAllowedFunctionality(f));
+  if (invalid.length > 0) {
+    throw new AppError(`Unknown functionalities: ${invalid.join(", ")}`, 400);
+  }
+
+  const dbRole = await findUserRole(targetUserId);
+  if (dbRole === UserRoles.ADMIN) {
+    throw new AppError(
+      "Admins have full access — functionalities can't be assigned to an admin.",
+      400
+    );
+  }
+
+  // Dedupe so the stored list stays clean even if the client repeats an id.
+  const unique = Array.from(new Set(functionalities));
+  const changed = await updateInternalUserFunctionalities(targetUserId, unique);
+  if (!changed) {
+    throw new AppError("Could not update functionalities.", 502);
+  }
+
+  recordInternalUserAudit({
+    actorId: actor.actorId,
+    actorSessionId: actor.actorSessionId,
+    action: "update_internal_user_functionalities",
+    targetUserId,
+    endpoint: actor.endpoint,
+    method: actor.method,
+    ipAddress: actor.ip,
+  });
+
+  return { id: targetUserId, functionalities: unique };
 };
 
 export { ALLOWED_FE_ROLES, isAllowedFeRole };

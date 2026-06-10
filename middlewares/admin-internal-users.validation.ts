@@ -1,6 +1,13 @@
 import Joi from "joi";
+import { ALLOWED_FUNCTIONALITIES } from "../services/business-service/admin-internal-users/functionalities";
 
 const ALLOWED_ROLES = ["admin", "sales", "marketing", "music", "songfest"];
+
+// Per-user functionality grant. Optional on create (defaults to []); for an
+// admin role the FE may omit it entirely (admins get everything by role).
+const functionalitiesField = Joi.array()
+  .items(Joi.string().valid(...ALLOWED_FUNCTIONALITIES))
+  .unique();
 
 // Loose mobile validator — accepts E.164-ish (+ optional, then 8-15 digits).
 // We don't try to be a full phone-parsing library, just reject obvious garbage.
@@ -22,6 +29,13 @@ export const createInternalUserSchema = Joi.object({
   role: Joi.string()
     .valid(...ALLOWED_ROLES)
     .required(),
+  functionalities: functionalitiesField.optional(),
+}).unknown(false);
+
+// PATCH /admin/internal-users/:id/functionalities — replaces the user's grant
+// list wholesale. Empty array is valid (revokes everything).
+export const updateInternalUserFunctionalitiesSchema = Joi.object({
+  functionalities: functionalitiesField.required(),
 }).unknown(false);
 
 export const listInternalUsersQuerySchema = Joi.object({

@@ -11,6 +11,7 @@ import {
   listInternalUsersService,
   deactivateInternalUserService,
   reactivateInternalUserService,
+  updateInternalUserFunctionalitiesService,
   type AllowedFeRole,
 } from "../services/business-service/admin-internal-users/modules.export";
 import { listInternalUsersQuerySchema } from "../middlewares/admin-internal-users.validation";
@@ -108,6 +109,32 @@ export const deactivateInternalUser = catchAsync(
       status: HttpStatusCode.OK,
       data: result,
       message: "Internal user deactivated.",
+    });
+  }
+);
+
+// PATCH /admin/internal-users/:id/functionalities
+export const updateInternalUserFunctionalities = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const { actorId, actorSessionId } = requireActor(req);
+    const targetUserId = parseTargetId(req);
+
+    const result = await updateInternalUserFunctionalitiesService(
+      targetUserId,
+      req.body.functionalities,
+      {
+        actorId,
+        actorSessionId,
+        ip: getClientIp(req),
+        endpoint: req.originalUrl,
+        method: req.method,
+      }
+    );
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: "Internal user functionalities updated.",
     });
   }
 );

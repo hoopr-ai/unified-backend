@@ -73,6 +73,9 @@ export interface LoginResponse {
   mobile?: string | null;
   countryCode?: string | null;
   role: string | null;
+  // INTERNAL CMS functionality grant list. Empty for non-internal logins and
+  // for admins (admins are gated by role, not by this list).
+  functionalities?: string[];
   isProfileComplete: boolean;
   expiresIn: number;
   token: string;
