@@ -18,12 +18,19 @@ export interface RoleRestrictionEntry {
   ownerCode?: string;
 }
 
+// Per-user functionality allocation for INTERNAL CMS users. Stored in the
+// `restrictions` JSONB column. A non-admin user only sees the CMS items whose
+// id is in `functionalities`. ADMIN rows leave this null (access is by role).
+export interface RoleRestrictions {
+  functionalities?: string[];
+}
+
 export interface UserRoleDetails {
   id?: number;
   userId: number;
   role: UserRoles;
   status: string;
-  restrictions?: RoleRestrictionEntry[] | null;
+  restrictions?: RoleRestrictions | RoleRestrictionEntry[] | null;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -61,7 +68,7 @@ export class UserRoleModel extends Model<UserRoleModel, UserRoleDetails> {
     type: DataType.JSONB,
     allowNull: true,
   })
-  restrictions?: RoleRestrictionEntry[] | null;
+  restrictions?: RoleRestrictions | RoleRestrictionEntry[] | null;
 
   @CreatedAt
   @Column({

@@ -51,6 +51,19 @@ export const deactivateInternalUserById = async (
   return affectedUserRows > 0;
 };
 
+// Replace the functionality grant list on a user's active role row. Returns true if a row
+// was changed. Caller is responsible for confirming the target is an INTERNAL user first.
+export const updateInternalUserFunctionalities = async (
+  userId: number,
+  functionalities: string[]
+): Promise<boolean> => {
+  const [affected] = await UserRoleModel.update(
+    { restrictions: { functionalities } },
+    { where: { userId, status: UserStatus.ACTIVE } }
+  );
+  return affected > 0;
+};
+
 // Reactivate a previously deactivated INTERNAL user. Restores status=ACTIVE on the user row
 // and on whatever role row was active when they were deactivated. Returns true if changed.
 export const reactivateInternalUserById = async (
@@ -129,7 +142,7 @@ export const findInternalUsersPaginated = async (
         // role filter must reduce the result set — otherwise required:false (LEFT JOIN)
         // would return users without a matching active role.
         required: !!role,
-        attributes: ["role"],
+        attributes: ["role", "restrictions"],
       },
     ],
     distinct: true,

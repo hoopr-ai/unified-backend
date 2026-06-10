@@ -92,6 +92,26 @@ export const findUserRole = async (
   return userRole?.role ?? null;
 }
 
+// Like findUserRole, but also returns the user's functionality grant list from
+// the `restrictions` JSONB column. Used by the INTERNAL OTP login so the FE can
+// gate CMS items per-user.
+export const findUserRoleWithRestrictions = async (
+  userId: number
+): Promise<{ role: UserRoles | null; functionalities: string[] }> => {
+  const userRole = await UserRoleModel.findOne({
+    where: { userId, status: UserStatus.ACTIVE },
+  });
+  const r = userRole?.restrictions;
+  const functionalities =
+    r && !Array.isArray(r) && Array.isArray(r?.functionalities)
+      ? r.functionalities
+      : [];
+  return {
+    role: userRole?.role ?? null,
+    functionalities,
+  };
+}
+
 export const findUserById = async (
   userId: number
 ): Promise<UserDetails | null> => {

@@ -7,7 +7,8 @@ interface InternalAuditParams {
   action:
     | "create_internal_user"
     | "deactivate_internal_user"
-    | "reactivate_internal_user";
+    | "reactivate_internal_user"
+    | "update_internal_user_functionalities";
   targetUserId: number;
   role?: string;
   endpoint: string;

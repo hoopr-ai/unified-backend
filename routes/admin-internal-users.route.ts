@@ -2,12 +2,16 @@ import { Router } from "express";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
 import { Platform, UserRoles } from "../services/dto-service/modules.export";
-import { createInternalUserSchema } from "../middlewares/admin-internal-users.validation";
+import {
+  createInternalUserSchema,
+  updateInternalUserFunctionalitiesSchema,
+} from "../middlewares/admin-internal-users.validation";
 import {
   createInternalUser,
   listInternalUsers,
   deactivateInternalUser,
   reactivateInternalUser,
+  updateInternalUserFunctionalities,
 } from "../controllers/admin-internal-users.controller";
 
 const router = Router();
@@ -42,6 +46,14 @@ router.post(
   "/:id/reactivate",
   requireInternalAdmin,
   reactivateInternalUser
+);
+
+// Replace a non-admin user's functionality grant list. Admin-only.
+router.patch(
+  "/:id/functionalities",
+  requireInternalAdmin,
+  validateRequest(updateInternalUserFunctionalitiesSchema),
+  updateInternalUserFunctionalities
 );
 
 export default router;
