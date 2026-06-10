@@ -16,6 +16,7 @@ export interface PlaylistInfo {
   playlistCode: string | null;
   name: string;
   name_slug: string | null;
+  imageLink: string | null;
 }
 
 export interface PaginatedPlaylists {
@@ -57,6 +58,7 @@ export interface PlaylistDetail {
   name: string;
   name_slug: string | null;
   description: string | null;
+  imageLink: string | null;
   tracks: PlaylistTrackInfo[];
 }
 

@@ -13,6 +13,7 @@ import {
 } from "../../persistence-service/exports";
 import { TrackModel } from "../../persistence-service/track/schemas/track.schema";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { uploadPublicImageToGCS } from "../../helper-service/gcs.helper";
 import { Op } from "sequelize";
 import {
   ArtistInfoTrack,
@@ -70,6 +71,7 @@ export const getAllPlaylistsService = async (
     playlistCode: playlist.playlistCode || null,
     name: playlist.name || "",
     name_slug: playlist.name_slug || null,
+    imageLink: playlist.imageLink || null,
   }));
 
   return {
@@ -196,6 +198,7 @@ export const getPlaylistDetailService = async (
     name: playlist.name || "",
     name_slug: playlist.name_slug || null,
     description: playlist.description || null,
+    imageLink: playlist.imageLink || null,
     tracks,
   };
 
@@ -302,6 +305,7 @@ export const createPlaylistService = async (
     name: created.name || "",
     name_slug: created.name_slug || null,
     description: created.description || null,
+    imageLink: created.imageLink || null,
     tracks: [],
   };
 };
@@ -340,6 +344,7 @@ export const updatePlaylistService = async (
     name: updated.name || "",
     name_slug: updated.name_slug || null,
     description: updated.description || null,
+    imageLink: updated.imageLink || null,
     tracks: [],
   };
 };
@@ -402,8 +407,61 @@ export const setPlaylistTracksService = async (
       name: playlist.name || "",
       name_slug: playlist.name_slug || null,
       description: playlist.description || null,
+      imageLink: playlist.imageLink || null,
       tracks: [],
     },
     unknownTrackCodes,
+  };
+};
+
+// mime → file extension for the stored object path. Covers the set the upload
+// middleware allows; defaults to a generic .img if somehow unknown.
+const EXT_BY_MIME: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+export interface UploadPlaylistImageResult {
+  id: string;
+  playlistCode: string | null;
+  imageLink: string;
+}
+
+// Upload (or replace) a playlist's cover. Stores the object at the
+// code-keyed CDN path web/playlists/<code>.<ext> so the public site can also
+// resolve it by convention; persists the full public URL (with a ?v= cache-bust
+// so replaced covers refresh immediately) to playlists.imageLink. Returns null
+// if the playlist doesn't exist.
+export const uploadPlaylistImageService = async (
+  id: string,
+  file: { buffer: Buffer; mimetype: string },
+): Promise<UploadPlaylistImageResult | null> => {
+  const playlist = await findPlaylistById(id);
+  if (!playlist) return null;
+
+  // Prefer the playlistCode for the path (matches the CDN convention); fall
+  // back to the UUID id for the rare legacy playlist with no code.
+  const key = playlist.playlistCode || playlist.id;
+  const ext = EXT_BY_MIME[file.mimetype] || "img";
+  const gcsPath = `web/playlists/${key}.${ext}`;
+
+  const publicUrl = await uploadPublicImageToGCS({
+    buffer: file.buffer,
+    gcsPath,
+    contentType: file.mimetype,
+  });
+
+  // Cache-bust: same object path is overwritten on replace, so append a
+  // version query the CDN/browser treats as a new resource.
+  const versionedUrl = `${publicUrl}?v=${Date.now()}`;
+
+  await updatePlaylistById(id, { imageLink: versionedUrl });
+
+  return {
+    id: playlist.id,
+    playlistCode: playlist.playlistCode || null,
+    imageLink: versionedUrl,
   };
 };

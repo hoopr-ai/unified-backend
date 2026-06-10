@@ -149,6 +149,54 @@ export const uploadBufferToGCS = async (
   return signedUrl;
 };
 
+interface UploadPublicImageOptions {
+  buffer: Buffer;
+  // Object path within the bucket, e.g. "web/playlists/<code>.webp".
+  gcsPath: string;
+  contentType: string;
+}
+
+/**
+ * Upload an image to the public CDN bucket and return its permanent public URL.
+ *
+ * Unlike uploadBufferToGCS (which returns an expiring signed URL), this is for
+ * assets the consumer site loads directly. The bucket has uniform bucket-level
+ * public access, so saving the object is enough — no per-object ACL call. The
+ * returned URL is built from CDN_BASE_URL (env-configurable per environment) so
+ * dev/prod resolve to the correct CDN host without code changes.
+ */
+export const uploadPublicImageToGCS = async (
+  options: UploadPublicImageOptions
+): Promise<string> => {
+  const { buffer, gcsPath, contentType } = options;
+
+  const bucketName = process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const cdnBaseUrl = process.env.CDN_BASE_URL;
+  if (!cdnBaseUrl) {
+    throw new Error("Missing CDN_BASE_URL environment variable");
+  }
+
+  const storage = getStorageInstance();
+  const bucket = storage.bucket(bucketName);
+  const file = bucket.file(gcsPath);
+
+  // Overwrites any existing object at this path (callers cache-bust via a
+  // version query param on the saved URL). cacheControl is short so the CDN
+  // re-validates replaced covers reasonably quickly.
+  await file.save(buffer, {
+    contentType,
+    metadata: { cacheControl: "public, max-age=300" },
+  });
+
+  const base = cdnBaseUrl.replace(/\/+$/, "");
+  const path = gcsPath.replace(/^\/+/, "");
+  return `${base}/${path}`;
+};
+
 /**
  * Generate a short-lived signed URL for track preview (expires in seconds)
  * Used for public APIs that need time-limited access to audio files

@@ -34,7 +34,7 @@ export const findAllPlaylists = async (
 
   const { count, rows } = await PlaylistModel.findAndCountAll({
     where: whereClause,
-    attributes: ["id", "playlistCode", "name", "name_slug"],
+    attributes: ["id", "playlistCode", "name", "name_slug", "imageLink"],
     order: [["createdAt", "DESC"]],
     limit,
     offset,
@@ -51,7 +51,7 @@ export const findPlaylistByCode = async (
       playlistCode,
       status: { [Op.in]: [PlaylistStatus.ACTIVE, PlaylistStatus.HIDDEN] },
     },
-    attributes: ["id", "playlistCode", "name", "name_slug", "description"],
+    attributes: ["id", "playlistCode", "name", "name_slug", "description", "imageLink"],
   });
 };
 

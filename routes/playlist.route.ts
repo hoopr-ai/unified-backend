@@ -7,11 +7,13 @@ import {
   updatePlaylist,
   setPlaylistTracks,
   archivePlaylist,
+  uploadPlaylistImage,
 } from "../controllers/playlist.controller";
 import {
   authenticateWithSession,
   optionalAuthenticate,
 } from "../middlewares/authenticate";
+import { singleImageUpload } from "../middlewares/image-upload";
 import { UserRoles } from "../services/dto-service/modules.export";
 
 const router = Router();
@@ -27,6 +29,7 @@ router.get("/search", searchPlaylists);
 // Declared before "/:playlistCode" so the literal-segment routes resolve first.
 router.post("/", adminAuth, createPlaylist);
 router.put("/:id/tracks", adminAuth, setPlaylistTracks);
+router.post("/:id/image", adminAuth, singleImageUpload, uploadPlaylistImage);
 router.put("/:id", adminAuth, updatePlaylist);
 router.delete("/:id", adminAuth, archivePlaylist);
 

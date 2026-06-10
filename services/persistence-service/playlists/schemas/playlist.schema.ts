@@ -22,6 +22,7 @@ export interface PlaylistDetails {
   name_slug?: string;
   partnerId?: string;
   status?: string;
+  imageLink?: string;
   created_by?: string;
   createdAt: Date;
   updatedAt?: Date;
@@ -87,6 +88,12 @@ export class PlaylistModel extends Model<PlaylistModel, PlaylistDetails> {
     allowNull: true,
   })
   status?: string;
+
+  @Column({
+    type: DataType.STRING(1024),
+    allowNull: true,
+  })
+  imageLink?: string;
 
   @Column({
     type: DataType.STRING(255),

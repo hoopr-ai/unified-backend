@@ -7,6 +7,7 @@ import {
   updatePlaylistService,
   archivePlaylistService,
   setPlaylistTracksService,
+  uploadPlaylistImageService,
 } from "../services/business-service/modules.export";
 import { catchAsync, sendResponse, sendError } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
@@ -170,4 +171,26 @@ export const archivePlaylist = catchAsync(async (req: AuthRequest, res: Response
     return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.PlaylistNotFound);
   }
   sendResponse(res, { status: HttpStatusCode.OK, data: { id }, message: ResponseMessages.DeletePlaylistSuccess });
+});
+
+// POST /playlists/:id/image — upload (or replace) the playlist cover.
+// Expects multipart/form-data with an "image" file (handled by the
+// singleImageUpload middleware on the route, which sets req.file).
+export const uploadPlaylistImage = catchAsync(async (req: AuthRequest, res: Response) => {
+  const id = req.params.id as string;
+  if (!UUID_REGEX.test(id)) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid playlist id");
+  }
+  if (!req.file) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "An image file is required (field name: image)");
+  }
+
+  const result = await uploadPlaylistImageService(id, {
+    buffer: req.file.buffer,
+    mimetype: req.file.mimetype,
+  });
+  if (!result) {
+    return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.PlaylistNotFound);
+  }
+  sendResponse(res, { status: HttpStatusCode.OK, data: result, message: ResponseMessages.UploadPlaylistImageSuccess });
 });

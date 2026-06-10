@@ -17,6 +17,7 @@ export const enum ResponseMessages {
   UpdatePlaylistSuccess = "Playlist updated successfully",
   DeletePlaylistSuccess = "Playlist archived successfully",
   SetPlaylistTracksSuccess = "Playlist tracks updated successfully",
+  UploadPlaylistImageSuccess = "Playlist image uploaded successfully",
   GetTracksByFilterSuccess = "Tracks fetched successfully",
   GetUserActivitiesSuccess = "User activities fetched successfully",
   GetUserSessionsSuccess = "User sessions fetched successfully",
