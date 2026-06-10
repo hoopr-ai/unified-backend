@@ -12,6 +12,7 @@ import {
   deactivateInternalUserService,
   reactivateInternalUserService,
   updateInternalUserFunctionalitiesService,
+  getInternalUserMeService,
   type AllowedFeRole,
 } from "../services/business-service/admin-internal-users/modules.export";
 import { listInternalUsersQuerySchema } from "../middlewares/admin-internal-users.validation";
@@ -109,6 +110,22 @@ export const deactivateInternalUser = catchAsync(
       status: HttpStatusCode.OK,
       data: result,
       message: "Internal user deactivated.",
+    });
+  }
+);
+
+// GET /admin/internal-users/me — caller's own live role + functionalities.
+export const getInternalUserMe = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const actorId = req.session?.userId;
+    if (!actorId) {
+      throw new AppError("Unauthorized", 401);
+    }
+    const result = await getInternalUserMeService(actorId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: "Current internal user access fetched.",
     });
   }
 );

@@ -15,6 +15,7 @@ import {
   saveUser,
   saveUserRole,
   findUserRole,
+  findUserRoleWithRestrictions,
   updateInternalUserFunctionalities,
   deactivateAllUserSessions,
   type UserDetails,
@@ -423,6 +424,31 @@ export const updateInternalUserFunctionalitiesService = async (
   });
 
   return { id: targetUserId, functionalities: unique };
+};
+
+// ---------------------------------------------------------------------------
+// ME — current internal user's live role + functionalities
+// ---------------------------------------------------------------------------
+//
+// Lets a logged-in internal user re-pull their grant list without re-login, so
+// an admin's change takes effect on focus / navigation. Any internal role may
+// call this (it's about the caller's own access), not just admins.
+
+export interface InternalUserMeResult {
+  role: AllowedFeRole | null;
+  functionalities: string[];
+}
+
+export const getInternalUserMeService = async (
+  userId: number
+): Promise<InternalUserMeResult> => {
+  const { role, functionalities } = await findUserRoleWithRestrictions(userId);
+  const feRole = role ? DB_TO_FE_ROLE[role] ?? null : null;
+  // Admins carry no list — they get full access by role on the FE.
+  return {
+    role: feRole,
+    functionalities: feRole === "admin" ? [] : functionalities,
+  };
 };
 
 export { ALLOWED_FE_ROLES, isAllowedFeRole };

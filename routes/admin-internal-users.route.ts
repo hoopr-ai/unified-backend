@@ -12,6 +12,7 @@ import {
   deactivateInternalUser,
   reactivateInternalUser,
   updateInternalUserFunctionalities,
+  getInternalUserMe,
 } from "../controllers/admin-internal-users.controller";
 
 const router = Router();
@@ -24,6 +25,12 @@ const requireInternalAdmin = authenticateWithSession({
   platforms: [Platform.INTERNAL],
 });
 
+// Any logged-in INTERNAL user (not just admins) — used by /me to re-pull the
+// caller's own live access.
+const requireInternalUser = authenticateWithSession({
+  platforms: [Platform.INTERNAL],
+});
+
 router.post(
   "/",
   requireInternalAdmin,
@@ -32,6 +39,9 @@ router.post(
 );
 
 router.get("/", requireInternalAdmin, listInternalUsers);
+
+// Caller's own live role + functionalities. Any internal user, not just admins.
+router.get("/me", requireInternalUser, getInternalUserMe);
 
 // v2: deactivate / reactivate. Replaces the v1 reset-password endpoint — admins no longer
 // touch passwords. Users set their own (optional) password via the existing
