@@ -59,3 +59,23 @@ export interface PlaylistDetail {
   description: string | null;
   tracks: PlaylistTrackInfo[];
 }
+
+// ─── CMS write-side request shapes ───────────────────────────────────────────
+
+export interface CreatePlaylistRequest {
+  name: string;
+  description?: string | null;
+  type?: string;   // PlaylistType — validated in the controller
+  status?: string; // PlaylistStatus — validated in the controller
+}
+
+export interface UpdatePlaylistRequest {
+  name?: string;
+  description?: string | null;
+  type?: string;
+  status?: string;
+}
+
+export interface SetPlaylistTracksRequest {
+  trackCodes: string[];
+}
