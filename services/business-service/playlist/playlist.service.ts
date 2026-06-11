@@ -14,6 +14,7 @@ import {
 import { TrackModel } from "../../persistence-service/track/schemas/track.schema";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { uploadPublicImageToGCS } from "../../helper-service/gcs.helper";
+import { toCdnUrl } from "../../helper-service/cdn.helper";
 import { Op } from "sequelize";
 import {
   ArtistInfoTrack,
@@ -182,8 +183,8 @@ export const getPlaylistDetailService = async (
       name: trackData.name || "",
       name_slug: trackData.name_slug || null,
       sourceLink: trackData.sourceLink || null,
-      waveformLink: trackData.waveformLink || null,
-      mp3Link: trackData.mp3Link || null,
+      waveformLink: toCdnUrl(trackData.waveformLink) || null,
+      mp3Link: toCdnUrl(trackData.mp3Link) || null,
       hasVocals: trackData.hasVocals || null,
       trending: trackData.trending || null,
       primaryArtists,
