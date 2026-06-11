@@ -16,6 +16,7 @@ import {
 import { findBrandById } from "../../persistence-service/brand/brand.persistence.service";
 import { getOwnersByIds } from "../../persistence-service/owner/owner.persistence.service";
 import { AppError } from "../../helper-service/AppError";
+import { toCdnUrl } from "../../helper-service/cdn.helper";
 import type {
   AssignTokensRequest,
   DeductTokensRequest,
@@ -472,8 +473,8 @@ export const getTokenDeductionsService = async (
           trackCode: track.trackCode,
           name: track.name || null,
           sourceLink: track.sourceLink || null,
-          waveformLink: track.waveformLink || null,
-          mp3Link: track.mp3Link || null,
+          waveformLink: toCdnUrl(track.waveformLink) || null,
+          mp3Link: toCdnUrl(track.mp3Link) || null,
         } : null,
         trackOwnerDetails: track?.ownerId?.map((id: string) => ownerDetailsMap.get(id)).filter(Boolean) || [],
         purchasedBy: user ? {

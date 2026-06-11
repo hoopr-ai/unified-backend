@@ -10,7 +10,7 @@ import {
   isTrackLiked,
   findTrackByTrackCode,
 } from "../../persistence-service/exports";
-import { AppError } from "../../helper-service/modules.export";
+import { AppError, toCdnUrl } from "../../helper-service/modules.export";
 import { ErrorMessages } from "../../dto-service/constants/modules.export";
 
 export const likeTrackService = async (
@@ -69,8 +69,8 @@ export const getLikedTracksService = async (
           id: likedTrack.track.id,
           name: likedTrack.track.name,
           duration: likedTrack.track.duration,
-          mp3Link: likedTrack.track.mp3Link,
-          waveformLink: likedTrack.track.waveformLink,
+          mp3Link: toCdnUrl(likedTrack.track.mp3Link),
+          waveformLink: toCdnUrl(likedTrack.track.waveformLink),
           artists: likedTrack.track.trackArtistMappings?.map((mapping: any) => ({
             id: mapping.artist?.id,
             name: mapping.artist?.name,

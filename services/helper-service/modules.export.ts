@@ -14,3 +14,4 @@ export * from './redis.client';
 export * from './sms.service';
 export * from './reset-token.helper';
 export * from './internal-brands.helper';
+export * from './cdn.helper';

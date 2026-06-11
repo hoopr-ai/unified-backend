@@ -54,6 +54,7 @@ import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { transformRawTracksToDto } from "../track/track.service";
+import { toCdnUrl } from "../../helper-service/cdn.helper";
 
 // -----------------------------------------------------------------------------
 // Brand Recommendation Filter Configuration per Page
@@ -191,8 +192,8 @@ const hydrateTracks = async (
       trackCode: track.trackCode,
       name: track.name,
       name_slug: track.name_slug,
-      waveformLink: track.waveformLink,
-      mp3Link: track.mp3Link,
+      waveformLink: toCdnUrl(track.waveformLink),
+      mp3Link: toCdnUrl(track.mp3Link),
       hasVocals: track.hasVocals,
       trending: track.trending,
       hookTimings: track.hookTimings,

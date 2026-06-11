@@ -9,7 +9,7 @@ import {
 import { recordStream, getUserStreamHistory } from "../../persistence-service/exports";
 import { findTrackByTrackCode } from "../../persistence-service/exports";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
-import { AppError } from "../../helper-service/modules.export";
+import { AppError, toCdnUrl } from "../../helper-service/modules.export";
 import { ErrorMessages } from "../../dto-service/constants/modules.export";
 import { RawTrackWithMappings } from "../../dto-service/modules.export";
 
@@ -119,8 +119,8 @@ export const getStreamHistoryService = async (
         id: track.id,
         name: track.name || "",
         name_slug: track.name_slug || "",
-        mp3Link: track.mp3Link ?? null,
-        waveformLink: track.waveformLink ?? null,
+        mp3Link: toCdnUrl(track.mp3Link) ?? null,
+        waveformLink: toCdnUrl(track.waveformLink) ?? null,
         duration: (track as any).duration,
         trending: track.trending ?? null,
         hasVocals: track.hasVocals ?? null,
