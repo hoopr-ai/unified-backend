@@ -446,7 +446,14 @@ export const uploadPlaylistImageService = async (
   // back to the UUID id for the rare legacy playlist with no code.
   const key = playlist.playlistCode || playlist.id;
   const ext = EXT_BY_MIME[file.mimetype] || "img";
-  const gcsPath = `web/playlists/${key}.${ext}`;
+
+  // Cache-bust at the object-path level: each upload writes a NEW object path
+  // (unique version segment) instead of overwriting the same one. CDNs that
+  // cache by path and ignore the query string (e.g. GCP Cloud CDN by default)
+  // would otherwise keep serving the previous image. A fresh path is always a
+  // CDN cache miss, so the new image shows immediately.
+  const version = Date.now().toString(36);
+  const gcsPath = `web/playlists/${key}-${version}.${ext}`;
 
   const publicUrl = await uploadPublicImageToGCS({
     buffer: file.buffer,
@@ -454,15 +461,11 @@ export const uploadPlaylistImageService = async (
     contentType: file.mimetype,
   });
 
-  // Cache-bust: same object path is overwritten on replace, so append a
-  // version query the CDN/browser treats as a new resource.
-  const versionedUrl = `${publicUrl}?v=${Date.now()}`;
-
-  await updatePlaylistById(id, { imageLink: versionedUrl });
+  await updatePlaylistById(id, { imageLink: publicUrl });
 
   return {
     id: playlist.id,
     playlistCode: playlist.playlistCode || null,
-    imageLink: versionedUrl,
+    imageLink: publicUrl,
   };
 };
