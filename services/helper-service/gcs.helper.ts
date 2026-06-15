@@ -170,9 +170,11 @@ export const uploadPublicImageToGCS = async (
 ): Promise<string> => {
   const { buffer, gcsPath, contentType } = options;
 
-  const bucketName = process.env.SELECT_BUCKET;
+  // Playlist images live in a dedicated public bucket, separate from the
+  // SELECT_BUCKET used by the rest of GCS functionality.
+  const bucketName = process.env.CDN_UNIFIED_BUCKET;
   if (!bucketName) {
-    throw new Error("Missing SELECT_BUCKET environment variable");
+    throw new Error("Missing CDN_UNIFIED_BUCKET environment variable");
   }
 
   const cdnBaseUrl = process.env.CDN_BASE_URL;
