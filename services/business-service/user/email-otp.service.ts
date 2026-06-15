@@ -1,3 +1,5 @@
+import bcrypt from "bcrypt";
+import { v4 as uuidv4 } from "uuid";
 import {
   AppError,
   redisClient,
@@ -12,14 +14,21 @@ import {
   RefreshTokenExpiry,
   RefreshTokenExpiryInSeconds,
   SessionStatus,
+  UserStatus,
+  UserRoles,
   type LoginResponse,
   Platform,
 } from "../../dto-service/modules.export";
 import {
+  findActiveUserSilently,
   findActiveUser,
   findUserRole,
+  saveUser,
+  saveUserRole,
   createSession,
   type UserSessionDetails,
+  type UserDetails,
+  type UserRoleDetails,
 } from "../../persistence-service/exports";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
 
@@ -67,6 +76,37 @@ interface LoginResponseWithSession extends LoginResponse {
   sessionId: number;
 }
 
+const findOrCreateUser = async (
+  email: string,
+  platform: Platform,
+): Promise<void> => {
+  const existing = await findActiveUserSilently(email, platform);
+  if (existing) return;
+
+  // Auto-create the user with a placeholder password (OTP is the auth mechanism).
+  // No brandId assigned at this point — admin can associate later.
+  // isProfileComplete defaults to false so FE routes to complete-profile after first login.
+  const placeholderPassword = await bcrypt.hash(uuidv4(), 10);
+  const newUser: UserDetails = {
+    email,
+    platform,
+    password: placeholderPassword,
+    status: UserStatus.INVITED,
+    createdAt: new Date(),
+  };
+  const savedUser = await saveUser(newUser);
+
+  const roleDetails: UserRoleDetails = {
+    userId: savedUser.id!,
+    role: UserRoles.USER,
+    status: UserStatus.ACTIVE,
+    createdAt: new Date(),
+  };
+  await saveUserRole(roleDetails);
+
+  logger.info("Auto-created user for email OTP login", { email, platform });
+};
+
 export const sendEmailOtpService = async (
   data: SendEmailOtpData,
 ): Promise<Record<string, never>> => {
@@ -75,8 +115,8 @@ export const sendEmailOtpService = async (
 
   validateEmail(lowerEmail);
 
-  // Ensure the user actually exists for this platform before sending OTP
-  await findActiveUser(lowerEmail, platform);
+  // Create user if they don't exist yet
+  await findOrCreateUser(lowerEmail, platform);
 
   // Check resend rate limit
   const resendAttempts = parseInt(
@@ -105,7 +145,6 @@ export const sendEmailOtpService = async (
     RESEND_WINDOW_SECONDS,
   );
 
-  // Send email
   try {
     await sendOtpEmail(lowerEmail, otp);
   } catch (err) {
@@ -151,7 +190,6 @@ export const verifyEmailOtpService = async (
   }
 
   if (storedOtp !== otp) {
-    // Wrong OTP — increment attempts
     const attempts =
       parseInt(
         (await redisClient.get(KEY_VERIFY_ATTEMPTS(lowerEmail))) || "0",
