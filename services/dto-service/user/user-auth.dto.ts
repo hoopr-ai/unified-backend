@@ -118,9 +118,11 @@ export interface ActivityLogData {
 
 export interface SendEmailOtpRequestData {
   email: string;
+  platform: Platform;
 }
 
 export interface VerifyEmailOtpRequestData {
   email: string;
   otp: string;
+  platform: Platform;
 }

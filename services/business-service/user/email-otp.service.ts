@@ -1,8 +1,27 @@
-import { AppError, redisClient, generateResetToken } from "../../helper-service/modules.export";
+import {
+  AppError,
+  redisClient,
+  createJWTToken,
+} from "../../helper-service/modules.export";
 import { ErrorMessages } from "../../dto-service/constants/modules.export";
 import { sendOtpEmail } from "../../helper-service/email.service";
 import { logger } from "../../helper-service/logger";
-import type { VerifyOtpResponse } from "../../dto-service/modules.export";
+import {
+  AccessTokenExpiry,
+  AccessTokenExpiryInSeconds,
+  RefreshTokenExpiry,
+  RefreshTokenExpiryInSeconds,
+  SessionStatus,
+  type LoginResponse,
+  Platform,
+} from "../../dto-service/modules.export";
+import {
+  findActiveUser,
+  findUserRole,
+  createSession,
+  type UserSessionDetails,
+} from "../../persistence-service/exports";
+import { findBrandById } from "../../persistence-service/brand/modules.export";
 
 // OTP Configuration
 const OTP_LENGTH = 6;
@@ -35,21 +54,29 @@ const validateEmail = (email: string): void => {
 
 export interface SendEmailOtpData {
   email: string;
-  type?: "R"; // R for resend
+  platform: Platform;
 }
 
 export interface VerifyEmailOtpData {
   email: string;
   otp: string;
+  platform: Platform;
+}
+
+interface LoginResponseWithSession extends LoginResponse {
+  sessionId: number;
 }
 
 export const sendEmailOtpService = async (
   data: SendEmailOtpData,
 ): Promise<Record<string, never>> => {
-  const { email } = data;
-  const lowerEmail = email.toLowerCase().trim();
+  const { platform } = data;
+  const lowerEmail = data.email.toLowerCase().trim();
 
   validateEmail(lowerEmail);
+
+  // Ensure the user actually exists for this platform before sending OTP
+  await findActiveUser(lowerEmail, platform);
 
   // Check resend rate limit
   const resendAttempts = parseInt(
@@ -92,15 +119,15 @@ export const sendEmailOtpService = async (
     );
   }
 
-  logger.info("Email OTP sent", { email: lowerEmail });
+  logger.info("Email OTP sent", { email: lowerEmail, platform });
   return {};
 };
 
 export const verifyEmailOtpService = async (
   data: VerifyEmailOtpData,
-): Promise<VerifyOtpResponse> => {
-  const { email, otp } = data;
-  const lowerEmail = email.toLowerCase().trim();
+): Promise<LoginResponseWithSession> => {
+  const { otp, platform } = data;
+  const lowerEmail = data.email.toLowerCase().trim();
 
   validateEmail(lowerEmail);
 
@@ -123,53 +150,98 @@ export const verifyEmailOtpService = async (
     );
   }
 
-  if (storedOtp === otp) {
-    // OTP valid — clean up
-    await redisClient.del(KEY_OTP(lowerEmail));
-    await redisClient.del(KEY_VERIFY_ATTEMPTS(lowerEmail));
-    await redisClient.del(KEY_RESEND_ATTEMPTS(lowerEmail));
+  if (storedOtp !== otp) {
+    // Wrong OTP — increment attempts
+    const attempts =
+      parseInt(
+        (await redisClient.get(KEY_VERIFY_ATTEMPTS(lowerEmail))) || "0",
+        10,
+      ) + 1;
 
-    // Generate reset token for password reset
-    const resetToken = generateResetToken(lowerEmail);
+    if (attempts >= MAX_VERIFY_ATTEMPTS) {
+      await redisClient.set(
+        KEY_BLOCK(lowerEmail),
+        "1",
+        "EX",
+        BLOCK_DURATION_SECONDS,
+      );
+      await redisClient.del(KEY_OTP(lowerEmail));
+      await redisClient.del(KEY_VERIFY_ATTEMPTS(lowerEmail));
 
-    logger.info("Email OTP verified, reset token generated", { email: lowerEmail });
-    return { resetToken };
-  }
+      throw new AppError(
+        `Email temporarily locked. Try again in ${BLOCK_DURATION_SECONDS / 60} minutes.`,
+        429,
+      );
+    }
 
-  // Wrong OTP — increment attempts
-  const attempts =
-    parseInt(
-      (await redisClient.get(KEY_VERIFY_ATTEMPTS(lowerEmail))) || "0",
-      10,
-    ) + 1;
-
-  if (attempts >= MAX_VERIFY_ATTEMPTS) {
-    // Block the email
     await redisClient.set(
-      KEY_BLOCK(lowerEmail),
-      "1",
+      KEY_VERIFY_ATTEMPTS(lowerEmail),
+      attempts.toString(),
       "EX",
       BLOCK_DURATION_SECONDS,
     );
-    await redisClient.del(KEY_OTP(lowerEmail));
-    await redisClient.del(KEY_VERIFY_ATTEMPTS(lowerEmail));
 
+    const remaining = MAX_VERIFY_ATTEMPTS - attempts;
     throw new AppError(
-      `Email temporarily locked. Try again in ${BLOCK_DURATION_SECONDS / 60} minutes.`,
-      429,
+      `Invalid OTP. ${remaining} attempt${remaining === 1 ? "" : "s"} left.`,
+      400,
     );
   }
 
-  await redisClient.set(
-    KEY_VERIFY_ATTEMPTS(lowerEmail),
-    attempts.toString(),
-    "EX",
-    BLOCK_DURATION_SECONDS,
+  // OTP valid — clean up Redis keys
+  await redisClient.del(KEY_OTP(lowerEmail));
+  await redisClient.del(KEY_VERIFY_ATTEMPTS(lowerEmail));
+  await redisClient.del(KEY_RESEND_ATTEMPTS(lowerEmail));
+
+  // Fetch user and create session
+  const user = await findActiveUser(lowerEmail, platform);
+  const role = await findUserRole(user.id!);
+
+  const token = createJWTToken(
+    { userId: user.id, email: user.email, platform: user.platform, role },
+    AccessTokenExpiry,
   );
 
-  const remaining = MAX_VERIFY_ATTEMPTS - attempts;
-  throw new AppError(
-    `Invalid OTP. ${remaining} attempt${remaining === 1 ? "" : "s"} left.`,
-    400,
+  const refreshToken = createJWTToken(
+    { userId: user.id },
+    RefreshTokenExpiry,
   );
+
+  const sessionData: UserSessionDetails = {
+    userId: user.id!,
+    sessionToken: token,
+    refreshToken,
+    status: SessionStatus.ACTIVE,
+    lastActivityAt: new Date(),
+    expiresAt: new Date(Date.now() + RefreshTokenExpiryInSeconds * 1000),
+    createdAt: new Date(),
+  };
+
+  const session = await createSession(sessionData);
+
+  const brand = user.brandId ? await findBrandById(user.brandId) : null;
+  const brandName = (brand as any)?.name ?? undefined;
+
+  logger.info("Email OTP verified, user logged in", {
+    email: lowerEmail,
+    platform,
+    userId: user.id,
+  });
+
+  return {
+    id: user.id!,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    mobile: user.mobile ?? null,
+    countryCode: user.countryCode ?? null,
+    role,
+    isProfileComplete: user.isProfileComplete ?? false,
+    expiresIn: AccessTokenExpiryInSeconds,
+    token,
+    refreshToken,
+    sessionId: session.id!,
+    brandId: user.brandId,
+    brandName,
+  };
 };

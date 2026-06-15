@@ -89,10 +89,16 @@ export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
 
 export const sendEmailOtpRequestSchema = Joi.object<SendEmailOtpRequestData>({
   email: Joi.string().email().required(),
+  platform: Joi.string()
+    .valid(...platformValues)
+    .required(),
 }).unknown(false);
 
 export const verifyEmailOtpRequestSchema =
   Joi.object<VerifyEmailOtpRequestData>({
     email: Joi.string().email().required(),
     otp: Joi.string().length(6).pattern(/^\d+$/).required(),
+    platform: Joi.string()
+      .valid(...platformValues)
+      .required(),
   }).unknown(false);
