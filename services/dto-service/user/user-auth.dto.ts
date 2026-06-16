@@ -18,6 +18,9 @@ export interface CompleteProfileRequestData {
   mobile: string;
   countryCode: string;
   profileRole: ProfileRole;
+  instagramLink?: string;
+  youtubeLink?: string;
+  facebookLink?: string;
 }
 
 export interface UpdateProfileRequestData {

@@ -7,6 +7,7 @@ import {
   UserActivityModel,
   UserLikedTrackModel,
   UserStreamHistoryModel,
+  UserProfileModel,
 } from "./user/modules.export";
 import { TrackModel, FeaturedTracksModel, ChartTrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
@@ -85,6 +86,7 @@ sequelize.addModels([
   UserActivityModel,
   UserLikedTrackModel,
   UserStreamHistoryModel,
+  UserProfileModel,
   TrackModel,
   AlbumModel,
   FilterModel,

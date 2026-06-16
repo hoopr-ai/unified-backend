@@ -38,7 +38,10 @@ export const completeProfileRequestSchema =
     profileRole: Joi.string()
       .valid(...profileRoleValues)
       .required(),
-  });
+    instagramLink: Joi.string().max(500).optional(),
+    youtubeLink: Joi.string().max(500).optional(),
+    facebookLink: Joi.string().max(500).optional(),
+  }).or("instagramLink", "youtubeLink", "facebookLink");
 
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({
   email: Joi.string().email().required(),

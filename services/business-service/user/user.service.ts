@@ -47,6 +47,7 @@ import {
   deleteSessionByToken,
   isSessionExpiredByInactivity,
   type UserSessionDetails,
+  upsertUserProfile,
 } from "../../persistence-service/exports";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
 import {
@@ -487,7 +488,7 @@ export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number,
 ): Promise<LoginResponseWithSession> => {
-  const { firstName, lastName, mobile, countryCode, profileRole } = data;
+  const { firstName, lastName, mobile, countryCode, profileRole, instagramLink, youtubeLink, facebookLink } = data;
 
   const user = await findUserById(userId);
   if (!user) {
@@ -507,6 +508,7 @@ export const completeProfileService = async (
       countryCode,
       profileRole,
     );
+    await upsertUserProfile(userId, { instagramLink, youtubeLink, facebookLink });
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
