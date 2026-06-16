@@ -25,7 +25,6 @@ export interface UpsertBillingAddressData {
   state: string;
   city: string;
   postalCode: string;
-  sameAsBusinessAddress?: boolean;
 }
 
 export interface AddressesResponse {
@@ -52,7 +51,6 @@ export const upsertBusinessAddressService = async (
     postalCode: data.postalCode,
     pan: data.pan ?? null,
     gstin: data.gstin ?? null,
-    sameAsBusinessAddress: false,
   });
 };
 
@@ -67,7 +65,6 @@ export const upsertBillingAddressService = async (
     state: data.state,
     city: data.city,
     postalCode: data.postalCode,
-    sameAsBusinessAddress: data.sameAsBusinessAddress ?? false,
   });
 };
 
