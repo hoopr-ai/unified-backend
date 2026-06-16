@@ -41,6 +41,9 @@ export interface UserProfileResponse {
   role?: UserRoles;
   isProfileComplete: boolean;
   status: UserStatus;
+  instagramLink?: string | null;
+  youtubeLink?: string | null;
+  facebookLink?: string | null;
 }
 
 export interface LoginUserRequestData {

@@ -48,6 +48,7 @@ import {
   isSessionExpiredByInactivity,
   type UserSessionDetails,
   upsertUserProfile,
+  findUserProfile,
 } from "../../persistence-service/exports";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
 import {
@@ -594,7 +595,10 @@ export const completeProfileService = async (
 export const getUserProfileService = async (
   userId: number,
 ): Promise<UserProfileResponse> => {
-  const user = await findUserById(userId);
+  const [user, userProfile] = await Promise.all([
+    findUserById(userId),
+    findUserProfile(userId),
+  ]);
   if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
@@ -609,6 +613,9 @@ export const getUserProfileService = async (
     countryCode: user.countryCode,
     profileRole: user.profileRole,
     isProfileComplete: user.isProfileComplete ?? false,
+    instagramLink: userProfile?.instagramLink ?? null,
+    youtubeLink: userProfile?.youtubeLink ?? null,
+    facebookLink: userProfile?.facebookLink ?? null,
   };
 };
 
