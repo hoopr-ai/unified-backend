@@ -1,6 +1,7 @@
-import type { Response } from "express";
+import type { Response, Request } from "express";
 import {
-  getAddressesService,
+  getBusinessAddressService,
+  getBillingAddressService,
   upsertBusinessAddressService,
   upsertBillingAddressService,
   deleteAddressService,
@@ -11,19 +12,26 @@ import {
   sendError,
 } from "../services/helper-service/modules.export";
 import { HttpStatusCode, AddressType } from "../services/dto-service/modules.export";
-import type { Request } from "express";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
-export const getAddresses = catchAsync(async (req: AuthRequest, res: Response) => {
+export const getBusinessAddress = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = req.session?.userId;
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
-  const data = await getAddressesService(userId);
-  sendResponse(res, { status: HttpStatusCode.OK, data, message: "Addresses fetched successfully" });
+  const data = await getBusinessAddressService(userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data, message: "Business address fetched successfully" });
+});
+
+export const getBillingAddress = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+
+  const data = await getBillingAddressService(userId);
+  sendResponse(res, { status: HttpStatusCode.OK, data, message: "Billing address fetched successfully" });
 });
 
 export const upsertBusinessAddress = catchAsync(async (req: AuthRequest, res: Response) => {

@@ -2,7 +2,7 @@ import { AppError } from "../../helper-service/modules.export";
 import { AddressType } from "../../dto-service/modules.export";
 import {
   upsertUserAddress,
-  findAllUserAddresses,
+  findUserAddress,
   deleteUserAddress,
   type UserAddressAttributes,
 } from "../../persistence-service/exports";
@@ -27,15 +27,17 @@ export interface UpsertBillingAddressData {
   postalCode: string;
 }
 
-export interface AddressesResponse {
-  business: UserAddressAttributes | null;
-  billing: UserAddressAttributes | null;
-}
 
-export const getAddressesService = async (
+export const getBusinessAddressService = async (
   userId: number,
-): Promise<AddressesResponse> => {
-  return await findAllUserAddresses(userId);
+): Promise<UserAddressAttributes | null> => {
+  return await findUserAddress(userId, AddressType.BUSINESS);
+};
+
+export const getBillingAddressService = async (
+  userId: number,
+): Promise<UserAddressAttributes | null> => {
+  return await findUserAddress(userId, AddressType.BILLING);
 };
 
 export const upsertBusinessAddressService = async (
