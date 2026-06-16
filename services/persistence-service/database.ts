@@ -36,6 +36,7 @@ import {
   TrackKeywordMappingModel,
 } from "./keyword/modules.export";
 import { RailModel, RailItemModel } from "./rail/modules.export";
+import { CountryModel, StateModel, CityModel } from "./geography/modules.export";
 
 config();
 
@@ -116,6 +117,9 @@ sequelize.addModels([
   FaqModel,
   RailModel,
   RailItemModel,
+  CountryModel,
+  StateModel,
+  CityModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
