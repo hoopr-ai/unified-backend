@@ -300,10 +300,25 @@ export const sendEmailOtp = catchAsync(async (req: Request, res: Response) => {
 export const verifyEmailOtp = catchAsync(
   async (req: Request, res: Response) => {
     const response = await verifyEmailOtpService(req.body);
+
+    res.cookie("sessionId", response.sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: response.expiresIn * 1000,
+    });
+
+    res.cookie("refreshToken", response.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: RefreshTokenExpiryInSeconds * 1000,
+    });
+
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: response,
-      message: ResponseMessages.OtpVerifiedSuccess,
+      message: ResponseMessages.LoginSuccess,
     });
   },
 );

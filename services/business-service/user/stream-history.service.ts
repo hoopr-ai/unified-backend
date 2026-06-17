@@ -42,11 +42,7 @@ const buildOwnerMaps = async (
   return { ownerTypeMap, ownerSubTypeMap };
 };
 
-const getStandardToken = (skus?: { skuType?: string; token?: number }[]): number => {
-  if (skus && skus.length > 0) {
-    const standard = skus.find((s) => s.skuType === "N") || skus[0];
-    return standard.token ?? 1;
-  }
+const getStandardToken = (_skus?: unknown[]): number => {
   return 1;
 };
 
