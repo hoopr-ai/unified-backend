@@ -1,13 +1,20 @@
 import { UserAddressModel, type UserAddressAttributes } from "./schemas/user-address.schema";
 import { AddressType } from "../../dto-service/modules.export";
 
+type AddressData = Omit<UserAddressAttributes, "id" | "userId" | "addressType" | "createdAt" | "updatedAt">;
+
 export const upsertUserAddress = async (
   userId: number,
   addressType: AddressType,
-  data: Omit<UserAddressAttributes, "id" | "userId" | "addressType" | "createdAt" | "updatedAt">,
+  data: AddressData,
 ): Promise<UserAddressAttributes> => {
-  const [record] = await UserAddressModel.upsert({ userId, addressType, ...data });
-  return record;
+  const existing = await UserAddressModel.findOne({ where: { userId, addressType } });
+  if (existing) {
+    await existing.update(data);
+    return existing.get({ plain: true });
+  }
+  const created = await UserAddressModel.create({ userId, addressType, ...data });
+  return created.get({ plain: true });
 };
 
 export const findUserAddress = async (
