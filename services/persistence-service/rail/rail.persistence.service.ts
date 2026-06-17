@@ -516,7 +516,9 @@ export const upsertRailWithItems = async (
 ): Promise<{ rail: RailDetails; items: RailItemDetails[] }> => {
   const transaction = await sequelize.transaction();
   try {
-    // Check if a rail with the same key, brandId, and pageName exists
+    // A rail is uniquely identified by (key, brandId, pageName). On update we
+    // keep the SAME row so its id is stable — concurrent operations holding the
+    // rail id (item edits, reorders, see-all fetches) remain valid.
     const existingRail = await RailModel.findOne({
       where: {
         key: input.key,
@@ -526,35 +528,64 @@ export const upsertRailWithItems = async (
       transaction,
     });
 
-    // If existing rail found, delete it and its items first
+    let rail: RailModel;
     if (existingRail) {
-      await RailItemModel.destroy({
-        where: { railId: existingRail.id },
-        transaction,
-      });
-      await RailModel.destroy({
-        where: { id: existingRail.id },
-        transaction,
-      });
+      // Update mutable columns in place; id, createdAt are preserved.
+      await existingRail.update(input as unknown as RailDetails, { transaction });
+      rail = existingRail;
+    } else {
+      rail = await RailModel.create(input as unknown as RailDetails, { transaction });
     }
 
-    // Create a new rail
-    const rail = await RailModel.create(input as unknown as RailDetails, {
-      transaction,
-    });
+    // Reconcile items, preserving existing rail_item ids where the same
+    // (itemType, itemCode) still exists so in-flight item references stay valid.
+    const currentItems = existingRail
+      ? await RailItemModel.findAll({ where: { railId: rail.id }, transaction })
+      : [];
+    const currentByCode = new Map<string, RailItemModel>();
+    for (const it of currentItems) {
+      currentByCode.set(`${it.itemType}::${it.itemCode}`, it);
+    }
 
-    const created = items.length
-      ? await RailItemModel.bulkCreate(
-          items.map((item) => ({
+    const keptIds = new Set<number>();
+    const finalItems: RailItemModel[] = [];
+
+    for (const item of items) {
+      const codeKey = `${item.itemType}::${item.itemCode}`;
+      const match = currentByCode.get(codeKey);
+      if (match) {
+        // Same item still present — update order/lock, keep its id.
+        await match.update(
+          { order: item.order, isLocked: item.isLocked ?? false },
+          { transaction },
+        );
+        keptIds.add(match.id);
+        finalItems.push(match);
+      } else {
+        const created = await RailItemModel.create(
+          {
             railId: rail.id,
             itemType: item.itemType,
             itemCode: item.itemCode,
             order: item.order,
             isLocked: item.isLocked ?? false,
-          })) as unknown as RailItemDetails[],
+          } as unknown as RailItemDetails,
           { transaction },
-        )
-      : [];
+        );
+        finalItems.push(created);
+      }
+    }
+
+    // Remove items that are no longer part of the rail.
+    const idsToDelete = currentItems
+      .filter((it) => !keptIds.has(it.id))
+      .map((it) => it.id);
+    if (idsToDelete.length > 0) {
+      await RailItemModel.destroy({
+        where: { id: { [Op.in]: idsToDelete } },
+        transaction,
+      });
+    }
 
     await transaction.commit();
 
@@ -563,7 +594,7 @@ export const upsertRailWithItems = async (
 
     return {
       rail: rail.toJSON() as RailDetails,
-      items: created.map((i) => i.toJSON() as RailItemDetails),
+      items: finalItems.map((i) => i.toJSON() as RailItemDetails),
     };
   } catch (err) {
     await transaction.rollback();
