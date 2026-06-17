@@ -3,7 +3,7 @@ import { KeywordModel } from "./schemas/keyword.schema";
 import { TrackKeywordMappingModel } from "./schemas/track-keyword-mapping.schema";
 import { TrackModel } from "../track/schemas/track.schema";
 import { TrackArtistMappingModel, ArtistModel } from "../artists/modules.export";
-import { SkuModel } from "../sku/modules.export";
+import { SkuModel, SkuType } from "../sku/modules.export";
 import {
   PaginatedRawTracks,
   RawTrackWithMappings,
@@ -81,7 +81,8 @@ export const findTracksByKeywordIds = async (
               model: SkuModel,
               as: "skus",
               required: false,
-              attributes: ["id", "costPrice", "sellingPrice"],
+              where: { skuType: SkuType.STANDARD, active: "Y" },
+              attributes: ["token"],
             },
           ],
         },

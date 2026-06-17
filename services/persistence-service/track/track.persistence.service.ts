@@ -10,7 +10,7 @@ import {
   RawTrackWithMappings,
 } from "../../dto-service/modules.export";
 import { TrackFilterMappingModel, FilterModel } from "../exports";
-import { SkuModel } from "../sku/modules.export";
+import { SkuModel, SkuType } from "../sku/modules.export";
 import { CampaignModel, CampaignStatus } from "../campaign/modules.export";
 import { SoundProjectModel } from "../project/modules.export";
 import { Op, Sequelize, fn, col, where } from "sequelize";
@@ -32,13 +32,14 @@ const getArtistInclude = () => [
   },
 ];
 
-// Include standard SKU for listing APIs
+// Include standard SKU for listing APIs (only token needed)
 const getStandardSkuInclude = () => [
   {
     model: SkuModel,
     as: "skus",
     required: false,
-    attributes: ["id", "costPrice", "sellingPrice"],
+    where: { skuType: SkuType.STANDARD, active: "Y" },
+    attributes: ["token"],
   },
 ];
 
@@ -48,7 +49,8 @@ const getAllSkusInclude = () => [
     model: SkuModel,
     as: "skus",
     required: false,
-    attributes: ["id", "costPrice", "sellingPrice", "gstPercent", "maxUsage", "description"],
+    where: { active: "Y" },
+    attributes: ["id", "name", "costPrice", "sellingPrice", "gstPercent", "maxUsage", "description", "token", "skuType"],
   },
 ];
 
@@ -578,7 +580,8 @@ export const findTracksByFilter = async (
               model: SkuModel,
               as: "skus",
               required: false,
-              attributes: ["id", "costPrice", "sellingPrice"],
+              where: { skuType: SkuType.STANDARD, active: "Y" },
+              attributes: ["token"],
             },
             {
               model: CampaignModel,

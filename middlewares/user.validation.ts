@@ -38,10 +38,7 @@ export const completeProfileRequestSchema =
     profileRole: Joi.string()
       .valid(...profileRoleValues)
       .required(),
-    instagramLink: Joi.string().max(500).optional(),
-    youtubeLink: Joi.string().max(500).optional(),
-    facebookLink: Joi.string().max(500).optional(),
-  }).or("instagramLink", "youtubeLink", "facebookLink");
+  });
 
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({
   email: Joi.string().email().required(),
@@ -92,16 +89,10 @@ export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
 
 export const sendEmailOtpRequestSchema = Joi.object<SendEmailOtpRequestData>({
   email: Joi.string().email().required(),
-  platform: Joi.string()
-    .valid(...platformValues)
-    .required(),
 }).unknown(false);
 
 export const verifyEmailOtpRequestSchema =
   Joi.object<VerifyEmailOtpRequestData>({
     email: Joi.string().email().required(),
     otp: Joi.string().length(6).pattern(/^\d+$/).required(),
-    platform: Joi.string()
-      .valid(...platformValues)
-      .required(),
   }).unknown(false);
