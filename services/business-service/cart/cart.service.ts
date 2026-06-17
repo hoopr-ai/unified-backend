@@ -67,11 +67,16 @@ export const addToCartService = async (userId: number, data: AddToCartData) => {
     const existing = await findCartItem(userId, skuId, cartType);
     if (existing) {
       await updateCartItemQty(userId, skuId, cartType, existing.qty + qty);
-      return findCartItem(userId, skuId, cartType);
+    } else {
+      await createCartItem({ userId, skuId, cartType, qty });
     }
+  } else {
+    await createCartItem({ userId, skuId, cartType, qty });
   }
 
-  return createCartItem({ userId, skuId, cartType, qty });
+  const items = await findCartItems(userId, cartType);
+  const summary = calculateSummary(items);
+  return { items, summary };
 };
 
 export const updateCartService = async (userId: number, data: UpdateCartData) => {
@@ -80,10 +85,12 @@ export const updateCartService = async (userId: number, data: UpdateCartData) =>
   if (qty === 0) {
     const removed = await removeCartItem(userId, skuId, cartType);
     if (!removed) throw new AppError("Cart item not found", 404);
-    return null;
+  } else {
+    const updated = await updateCartItemQty(userId, skuId, cartType, qty);
+    if (!updated) throw new AppError("Cart item not found", 404);
   }
 
-  const updated = await updateCartItemQty(userId, skuId, cartType, qty);
-  if (!updated) throw new AppError("Cart item not found", 404);
-  return findCartItem(userId, skuId, cartType);
+  const items = await findCartItems(userId, cartType);
+  const summary = calculateSummary(items);
+  return { items, summary };
 };

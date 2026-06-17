@@ -35,7 +35,7 @@ export const addToCart = catchAsync(async (req: AuthRequest, res: Response) => {
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
   const data = await addToCartService(userId, req.body);
-  sendResponse(res, { status: HttpStatusCode.OK, data, message: "Item added to cart" });
+  sendResponse(res, { status: HttpStatusCode.OK, data, message: "Cart updated successfully" });
 });
 
 export const updateCart = catchAsync(async (req: AuthRequest, res: Response) => {
