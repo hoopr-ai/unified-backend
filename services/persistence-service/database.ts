@@ -38,6 +38,8 @@ import {
 import { RailModel, RailItemModel } from "./rail/modules.export";
 import { CountryModel, StateModel, CityModel } from "./geography/modules.export";
 import { CartModel } from "./cart/modules.export";
+import { OrderModel, OrderInfoModel } from "./order/modules.export";
+import { TransactionModel } from "./transaction/modules.export";
 
 config();
 
@@ -122,6 +124,9 @@ sequelize.addModels([
   StateModel,
   CityModel,
   CartModel,
+  OrderModel,
+  OrderInfoModel,
+  TransactionModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
