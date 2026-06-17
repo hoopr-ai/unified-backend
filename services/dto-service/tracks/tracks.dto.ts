@@ -40,14 +40,11 @@ export interface HookTiming {
 // SKU info for track details (both standard and premium)
 export interface SkuInfo {
   id: string;
-  name?: string;
   costPrice?: number;
   sellingPrice?: number;
   gstPercent?: number;
   maxUsage?: number;
   description?: string;
-  token: number;
-  skuType: string;
 }
 
 export interface TrackWithArtists {

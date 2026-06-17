@@ -56,8 +56,8 @@ export const getCartService = async (userId: number, cartType?: CartType) => {
 export const addToCartService = async (userId: number, data: AddToCartData) => {
   const { skuId, cartType, qty } = data;
 
-  const sku = await SkuModel.findOne({ where: { id: skuId, active: "Y" } });
-  if (!sku) throw new AppError("SKU not found or inactive", 404);
+  const sku = await SkuModel.findOne({ where: { id: skuId } });
+  if (!sku) throw new AppError("SKU not found", 404);
 
   if (cartType === CartType.BUY_NOW) {
     await clearBuyNowCart(userId);

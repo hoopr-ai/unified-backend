@@ -93,15 +93,8 @@ const normalizeHookTimings = (raw: unknown): unknown => {
   return [];
 };
 
-// Get token from standard SKU, default to 1 if not found
-const getStandardToken = (track: RawTrackWithMappings): number => {
-  if (track.skus && track.skus.length > 0) {
-    // For listing APIs, we only get standard SKU (skuType = 'N')
-    const standardSku =
-      track.skus.find((sku) => sku.skuType === "N") || track.skus[0];
-    return standardSku.token ?? 1;
-  }
-  return 1; // Default token if no SKU exists
+const getStandardToken = (_track: RawTrackWithMappings): number => {
+  return 1;
 };
 
 // Fetch owner maps from a list of tracks
@@ -832,14 +825,11 @@ const transformTrackToDetailsDto = (
     const skuData = track.skus[0];
     sku = {
       id: skuData.id || "",
-      name: skuData.name,
       costPrice: skuData.costPrice,
       sellingPrice: skuData.sellingPrice,
       gstPercent: skuData.gstPercent,
       maxUsage: skuData.maxUsage,
       description: skuData.description,
-      token: skuData.token ?? 1,
-      skuType: skuData.skuType || "P",
     };
   }
 
