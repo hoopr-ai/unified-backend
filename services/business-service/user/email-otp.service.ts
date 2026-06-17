@@ -74,6 +74,7 @@ export interface VerifyEmailOtpData {
 
 interface LoginResponseWithSession extends LoginResponse {
   sessionId: number;
+  isExistingUser: boolean;
 }
 
 const findOrCreateUser = async (
@@ -281,5 +282,6 @@ export const verifyEmailOtpService = async (
     sessionId: session.id!,
     brandId: user.brandId,
     brandName,
+    isExistingUser: !!user.createdBy,
   };
 };

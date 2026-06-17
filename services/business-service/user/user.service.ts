@@ -47,6 +47,8 @@ import {
   deleteSessionByToken,
   isSessionExpiredByInactivity,
   type UserSessionDetails,
+  upsertUserProfile,
+  findUserProfile,
 } from "../../persistence-service/exports";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
 import {
@@ -487,7 +489,7 @@ export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number,
 ): Promise<LoginResponseWithSession> => {
-  const { firstName, lastName, mobile, countryCode, profileRole } = data;
+  const { firstName, lastName, mobile, countryCode, profileRole, instagramLink, youtubeLink, facebookLink } = data;
 
   const user = await findUserById(userId);
   if (!user) {
@@ -507,6 +509,7 @@ export const completeProfileService = async (
       countryCode,
       profileRole,
     );
+    await upsertUserProfile(userId, { instagramLink, youtubeLink, facebookLink });
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
@@ -592,7 +595,10 @@ export const completeProfileService = async (
 export const getUserProfileService = async (
   userId: number,
 ): Promise<UserProfileResponse> => {
-  const user = await findUserById(userId);
+  const [user, userProfile] = await Promise.all([
+    findUserById(userId),
+    findUserProfile(userId),
+  ]);
   if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
@@ -607,6 +613,9 @@ export const getUserProfileService = async (
     countryCode: user.countryCode,
     profileRole: user.profileRole,
     isProfileComplete: user.isProfileComplete ?? false,
+    instagramLink: userProfile?.instagramLink ?? null,
+    youtubeLink: userProfile?.youtubeLink ?? null,
+    facebookLink: userProfile?.facebookLink ?? null,
   };
 };
 
