@@ -826,29 +826,21 @@ const transformTrackToDetailsDto = (
       ? `From '${albumName}' by ${creditParts.join(" | ")}`
       : `'${track.name}' by ${creditParts.join(" | ")}`;
 
-  let standardSku: SkuInfo | undefined;
-  let premiumSku: SkuInfo | undefined;
+  let sku: SkuInfo | undefined;
 
   if (track.skus && track.skus.length > 0) {
-    for (const sku of track.skus) {
-      const skuInfo: SkuInfo = {
-        id: sku.id || "",
-        name: sku.name,
-        costPrice: sku.costPrice,
-        sellingPrice: sku.sellingPrice,
-        gstPercent: sku.gstPercent,
-        maxUsage: sku.maxUsage,
-        description: sku.description,
-        token: sku.token ?? 1,
-        skuType: sku.skuType || "N",
-      };
-
-      if (sku.skuType === "N") {
-        standardSku = skuInfo;
-      } else if (sku.skuType === "P") {
-        premiumSku = skuInfo;
-      }
-    }
+    const skuData = track.skus[0];
+    sku = {
+      id: skuData.id || "",
+      name: skuData.name,
+      costPrice: skuData.costPrice,
+      sellingPrice: skuData.sellingPrice,
+      gstPercent: skuData.gstPercent,
+      maxUsage: skuData.maxUsage,
+      description: skuData.description,
+      token: skuData.token ?? 1,
+      skuType: skuData.skuType || "P",
+    };
   }
 
   // Extract filters by type
@@ -859,8 +851,7 @@ const transformTrackToDetailsDto = (
 
   return {
     ...baseDto,
-    standardSku,
-    premiumSku,
+    sku,
     languages,
     genres,
     categories,

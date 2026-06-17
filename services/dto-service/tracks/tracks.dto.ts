@@ -72,8 +72,7 @@ export interface TrackWithArtists {
 
 // Extended track details with both SKUs and filters
 export interface TrackDetailsWithSkus extends TrackWithArtists {
-  standardSku?: SkuInfo;
-  premiumSku?: SkuInfo;
+  sku?: SkuInfo;
   languages: FilterInfo[];
   genres: FilterInfo[];
   categories: FilterInfo[];
