@@ -26,6 +26,7 @@ export interface UserAddressAttributes {
   country: string;
   pan?: string | null;
   gstin?: string | null;
+  sameAsBusinessAddress?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -73,6 +74,9 @@ export class UserAddressModel extends Model<UserAddressModel, UserAddressAttribu
 
   @Column({ type: DataType.TEXT, allowNull: true })
   gstin?: string | null;
+
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  sameAsBusinessAddress!: boolean;
 
   @CreatedAt
   @Column({ type: DataType.DATE })

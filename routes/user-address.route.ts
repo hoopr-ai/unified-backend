@@ -30,6 +30,7 @@ const billingAddressSchema = Joi.object({
   state: Joi.string().max(100).required(),
   city: Joi.string().max(100).required(),
   postalCode: Joi.string().max(20).required(),
+  sameAsBusinessAddress: Joi.boolean().optional().default(false),
 }).unknown(false);
 
 router.use(authenticateWithSession);
