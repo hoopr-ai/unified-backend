@@ -61,6 +61,7 @@ export interface TrackDetails {
   artLink?: string;
   hookTimings?: unknown;
   artworkLink?: string;
+  notVisibleToB2b?: boolean | null;
 }
 
 @Table({
@@ -316,6 +317,16 @@ export class TrackModel extends Model<TrackModel> {
     allowNull: true,
   })
   artworkLink?: string;
+
+  /**
+   * When true, this track is hidden from B2B / enterprise API consumers even
+   * if it is otherwise visible on consumer surfaces.
+   */
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: true,
+  })
+  notVisibleToB2b?: boolean | null;
 
   @BelongsTo(() => CampaignModel, "campaignId")
   campaign?: CampaignModel;
