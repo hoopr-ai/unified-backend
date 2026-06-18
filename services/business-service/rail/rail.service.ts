@@ -50,7 +50,6 @@ import {
   copyRailToPages,
   CopyRailResult,
   brandHasActiveTokens,
-  getActiveBrandTokenTypes,
 } from "../../persistence-service/exports";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
@@ -127,7 +126,7 @@ const hydrateTracks = async (
   }
 
   // Get liked tracks, SKUs, and token status in parallel with track fetch
-  const [tracksMap, likedCodes, skuRows, activeTokenTypes] = await Promise.all([
+  const [tracksMap, likedCodes, skuRows, hasActiveTokens] = await Promise.all([
     findTracksLightweight(trackCodes, excludeOwnerIds),
     userId ? getUserLikedTrackCodes(userId) : Promise.resolve([]),
     SkuModel.findAll({
@@ -135,7 +134,7 @@ const hydrateTracks = async (
       attributes: ["trackCode", "id", "costPrice", "sellingPrice"],
       raw: true,
     }),
-    brandId ? getActiveBrandTokenTypes(brandId) : Promise.resolve(new Set<string>()),
+    brandId ? brandHasActiveTokens(brandId) : Promise.resolve(false),
   ]);
 
   // Build SKU map keyed by trackCode
@@ -204,9 +203,7 @@ const hydrateTracks = async (
       }
     }
 
-    const ownerTokenType = ownerType?.toLowerCase() ?? null;
-    const hasMatchingTokens = ownerTokenType ? activeTokenTypes.has(ownerTokenType) : false;
-    const isEnterpriseOnly = ownerType === "Chartbusters" && hasMatchingTokens;
+    const isEnterpriseOnly = ownerType === "Chartbusters" && !hasActiveTokens;
     const skuData = skuMap.get(track.trackCode);
     const sku = skuData
       ? {

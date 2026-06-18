@@ -363,24 +363,6 @@ export const brandHasActiveTokens = async (brandId: number): Promise<boolean> =>
   return !!token;
 };
 
-// Returns the set of token types the brand currently has active (balance > 0 or unlimited).
-// Used to determine per-track price visibility: if the brand holds a token of the matching
-// type, the price is hidden (use tokens); otherwise the price is shown (purchase flow).
-export const getActiveBrandTokenTypes = async (brandId: number): Promise<Set<string>> => {
-  const tokens = await TokenAssignedModel.findAll({
-    where: {
-      brandId,
-      [Op.or]: [
-        { tokenBalance: { [Op.gt]: 0 } },
-        { isUnlimited: true },
-      ],
-    },
-    attributes: ["type"],
-    raw: true,
-  });
-  return new Set((tokens as any[]).map((t) => t.type).filter(Boolean));
-};
-
 export const addTokensAssignedByType = async (
   brandId: number,
   type: string,
