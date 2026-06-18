@@ -185,6 +185,10 @@ export const touchUserLastLogin = async (userId: number): Promise<void> => {
   );
 };
 
+export const updateUserBrandId = async (userId: number, brandId: number): Promise<void> => {
+  await UserModel.update({ brandId }, { where: { id: userId } });
+};
+
 export const findUsersByBrandId = async (
   brandId: number,
   page: number,

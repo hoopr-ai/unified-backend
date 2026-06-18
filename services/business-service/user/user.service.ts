@@ -49,8 +49,9 @@ import {
   type UserSessionDetails,
   upsertUserProfile,
   findUserProfile,
+  updateUserBrandId,
 } from "../../persistence-service/exports";
-import { findBrandById, updateBrand } from "../../persistence-service/brand/modules.export";
+import { findBrandById, updateBrand, saveBrand } from "../../persistence-service/brand/modules.export";
 import { saveOrganization } from "../../persistence-service/exports";
 import { OrganizationStatus, BrandStatus } from "../../dto-service/modules.export";
 import {
@@ -529,8 +530,8 @@ export const completeProfileService = async (
     throw error;
   }
 
-  // If a brand name is provided, store it (lowercase), create an org, and link them
-  if (user.brandId && brandName) {
+  // If a brand name is provided, create or update org + brand and link to user
+  if (brandName) {
     const normalizedName = brandName.toLowerCase().trim();
     const now = new Date();
     const org = await saveOrganization({
@@ -539,10 +540,24 @@ export const completeProfileService = async (
       createdBy: userId,
       createdAt: now,
     });
-    await updateBrand(user.brandId, {
-      name: normalizedName,
-      organizationId: (org as any).id,
-    });
+
+    if (user.brandId) {
+      // Invited user — update the existing brand's name and org
+      await updateBrand(user.brandId, {
+        name: normalizedName,
+        organizationId: (org as any).id,
+      });
+    } else {
+      // New self-signed-up user — create a brand and link it
+      const brand = await saveBrand({
+        name: normalizedName,
+        organizationId: (org as any).id,
+        status: BrandStatus.ACTIVE,
+        createdBy: userId,
+        createdAt: now,
+      });
+      await updateUserBrandId(userId, (brand as any).id);
+    }
   }
 
   // Notify existing team members that someone has joined
