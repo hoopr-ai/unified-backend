@@ -45,6 +45,7 @@ export interface UserProfileResponse {
   instagramLink?: string | null;
   youtubeLink?: string | null;
   facebookLink?: string | null;
+  brandName?: string;
 }
 
 export interface LoginUserRequestData {

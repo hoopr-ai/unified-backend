@@ -621,6 +621,8 @@ export const getUserProfileService = async (
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
 
+  const brand = user.brandId ? await findBrandById(user.brandId) : null;
+
   return {
     id: user.id!,
     email: user.email,
@@ -634,6 +636,7 @@ export const getUserProfileService = async (
     instagramLink: userProfile?.instagramLink ?? null,
     youtubeLink: userProfile?.youtubeLink ?? null,
     facebookLink: userProfile?.facebookLink ?? null,
+    brandName: (brand as any)?.name ?? undefined,
   };
 };
 
