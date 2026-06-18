@@ -349,6 +349,20 @@ export const getAllTokenAssignedDetails = async (
   }));
 };
 
+export const brandHasActiveTokens = async (brandId: number): Promise<boolean> => {
+  const token = await TokenAssignedModel.findOne({
+    where: {
+      brandId,
+      [Op.or]: [
+        { tokenBalance: { [Op.gt]: 0 } },
+        { isUnlimited: true },
+      ],
+    },
+    attributes: ["id"],
+  });
+  return !!token;
+};
+
 export const addTokensAssignedByType = async (
   brandId: number,
   type: string,

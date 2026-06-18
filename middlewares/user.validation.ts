@@ -38,6 +38,7 @@ export const completeProfileRequestSchema =
     profileRole: Joi.string()
       .valid(...profileRoleValues)
       .required(),
+    brandName: Joi.string().min(2).max(255).optional(),
     instagramLink: Joi.string().max(500).optional(),
     youtubeLink: Joi.string().max(500).optional(),
     facebookLink: Joi.string().max(500).optional(),

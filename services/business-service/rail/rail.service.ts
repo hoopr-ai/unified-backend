@@ -49,8 +49,10 @@ import {
   findAlbumByTrackId,
   copyRailToPages,
   CopyRailResult,
+  brandHasActiveTokens,
 } from "../../persistence-service/exports";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
 import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { transformRawTracksToDto } from "../track/track.service";
@@ -123,11 +125,24 @@ const hydrateTracks = async (
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
-  // Get liked tracks (parallel with track fetch)
-  const [tracksMap, likedCodes] = await Promise.all([
+  // Get liked tracks, SKUs, and token status in parallel with track fetch
+  const [tracksMap, likedCodes, skuRows, hasActiveTokens] = await Promise.all([
     findTracksLightweight(trackCodes, excludeOwnerIds),
     userId ? getUserLikedTrackCodes(userId) : Promise.resolve([]),
+    SkuModel.findAll({
+      where: { trackCode: { [Op.in]: trackCodes } },
+      attributes: ["trackCode", "id", "costPrice", "sellingPrice"],
+    }),
+    brandId ? brandHasActiveTokens(brandId) : Promise.resolve(false),
   ]);
+
+  // Build SKU map keyed by trackCode
+  const skuMap = new Map<string, { id: string; costPrice?: number; sellingPrice?: number }>();
+  for (const sku of skuRows) {
+    if (!skuMap.has(sku.trackCode)) {
+      skuMap.set(sku.trackCode, { id: sku.id, costPrice: sku.costPrice, sellingPrice: sku.sellingPrice });
+    }
+  }
 
   const likedSet = new Set(likedCodes);
 
@@ -187,6 +202,16 @@ const hydrateTracks = async (
       }
     }
 
+    const isEnterpriseOnly = ownerType === "Chartbusters" && !hasActiveTokens;
+    const skuData = skuMap.get(track.trackCode);
+    const sku = skuData
+      ? {
+          id: skuData.id,
+          costPrice: isEnterpriseOnly ? undefined : skuData.costPrice,
+          sellingPrice: isEnterpriseOnly ? undefined : skuData.sellingPrice,
+        }
+      : undefined;
+
     const trackData: Record<string, unknown> = {
       id: track.id,
       trackCode: track.trackCode,
@@ -199,13 +224,15 @@ const hydrateTracks = async (
       hookTimings: track.hookTimings,
       primaryArtists: track.primaryArtists,
       isLiked: likedSet.has(track.trackCode),
-      token: 1, // Default token (skip SKU lookup for speed)
+      token: 1,
     };
 
     // Add optional fields if they exist (matching getAllTracks API)
     if (ownerType) trackData.ownerType = ownerType;
     if (ownerSubType) trackData.ownerSubType = ownerSubType;
     if (ownerCode) trackData.ownerCode = ownerCode;
+    if (isEnterpriseOnly) trackData.isEnterpriseOnly = true;
+    if (sku) trackData.sku = sku;
     if (albumMap.has(track.id)) trackData.album = albumMap.get(track.id);
 
     result.set(code, trackData);

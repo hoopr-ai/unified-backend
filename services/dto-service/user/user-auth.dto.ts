@@ -18,6 +18,7 @@ export interface CompleteProfileRequestData {
   mobile: string;
   countryCode: string;
   profileRole: ProfileRole;
+  brandName?: string;
   instagramLink?: string;
   youtubeLink?: string;
   facebookLink?: string;

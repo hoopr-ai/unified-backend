@@ -50,7 +50,9 @@ import {
   upsertUserProfile,
   findUserProfile,
 } from "../../persistence-service/exports";
-import { findBrandById } from "../../persistence-service/brand/modules.export";
+import { findBrandById, updateBrand } from "../../persistence-service/brand/modules.export";
+import { saveOrganization } from "../../persistence-service/exports";
+import { OrganizationStatus, BrandStatus } from "../../dto-service/modules.export";
 import {
   AppError,
   createJWTToken,
@@ -489,7 +491,7 @@ export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number,
 ): Promise<LoginResponseWithSession> => {
-  const { firstName, lastName, mobile, countryCode, profileRole, instagramLink, youtubeLink, facebookLink } = data;
+  const { firstName, lastName, mobile, countryCode, profileRole, brandName, instagramLink, youtubeLink, facebookLink } = data;
 
   const user = await findUserById(userId);
   if (!user) {
@@ -527,6 +529,22 @@ export const completeProfileService = async (
     throw error;
   }
 
+  // If a brand name is provided, store it (lowercase), create an org, and link them
+  if (user.brandId && brandName) {
+    const normalizedName = brandName.toLowerCase().trim();
+    const now = new Date();
+    const org = await saveOrganization({
+      name: normalizedName,
+      status: OrganizationStatus.ACTIVE,
+      createdBy: userId,
+      createdAt: now,
+    });
+    await updateBrand(user.brandId, {
+      name: normalizedName,
+      organizationId: (org as any).id,
+    });
+  }
+
   // Notify existing team members that someone has joined
   if (user.brandId) {
     const newMemberFirstName = firstName || "";
@@ -557,7 +575,7 @@ export const completeProfileService = async (
   const brand = updatedUser.brandId
     ? await findBrandById(updatedUser.brandId)
     : null;
-  const brandName = (brand as any)?.name ?? undefined;
+  const responseBrandName = (brand as any)?.name ?? undefined;
 
   const token = createJWTToken(
     { userId, email: updatedUser.email, platform: updatedUser.platform, role },
@@ -588,7 +606,7 @@ export const completeProfileService = async (
     token,
     refreshToken,
     session.id!,
-    brandName,
+    responseBrandName,
   );
 };
 
