@@ -132,6 +132,7 @@ const hydrateTracks = async (
     SkuModel.findAll({
       where: { trackCode: { [Op.in]: trackCodes } },
       attributes: ["trackCode", "id", "costPrice", "sellingPrice"],
+      raw: true,
     }),
     brandId ? brandHasActiveTokens(brandId) : Promise.resolve(false),
   ]);
