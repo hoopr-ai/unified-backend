@@ -221,6 +221,18 @@ const transformTrackToDto = (
     }
   }
 
+  const isEnterpriseOnly = ownerType === "Chartbusters";
+
+  let sku: SkuInfo | undefined;
+  if (track.skus && track.skus.length > 0) {
+    const skuData = track.skus[0];
+    sku = {
+      id: skuData.id || "",
+      costPrice: isEnterpriseOnly ? undefined : skuData.costPrice,
+      sellingPrice: isEnterpriseOnly ? undefined : skuData.sellingPrice,
+    };
+  }
+
   const dto: TrackWithArtists = {
     id: track.id,
     trackCode: track.trackCode,
@@ -236,6 +248,8 @@ const transformTrackToDto = (
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
+    ...(isEnterpriseOnly && { isEnterpriseOnly: true }),
+    ...(sku && { sku }),
     ...(track.album && { album: track.album }),
     hookTimings: normalizeHookTimings(track.hookTimings),
     // Only include campaign if it exists and hasn't been used by the user
@@ -823,10 +837,11 @@ const transformTrackToDetailsDto = (
 
   if (track.skus && track.skus.length > 0) {
     const skuData = track.skus[0];
+    const isEnterpriseOnly = baseDto.isEnterpriseOnly === true;
     sku = {
       id: skuData.id || "",
-      costPrice: skuData.costPrice,
-      sellingPrice: skuData.sellingPrice,
+      costPrice: isEnterpriseOnly ? undefined : skuData.costPrice,
+      sellingPrice: isEnterpriseOnly ? undefined : skuData.sellingPrice,
       gstPercent: skuData.gstPercent,
       maxUsage: skuData.maxUsage,
       description: skuData.description,

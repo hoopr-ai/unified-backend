@@ -13,9 +13,11 @@ import {
   findTransactionByRazorpayOrderId,
   updateTransactionStatus,
   TransactionStatus,
+  OwnerModel,
 } from "../../persistence-service/exports";
 import { findUserAddress } from "../../persistence-service/user/user-address.persistence.service";
 import { AddressType } from "../../dto-service/modules.export";
+import { Op } from "sequelize";
 
 const getRazorpay = () =>
   new Razorpay({
@@ -26,6 +28,16 @@ const getRazorpay = () =>
 export const initTransactionService = async (userId: number, email: string) => {
   const cartItems = await findCartItems(userId, CartType.BUY_NOW);
   if (!cartItems.length) throw new AppError("Cart is empty", 400);
+
+  // Block transactions containing Chartbuster (enterprise-only) tracks
+  const allOwnerIds = cartItems.flatMap((item) => (item.sku?.track as any)?.ownerId ?? []);
+  if (allOwnerIds.length) {
+    const chartbusterOwner = await OwnerModel.findOne({
+      where: { id: { [Op.in]: allOwnerIds }, type: "Chartbusters" },
+      attributes: ["id"],
+    });
+    if (chartbusterOwner) throw new AppError("This track is enterprise-only and cannot be purchased", 403);
+  }
 
   const billingAddress = await findUserAddress(userId, AddressType.BILLING);
   if (!billingAddress) throw new AppError("Billing address is required", 400);

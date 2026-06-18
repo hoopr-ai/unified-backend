@@ -62,6 +62,8 @@ export interface TrackWithArtists {
   ownerType?: string;
   ownerSubType?: string;
   ownerCode?: string;
+  isEnterpriseOnly?: boolean; // True for Chartbuster tracks — no price, token-only access
+  sku?: SkuInfo; // SKU pricing info (prices omitted for enterprise-only tracks)
   album?: AlbumInfo; // Album details for the track
   campaign?: CampaignInfo; // Campaign details (amount and type) if active
   hookTimings: unknown; // Hook timing segments (e.g., chorus markers) — always present; `[]` when none

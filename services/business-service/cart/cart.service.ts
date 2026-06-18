@@ -7,8 +7,11 @@ import {
   updateCartItemQty,
   removeCartItem,
   clearBuyNowCart,
+  OwnerModel,
 } from "../../persistence-service/exports";
 import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
+import { TrackModel } from "../../persistence-service/track/schemas/track.schema";
+import { Op } from "sequelize";
 
 export interface AddToCartData {
   skuId: string;
@@ -58,6 +61,16 @@ export const addToCartService = async (userId: number, data: AddToCartData) => {
 
   const sku = await SkuModel.findOne({ where: { id: skuId } });
   if (!sku) throw new AppError("SKU not found", 404);
+
+  // Block Chartbuster (enterprise-only) tracks from being added to cart
+  const track = await TrackModel.findOne({ where: { trackCode: sku.trackCode }, attributes: ["ownerId"] });
+  if (track?.ownerId?.length) {
+    const chartbusterOwner = await OwnerModel.findOne({
+      where: { id: { [Op.in]: track.ownerId }, type: "Chartbusters" },
+      attributes: ["id"],
+    });
+    if (chartbusterOwner) throw new AppError("This track is enterprise-only and cannot be purchased", 403);
+  }
 
   if (cartType === CartType.BUY_NOW) {
     await clearBuyNowCart(userId);
