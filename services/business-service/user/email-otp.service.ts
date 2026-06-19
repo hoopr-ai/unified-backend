@@ -48,7 +48,14 @@ const KEY_VERIFY_ATTEMPTS = (email: string) =>
   `email_otp:verify_attempts:${email.toLowerCase()}`;
 const KEY_BLOCK = (email: string) => `email_otp:block:${email.toLowerCase()}`;
 
-const generateOtp = (): string => {
+// Test account that always receives a fixed OTP (for QA / automated testing).
+const TEST_EMAIL = "test@gsharp.media";
+const TEST_OTP = "123456";
+
+const generateOtp = (email: string): string => {
+  if (email.toLowerCase().trim() === TEST_EMAIL) {
+    return TEST_OTP;
+  }
   return Math.floor(
     10 ** (OTP_LENGTH - 1) + Math.random() * 9 * 10 ** (OTP_LENGTH - 1),
   ).toString();
@@ -135,7 +142,7 @@ export const sendEmailOtpService = async (
   await redisClient.del(KEY_OTP(lowerEmail));
 
   // Generate and store new OTP
-  const otp = generateOtp();
+  const otp = generateOtp(lowerEmail);
   await redisClient.set(KEY_OTP(lowerEmail), otp, "EX", OTP_TTL_SECONDS);
 
   // Increment resend counter
