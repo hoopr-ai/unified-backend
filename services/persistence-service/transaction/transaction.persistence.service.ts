@@ -60,7 +60,7 @@ export const findTransactionsByUserId = async (
     include: [
       {
         model: OrderModel,
-        attributes: [],
+        attributes: ["id"],
         include: [
           {
             model: OrderInfoModel,
