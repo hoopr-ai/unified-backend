@@ -74,8 +74,9 @@ export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) 
     : undefined;
 
   // Get the logged-in user's brandId for brand-specific recommendations
+  // Fall back to query param brandId so FE can pass it without auth header for token gating
   const user = userId ? await findUserById(userId) : null;
-  const userBrandId = user?.brandId;
+  const userBrandId = user?.brandId ?? parseBrandId(req.query.brandId);
   const result = await getRailsPaginatedService(userBrandId, userId, pageName, page, limit, railItemLimit);
 
   sendResponse(res, {

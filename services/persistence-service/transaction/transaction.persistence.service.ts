@@ -50,33 +50,39 @@ export const findTransactionsByUserId = async (
   limit: number,
   offset: number,
 ): Promise<{ rows: TransactionModel[]; count: number }> => {
-  return TransactionModel.findAndCountAll({
-    where: { userId },
-    order: [["createdAt", "DESC"]],
-    limit,
-    offset,
-    distinct: true,
-    attributes: ["id", "orderId", "totalDiscount", "totalAmount", "payAmount", "status", "paymentMethod", "createdAt"],
-    include: [
-      {
-        model: OrderModel,
-        attributes: ["id"],
-        include: [
-          {
-            model: OrderInfoModel,
-            attributes: ["skuId", "qty", "sellingPrice", "discount", "gstPercent", "maxUsage"],
-            include: [
-              {
-                model: SkuModel,
-                attributes: ["id", "itemType"],
-                include: [TRACK_ARTIST_INCLUDE],
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  });
+  const [rows, count] = await Promise.all([
+    TransactionModel.findAll({
+      where: { userId },
+      order: [["createdAt", "DESC"]],
+      limit,
+      offset,
+      attributes: ["id", "orderId", "totalDiscount", "totalAmount", "payAmount", "status", "paymentMethod", "createdAt"],
+      include: [
+        {
+          model: OrderModel,
+          attributes: ["id"],
+          required: false,
+          include: [
+            {
+              model: OrderInfoModel,
+              attributes: ["skuId", "qty", "sellingPrice", "discount", "gstPercent", "maxUsage"],
+              required: false,
+              include: [
+                {
+                  model: SkuModel,
+                  attributes: ["id", "itemType"],
+                  required: false,
+                  include: [TRACK_ARTIST_INCLUDE],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+    TransactionModel.count({ where: { userId } }),
+  ]);
+  return { rows, count };
 };
 
 export const findTransactionByIdAndUserId = async (
