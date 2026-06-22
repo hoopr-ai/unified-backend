@@ -15,6 +15,20 @@ import { CampaignModel, CampaignStatus } from "../campaign/modules.export";
 import { SoundProjectModel } from "../project/modules.export";
 import { Op, Sequelize, fn, col, where } from "sequelize";
 
+// Get the list of distinct non-null tier values across all tracks
+export const getDistinctTrackTiers = async (): Promise<string[]> => {
+  const rows = (await TrackModel.findAll({
+    attributes: [[fn("DISTINCT", col("tier")), "tier"]],
+    where: { tier: { [Op.ne]: null } } as any,
+    order: [[col("tier"), "ASC"]],
+    raw: true,
+  })) as unknown as { tier: string | null }[];
+
+  return rows
+    .map((r) => r.tier)
+    .filter((t): t is string => typeof t === "string" && t.trim().length > 0);
+};
+
 // Reusable include configuration for artist mappings
 const getArtistInclude = () => [
   {

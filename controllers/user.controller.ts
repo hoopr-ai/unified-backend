@@ -254,6 +254,19 @@ export const getUsers = catchAsync(async (req: AuthRequest, res: Response) => {
   });
 });
 
+// Admin edit of an arbitrary user's basic profile fields (client-credentials console)
+export const updateUserById = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const targetUserId = Number(req.params.userId);
+    const response = await updateUserProfileService(req.body, targetUserId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.UserUpdatedSuccess,
+    });
+  },
+);
+
 export const removeInvitedUser = catchAsync(
   async (req: AuthRequest, res: Response) => {
     const adminUserId = req.session?.userId;

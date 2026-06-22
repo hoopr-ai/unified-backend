@@ -82,6 +82,18 @@ export const findBrandByNameAndOrganization = async (
   return brand;
 };
 
+export const updateBrandById = async (
+  id: number,
+  updates: Partial<
+    Pick<
+      BrandDetails,
+      "name" | "description" | "status" | "restrictedOwners" | "restrictedTrackTiers"
+    >
+  >
+): Promise<void> => {
+  await BrandModel.update(updates, { where: { id } });
+};
+
 export const getRestrictedOwnersByBrandId = async (
   brandId: number
 ): Promise<string[]> => {
