@@ -4,7 +4,7 @@ export const upsertUserProfile = async (
   userId: number,
   data: Pick<UserProfileAttributes, "instagramLink" | "youtubeLink" | "facebookLink">,
 ): Promise<void> => {
-  await UserProfileModel.upsert({ userId, ...data });
+  await UserProfileModel.upsert({ userId, ...data }, { conflictFields: ["userId"] });
 };
 
 export const findUserProfile = async (
