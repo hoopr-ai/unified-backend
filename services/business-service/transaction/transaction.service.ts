@@ -161,21 +161,63 @@ export const commitTransactionService = async (
 
 const PAGE_SIZE = 10;
 
+const mapOrderItems = (orderInfos: any[]) =>
+  orderInfos.map((info: any) => {
+    const track = info.sku?.track ?? null;
+    const artists = (track?.trackArtistMappings ?? []).map((m: any) => ({
+      id: m.artist?.id ?? null,
+      name: m.artist?.name ?? null,
+      artistCode: m.artist?.artistCode ?? null,
+      type: m.artist?.type ?? null,
+      role: m.role,
+      isPrimary: m.isPrimary ?? false,
+      instagramLink: m.artist?.instagramLink ?? null,
+      spotifyLink: m.artist?.spotifyLink ?? null,
+    }));
+
+    return {
+      skuId: info.skuId,
+      itemType: info.sku?.itemType ?? null,
+      qty: info.qty,
+      sellingPrice: info.sellingPrice,
+      discount: info.discount,
+      gstPercent: info.gstPercent,
+      maxUsage: info.maxUsage,
+      track: track
+        ? {
+            trackCode: track.trackCode,
+            name: track.name ?? null,
+            duration: track.duration ?? null,
+            mp3Link: track.mp3Link ?? null,
+            artworkLink: track.artworkLink ?? null,
+            bpm: track.bpm ?? null,
+            energy: track.energy ?? null,
+            displayTags: track.displayTags ?? [],
+            artists,
+          }
+        : null,
+    };
+  });
+
 export const getTransactionsService = async (userId: number, page: number) => {
   const offset = (page - 1) * PAGE_SIZE;
   const { rows, count } = await findTransactionsByUserId(userId, PAGE_SIZE, offset);
 
   return {
-    transactions: rows.map((t) => ({
-      id: t.id,
-      orderId: t.orderId,
-      totalAmount: t.totalAmount,
-      totalDiscount: t.totalDiscount,
-      payAmount: t.payAmount,
-      status: t.status,
-      paymentMethod: t.paymentMethod ?? null,
-      createdAt: t.createdAt,
-    })),
+    transactions: rows.map((t) => {
+      const orderInfos: any[] = (t as any).order?.orderInfos ?? [];
+      return {
+        id: t.id,
+        orderId: t.orderId,
+        totalAmount: t.totalAmount,
+        totalDiscount: t.totalDiscount,
+        payAmount: t.payAmount,
+        status: t.status,
+        paymentMethod: t.paymentMethod ?? null,
+        createdAt: t.createdAt,
+        items: mapOrderItems(orderInfos),
+      };
+    }),
     pagination: {
       total: count,
       page,

@@ -3,6 +3,8 @@ import { OrderModel } from "../order/schemas/order.schema";
 import { OrderInfoModel } from "../order/schemas/order-info.schema";
 import { SkuModel } from "../sku/schemas/sku.schema";
 import { TrackModel } from "../track/schemas/track.schema";
+import { TrackArtistMappingModel } from "../artists/schemas/track-artist-mapping.schema";
+import { ArtistModel } from "../artists/schemas/artist.schema";
 
 export const createTransaction = async (data: TransactionAttributes): Promise<TransactionModel> => {
   return TransactionModel.create(data);
@@ -26,6 +28,23 @@ export const updateTransactionStatus = async (
   await TransactionModel.update({ status, ...updates }, { where: { id } });
 };
 
+const TRACK_ARTIST_INCLUDE = {
+  model: TrackModel,
+  attributes: ["trackCode", "name", "duration", "mp3Link", "artworkLink", "bpm", "energy", "displayTags"],
+  include: [
+    {
+      model: TrackArtistMappingModel,
+      attributes: ["role", "isPrimary"],
+      include: [
+        {
+          model: ArtistModel,
+          attributes: ["id", "name", "artistCode", "type", "instagramLink", "spotifyLink"],
+        },
+      ],
+    },
+  ],
+};
+
 export const findTransactionsByUserId = async (
   userId: number,
   limit: number,
@@ -36,7 +55,27 @@ export const findTransactionsByUserId = async (
     order: [["createdAt", "DESC"]],
     limit,
     offset,
+    distinct: true,
     attributes: ["id", "orderId", "totalDiscount", "totalAmount", "payAmount", "status", "paymentMethod", "createdAt"],
+    include: [
+      {
+        model: OrderModel,
+        attributes: [],
+        include: [
+          {
+            model: OrderInfoModel,
+            attributes: ["skuId", "qty", "sellingPrice", "discount", "gstPercent", "maxUsage"],
+            include: [
+              {
+                model: SkuModel,
+                attributes: ["id", "itemType"],
+                include: [TRACK_ARTIST_INCLUDE],
+              },
+            ],
+          },
+        ],
+      },
+    ],
   });
 };
 
