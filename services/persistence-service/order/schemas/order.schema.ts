@@ -13,6 +13,7 @@ import {
   Index,
 } from "sequelize-typescript";
 import { UserModel } from "../../user/schemas/user.schema";
+import { OrderInfoModel } from "./order-info.schema";
 
 export enum OrderStatus {
   PENDING = "PENDING",
@@ -69,4 +70,7 @@ export class OrderModel extends Model<OrderModel, OrderAttributes> {
 
   @BelongsTo(() => UserModel)
   user!: UserModel;
+
+  @HasMany(() => OrderInfoModel)
+  orderInfos!: OrderInfoModel[];
 }

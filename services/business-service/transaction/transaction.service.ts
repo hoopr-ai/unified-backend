@@ -14,6 +14,8 @@ import {
   updateTransactionStatus,
   TransactionStatus,
   OwnerModel,
+  findTransactionsByUserId,
+  findTransactionByIdAndUserId,
 } from "../../persistence-service/exports";
 import { findUserAddress } from "../../persistence-service/user/user-address.persistence.service";
 import { AddressType } from "../../dto-service/modules.export";
@@ -154,5 +156,69 @@ export const commitTransactionService = async (
     orderId: transaction.orderId,
     status: TransactionStatus.SUCCESS,
     paymentMethod,
+  };
+};
+
+const PAGE_SIZE = 10;
+
+export const getTransactionsService = async (userId: number, page: number) => {
+  const offset = (page - 1) * PAGE_SIZE;
+  const { rows, count } = await findTransactionsByUserId(userId, PAGE_SIZE, offset);
+
+  return {
+    transactions: rows.map((t) => ({
+      id: t.id,
+      orderId: t.orderId,
+      totalAmount: t.totalAmount,
+      totalDiscount: t.totalDiscount,
+      payAmount: t.payAmount,
+      status: t.status,
+      paymentMethod: t.paymentMethod ?? null,
+      createdAt: t.createdAt,
+    })),
+    pagination: {
+      total: count,
+      page,
+      pageSize: PAGE_SIZE,
+      totalPages: Math.ceil(count / PAGE_SIZE),
+    },
+  };
+};
+
+export const getTransactionDetailService = async (userId: number, transactionId: number) => {
+  const transaction = await findTransactionByIdAndUserId(transactionId, userId);
+  if (!transaction) throw new AppError("Transaction not found", 404);
+
+  const order = (transaction as any).order;
+  const orderInfos: any[] = order?.orderInfos ?? [];
+
+  return {
+    id: transaction.id,
+    orderId: transaction.orderId,
+    totalAmount: transaction.totalAmount,
+    totalDiscount: transaction.totalDiscount,
+    payAmount: transaction.payAmount,
+    status: transaction.status,
+    paymentMethod: transaction.paymentMethod ?? null,
+    razorpayOrderId: transaction.razorpayOrderId ?? null,
+    razorpayPaymentId: transaction.razorpayPaymentId ?? null,
+    billingAddress: transaction.billingAddress ?? null,
+    createdAt: transaction.createdAt,
+    items: orderInfos.map((info: any) => ({
+      skuId: info.skuId,
+      qty: info.qty,
+      sellingPrice: info.sellingPrice,
+      discount: info.discount,
+      gstPercent: info.gstPercent,
+      maxUsage: info.maxUsage,
+      track: info.sku?.track
+        ? {
+            trackCode: info.sku.track.trackCode,
+            name: info.sku.track.name,
+            duration: info.sku.track.duration,
+            mp3Link: info.sku.track.mp3Link,
+          }
+        : null,
+    })),
   };
 };
