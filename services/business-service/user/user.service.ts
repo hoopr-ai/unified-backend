@@ -664,8 +664,10 @@ export const updateUserProfileService = async (
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
 
+  const { instagramLink, youtubeLink, facebookLink, brandName, ...userUpdates } = data;
+
   try {
-    await updateUserProfilePartial(userId, data);
+    await updateUserProfilePartial(userId, userUpdates);
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
@@ -683,7 +685,23 @@ export const updateUserProfileService = async (
     throw error;
   }
 
-  const updatedUser = await findUserById(userId);
+  const socialUpdates: { instagramLink?: string | null; youtubeLink?: string | null; facebookLink?: string | null } = {};
+  if (instagramLink !== undefined) socialUpdates.instagramLink = instagramLink;
+  if (youtubeLink !== undefined) socialUpdates.youtubeLink = youtubeLink;
+  if (facebookLink !== undefined) socialUpdates.facebookLink = facebookLink;
+  if (Object.keys(socialUpdates).length > 0) {
+    await upsertUserProfile(userId, socialUpdates);
+  }
+
+  if (brandName && user.brandId) {
+    await updateBrand(user.brandId, { name: brandName.toLowerCase().trim() });
+  }
+
+  const [updatedUser, userProfile, brand] = await Promise.all([
+    findUserById(userId),
+    findUserProfile(userId),
+    user.brandId ? findBrandById(user.brandId) : Promise.resolve(null),
+  ]);
   if (!updatedUser) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
@@ -697,6 +715,10 @@ export const updateUserProfileService = async (
     mobile: updatedUser.mobile,
     profileRole: updatedUser.profileRole,
     isProfileComplete: updatedUser.isProfileComplete ?? false,
+    instagramLink: userProfile?.instagramLink ?? null,
+    youtubeLink: userProfile?.youtubeLink ?? null,
+    facebookLink: userProfile?.facebookLink ?? null,
+    ...(brand ? { brandName: (brand as any).name } : {}),
   };
 };
 

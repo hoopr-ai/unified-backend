@@ -28,7 +28,12 @@ export interface UpdateProfileRequestData {
   firstName?: string;
   lastName?: string;
   mobile?: string;
+  countryCode?: string;
   profileRole?: ProfileRole;
+  instagramLink?: string | null;
+  youtubeLink?: string | null;
+  facebookLink?: string | null;
+  brandName?: string;
 }
 
 export interface UserProfileResponse {

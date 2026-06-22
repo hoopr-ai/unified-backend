@@ -78,6 +78,10 @@ export const updateProfileRequestSchema = Joi.object({
   profileRole: Joi.string()
     .valid(...profileRoleValues)
     .optional(),
+  instagramLink: Joi.string().uri().max(500).allow(null).optional(),
+  youtubeLink: Joi.string().uri().max(500).allow(null).optional(),
+  facebookLink: Joi.string().uri().max(500).allow(null).optional(),
+  brandName: Joi.string().min(2).max(255).optional(),
 }).min(1);
 
 export const sendOtpRequestSchema = Joi.object<SendOtpRequestData>({
