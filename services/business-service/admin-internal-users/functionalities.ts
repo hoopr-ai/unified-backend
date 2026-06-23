@@ -16,6 +16,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "sales-tool",
   "video-links",
   "sage",
+  "sftp-manager",
   "hoopr-b2c-dashboard",
   "youtube",
   "faq",
