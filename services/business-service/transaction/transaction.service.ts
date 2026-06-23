@@ -8,6 +8,7 @@ import {
   createOrder,
   createOrderInfo,
   updateOrderStatus,
+  findOrderInfosWithSku,
   OrderStatus,
   createTransaction,
   findTransactionByRazorpayOrderId,
@@ -16,6 +17,7 @@ import {
   OwnerModel,
   findTransactionsByUserId,
   findTransactionByIdAndUserId,
+  createLicenseRecord,
 } from "../../persistence-service/exports";
 import { findUserAddress } from "../../persistence-service/user/user-address.persistence.service";
 import { AddressType } from "../../dto-service/modules.export";
@@ -148,6 +150,26 @@ export const commitTransactionService = async (
 
   await updateOrderStatus(transaction.orderId, OrderStatus.SUCCESS);
 
+  // Create a license record for each purchased track
+  const orderItems = await findOrderInfosWithSku(transaction.orderId);
+  const now = new Date();
+  const licenses = await Promise.all(
+    orderItems
+      .filter((item) => (item as any).sku?.trackCode)
+      .map((item) =>
+        createLicenseRecord({
+          userId,
+          brandId: null,
+          trackCode: (item as any).sku.trackCode,
+          tokenCost: 0,
+          price: item.sellingPrice,
+          type: "pay_per_track",
+          licensedAt: now,
+          createdAt: now,
+        }),
+      ),
+  );
+
   // Clear the buy-now cart after successful payment
   await clearBuyNowCart(userId);
 
@@ -156,6 +178,7 @@ export const commitTransactionService = async (
     orderId: transaction.orderId,
     status: TransactionStatus.SUCCESS,
     paymentMethod,
+    licenseIds: licenses.map((l) => l.id),
   };
 };
 
