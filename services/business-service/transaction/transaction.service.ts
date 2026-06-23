@@ -18,6 +18,7 @@ import {
   findTransactionsByUserId,
   findTransactionByIdAndUserId,
   createLicenseRecord,
+  findLicensesByUserIdAndTrackCodes,
 } from "../../persistence-service/exports";
 import { findUserAddress } from "../../persistence-service/user/user-address.persistence.service";
 import { AddressType } from "../../dto-service/modules.export";
@@ -150,41 +151,48 @@ export const commitTransactionService = async (
 
   await updateOrderStatus(transaction.orderId, OrderStatus.SUCCESS);
 
-  // Create a license record for each purchased track
-  const orderItems = await findOrderInfosWithSku(transaction.orderId);
-  const now = new Date();
-  const licenses = await Promise.all(
-    orderItems
-      .filter((item) => (item as any).sku?.trackCode)
-      .map((item) =>
-        createLicenseRecord({
-          userId,
-          brandId: null,
-          trackCode: (item as any).sku.trackCode,
-          tokenCost: 0,
-          price: item.sellingPrice,
-          type: "pay_per_track",
-          licensedAt: now,
-          createdAt: now,
-        }),
-      ),
-  );
-
   // Clear the buy-now cart after successful payment
   await clearBuyNowCart(userId);
+
+  // Create license records for each purchased track — non-blocking so a DB
+  // hiccup here never rolls back an already-confirmed payment response.
+  let licenseIds: number[] = [];
+  try {
+    const orderItems = await findOrderInfosWithSku(transaction.orderId);
+    const now = new Date();
+    const licenses = await Promise.all(
+      orderItems
+        .filter((item) => (item as any).sku?.trackCode)
+        .map((item) =>
+          createLicenseRecord({
+            userId,
+            brandId: null,
+            trackCode: (item as any).sku.trackCode,
+            tokenCost: 0,
+            price: item.sellingPrice,
+            type: "pay_per_track",
+            licensedAt: now,
+            createdAt: now,
+          }),
+        ),
+    );
+    licenseIds = licenses.map((l) => l.id).filter((id): id is number => id != null);
+  } catch (err) {
+    console.error("License creation failed after payment commit:", err);
+  }
 
   return {
     transactionId: transaction.id,
     orderId: transaction.orderId,
     status: TransactionStatus.SUCCESS,
     paymentMethod,
-    licenseIds: licenses.map((l) => l.id),
+    licenseIds,
   };
 };
 
-const PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 10;
 
-const mapOrderItems = (orderInfos: any[]) =>
+const mapOrderItems = (orderInfos: any[], licenseMap: Map<string, number>) =>
   orderInfos.map((info: any) => {
     const track = info.sku?.track ?? null;
     const artists = (track?.trackArtistMappings ?? []).map((m: any) => ({
@@ -198,8 +206,11 @@ const mapOrderItems = (orderInfos: any[]) =>
       spotifyLink: m.artist?.spotifyLink ?? null,
     }));
 
+    const trackCode = track?.trackCode ?? null;
+
     return {
       skuId: info.skuId,
+      licenseId: trackCode ? (licenseMap.get(trackCode) ?? null) : null,
       itemType: info.sku?.itemType ?? null,
       qty: info.qty,
       sellingPrice: info.sellingPrice,
@@ -208,7 +219,7 @@ const mapOrderItems = (orderInfos: any[]) =>
       maxUsage: info.maxUsage,
       track: track
         ? {
-            trackCode: track.trackCode,
+            trackCode,
             name: track.name ?? null,
             duration: track.duration ?? null,
             mp3Link: track.mp3Link ?? null,
@@ -222,9 +233,28 @@ const mapOrderItems = (orderInfos: any[]) =>
     };
   });
 
-export const getTransactionsService = async (userId: number, page: number) => {
-  const offset = (page - 1) * PAGE_SIZE;
-  const { rows, count } = await findTransactionsByUserId(userId, PAGE_SIZE, offset);
+export const getTransactionsService = async (userId: number, page: number, limit: number) => {
+  const offset = (page - 1) * limit;
+  const { rows, count } = await findTransactionsByUserId(userId, limit, offset);
+
+  // Collect all unique trackCodes across this page of transactions
+  const allTrackCodes: string[] = [];
+  for (const t of rows) {
+    const orderInfos: any[] = (t as any).order?.orderInfos ?? [];
+    for (const info of orderInfos) {
+      const tc = info.sku?.track?.trackCode;
+      if (tc) allTrackCodes.push(tc);
+    }
+  }
+
+  // Single query to get licenseId per trackCode for this user
+  const licenseMap = new Map<string, number>();
+  if (allTrackCodes.length > 0) {
+    const licenses = await findLicensesByUserIdAndTrackCodes(userId, [...new Set(allTrackCodes)]);
+    for (const l of licenses) {
+      if (!licenseMap.has(l.trackCode)) licenseMap.set(l.trackCode, l.id);
+    }
+  }
 
   return {
     transactions: rows.map((t) => {
@@ -238,14 +268,14 @@ export const getTransactionsService = async (userId: number, page: number) => {
         status: t.status,
         paymentMethod: t.paymentMethod ?? null,
         createdAt: t.createdAt,
-        items: mapOrderItems(orderInfos),
+        items: mapOrderItems(orderInfos, licenseMap),
       };
     }),
     pagination: {
       total: count,
       page,
-      pageSize: PAGE_SIZE,
-      totalPages: Math.ceil(count / PAGE_SIZE),
+      pageSize: limit,
+      totalPages: Math.ceil(count / limit),
     },
   };
 };

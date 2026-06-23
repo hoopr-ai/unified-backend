@@ -39,8 +39,10 @@ export const getTransactions = catchAsync(async (req: AuthRequest, res: Response
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
   const pageRaw = Array.isArray(req.query.page) ? req.query.page[0] : req.query.page;
+  const limitRaw = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
   const page = Math.max(1, parseInt((pageRaw as string) ?? "1", 10) || 1);
-  const data = await getTransactionsService(userId, page);
+  const limit = Math.min(100, Math.max(1, parseInt((limitRaw as string) ?? "10", 10) || 10));
+  const data = await getTransactionsService(userId, page, limit);
   sendResponse(res, { status: HttpStatusCode.OK, data, message: "Transactions fetched" });
 });
 
