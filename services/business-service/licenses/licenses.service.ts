@@ -575,12 +575,11 @@ export const downloadTrackService = async (
     throw new AppError("License not found", 404);
   }
 
-  // Verify ownership
-  // Check if the user owns the license directly
-  if (license.userId !== userId) {
+  // Verify ownership — Number() cast handles Sequelize returning BIGINT as string
+  if (Number(license.userId) !== userId) {
     // Or check if the user belongs to the brand that owns the license
     const user = await UserModel.findByPk(userId);
-    if (!user || !user.brandId || user.brandId !== license.brandId) {
+    if (!user || !user.brandId || Number(user.brandId) !== Number(license.brandId)) {
       throw new AppError("Unauthorized access to license", 403);
     }
   }
@@ -622,10 +621,10 @@ export const downloadLicensePdfService = async (
     throw new AppError("License not found", 404);
   }
 
-  // Verify ownership
-  if (license.userId !== userId) {
+  // Verify ownership — Number() cast handles Sequelize returning BIGINT as string
+  if (Number(license.userId) !== userId) {
     const user = await UserModel.findByPk(userId);
-    if (!user || !user.brandId || user.brandId !== license.brandId) {
+    if (!user || !user.brandId || Number(user.brandId) !== Number(license.brandId)) {
       throw new AppError("Unauthorized access to license", 403);
     }
   }
