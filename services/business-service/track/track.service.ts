@@ -885,10 +885,12 @@ const transformTrackToDetailsDto = (
   if (track.skus && track.skus.length > 0) {
     const skuData = track.skus[0];
     const isEnterpriseOnly = baseDto.isEnterpriseOnly === true;
+    const hasTokenForTrack = baseDto.ownerType ? (activeTokenTypes?.has(baseDto.ownerType) ?? false) : false;
+    const hidePrice = isEnterpriseOnly || hasTokenForTrack;
     sku = {
       id: skuData.id || "",
-      costPrice: isEnterpriseOnly ? undefined : skuData.costPrice,
-      sellingPrice: isEnterpriseOnly ? undefined : skuData.sellingPrice,
+      costPrice: hidePrice ? undefined : skuData.costPrice,
+      sellingPrice: hidePrice ? undefined : skuData.sellingPrice,
       gstPercent: skuData.gstPercent,
       maxUsage: skuData.maxUsage,
       description: skuData.description,
