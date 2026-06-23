@@ -116,17 +116,28 @@ const hydrateTracks = async (
 ): Promise<Map<string, unknown>> => {
   if (trackCodes.length === 0) return new Map();
 
-  // Get excluded owners
+  // Get excluded owners and token types together before the main fetch
   let excludeOwnerIds: string[] | undefined;
+  let activeTokenTypes = new Set<string>();
   if (brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
+    ]);
+    activeTokenTypes = tokenTypes;
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
   }
 
-  // Get liked tracks, SKUs, and token status in parallel with track fetch
-  const [tracksMap, likedCodes, skuRows, activeTokenTypes] = await Promise.all([
+  // Get liked tracks and SKUs in parallel with track fetch
+  const [tracksMap, likedCodes, skuRows] = await Promise.all([
     findTracksLightweight(trackCodes, excludeOwnerIds),
     userId ? getUserLikedTrackCodes(userId) : Promise.resolve([]),
     SkuModel.findAll({
@@ -134,7 +145,6 @@ const hydrateTracks = async (
       attributes: ["trackCode", "id", "costPrice", "sellingPrice"],
       raw: true,
     }),
-    brandId ? getActiveBrandTokenTypes(brandId) : Promise.resolve(new Set<string>()),
   ]);
 
   // Build SKU map keyed by trackCode
@@ -878,7 +888,16 @@ const resolveQueryTracks = async (
   // Get excluded owners from brand or from login restrictions
   let excludeOwnerIds: string[] | undefined;
   if (req.brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(req.brandId);
+    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
+      getRestrictedOwnersByBrandId(req.brandId),
+      getActiveBrandTokenTypes(req.brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
+    ]);
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
@@ -995,7 +1014,16 @@ export const resolveChartTracks = async (
 
   let excludeOwnerIds: string[] | undefined;
   if (brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
+    ]);
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
@@ -1648,7 +1676,16 @@ const resolveQueryTracksPaginated = async (
 
   let excludeOwnerIds: string[] | undefined;
   if (brandId) {
-    excludeOwnerIds = await getRestrictedOwnersByBrandId(brandId);
+    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
+    ]);
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
     excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;

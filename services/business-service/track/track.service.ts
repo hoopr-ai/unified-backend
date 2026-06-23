@@ -521,11 +521,19 @@ export const getAllTracksService = async (
   let excludeTiers: string[] | undefined;
   let activeTokenTypes = new Set<string>();
   if (brandId) {
-    [excludeOwnerIds, excludeTiers, activeTokenTypes] = await Promise.all([
+    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
       getRestrictedOwnersByBrandId(brandId),
       getRestrictedTrackTiersByBrandId(brandId),
       getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
     ]);
+    activeTokenTypes = tokenTypes;
+    excludeTiers = brandExcludeTiers;
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(
       UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
@@ -624,11 +632,19 @@ export const getTracksByCodesService = async (
   let excludeTiers: string[] | undefined;
   let activeTokenTypes = new Set<string>();
   if (brandId) {
-    [excludeOwnerIds, excludeTiers, activeTokenTypes] = await Promise.all([
+    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
       getRestrictedOwnersByBrandId(brandId),
       getRestrictedTrackTiersByBrandId(brandId),
       getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
     ]);
+    activeTokenTypes = tokenTypes;
+    excludeTiers = brandExcludeTiers;
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(
       UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
@@ -754,11 +770,19 @@ export const getTracksByFilterService = async (
   let excludeTiers: string[] | undefined;
   let activeTokenTypes = new Set<string>();
   if (brandId) {
-    [excludeOwnerIds, excludeTiers, activeTokenTypes] = await Promise.all([
+    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
       getRestrictedOwnersByBrandId(brandId),
       getRestrictedTrackTiersByBrandId(brandId),
       getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
     ]);
+    activeTokenTypes = tokenTypes;
+    excludeTiers = brandExcludeTiers;
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(
       UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
@@ -902,11 +926,19 @@ export const getTrackDetailsByCodeService = async (
   let excludeTiers: string[] | undefined;
   let activeTokenTypes = new Set<string>();
   if (brandId) {
-    [excludeOwnerIds, excludeTiers, activeTokenTypes] = await Promise.all([
+    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
       getRestrictedOwnersByBrandId(brandId),
       getRestrictedTrackTiersByBrandId(brandId),
       getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
     ]);
+    activeTokenTypes = tokenTypes;
+    excludeTiers = brandExcludeTiers;
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
   } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
     const resolvedIds = await getOwnerIdsByNames(
       UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
