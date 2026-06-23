@@ -182,4 +182,5 @@ export interface GetTracksByCodesQuery {
 
 export const UNAUTHENTICATED_RESTRICTED_OWNER_NAMES: string[] = [
   "YRF Music",
+  "Zee Music Company",
 ];

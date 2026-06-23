@@ -354,31 +354,21 @@ export const brandHasActiveTokens = async (brandId: number): Promise<boolean> =>
   return types.size > 0;
 };
 
-// Returns the set of token types that this brand has active balance for (checks both token tables)
+// Returns the set of token types that this brand has active balance for
 export const getActiveBrandTokenTypes = async (brandId: number): Promise<Set<string>> => {
-  const [newTokens, oldTokens] = await Promise.all([
-    TokenAssignedModel.findAll({
-      where: {
-        brandId,
-        [Op.or]: [
-          { tokenBalance: { [Op.gt]: 0 } },
-          { isUnlimited: true },
-        ],
-      },
-      attributes: ["type"],
-      raw: true,
-    }),
-    TokenModel.findAll({
-      where: {
-        brandId,
-        tokenBalance: { [Op.gt]: 0 },
-      },
-      attributes: ["type"],
-      raw: true,
-    }),
-  ]);
+  const tokens = await TokenAssignedModel.findAll({
+    where: {
+      brandId,
+      [Op.or]: [
+        { tokenBalance: { [Op.gt]: 0 } },
+        { isUnlimited: true },
+      ],
+    },
+    attributes: ["type"],
+    raw: true,
+  });
   const types = new Set<string>();
-  for (const t of [...newTokens, ...oldTokens]) {
+  for (const t of tokens) {
     if ((t as any).type) types.add((t as any).type);
   }
   return types;
