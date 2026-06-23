@@ -52,7 +52,7 @@ export const findTransactionsByUserId = async (
 ): Promise<{ rows: TransactionModel[]; count: number }> => {
   const [rows, count] = await Promise.all([
     TransactionModel.findAll({
-      where: { userId },
+      where: { userId, status: TransactionStatus.SUCCESS },
       order: [["createdAt", "DESC"]],
       limit,
       offset,
@@ -80,7 +80,7 @@ export const findTransactionsByUserId = async (
         },
       ],
     }),
-    TransactionModel.count({ where: { userId } }),
+    TransactionModel.count({ where: { userId, status: TransactionStatus.SUCCESS } }),
   ]);
   return { rows, count };
 };
