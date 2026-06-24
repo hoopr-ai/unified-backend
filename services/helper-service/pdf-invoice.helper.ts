@@ -209,12 +209,12 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
 
   <!-- ── Billing Details ── border-bottom on td draws the line without gap -->
   <tr>
-    <td colspan="2" style="${S.plain}padding-top:16px;padding-bottom:5px;border-bottom:1px solid #000;">
+    <td colspan="2" style="${S.plain}padding-top:16px;padding-bottom:2px;border-bottom:1px solid #000;">
       <span style="${S.sec}">Billing Details</span>
     </td>
   </tr>
   <tr>
-    <td colspan="2" style="${S.plain}padding-top:6px;">
+    <td colspan="2" style="${S.plain}padding-top:5px;">
       <span style="${S.label}">Name:</span> ${escHtml(billingName)}<br/>
       <span style="${S.label}">Contact Details:</span> ${escHtml(billingEmail)}${billingMobile ? " | " + escHtml(billingMobile) : ""}<br/>
       <span style="${S.label}">Address:</span><br/>
