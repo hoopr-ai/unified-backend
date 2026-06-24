@@ -10,6 +10,7 @@ import {
   commitTransactionService,
   getTransactionsService,
   getTransactionDetailService,
+  parseTransactionId,
 } from "../services/business-service/transaction/transaction.service";
 import type { SessionPayload } from "../middlewares/authenticate";
 
@@ -50,7 +51,8 @@ export const getTransactionDetail = catchAsync(async (req: AuthRequest, res: Res
   const userId = req.session?.userId;
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
-  const transactionId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const transactionId = rawId.startsWith("TXN-") ? parseTransactionId(rawId) : parseInt(rawId, 10);
   if (isNaN(transactionId)) return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid transaction id", {});
 
   const data = await getTransactionDetailService(userId, transactionId);

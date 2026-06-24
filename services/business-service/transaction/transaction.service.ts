@@ -99,8 +99,8 @@ export const initTransactionService = async (userId: number, email: string) => {
   });
 
   return {
-    orderId: order.id,
-    transactionId: transaction.id,
+    orderId: formatOrderId(order.id!),
+    transactionId: formatTransactionId(transaction.id!),
     razorpayOrderId: razorpayOrder.id,
     amount: payAmount,
     amountInPaise: Math.round(payAmount * 100),
@@ -187,13 +187,17 @@ export const commitTransactionService = async (
   }
 
   return {
-    transactionId: transaction.id,
-    orderId: transaction.orderId,
+    transactionId: formatTransactionId(transaction.id!),
+    orderId: formatOrderId(transaction.orderId),
     status: TransactionStatus.SUCCESS,
     paymentMethod,
     licenseIds,
   };
 };
+
+export const formatOrderId = (id: number): string => `ORD-${String(id).padStart(8, "0")}`;
+export const formatTransactionId = (id: number): string => `TXN-${String(id).padStart(8, "0")}`;
+export const parseTransactionId = (raw: string): number => parseInt(raw.replace(/^TXN-/, ""), 10);
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -265,8 +269,8 @@ export const getTransactionsService = async (userId: number, page: number, limit
     transactions: rows.map((t) => {
       const orderInfos: any[] = (t as any).order?.orderInfos ?? [];
       return {
-        id: t.id,
-        orderId: t.orderId,
+        id: formatTransactionId(t.id),
+        orderId: formatOrderId(t.orderId),
         totalAmount: t.totalAmount,
         totalDiscount: t.totalDiscount,
         payAmount: t.payAmount,
@@ -293,8 +297,8 @@ export const getTransactionDetailService = async (userId: number, transactionId:
   const orderInfos: any[] = order?.orderInfos ?? [];
 
   return {
-    id: transaction.id,
-    orderId: transaction.orderId,
+    id: formatTransactionId(transaction.id),
+    orderId: formatOrderId(transaction.orderId),
     totalAmount: transaction.totalAmount,
     totalDiscount: transaction.totalDiscount,
     payAmount: transaction.payAmount,
