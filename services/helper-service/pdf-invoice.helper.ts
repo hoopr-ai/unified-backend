@@ -111,13 +111,11 @@ const formatInr = (n: number): string =>
 // ─── HTML Template ───────────────────────────────────────────────────────────
 
 const S = {
-  cell: "border:1px solid #000;padding:8px 10px;font-size:13px;vertical-align:top;",
-  hdr: "border:1px solid #000;padding:8px 10px;font-size:13px;font-weight:bold;",
+  cell:  "border:1px solid #000;padding:8px 10px;font-size:13px;vertical-align:top;",
+  hdr:   "border:1px solid #000;padding:8px 10px;font-size:13px;font-weight:bold;",
   plain: "border:none;padding:0;font-size:13px;vertical-align:top;",
   label: "font-weight:bold;",
-  sec: "font-size:14px;font-weight:bold;text-decoration:underline;",
-  // font-size:1px + line-height:1px stops &nbsp; from inflating row height
-  sp: (px: number) => `<tr><td colspan="10" style="border:none;padding:0;height:${px}px;font-size:1px;line-height:1px;"> </td></tr>`,
+  sec:   "font-size:14px;font-weight:bold;text-decoration:underline;",
 };
 
 const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogoSrc: string): string => {
@@ -163,12 +161,12 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
   <meta charset="UTF-8"/>
   <title>Tax Invoice</title>
   <style>
-    @page { margin: 12mm 14mm; }
+    @page { margin: 8mm 12mm; }
     body  { margin:0; padding:0; }
   </style>
 </head>
 <body style="font-family:Arial,sans-serif;color:#1a1a1a;line-height:1.5;">
-<table width="680" cellpadding="0" cellspacing="0" style="margin:20px auto;border-collapse:collapse;">
+<table width="680" cellpadding="0" cellspacing="0" style="margin:16px auto;border-collapse:collapse;">
 
   <!-- ── Logos ── -->
   <tr>
@@ -184,20 +182,23 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
     </td>
   </tr>
 
-  <!-- thin rule after logos -->
-  <tr><td colspan="2" style="border:none;padding:6px 0 0;"><hr style="border:0;border-top:1px solid #ccc;margin:0;"/></td></tr>
-  ${S.sp(8)}
+  <!-- thin rule after logos — padding-top here, not a spacer row -->
+  <tr>
+    <td colspan="2" style="border:none;padding:6px 0 0;">
+      <hr style="border:0;border-top:1px solid #ccc;margin:0;"/>
+    </td>
+  </tr>
 
   <!-- ── Order Details + Purchaser Details ── -->
   <tr>
-    <td style="${S.plain}padding-right:30px;">
+    <td style="${S.plain}padding-top:10px;padding-right:30px;">
       <span style="${S.sec}">Order Details</span><br/>
       <span style="${S.label}">Tax Invoice No.:</span> ${escHtml(data.invoiceNumber)}<br/>
       <span style="${S.label}">Order ID:</span> ${escHtml(data.orderId)}<br/>
       <span style="${S.label}">Date:</span> ${escHtml(data.date)}<br/>
       <span style="${S.label}">Payment Mode:</span> ${escHtml(data.paymentMethod)}
     </td>
-    <td style="${S.plain}">
+    <td style="${S.plain}padding-top:10px;">
       <span style="${S.sec}">Purchaser Details</span><br/>
       <span style="${S.label}">Name:</span> ${escHtml(data.buyerName)}<br/>
       <span style="${S.label}">Email:</span> ${escHtml(data.email)}<br/>
@@ -205,16 +206,14 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
     </td>
   </tr>
 
-  ${S.sp(14)}
-
   <!-- ── Billing Details ── -->
   <tr>
-    <td colspan="2" style="${S.plain}">
+    <td colspan="2" style="${S.plain}padding-top:16px;">
       <span style="${S.sec}">Billing Details</span>
     </td>
   </tr>
   <tr>
-    <td colspan="2" style="border:none;padding:3px 0 8px;">
+    <td colspan="2" style="border:none;padding:3px 0 6px;">
       <hr style="border:0;border-top:1px solid #000;margin:0;"/>
     </td>
   </tr>
@@ -229,11 +228,9 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
     </td>
   </tr>
 
-  ${S.sp(14)}
-
   <!-- ── Items Table ── -->
   <tr>
-    <td colspan="2" style="${S.plain}">
+    <td colspan="2" style="${S.plain}padding-top:16px;">
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #000;">
         <thead>
           <tr>
@@ -255,54 +252,43 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
     </td>
   </tr>
 
-  ${S.sp(10)}
-
   <!-- ── Amount in Words ── -->
   <tr>
-    <td colspan="2" style="${S.plain}">
+    <td colspan="2" style="${S.plain}padding-top:12px;">
       <span style="${S.label}">Total Amount in Words:</span><br/>
       ${amountInWords(grandTotal)}
     </td>
   </tr>
 
-  ${S.sp(8)}
-
   <!-- ── SAC Code ── -->
   <tr>
-    <td colspan="2" style="${S.plain}">
+    <td colspan="2" style="${S.plain}padding-top:8px;">
       Item SAC Code: <span style="${S.label}">997332</span>
     </td>
   </tr>
 
-  ${S.sp(8)}
-
   <!-- ── Note ── -->
   <tr>
-    <td colspan="2" style="${S.plain}font-style:italic;font-weight:bold;">
+    <td colspan="2" style="${S.plain}padding-top:8px;font-style:italic;font-weight:bold;">
       Note: Any usage of the tracks will be subject to the
       <a href="https://hoopr.ai/terms" style="color:#1a1a1a;">terms and conditions</a> of the platform.
     </td>
   </tr>
 
-  ${S.sp(14)}
-
   <!-- ── Legal Entity ── -->
   <tr>
-    <td colspan="2" style="${S.plain}">
+    <td colspan="2" style="${S.plain}padding-top:16px;">
       <span style="${S.sec}">Legal Entity Details</span>
     </td>
   </tr>
-  ${S.sp(4)}
   <tr>
-    <td colspan="2" style="${S.plain}">
+    <td colspan="2" style="${S.plain}padding-top:4px;">
       Hoopr Smash is a division of GSharp Media Pvt. Ltd.<br/>
       <span style="${S.label}">Billing Address:</span><br/>
       A-1203, Serenity Complex, Off. Link Road, Oshiwara, Mumbai - 400102<br/>
       <span style="${S.label}">GSTIN No:</span> 27AAHCG1665M1Z7 &nbsp;|&nbsp; <span style="${S.label}">PAN:</span> AAHCG1665M
     </td>
   </tr>
-
-  ${S.sp(16)}
 
 </table>
 </body>
