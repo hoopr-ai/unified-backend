@@ -1,4 +1,6 @@
 import * as fs from "fs";
+import * as http from "http";
+import * as https from "https";
 import * as os from "os";
 import * as path from "path";
 import { exec } from "child_process";
@@ -47,6 +49,22 @@ export interface InvoicePdfData {
   payAmount: number;
 }
 
+// ─── Image fetch ────────────────────────────────────────────────────────────
+
+const fetchAsBase64 = (url: string): Promise<string> =>
+  new Promise((resolve) => {
+    const client = url.startsWith("https") ? https : http;
+    client.get(url, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => {
+        const mime = res.headers["content-type"] ?? "image/png";
+        resolve(`data:${mime};base64,${Buffer.concat(chunks).toString("base64")}`);
+      });
+      res.on("error", () => resolve(""));
+    }).on("error", () => resolve(""));
+  });
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const escHtml = (str?: string | null): string =>
@@ -92,7 +110,7 @@ const formatInr = (n: number): string =>
 
 // ─── HTML Template ───────────────────────────────────────────────────────────
 
-const buildInvoiceHtml = (data: InvoicePdfData): string => {
+const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogoSrc: string): string => {
   let totalNetAmount = 0;
   let totalGst = 0;
 
@@ -133,37 +151,34 @@ const buildInvoiceHtml = (data: InvoicePdfData): string => {
 <head>
   <title>Tax Invoice</title>
   <style type="text/css">
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-    body { font-family: 'Inter', Arial, sans-serif; margin: auto; line-height: 1.6; color: #1a1a1a; }
+    body { font-family: Arial, sans-serif; margin: 0; line-height: 1.6; color: #1a1a1a; }
     .bold { font-weight: bold; }
     .break { padding: 5px 0; }
-    .clear { clear: both; }
-    .container { width: 740px; padding: 40px 60px; margin: auto; }
-    .image-left { width: 135px; float: left; height: auto; padding: 0 0 20px; }
-    .image-right { float: right; width: 45px; height: auto; }
+    .container { width: 700px; padding: 30px 40px; margin: auto; }
     .italic { font-style: italic; }
-    .noborder { border: none !important; border-collapse: collapse; padding: 0 20px 0 0; }
+    .noborder td { border: none !important; padding: 4px 20px 4px 0; vertical-align: top; }
     th, td { border: 1px solid #000; border-collapse: collapse; padding: 8px; text-align: left; font-size: 13px; }
-    .table { max-width: 740px; width: 100%; border-spacing: 0; border-collapse: collapse; margin: 0 auto; }
-    .underline { text-decoration: underline; }
-    .section-header { font-size: 15px; font-weight: bold; text-decoration: underline; }
+    .table { width: 100%; border-spacing: 0; border-collapse: collapse; }
+    .section-header { font-size: 14px; font-weight: bold; text-decoration: underline; }
     .label { font-weight: bold; }
     .normal { font-size: 13px; }
-    .small { font-size: 11px; color: #555; }
-    .red { color: #F84451; }
     .total-row td { font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="container">
 
-    <!-- Logos -->
-    <div>
-      <img src="https://storage.googleapis.com/cdn-hooprsmash-com/web/logos/smash.webp" class="image-left" alt="Hoopr Smash" />
-      <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/invoice/gsharp.png" class="image-right" alt="GSharp" />
-    </div>
-    <div class="clear"></div>
-    <div class="break"></div>
+    <!-- Logos — table layout so LibreOffice respects sizing -->
+    <table class="table noborder" style="margin-bottom:12px;">
+      <tr>
+        <td style="border:none;padding:0;">
+          ${smashLogoSrc ? `<img src="${smashLogoSrc}" width="130" height="40" alt="Hoopr Smash" style="display:block;" />` : "<strong>Hoopr Smash</strong>"}
+        </td>
+        <td align="right" style="border:none;padding:0;">
+          ${gsharpLogoSrc ? `<img src="${gsharpLogoSrc}" width="44" height="44" alt="GSharp" style="display:block;margin-left:auto;" />` : ""}
+        </td>
+      </tr>
+    </table>
 
     <!-- Order + Purchaser -->
     <table class="table noborder">
@@ -262,8 +277,15 @@ const buildInvoiceHtml = (data: InvoicePdfData): string => {
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
+const SMASH_LOGO_URL = "https://storage.googleapis.com/cdn-hooprsmash-com/web/logos/smash.png";
+const GSHARP_LOGO_URL = "https://storage.googleapis.com/cdn-hooprsmash-com/emailers/invoice/gsharp.png";
+
 export const generateInvoicePdf = async (data: InvoicePdfData): Promise<Buffer> => {
-  const html = buildInvoiceHtml(data);
+  const [smashLogoSrc, gsharpLogoSrc] = await Promise.all([
+    fetchAsBase64(SMASH_LOGO_URL),
+    fetchAsBase64(GSHARP_LOGO_URL),
+  ]);
+  const html = buildInvoiceHtml(data, smashLogoSrc, gsharpLogoSrc);
   const tmpDir = os.tmpdir();
   const uid = `invoice_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const htmlPath = path.join(tmpDir, `${uid}.html`);
