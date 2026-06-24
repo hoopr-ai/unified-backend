@@ -87,6 +87,8 @@ export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   ownerType?: string;
   ownerSubType?: string;
   primaryArtists?: { id: string; name: string }[];
+  type?: string;
+  price?: number;
 }
 
 export interface BrandLicenseHistoryResponse {

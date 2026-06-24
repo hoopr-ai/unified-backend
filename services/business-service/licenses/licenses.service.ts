@@ -545,6 +545,8 @@ export const getBrandLicenseHistoryService = async (
       ownerType: ownerTypes.length > 0 ? ownerTypes[0] : undefined,
       ownerSubType: ownerSubTypes.length > 0 ? ownerSubTypes[0] : undefined,
       primaryArtists,
+      type: license.type,
+      price: license.price,
     };
   });
 

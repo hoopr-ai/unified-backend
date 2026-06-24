@@ -15,6 +15,7 @@ import {
   updateTransactionStatus,
   TransactionStatus,
   OwnerModel,
+  UserModel,
   findTransactionsByUserId,
   findTransactionByIdAndUserId,
   createLicenseRecord,
@@ -158,7 +159,11 @@ export const commitTransactionService = async (
   // hiccup here never rolls back an already-confirmed payment response.
   let licenseIds: number[] = [];
   try {
-    const orderItems = await findOrderInfosWithSku(transaction.orderId);
+    const [orderItems, userRecord] = await Promise.all([
+      findOrderInfosWithSku(transaction.orderId),
+      UserModel.findByPk(userId, { attributes: ["id", "brandId"] }),
+    ]);
+    const brandId = userRecord?.brandId ?? null;
     const now = new Date();
     const licenses = await Promise.all(
       orderItems
@@ -166,7 +171,7 @@ export const commitTransactionService = async (
         .map((item) =>
           createLicenseRecord({
             userId,
-            brandId: null,
+            brandId,
             trackCode: (item as any).sku.trackCode,
             tokenCost: 0,
             price: item.sellingPrice,
