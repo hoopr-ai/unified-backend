@@ -110,13 +110,23 @@ const formatInr = (n: number): string =>
 
 // ─── HTML Template ───────────────────────────────────────────────────────────
 
+const S = {
+  // all td/th in bordered tables get this; noborder overrides per-cell
+  cell: "border:1px solid #000;padding:10px 12px;font-size:13px;vertical-align:top;",
+  hdr: "border:1px solid #000;padding:10px 12px;font-size:13px;font-weight:bold;",
+  plain: "border:none;padding:0;font-size:13px;vertical-align:top;",
+  label: "font-weight:bold;",
+  sec: "font-size:14px;font-weight:bold;text-decoration:underline;",
+  sp: (px: number) => `<tr><td colspan="10" style="border:none;padding:0;height:${px}px;">&nbsp;</td></tr>`,
+};
+
 const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogoSrc: string): string => {
   let totalNetAmount = 0;
   let totalGst = 0;
 
   const invoiceRows = data.items.map((item) => {
     const discounted = item.sellingPrice - (item.discount ?? 0);
-    const netAmount = discounted * item.qty;           // excl. GST
+    const netAmount = discounted * item.qty;
     const gstAmt = (netAmount * (item.gstPercent ?? 18)) / 100;
     const lineTotal = netAmount + gstAmt;
     totalNetAmount += netAmount;
@@ -124,14 +134,15 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
 
     return `
       <tr>
-        <td>
-          ${escHtml(item.trackName)} (${escHtml(item.trackCode)})<br/>
-          ${item.primaryArtists ? `<span style="font-size:12px;color:#7D7D7D;">${escHtml(item.primaryArtists)}</span>` : ""}
+        <td style="${S.cell}">
+          ${escHtml(item.trackName)}<br/>
+          <span style="font-size:11px;color:#555;">${escHtml(item.trackCode)}</span>
+          ${item.primaryArtists ? `<br/><span style="font-size:12px;color:#7D7D7D;">${escHtml(item.primaryArtists)}</span>` : ""}
         </td>
-        <td style="text-align:center;">${item.qty}</td>
-        <td style="text-align:right;">&#8377;${formatInr(netAmount)}</td>
-        <td style="text-align:right;">&#8377;${formatInr(gstAmt)}</td>
-        <td style="text-align:right;font-weight:bold;">&#8377;${formatInr(lineTotal)}</td>
+        <td style="${S.cell}text-align:center;">${item.qty}</td>
+        <td style="${S.cell}text-align:right;">&#8377;${formatInr(netAmount)}</td>
+        <td style="${S.cell}text-align:right;">&#8377;${formatInr(gstAmt)}</td>
+        <td style="${S.cell}text-align:right;font-weight:bold;">&#8377;${formatInr(lineTotal)}</td>
       </tr>`;
   });
 
@@ -140,137 +151,159 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
   const billingName = [data.billingFirstName, data.billingLastName].filter(Boolean).join(" ") || data.buyerName;
   const billingEmail = data.billingEmail || data.email;
   const billingMobile = data.billingMobile || data.mobile || "";
-  const addressParts = [
+  const addressLines = [
     data.addressLine1,
     data.addressLine2,
     [data.city, data.state, data.postalCode].filter(Boolean).join(", "),
-  ].filter(Boolean).join("<br/>");
+  ].filter(Boolean);
 
+  // use <table> everywhere — LibreOffice ignores div margins/floats
   return `<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8"/>
   <title>Tax Invoice</title>
-  <style type="text/css">
-    body { font-family: Arial, sans-serif; margin: 0; line-height: 1.6; color: #1a1a1a; }
-    .bold { font-weight: bold; }
-    .break { padding: 5px 0; }
-    .container { width: 700px; padding: 30px 40px; margin: auto; }
-    .italic { font-style: italic; }
-    .noborder td { border: none !important; padding: 4px 20px 4px 0; vertical-align: top; }
-    th, td { border: 1px solid #000; border-collapse: collapse; padding: 8px; text-align: left; font-size: 13px; }
-    .table { width: 100%; border-spacing: 0; border-collapse: collapse; }
-    .section-header { font-size: 14px; font-weight: bold; text-decoration: underline; }
-    .label { font-weight: bold; }
-    .normal { font-size: 13px; }
-    .total-row td { font-weight: bold; }
-  </style>
 </head>
-<body>
-  <div class="container">
+<body style="margin:0;padding:0;font-family:Arial,sans-serif;color:#1a1a1a;line-height:1.5;">
+<table width="680" cellpadding="0" cellspacing="0" style="margin:30px auto;border-collapse:collapse;">
 
-    <!-- Logos — table layout so LibreOffice respects sizing -->
-    <table class="table noborder" style="margin-bottom:12px;">
-      <tr>
-        <td style="border:none;padding:0;">
-          ${smashLogoSrc ? `<img src="${smashLogoSrc}" width="130" height="40" alt="Hoopr Smash" style="display:block;" />` : "<strong>Hoopr Smash</strong>"}
-        </td>
-        <td align="right" style="border:none;padding:0;">
-          ${gsharpLogoSrc ? `<img src="${gsharpLogoSrc}" width="44" height="44" alt="GSharp" style="display:block;margin-left:auto;" />` : ""}
-        </td>
-      </tr>
-    </table>
+  <!-- ── Logos ── -->
+  <tr>
+    <td style="${S.plain}">
+      ${smashLogoSrc
+        ? `<img src="${smashLogoSrc}" width="130" height="40" alt="Hoopr Smash"/>`
+        : `<strong style="font-size:20px;">Hoopr Smash</strong>`}
+    </td>
+    <td align="right" style="${S.plain}">
+      ${gsharpLogoSrc
+        ? `<img src="${gsharpLogoSrc}" width="44" height="44" alt="GSharp"/>`
+        : ""}
+    </td>
+  </tr>
 
-    <!-- Order + Purchaser -->
-    <table class="table noborder">
-      <tr class="noborder">
-        <td width="50%" class="noborder">
-          <div class="section-header">Order Details</div>
-          <div class="normal" style="margin-top:6px;">
-            <span class="label">Tax Invoice No.:</span> ${escHtml(data.invoiceNumber)}<br/>
-            <span class="label">Order ID:</span> ${escHtml(data.orderId)}<br/>
-            <span class="label">Date:</span> ${escHtml(data.date)}<br/>
-            <span class="label">Payment Mode:</span> ${escHtml(data.paymentMethod)}
-          </div>
-        </td>
-        <td class="noborder">
-          <div class="section-header">Purchaser Details</div>
-          <div class="normal" style="margin-top:6px;">
-            <span class="label">Name:</span> ${escHtml(data.buyerName)}<br/>
-            <span class="label">Email:</span> ${escHtml(data.email)}<br/>
-            ${data.mobile ? `<span class="label">Mobile:</span> ${escHtml(data.mobile)}<br/>` : ""}
-          </div>
-        </td>
-      </tr>
-    </table>
+  <!-- thin rule after logos -->
+  <tr><td colspan="2" style="border:none;padding:10px 0 0;"><hr style="border:0;border-top:1px solid #ccc;margin:0;"/></td></tr>
+  ${S.sp(12)}
 
-    <div class="clear"></div>
-    <div class="break"></div><div class="break"></div>
+  <!-- ── Order Details + Purchaser Details ── -->
+  <tr>
+    <td style="${S.plain}padding-right:30px;">
+      <span style="${S.sec}">Order Details</span><br/>
+      <br/>
+      <span style="${S.label}">Tax Invoice No.:</span> ${escHtml(data.invoiceNumber)}<br/>
+      <span style="${S.label}">Order ID:</span> ${escHtml(data.orderId)}<br/>
+      <span style="${S.label}">Date:</span> ${escHtml(data.date)}<br/>
+      <span style="${S.label}">Payment Mode:</span> ${escHtml(data.paymentMethod)}
+    </td>
+    <td style="${S.plain}">
+      <span style="${S.sec}">Purchaser Details</span><br/>
+      <br/>
+      <span style="${S.label}">Name:</span> ${escHtml(data.buyerName)}<br/>
+      <span style="${S.label}">Email:</span> ${escHtml(data.email)}<br/>
+      ${data.mobile ? `<span style="${S.label}">Mobile:</span> ${escHtml(data.mobile)}<br/>` : ""}
+    </td>
+  </tr>
 
-    <!-- Billing Details -->
-    <div class="section-header">Billing Details</div>
-    <hr style="border:1px solid #000;margin:6px 0 10px;"/>
-    <div class="normal">
-      <span class="label">Name:</span> ${escHtml(billingName)}<br/>
-      <span class="label">Contact:</span> ${escHtml(billingEmail)}${billingMobile ? " | " + escHtml(billingMobile) : ""}<br/>
-      ${addressParts ? `<span class="label">Address:</span><br/>${addressParts}<br/>` : ""}
-      <span class="label">GSTIN No:</span> ${escHtml(data.gstin) || "-"}<br/>
-      <span class="label">PAN:</span> ${escHtml(data.pan) || "-"}<br/>
-    </div>
+  ${S.sp(18)}
 
-    <div class="break"></div><div class="break"></div><div class="break"></div>
+  <!-- ── Billing Details ── -->
+  <tr>
+    <td colspan="2" style="${S.plain}">
+      <span style="${S.sec}">Billing Details</span>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" style="border:none;padding:4px 0 10px;">
+      <hr style="border:0;border-top:1px solid #000;margin:0;"/>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" style="${S.plain}">
+      <span style="${S.label}">Name:</span> ${escHtml(billingName)}<br/>
+      <span style="${S.label}">Contact Details:</span> ${escHtml(billingEmail)}${billingMobile ? " | " + escHtml(billingMobile) : ""}<br/>
+      <span style="${S.label}">Address:</span><br/>
+      ${addressLines.map((l) => escHtml(l) + "<br/>").join("") || "-<br/>"}
+      <span style="${S.label}">GSTIN No:</span> ${escHtml(data.gstin) || "-"}<br/>
+      <span style="${S.label}">PAN:</span> ${escHtml(data.pan) || "-"}
+    </td>
+  </tr>
 
-    <!-- Items Table -->
-    <table class="table">
-      <thead>
-        <tr>
-          <th style="width:45%;">Description</th>
-          <th style="width:8%;text-align:center;">Qty</th>
-          <th style="width:16%;text-align:right;">Net Amount (INR)</th>
-          <th style="width:14%;text-align:right;">GST (@18%)</th>
-          <th style="width:17%;text-align:right;">Amount (INR)</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${invoiceRows.join("\n")}
-        <tr class="total-row">
-          <td colspan="4">TOTAL</td>
-          <td style="text-align:right;">&#8377;${formatInr(grandTotal)}</td>
-        </tr>
-      </tbody>
-    </table>
+  ${S.sp(18)}
 
-    <div class="break"></div><div class="break"></div>
+  <!-- ── Items Table ── -->
+  <tr>
+    <td colspan="2" style="${S.plain}">
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #000;">
+        <thead>
+          <tr>
+            <th width="44%" style="${S.hdr}">Description</th>
+            <th width="8%"  style="${S.hdr}text-align:center;">Qty</th>
+            <th width="16%" style="${S.hdr}text-align:right;">Net Amount (INR)</th>
+            <th width="14%" style="${S.hdr}text-align:right;">GST (@18%)</th>
+            <th width="18%" style="${S.hdr}text-align:right;">Amount (INR)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${invoiceRows.join("\n")}
+          <tr>
+            <td colspan="4" style="${S.cell}font-weight:bold;">TOTAL</td>
+            <td style="${S.cell}text-align:right;font-weight:bold;">&#8377;${formatInr(grandTotal)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </td>
+  </tr>
 
-    <div class="normal">
-      <span class="bold">Total Amount in Words:</span><br/>
+  ${S.sp(14)}
+
+  <!-- ── Amount in Words ── -->
+  <tr>
+    <td colspan="2" style="${S.plain}">
+      <span style="${S.label}">Total Amount in Words:</span><br/>
       ${amountInWords(grandTotal)}
-    </div>
+    </td>
+  </tr>
 
-    <div class="break"></div>
+  ${S.sp(10)}
 
-    <div class="normal">
-      Item SAC Code: <span class="bold">997332</span>
-    </div>
+  <!-- ── SAC Code ── -->
+  <tr>
+    <td colspan="2" style="${S.plain}">
+      Item SAC Code: <span style="${S.label}">997332</span>
+    </td>
+  </tr>
 
-    <div class="break"></div>
+  ${S.sp(10)}
 
-    <div class="normal italic bold">
+  <!-- ── Note ── -->
+  <tr>
+    <td colspan="2" style="${S.plain}font-style:italic;font-weight:bold;">
       Note: Any usage of the tracks will be subject to the
-      <a href="https://hoopr.ai/terms">terms and conditions</a> of the platform.
-    </div>
+      <a href="https://hoopr.ai/terms" style="color:#1a1a1a;">terms and conditions</a> of the platform.
+    </td>
+  </tr>
 
-    <div class="break"></div><div class="break"></div>
+  ${S.sp(18)}
 
-    <!-- Legal Entity -->
-    <div class="section-header">Legal Entity Details</div>
-    <div class="normal" style="margin-top:6px;">
+  <!-- ── Legal Entity ── -->
+  <tr>
+    <td colspan="2" style="${S.plain}">
+      <span style="${S.sec}">Legal Entity Details</span>
+    </td>
+  </tr>
+  ${S.sp(6)}
+  <tr>
+    <td colspan="2" style="${S.plain}">
       Hoopr Smash is a division of GSharp Media Pvt. Ltd.<br/>
-      <span class="bold">Billing Address:</span><br/>
+      <span style="${S.label}">Billing Address:</span><br/>
       A-1203, Serenity Complex, Off. Link Road, Oshiwara, Mumbai - 400102<br/>
-      <span class="bold">GSTIN No:</span> 27AAHCG1665M1Z7 &nbsp;|&nbsp; <span class="bold">PAN:</span> AAHCG1665M
-    </div>
+      <span style="${S.label}">GSTIN No:</span> 27AAHCG1665M1Z7 &nbsp;|&nbsp; <span style="${S.label}">PAN:</span> AAHCG1665M
+    </td>
+  </tr>
 
-  </div>
+  ${S.sp(20)}
+
+</table>
 </body>
 </html>`;
 };
