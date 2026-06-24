@@ -166,7 +166,7 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
   </style>
 </head>
 <body style="font-family:Arial,sans-serif;color:#1a1a1a;line-height:1.5;">
-<table width="680" cellpadding="0" cellspacing="0" style="margin:16px auto;border-collapse:collapse;">
+<table width="680" cellpadding="0" cellspacing="0" style="margin:16px auto 0;border-collapse:collapse;">
 
   <!-- ── Logos ── -->
   <tr>
@@ -210,11 +210,7 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
   <tr>
     <td colspan="2" style="${S.plain}padding-top:16px;">
       <span style="${S.sec}">Billing Details</span>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" style="border:none;padding:3px 0 6px;">
-      <hr style="border:0;border-top:1px solid #000;margin:0;"/>
+      <hr style="border:0;border-top:1px solid #000;margin:4px 0 6px;"/>
     </td>
   </tr>
   <tr>
