@@ -5,6 +5,7 @@ import * as os from "os";
 import * as path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { PDFDocument } from "pdf-lib";
 
 const execAsync = promisify(exec);
 
@@ -206,15 +207,14 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
     </td>
   </tr>
 
-  <!-- ── Billing Details ── -->
+  <!-- ── Billing Details ── border-bottom on td draws the line without gap -->
   <tr>
-    <td colspan="2" style="${S.plain}padding-top:16px;">
+    <td colspan="2" style="${S.plain}padding-top:16px;padding-bottom:5px;border-bottom:1px solid #000;">
       <span style="${S.sec}">Billing Details</span>
-      <hr style="border:0;border-top:1px solid #000;margin:4px 0 6px;"/>
     </td>
   </tr>
   <tr>
-    <td colspan="2" style="${S.plain}">
+    <td colspan="2" style="${S.plain}padding-top:6px;">
       <span style="${S.label}">Name:</span> ${escHtml(billingName)}<br/>
       <span style="${S.label}">Contact Details:</span> ${escHtml(billingEmail)}${billingMobile ? " | " + escHtml(billingMobile) : ""}<br/>
       <span style="${S.label}">Address:</span><br/>
@@ -293,6 +293,29 @@ const buildInvoiceHtml = (data: InvoicePdfData, smashLogoSrc: string, gsharpLogo
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
+// Remove trailing blank pages LibreOffice sometimes appends.
+// Heuristic: copy the candidate page into its own single-page doc and check
+// the byte size — a truly blank LibreOffice page comes out under ~3 KB.
+const stripBlankTrailingPages = async (buf: Buffer): Promise<Buffer> => {
+  try {
+    const doc = await PDFDocument.load(buf);
+    for (let i = doc.getPageCount() - 1; i >= 1; i--) {
+      const probe = await PDFDocument.create();
+      const [pg] = await probe.copyPages(doc, [i]);
+      probe.addPage(pg);
+      const probeBytes = await probe.save();
+      if (probeBytes.length < 4000) {
+        doc.removePage(i);
+      } else {
+        break;
+      }
+    }
+    return Buffer.from(await doc.save());
+  } catch {
+    return buf;
+  }
+};
+
 const SMASH_LOGO_URL = "https://storage.googleapis.com/cdn-hooprsmash-com/web/logos/smash.png";
 const GSHARP_LOGO_URL = "https://storage.googleapis.com/cdn-hooprsmash-com/emailers/invoice/gsharp.png";
 
@@ -314,8 +337,8 @@ export const generateInvoicePdf = async (data: InvoicePdfData): Promise<Buffer> 
       `soffice --headless --convert-to pdf --outdir "${tmpDir}" "${htmlPath}"`,
       { timeout: 30000 },
     );
-    const buf = await fs.promises.readFile(expectedPdfPath);
-    return buf;
+    const raw = await fs.promises.readFile(expectedPdfPath);
+    return await stripBlankTrailingPages(raw);
   } finally {
     fs.promises.unlink(htmlPath).catch(() => {});
     fs.promises.unlink(expectedPdfPath).catch(() => {});
