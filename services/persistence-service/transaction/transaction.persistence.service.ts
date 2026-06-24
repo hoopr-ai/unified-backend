@@ -109,3 +109,35 @@ export const findTransactionByIdAndUserId = async (
     ],
   });
 };
+
+export const findSuccessTransactionForInvoice = async (
+  id: number,
+  userId: number,
+): Promise<TransactionModel | null> => {
+  return TransactionModel.findOne({
+    where: { id, userId, status: TransactionStatus.SUCCESS },
+    attributes: [
+      "id", "orderId", "userId", "totalAmount", "totalDiscount",
+      "payAmount", "paymentMethod", "billingAddress", "email", "createdAt",
+    ],
+    include: [
+      {
+        model: OrderModel,
+        attributes: ["id"],
+        include: [
+          {
+            model: OrderInfoModel,
+            attributes: ["skuId", "qty", "sellingPrice", "discount", "gstPercent"],
+            include: [
+              {
+                model: SkuModel,
+                attributes: ["id", "trackCode"],
+                include: [{ model: TrackModel, attributes: ["trackCode", "name"] }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+};

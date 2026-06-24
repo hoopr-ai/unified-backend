@@ -26,6 +26,7 @@ export interface LicenseDetails {
   trackCode: string;
   tokenCost: number;
   licensedAt: Date;
+  validThrough?: Date | null;
   status?: string;
   licenseTypeId?: string;
   licensePdfPath?: string;
@@ -84,6 +85,12 @@ export class LicenseModel extends Model<LicenseModel, LicenseDetails> {
     allowNull: false,
   })
   licensedAt!: Date;
+
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  validThrough?: Date | null;
 
   @Column({
     type: DataType.STRING(50),

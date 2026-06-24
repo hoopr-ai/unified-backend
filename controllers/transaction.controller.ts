@@ -10,6 +10,7 @@ import {
   commitTransactionService,
   getTransactionsService,
   getTransactionDetailService,
+  downloadInvoiceService,
   parseTransactionId,
 } from "../services/business-service/transaction/transaction.service";
 import type { SessionPayload } from "../middlewares/authenticate";
@@ -57,4 +58,16 @@ export const getTransactionDetail = catchAsync(async (req: AuthRequest, res: Res
 
   const data = await getTransactionDetailService(userId, transactionId);
   sendResponse(res, { status: HttpStatusCode.OK, data, message: "Transaction fetched" });
+});
+
+export const downloadInvoice = catchAsync(async (req: AuthRequest, res: Response) => {
+  const userId = req.session?.userId;
+  if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const transactionId = rawId.startsWith("TXN-") ? parseTransactionId(rawId) : parseInt(rawId, 10);
+  if (isNaN(transactionId)) return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid transaction id", {});
+
+  const data = await downloadInvoiceService(userId, transactionId);
+  sendResponse(res, { status: HttpStatusCode.OK, data, message: "Invoice ready" });
 });

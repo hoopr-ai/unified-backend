@@ -1,6 +1,11 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { AppError } from "../../helper-service/modules.export";
+import {
+  AppError,
+  generateInvoicePdf,
+  uploadBufferToGCS,
+  getGCSSignedUrl,
+} from "../../helper-service/modules.export";
 import {
   CartType,
   findCartItems,
@@ -16,12 +21,13 @@ import {
   TransactionStatus,
   OwnerModel,
   UserModel,
+  UserEntityDetailsModel,
   findTransactionsByUserId,
   findTransactionByIdAndUserId,
+  findSuccessTransactionForInvoice,
   createLicenseRecord,
   findLicensesByUserIdAndTrackCodes,
 } from "../../persistence-service/exports";
-import { findUserAddress } from "../../persistence-service/user/user-address.persistence.service";
 import { AddressType } from "../../dto-service/modules.export";
 import { Op } from "sequelize";
 
@@ -165,6 +171,8 @@ export const commitTransactionService = async (
     ]);
     const brandId = userRecord?.brandId ?? null;
     const now = new Date();
+    const validThrough = new Date(now);
+    validThrough.setFullYear(validThrough.getFullYear() + 1);
     const licenses = await Promise.all(
       orderItems
         .filter((item) => (item as any).sku?.trackCode)
@@ -177,6 +185,7 @@ export const commitTransactionService = async (
             price: item.sellingPrice,
             type: "pay_per_track",
             licensedAt: now,
+            validThrough,
             createdAt: now,
           }),
         ),
@@ -325,4 +334,84 @@ export const getTransactionDetailService = async (userId: number, transactionId:
         : null,
     })),
   };
+};
+
+export const downloadInvoiceService = async (
+  userId: number,
+  transactionId: number,
+): Promise<{ downloadUrl: string; invoiceNumber: string }> => {
+  const transaction = await findSuccessTransactionForInvoice(transactionId, userId);
+  if (!transaction) throw new AppError("Transaction not found or payment not completed", 404);
+
+  const txnFormatted = formatTransactionId(transaction.id!);
+  const invoiceGcsPath = `invoices/${txnFormatted}/invoice.pdf`;
+
+  // Serve from GCS cache if already generated
+  const cached = await getGCSSignedUrl({ gcsPath: invoiceGcsPath });
+  if (cached) return { downloadUrl: cached, invoiceNumber: txnFormatted };
+
+  // Fetch user details and entity details in parallel
+  const [userRecord, entityDetails] = await Promise.all([
+    UserModel.findByPk(userId, { attributes: ["id", "firstName", "lastName", "email", "mobile"] }),
+    UserEntityDetailsModel.findOne({ where: { userId }, attributes: ["labelName"] }),
+  ]);
+
+  const billing = (transaction.billingAddress ?? {}) as Record<string, any>;
+  const order = (transaction as any).order;
+  const orderInfos: any[] = order?.orderInfos ?? [];
+
+  const items = orderInfos
+    .filter((info: any) => info.sku?.track?.trackCode)
+    .map((info: any) => ({
+      trackName: info.sku.track.name || "Unknown Track",
+      trackCode: info.sku.track.trackCode,
+      qty: info.qty,
+      sellingPrice: info.sellingPrice,
+      discount: info.discount ?? 0,
+      gstPercent: info.gstPercent ?? 18,
+    }));
+
+  if (items.length === 0) throw new AppError("No track items found in this order", 400);
+
+  const date = new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(transaction.createdAt));
+
+  const buyerName =
+    [userRecord?.firstName, userRecord?.lastName].filter(Boolean).join(" ") ||
+    transaction.email ||
+    "Customer";
+
+  const pdfBuffer = await generateInvoicePdf({
+    invoiceNumber: txnFormatted,
+    orderId: formatOrderId(transaction.orderId),
+    date,
+    paymentMethod: transaction.paymentMethod ?? "Online",
+    buyerName,
+    companyName: entityDetails?.labelName ?? undefined,
+    email: transaction.email ?? userRecord?.email ?? "",
+    mobile: userRecord?.mobile ?? undefined,
+    addressLine1: billing.addressLine1,
+    addressLine2: billing.addressLine2,
+    city: billing.city,
+    state: billing.state,
+    postalCode: billing.postalCode,
+    country: billing.country,
+    gstin: billing.gstin,
+    pan: billing.pan,
+    items,
+    totalDiscount: transaction.totalDiscount,
+    payAmount: transaction.payAmount,
+  });
+
+  const downloadUrl = await uploadBufferToGCS({
+    buffer: pdfBuffer,
+    gcsPath: invoiceGcsPath,
+    contentType: "application/pdf",
+  });
+
+  return { downloadUrl, invoiceNumber: txnFormatted };
 };
