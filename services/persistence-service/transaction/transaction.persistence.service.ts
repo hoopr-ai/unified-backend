@@ -132,7 +132,21 @@ export const findSuccessTransactionForInvoice = async (
               {
                 model: SkuModel,
                 attributes: ["id", "trackCode"],
-                include: [{ model: TrackModel, attributes: ["trackCode", "name"] }],
+                include: [
+                {
+                  model: TrackModel,
+                  attributes: ["trackCode", "name"],
+                  include: [
+                    {
+                      model: TrackArtistMappingModel,
+                      attributes: ["isPrimary"],
+                      required: false,
+                      where: { isPrimary: true },
+                      include: [{ model: ArtistModel, attributes: ["name"] }],
+                    },
+                  ],
+                },
+              ],
               },
             ],
           },

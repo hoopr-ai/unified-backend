@@ -5,6 +5,7 @@ import {
   generateInvoicePdf,
   uploadBufferToGCS,
   getGCSSignedUrl,
+  sendInvoiceEmail,
 } from "../../helper-service/modules.export";
 import {
   CartType,
@@ -363,26 +364,38 @@ export const downloadInvoiceService = async (
 
   const items = orderInfos
     .filter((info: any) => info.sku?.track?.trackCode)
-    .map((info: any) => ({
-      trackName: info.sku.track.name || "Unknown Track",
-      trackCode: info.sku.track.trackCode,
-      qty: info.qty,
-      sellingPrice: info.sellingPrice,
-      discount: info.discount ?? 0,
-      gstPercent: info.gstPercent ?? 18,
-    }));
+    .map((info: any) => {
+      const track = info.sku.track;
+      const artists: string[] = (track?.trackArtistMappings ?? [])
+        .filter((m: any) => m.isPrimary && m.artist?.name)
+        .map((m: any) => m.artist.name as string);
+      return {
+        trackName: track.name || "Unknown Track",
+        trackCode: track.trackCode,
+        primaryArtists: artists.length > 0 ? artists.join(", ") : undefined,
+        qty: info.qty,
+        sellingPrice: info.sellingPrice,
+        discount: info.discount ?? 0,
+        gstPercent: info.gstPercent ?? 18,
+      };
+    });
 
   if (items.length === 0) throw new AppError("No track items found in this order", 400);
 
-  const date = new Intl.DateTimeFormat("en-IN", {
+  const date = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
     timeZone: "Asia/Kolkata",
-  }).format(new Date(transaction.createdAt));
+  }).format(new Date(transaction.createdAt)).replace(",", "") + " IST";
 
+  const buyerFirstName = userRecord?.firstName ?? undefined;
+  const buyerLastName = userRecord?.lastName ?? undefined;
   const buyerName =
-    [userRecord?.firstName, userRecord?.lastName].filter(Boolean).join(" ") ||
+    [buyerFirstName, buyerLastName].filter(Boolean).join(" ") ||
     transaction.email ||
     "Customer";
 
@@ -391,18 +404,23 @@ export const downloadInvoiceService = async (
     orderId: formatOrderId(transaction.orderId),
     date,
     paymentMethod: transaction.paymentMethod ?? "Online",
+    buyerFirstName,
+    buyerLastName,
     buyerName,
-    companyName: entityDetails?.labelName ?? undefined,
     email: transaction.email ?? userRecord?.email ?? "",
     mobile: userRecord?.mobile ?? undefined,
+    billingFirstName: billing.firstName,
+    billingLastName: billing.lastName,
+    billingEmail: billing.email,
+    billingMobile: billing.mobile,
     addressLine1: billing.addressLine1,
     addressLine2: billing.addressLine2,
     city: billing.city,
     state: billing.state,
     postalCode: billing.postalCode,
     country: billing.country,
-    gstin: billing.gstin,
-    pan: billing.pan,
+    gstin: billing.gstin ?? billing.gstNo,
+    pan: billing.pan ?? billing.panNo,
     items,
     totalDiscount: transaction.totalDiscount,
     payAmount: transaction.payAmount,
@@ -413,6 +431,29 @@ export const downloadInvoiceService = async (
     gcsPath: invoiceGcsPath,
     contentType: "application/pdf",
   });
+
+  // Send invoice email with PDF attached — non-blocking so a mail failure
+  // never breaks the download URL response.
+  const recipientEmail = transaction.email ?? userRecord?.email;
+  if (recipientEmail) {
+    const grandTotal = items.reduce((sum, item) => {
+      const net = (item.sellingPrice - (item.discount ?? 0)) * item.qty;
+      return sum + net + (net * (item.gstPercent ?? 18)) / 100;
+    }, 0);
+
+    sendInvoiceEmail({
+      to: recipientEmail,
+      buyerFirstName,
+      transactionId: txnFormatted,
+      orderId: formatOrderId(transaction.orderId),
+      date,
+      paymentMethod: transaction.paymentMethod ?? "Online",
+      grandTotal,
+      items,
+      pdfBuffer,
+      invoiceFilename: `invoice-${txnFormatted}.pdf`,
+    }).catch((err) => console.error("Invoice email failed:", err));
+  }
 
   return { downloadUrl, invoiceNumber: txnFormatted };
 };

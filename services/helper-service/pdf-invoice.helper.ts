@@ -9,6 +9,7 @@ const execAsync = promisify(exec);
 export interface InvoiceLineItem {
   trackName: string;
   trackCode: string;
+  primaryArtists?: string;
   qty: number;
   sellingPrice: number;
   discount: number;
@@ -20,10 +21,18 @@ export interface InvoicePdfData {
   orderId: string;
   date: string;
   paymentMethod: string;
+  // Purchaser (logged-in user)
+  buyerFirstName?: string;
+  buyerLastName?: string;
   buyerName: string;
-  companyName?: string;
   email: string;
   mobile?: string;
+  // Billing contact (from billingAddress JSONB)
+  billingFirstName?: string;
+  billingLastName?: string;
+  billingEmail?: string;
+  billingMobile?: string;
+  // Billing address
   addressLine1?: string;
   addressLine2?: string;
   city?: string;
@@ -32,10 +41,16 @@ export interface InvoicePdfData {
   country?: string;
   gstin?: string;
   pan?: string;
+  // Items
   items: InvoiceLineItem[];
   totalDiscount: number;
   payAmount: number;
 }
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const escHtml = (str?: string | null): string =>
+  (str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const ONES = [
   "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
@@ -72,171 +87,180 @@ const amountInWords = (amount: number): string => {
   return result + " Only";
 };
 
-const buildInvoiceHtml = (data: InvoicePdfData): string => {
-  let subtotal = 0;
-  let totalGst = 0;
-  let totalDiscount = 0;
+const formatInr = (n: number): string =>
+  n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const rows = data.items.map((item, idx) => {
-    const discountedPrice = item.sellingPrice - item.discount;
-    const taxableAmt = discountedPrice * item.qty;
-    const gstAmt = (taxableAmt * item.gstPercent) / 100;
-    const lineTotal = taxableAmt + gstAmt;
-    subtotal += taxableAmt;
+// ─── HTML Template ───────────────────────────────────────────────────────────
+
+const buildInvoiceHtml = (data: InvoicePdfData): string => {
+  let totalNetAmount = 0;
+  let totalGst = 0;
+
+  const invoiceRows = data.items.map((item) => {
+    const discounted = item.sellingPrice - (item.discount ?? 0);
+    const netAmount = discounted * item.qty;           // excl. GST
+    const gstAmt = (netAmount * (item.gstPercent ?? 18)) / 100;
+    const lineTotal = netAmount + gstAmt;
+    totalNetAmount += netAmount;
     totalGst += gstAmt;
-    totalDiscount += item.discount * item.qty;
+
     return `
       <tr>
-        <td style="text-align:center;">${idx + 1}</td>
-        <td>${escHtml(item.trackName)}</td>
-        <td style="text-align:center;font-size:10px;color:#555;">${escHtml(item.trackCode)}</td>
+        <td>
+          ${escHtml(item.trackName)} (${escHtml(item.trackCode)})<br/>
+          ${item.primaryArtists ? `<span style="font-size:12px;color:#7D7D7D;">${escHtml(item.primaryArtists)}</span>` : ""}
+        </td>
         <td style="text-align:center;">${item.qty}</td>
-        <td style="text-align:right;">&#8377;${item.sellingPrice.toFixed(2)}</td>
-        <td style="text-align:right;">${item.discount > 0 ? `&#8377;${(item.discount * item.qty).toFixed(2)}` : "&mdash;"}</td>
-        <td style="text-align:right;">&#8377;${taxableAmt.toFixed(2)}</td>
-        <td style="text-align:center;">${item.gstPercent}%</td>
-        <td style="text-align:right;">&#8377;${gstAmt.toFixed(2)}</td>
-        <td style="text-align:right;font-weight:bold;">&#8377;${lineTotal.toFixed(2)}</td>
+        <td style="text-align:right;">&#8377;${formatInr(netAmount)}</td>
+        <td style="text-align:right;">&#8377;${formatInr(gstAmt)}</td>
+        <td style="text-align:right;font-weight:bold;">&#8377;${formatInr(lineTotal)}</td>
       </tr>`;
   });
 
-  const grandTotal = subtotal + totalGst;
+  const grandTotal = totalNetAmount + totalGst;
+
+  const billingName = [data.billingFirstName, data.billingLastName].filter(Boolean).join(" ") || data.buyerName;
+  const billingEmail = data.billingEmail || data.email;
+  const billingMobile = data.billingMobile || data.mobile || "";
   const addressParts = [
     data.addressLine1,
     data.addressLine2,
     [data.city, data.state, data.postalCode].filter(Boolean).join(", "),
-    data.country || "India",
-  ].filter(Boolean).join("<br>");
+  ].filter(Boolean).join("<br/>");
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<style>
-  body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; margin: 0; padding: 32px; }
-  table { width: 100%; border-collapse: collapse; }
-  .header-table td { vertical-align: top; }
-  .company-name { font-size: 24px; font-weight: bold; color: #1a1a1a; }
-  .company-sub { font-size: 11px; color: #555; line-height: 1.6; margin-top: 4px; }
-  .invoice-title { font-size: 20px; font-weight: bold; text-align: right; letter-spacing: 2px; color: #1a1a1a; }
-  .invoice-meta { font-size: 11px; color: #555; text-align: right; line-height: 1.7; margin-top: 6px; }
-  hr { border: none; border-top: 2px solid #1a1a1a; margin: 18px 0; }
-  .section-table td { vertical-align: top; padding: 0; }
-  .box { border: 1px solid #ccc; padding: 14px; }
-  .box-label { font-size: 10px; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
-  .items-table { margin-top: 20px; }
-  .items-table th { background: #1a1a1a; color: #fff; padding: 8px 10px; font-size: 11px; text-align: left; }
-  .items-table td { padding: 9px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
-  .items-table tr:nth-child(even) td { background: #f7f7f7; }
-  .totals-row td { padding: 5px 10px; font-size: 12px; }
-  .grand-total td { border-top: 2px solid #1a1a1a; font-size: 14px; font-weight: bold; padding: 8px 10px; }
-  .amount-words { font-size: 11px; color: #555; font-style: italic; margin-top: 12px; }
-  .footer { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 14px; font-size: 10px; color: #888; text-align: center; }
-</style>
+  <title>Tax Invoice</title>
+  <style type="text/css">
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { font-family: 'Inter', Arial, sans-serif; margin: auto; line-height: 1.6; color: #1a1a1a; }
+    .bold { font-weight: bold; }
+    .break { padding: 5px 0; }
+    .clear { clear: both; }
+    .container { width: 740px; padding: 40px 60px; margin: auto; }
+    .image-left { width: 135px; float: left; height: auto; padding: 0 0 20px; }
+    .image-right { float: right; width: 45px; height: auto; }
+    .italic { font-style: italic; }
+    .noborder { border: none !important; border-collapse: collapse; padding: 0 20px 0 0; }
+    th, td { border: 1px solid #000; border-collapse: collapse; padding: 8px; text-align: left; font-size: 13px; }
+    .table { max-width: 740px; width: 100%; border-spacing: 0; border-collapse: collapse; margin: 0 auto; }
+    .underline { text-decoration: underline; }
+    .section-header { font-size: 15px; font-weight: bold; text-decoration: underline; }
+    .label { font-weight: bold; }
+    .normal { font-size: 13px; }
+    .small { font-size: 11px; color: #555; }
+    .red { color: #F84451; }
+    .total-row td { font-weight: bold; }
+  </style>
 </head>
 <body>
+  <div class="container">
 
-<table class="header-table">
-  <tr>
-    <td width="60%">
-      <div class="company-name">Hoopr</div>
-      <div class="company-sub">
-        Gsharp Media Pvt Ltd<br>
-        Mumbai, India<br>
-        support@hoopr.ai
-      </div>
-    </td>
-    <td width="40%">
-      <div class="invoice-title">TAX INVOICE</div>
-      <div class="invoice-meta">
-        Invoice No: <b>${escHtml(data.invoiceNumber)}</b><br>
-        Order ID: ${escHtml(data.orderId)}<br>
-        Date: ${escHtml(data.date)}<br>
-        Payment: ${escHtml(data.paymentMethod)}
-      </div>
-    </td>
-  </tr>
-</table>
+    <!-- Logos -->
+    <div>
+      <img src="https://storage.googleapis.com/cdn-hooprsmash-com/web/logos/smash.webp" class="image-left" alt="Hoopr Smash" />
+      <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/invoice/gsharp.png" class="image-right" alt="GSharp" />
+    </div>
+    <div class="clear"></div>
+    <div class="break"></div>
 
-<hr>
+    <!-- Order + Purchaser -->
+    <table class="table noborder">
+      <tr class="noborder">
+        <td width="50%" class="noborder">
+          <div class="section-header">Order Details</div>
+          <div class="normal" style="margin-top:6px;">
+            <span class="label">Tax Invoice No.:</span> ${escHtml(data.invoiceNumber)}<br/>
+            <span class="label">Order ID:</span> ${escHtml(data.orderId)}<br/>
+            <span class="label">Date:</span> ${escHtml(data.date)}<br/>
+            <span class="label">Payment Mode:</span> ${escHtml(data.paymentMethod)}
+          </div>
+        </td>
+        <td class="noborder">
+          <div class="section-header">Purchaser Details</div>
+          <div class="normal" style="margin-top:6px;">
+            <span class="label">Name:</span> ${escHtml(data.buyerName)}<br/>
+            <span class="label">Email:</span> ${escHtml(data.email)}<br/>
+            ${data.mobile ? `<span class="label">Mobile:</span> ${escHtml(data.mobile)}<br/>` : ""}
+          </div>
+        </td>
+      </tr>
+    </table>
 
-<table class="section-table">
-  <tr>
-    <td width="50%" style="padding-right:12px;">
-      <div class="box">
-        <div class="box-label">Bill To</div>
-        <div style="font-size:13px;font-weight:bold;">${escHtml(data.buyerName)}</div>
-        ${data.companyName ? `<div style="font-size:11px;color:#555;">${escHtml(data.companyName)}</div>` : ""}
-        <div style="font-size:11px;color:#555;margin-top:6px;line-height:1.6;">
-          ${escHtml(data.email)}<br>
-          ${data.mobile ? escHtml(data.mobile) + "<br>" : ""}
-          ${addressParts}
-        </div>
-      </div>
-    </td>
-    <td width="50%" style="padding-left:12px;">
-      <div class="box">
-        <div class="box-label">Tax Information</div>
-        <table style="width:100%;">
-          ${data.gstin ? `<tr><td style="font-size:11px;color:#555;padding:3px 0;">GSTIN</td><td style="font-size:11px;font-weight:bold;text-align:right;">${escHtml(data.gstin)}</td></tr>` : ""}
-          ${data.pan ? `<tr><td style="font-size:11px;color:#555;padding:3px 0;">PAN</td><td style="font-size:11px;font-weight:bold;text-align:right;">${escHtml(data.pan)}</td></tr>` : ""}
-          ${!data.gstin && !data.pan ? `<tr><td style="font-size:11px;color:#aaa;font-style:italic;">No tax details on file</td></tr>` : ""}
-        </table>
-      </div>
-    </td>
-  </tr>
-</table>
+    <div class="clear"></div>
+    <div class="break"></div><div class="break"></div>
 
-<table class="items-table" style="margin-top:24px;">
-  <thead>
-    <tr>
-      <th style="width:4%;text-align:center;">#</th>
-      <th style="width:26%;">Track Name</th>
-      <th style="width:14%;text-align:center;">Track Code</th>
-      <th style="width:5%;text-align:center;">Qty</th>
-      <th style="width:10%;text-align:right;">Unit Price</th>
-      <th style="width:10%;text-align:right;">Discount</th>
-      <th style="width:11%;text-align:right;">Taxable Amt</th>
-      <th style="width:6%;text-align:center;">GST</th>
-      <th style="width:7%;text-align:right;">GST Amt</th>
-      <th style="width:7%;text-align:right;">Total</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${rows.join("\n")}
-  </tbody>
-</table>
+    <!-- Billing Details -->
+    <div class="section-header">Billing Details</div>
+    <hr style="border:1px solid #000;margin:6px 0 10px;"/>
+    <div class="normal">
+      <span class="label">Name:</span> ${escHtml(billingName)}<br/>
+      <span class="label">Contact:</span> ${escHtml(billingEmail)}${billingMobile ? " | " + escHtml(billingMobile) : ""}<br/>
+      ${addressParts ? `<span class="label">Address:</span><br/>${addressParts}<br/>` : ""}
+      <span class="label">GSTIN No:</span> ${escHtml(data.gstin) || "-"}<br/>
+      <span class="label">PAN:</span> ${escHtml(data.pan) || "-"}<br/>
+    </div>
 
-<table style="margin-top:12px;">
-  <tr>
-    <td width="60%">
-      <div class="amount-words">
-        Amount in words: <b>${amountInWords(grandTotal)}</b>
-      </div>
-    </td>
-    <td width="40%">
-      <table style="width:100%;">
-        ${totalDiscount > 0 ? `<tr class="totals-row"><td>Subtotal before discount</td><td style="text-align:right;">&#8377;${(subtotal + totalDiscount).toFixed(2)}</td></tr>` : ""}
-        ${totalDiscount > 0 ? `<tr class="totals-row"><td style="color:#c00;">Discount</td><td style="text-align:right;color:#c00;">&minus;&#8377;${totalDiscount.toFixed(2)}</td></tr>` : ""}
-        <tr class="totals-row"><td>Taxable Amount</td><td style="text-align:right;">&#8377;${subtotal.toFixed(2)}</td></tr>
-        <tr class="totals-row"><td>GST (18%)</td><td style="text-align:right;">&#8377;${totalGst.toFixed(2)}</td></tr>
-        <tr class="grand-total"><td>Total Amount</td><td style="text-align:right;">&#8377;${grandTotal.toFixed(2)}</td></tr>
-      </table>
-    </td>
-  </tr>
-</table>
+    <div class="break"></div><div class="break"></div><div class="break"></div>
 
-<div class="footer">
-  This is a system-generated invoice and does not require a physical signature.<br>
-  For queries, write to support@hoopr.ai &nbsp;|&nbsp; hoopr.ai
-</div>
+    <!-- Items Table -->
+    <table class="table">
+      <thead>
+        <tr>
+          <th style="width:45%;">Description</th>
+          <th style="width:8%;text-align:center;">Qty</th>
+          <th style="width:16%;text-align:right;">Net Amount (INR)</th>
+          <th style="width:14%;text-align:right;">GST (@18%)</th>
+          <th style="width:17%;text-align:right;">Amount (INR)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${invoiceRows.join("\n")}
+        <tr class="total-row">
+          <td colspan="4">TOTAL</td>
+          <td style="text-align:right;">&#8377;${formatInr(grandTotal)}</td>
+        </tr>
+      </tbody>
+    </table>
 
+    <div class="break"></div><div class="break"></div>
+
+    <div class="normal">
+      <span class="bold">Total Amount in Words:</span><br/>
+      ${amountInWords(grandTotal)}
+    </div>
+
+    <div class="break"></div>
+
+    <div class="normal">
+      Item SAC Code: <span class="bold">997332</span>
+    </div>
+
+    <div class="break"></div>
+
+    <div class="normal italic bold">
+      Note: Any usage of the tracks will be subject to the
+      <a href="https://hoopr.ai/terms">terms and conditions</a> of the platform.
+    </div>
+
+    <div class="break"></div><div class="break"></div>
+
+    <!-- Legal Entity -->
+    <div class="section-header">Legal Entity Details</div>
+    <div class="normal" style="margin-top:6px;">
+      Hoopr Smash is a division of GSharp Media Pvt. Ltd.<br/>
+      <span class="bold">Billing Address:</span><br/>
+      A-1203, Serenity Complex, Off. Link Road, Oshiwara, Mumbai - 400102<br/>
+      <span class="bold">GSTIN No:</span> 27AAHCG1665M1Z7 &nbsp;|&nbsp; <span class="bold">PAN:</span> AAHCG1665M
+    </div>
+
+  </div>
 </body>
 </html>`;
 };
 
-const escHtml = (str: string): string =>
-  str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+// ─── Export ──────────────────────────────────────────────────────────────────
 
 export const generateInvoicePdf = async (data: InvoicePdfData): Promise<Buffer> => {
   const html = buildInvoiceHtml(data);
