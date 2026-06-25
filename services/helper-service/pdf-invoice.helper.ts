@@ -336,14 +336,21 @@ export const generateInvoicePdf = async (data: InvoicePdfData): Promise<Buffer> 
   await fs.promises.writeFile(htmlPath, html, "utf-8");
 
   try {
-    const { stderr } = await execAsync(
+    const { stdout, stderr } = await execAsync(
       `soffice --headless --norestore "-env:UserInstallation=file://${profileDir}" --convert-to pdf --outdir "${tmpDir}" "${htmlPath}"`,
       { timeout: 30000 },
     );
+    if (stdout) console.log("[invoice-pdf] soffice stdout:", stdout);
     if (stderr) console.warn("[invoice-pdf] soffice stderr:", stderr);
 
     const raw = await fs.promises.readFile(expectedPdfPath);
-    if (raw.length < 100) throw new Error(`[invoice-pdf] soffice produced a ${raw.length}-byte file — likely a conversion failure`);
+    console.log(`[invoice-pdf] raw PDF size: ${raw.length} bytes`);
+
+    // LibreOffice produces ~20 KB even for a trivial HTML page; 5 KB means
+    // it output a blank/error page instead of the real invoice.
+    if (raw.length < 5_000) {
+      throw new Error(`[invoice-pdf] soffice output only ${raw.length} bytes — conversion likely failed. stderr: ${stderr}`);
+    }
 
     return await stripBlankTrailingPages(raw);
   } finally {
