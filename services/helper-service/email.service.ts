@@ -1251,145 +1251,233 @@ export const sendInvoiceEmail = async (params: {
 
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="x-apple-disable-message-reformatting"/>
   <title>Thank you for your purchase on Hoopr</title>
   <style>
     a { text-decoration: none; }
-    body { font-family: "Open Sans", "Helvetica", sans-serif; letter-spacing: -0.25px; }
-    .aIcon { text-decoration: none; padding: 0 10px; }
+    body { font-family: "Open Sans", "Helvetica", sans-serif; letter-spacing: -0.25px; margin: 0; padding: 0; background-color: #ffffff; -webkit-text-size-adjust: 100%; }
+    img { display: block; max-width: 100%; }
+    p { margin: 0; padding: 0; }
+    table { border-collapse: collapse; border-spacing: 0; }
+
     .bgSmash { background-color: #F84451; }
     .bgYellow { background-color: #F6F8ED; }
-    .footer { padding: 30px 30px 20px; border-radius: 10px; }
-    .footerIcon { padding: 10px 0; }
-    .footerL { font-size: 12px; color: #fff; line-height: 1.5; border-right: 1px solid #fff; width: 50%; }
-    .footerR { font-size: 12px; color: #fff; line-height: 1.5; width: 50%; }
-    .header { padding: 40px 30px; }
-    .logo { width: 100px; height: auto; }
-    p { margin: 0; padding: 0; }
-    .p30 { padding: 30px; }
-    .p30lr { padding: 0 30px; line-height: 1.7; }
-    .p30tb { padding: 30px 0; }
     .smashRed { color: #F84451; }
-    .table { max-width: 640px; width: 100%; padding: 0 20px; border-spacing: 0; border-collapse: collapse; margin: 0 auto; }
     .bold { font-weight: bold; }
+    .aIcon { text-decoration: none; padding: 0 8px; display: inline-block; }
+
     .card { border: 2px solid #CECECE; border-radius: 10px; padding: 10px 10px 5px; }
-    .detHeader { font-size: 18px; color: #7D7D7D; padding-left: 30px; line-height: 1.7; }
-    .detText { font-size: 18px; }
-    .normal { font-size: 16px; line-height: 1.7; }
-    .tImage { border-radius: 10px; width: 120px; height: auto; }
-    .tName { font-size: 22px; font-weight: bold; line-height: 1; }
-    .tArt { font-size: 14px; color: #7D7D7D; line-height: 1; }
-    .tQtyH { font-size: 16px; color: #7D7D7D; line-height: 2.5; }
-    .tQty { font-size: 16px; font-weight: bold; }
-    .sub-text { font-size: 26px; font-weight: bold; }
-    .salutation { padding: 60px 30px 20px; font-size: 20px; color: #000; font-weight: bold; }
-    .thanks { padding: 30px 30px 0; font-size: 34px; font-weight: bold; letter-spacing: -1px; }
+    .tImage { border-radius: 10px; width: 100px; height: auto; }
+    .tName { font-size: 20px; font-weight: bold; line-height: 1.3; }
+    .tArt { font-size: 14px; color: #7D7D7D; line-height: 1.5; }
+    .tQtyH { font-size: 14px; color: #7D7D7D; line-height: 2; }
+    .tQty { font-size: 14px; font-weight: bold; }
+
+    @media only screen and (max-width: 600px) {
+      .main-table { width: 100% !important; }
+      .outer-pad { padding: 0 !important; }
+
+      .thanks { font-size: 24px !important; padding: 20px 16px 0 !important; letter-spacing: -0.5px !important; }
+      .salutation { padding: 40px 16px 15px !important; font-size: 17px !important; }
+      .body-copy { padding: 16px !important; font-size: 14px !important; }
+      .section-head-wrap { padding: 20px 0 8px !important; }
+      .section-head { font-size: 20px !important; padding: 0 16px !important; }
+      .det-wrap { padding: 0 8px 16px !important; }
+      .det-label { font-size: 13px !important; white-space: normal !important; padding: 4px 8px 4px 8px !important; }
+      .det-value { font-size: 13px !important; padding: 4px 8px 4px 0 !important; }
+      .divider-td { padding: 8px 16px 16px !important; }
+      .tracks-head-wrap { padding: 10px 0 12px !important; }
+      .tracks-wrap { padding: 0 8px 10px !important; }
+
+      .tImage { width: 70px !important; }
+      .tName { font-size: 15px !important; }
+      .tArt { font-size: 12px !important; }
+      .tQtyH { font-size: 12px !important; }
+      .tQty { font-size: 12px !important; }
+
+      .footer-outer-td { padding: 16px 0 0 !important; }
+      .footer-inner-td { padding: 20px 16px 8px !important; }
+      .footer-col {
+        display: block !important;
+        width: 100% !important;
+        border-right: none !important;
+        border-bottom: 1px solid rgba(255,255,255,0.35) !important;
+        padding: 0 0 12px !important;
+        text-align: center !important;
+      }
+      .footer-col-r {
+        display: block !important;
+        width: 100% !important;
+        padding: 12px 0 0 !important;
+        text-align: center !important;
+      }
+      .footer-icon-l {
+        display: block !important;
+        width: 100% !important;
+        border-right: none !important;
+        padding: 10px 0 !important;
+        text-align: center !important;
+      }
+      .footer-icon-r {
+        display: block !important;
+        width: 100% !important;
+        padding: 10px 0 !important;
+        text-align: center !important;
+      }
+    }
   </style>
 </head>
 <body>
-  <table class="table" cellspacing="0">
+  <table width="100%" cellspacing="0" cellpadding="0" border="0">
     <tr>
-      <td colspan="12" class="header bgYellow">
-        <img class="logo" src="https://storage.googleapis.com/cdn-hooprsmash-com/web/logos/smash-bright.png" width="100px"/>
-      </td>
-    </tr>
-    <tr>
-      <td colspan="12" class="salutation bgYellow">
-        <p>Hi ${buyerFirstName || "there"},</p>
-      </td>
-    </tr>
-    <tr>
-      <td colspan="12" class="thanks bgYellow bold">
-        <p class="smashRed">Thank you for your purchase!</p>
-      </td>
-    </tr>
-    <tr>
-      <td colspan="12" class="p30 bgYellow">
-        <span class="normal">Your order has been confirmed. Please find your invoice attached to this email.</span>
-      </td>
-    </tr>
+      <td class="outer-pad" align="center" style="padding: 0 16px;">
+        <table class="main-table" width="640" cellspacing="0" cellpadding="0" border="0" style="max-width: 640px; width: 100%;">
 
-    <!-- Purchase Details -->
-    <tr>
-      <td colspan="12" class="p30tb">
-        <p class="sub-text smashRed p30lr">Purchase Details</p>
+          <!-- Header logo -->
+          <tr>
+            <td class="bgYellow" style="padding: 40px 30px;">
+              <img src="https://storage.googleapis.com/cdn-hooprsmash-com/web/logos/smash-bright.png" width="100" alt="Hoopr Smash" style="width: 100px; height: auto;"/>
+            </td>
+          </tr>
+
+          <!-- Salutation -->
+          <tr>
+            <td class="bgYellow salutation" style="padding: 60px 30px 20px; font-size: 20px; color: #000; font-weight: bold;">
+              <p>Hi ${buyerFirstName || "there"},</p>
+            </td>
+          </tr>
+
+          <!-- Thank you heading -->
+          <tr>
+            <td class="bgYellow thanks" style="padding: 30px 30px 0; font-size: 34px; font-weight: bold; letter-spacing: -1px;">
+              <p class="smashRed" style="color: #F84451;">Thank you for your purchase!</p>
+            </td>
+          </tr>
+
+          <!-- Body copy -->
+          <tr>
+            <td class="bgYellow body-copy" style="padding: 30px; font-size: 16px; line-height: 1.7; color: #000;">
+              Your order has been confirmed. Please find your invoice attached to this email.
+            </td>
+          </tr>
+
+          <!-- Purchase Details heading -->
+          <tr>
+            <td class="section-head-wrap" style="padding: 30px 0 10px;">
+              <p class="section-head smashRed bold" style="font-size: 26px; font-weight: bold; color: #F84451; padding: 0 30px; line-height: 1.7;">Purchase Details</p>
+            </td>
+          </tr>
+
+          <!-- Purchase Details (nested inner table for proper mobile alignment) -->
+          <tr>
+            <td class="det-wrap" style="padding: 0 20px 20px;">
+              <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td class="det-label" width="38%" style="font-size: 16px; color: #7D7D7D; padding: 5px 12px 5px 10px; line-height: 1.7; vertical-align: top; white-space: nowrap;">Transaction ID:</td>
+                  <td class="det-value" style="font-size: 16px; padding: 5px 0 5px 0; line-height: 1.7; vertical-align: top;">${transactionId}</td>
+                </tr>
+                <tr>
+                  <td class="det-label" width="38%" style="font-size: 16px; color: #7D7D7D; padding: 5px 12px 5px 10px; line-height: 1.7; vertical-align: top; white-space: nowrap;">Order ID:</td>
+                  <td class="det-value" style="font-size: 16px; padding: 5px 0 5px 0; line-height: 1.7; vertical-align: top;">${orderId}</td>
+                </tr>
+                <tr>
+                  <td class="det-label" width="38%" style="font-size: 16px; color: #7D7D7D; padding: 5px 12px 5px 10px; line-height: 1.7; vertical-align: top; white-space: nowrap;">Total Amount:</td>
+                  <td class="det-value" style="font-size: 16px; padding: 5px 0 5px 0; line-height: 1.7; vertical-align: top;">&#8377;${formatInr(grandTotal)}</td>
+                </tr>
+                <tr>
+                  <td class="det-label" width="38%" style="font-size: 16px; color: #7D7D7D; padding: 5px 12px 5px 10px; line-height: 1.7; vertical-align: top; white-space: nowrap;">Purchase Date:</td>
+                  <td class="det-value" style="font-size: 16px; padding: 5px 0 5px 0; line-height: 1.7; vertical-align: top;">${date}</td>
+                </tr>
+                <tr>
+                  <td class="det-label" width="38%" style="font-size: 16px; color: #7D7D7D; padding: 5px 12px 5px 10px; line-height: 1.7; vertical-align: top; white-space: nowrap;">Payment Mode:</td>
+                  <td class="det-value" style="font-size: 16px; padding: 5px 0 5px 0; line-height: 1.7; vertical-align: top;">${paymentMethod}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td class="divider-td" style="padding: 10px 30px 20px;">
+              <hr style="border: none; border-top: 1px solid #d0d0d0; margin: 0;"/>
+            </td>
+          </tr>
+
+          <!-- Tracks heading -->
+          <tr>
+            <td class="tracks-head-wrap" style="padding: 10px 0 20px;">
+              <p class="section-head bold" style="font-size: 26px; font-weight: bold; padding: 0 30px; line-height: 1.7;">Tracks</p>
+            </td>
+          </tr>
+
+          <!-- Track rows -->
+          <tr>
+            <td class="tracks-wrap" style="padding: 0 20px 10px;">
+              ${trackRows}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer-outer-td" style="padding: 20px 0 0;">
+              <table width="100%" cellspacing="0" cellpadding="0" border="0" class="bgSmash" style="background-color: #F84451; border-radius: 10px;">
+                <tr>
+                  <td class="footer-inner-td" style="padding: 30px 30px 10px;">
+                    <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td class="footer-col" align="center" width="50%"
+                          style="font-size: 12px; color: #fff; line-height: 1.5; border-right: 1px solid rgba(255,255,255,0.5); padding-right: 20px; vertical-align: top;">
+                          For any queries or customer support,<br/>you can reach us on
+                        </td>
+                        <td class="footer-col-r" align="center" width="50%"
+                          style="font-size: 12px; color: #fff; line-height: 1.5; padding-left: 20px; vertical-align: top;">
+                          Follow us for<br/>the latest updates
+                        </td>
+                      </tr>
+                      <tr>
+                        <td class="footer-icon-l" align="center"
+                          style="border-right: 1px solid rgba(255,255,255,0.5); padding: 12px 20px 12px 0;">
+                          <a href="tel:+917400226274" style="display: inline-block; padding: 0 8px; text-decoration: none;">
+                            <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/call-white.png" alt="call" width="28" style="display: inline-block;"/>
+                          </a>
+                          <a href="mailto:smashsupport@gsharp.media" style="display: inline-block; padding: 0 8px; text-decoration: none;">
+                            <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/email-white.png" alt="email" width="28" style="display: inline-block;"/>
+                          </a>
+                          <a href="https://wa.me/7400226274" style="display: inline-block; padding: 0 8px; text-decoration: none;">
+                            <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/whatsapp-wr.png" alt="whatsapp" width="28" style="display: inline-block;"/>
+                          </a>
+                        </td>
+                        <td class="footer-icon-r" align="center" style="padding: 12px 0 12px 20px;">
+                          <a href="https://www.instagram.com/hooprsmash" style="display: inline-block; padding: 0 8px; text-decoration: none;">
+                            <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/ig-white.png" alt="instagram" height="36" style="display: inline-block;"/>
+                          </a>
+                          <a href="https://www.youtube.com/@hoopr" style="display: inline-block; padding: 0 8px; text-decoration: none;">
+                            <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/yt-c-white.png" alt="youtube" width="36" style="display: inline-block;"/>
+                          </a>
+                          <a href="https://www.facebook.com/hoopr.official/" style="display: inline-block; padding: 0 8px; text-decoration: none;">
+                            <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/fb-white.png" alt="facebook" height="34" style="display: inline-block;"/>
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Bottom spacer -->
+          <tr>
+            <td style="padding: 20px;">&nbsp;</td>
+          </tr>
+
+        </table>
       </td>
     </tr>
-    <tr>
-      <td width="33%"><span class="detHeader">Transaction ID:</span></td>
-      <td><span class="detText">${transactionId}</span></td>
-    </tr>
-    <tr>
-      <td width="33%"><span class="detHeader">Order ID:</span></td>
-      <td><span class="detText">${orderId}</span></td>
-    </tr>
-    <tr>
-      <td width="33%"><span class="detHeader">Total Amount:</span></td>
-      <td><span class="detText">&#8377;${formatInr(grandTotal)}</span></td>
-    </tr>
-    <tr>
-      <td width="33%"><span class="detHeader">Purchase Date:</span></td>
-      <td><span class="detText">${date}</span></td>
-    </tr>
-    <tr>
-      <td width="33%"><span class="detHeader">Payment Mode:</span></td>
-      <td><span class="detText">${paymentMethod}</span></td>
-    </tr>
-
-    <tr><td colspan="12" class="p30"><hr/></td></tr>
-
-    <!-- Track list -->
-    <tr>
-      <td colspan="12" class="p30tb">
-        <p class="sub-text p30lr">Tracks</p>
-      </td>
-    </tr>
-    ${trackRows}
-
-    <!-- Footer -->
-    <tr>
-      <td colspan="12">
-        <div class="bgSmash footer">
-          <table class="table" align="center" cellspacing="0">
-            <tr>
-              <td colspan="6" class="footerL" align="center">
-                For any queries or customer support,<br/>you can reach us on
-              </td>
-              <td colspan="6" class="footerR" align="center">
-                Follow us for<br/>the latest updates
-              </td>
-            </tr>
-            <tr>
-              <td colspan="6" class="footerL footerIcon" align="center">
-                <a href="tel:+917400226274" class="aIcon">
-                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/call-white.png" alt="call" width="28px"/>
-                </a>
-                <a href="mailto:smashsupport@gsharp.media" class="aIcon">
-                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/email-white.png" alt="email" width="28px"/>
-                </a>
-                <a href="https://wa.me/7400226274" class="aIcon">
-                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/whatsapp-wr.png" alt="whatsapp" width="28px"/>
-                </a>
-              </td>
-              <td colspan="6" class="footerR footerIcon" align="center">
-                <a href="https://www.instagram.com/hooprsmash" class="aIcon">
-                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/ig-white.png" alt="instagram" height="36px"/>
-                </a>
-                <a href="https://www.youtube.com/@hoopr" class="aIcon">
-                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/yt-c-white.png" alt="youtube" width="36px"/>
-                </a>
-                <a href="https://www.facebook.com/hoopr.official/" class="aIcon">
-                  <img src="https://storage.googleapis.com/cdn-hooprsmash-com/emailers/icons/fb-white.png" alt="facebook" height="34px"/>
-                </a>
-              </td>
-            </tr>
-          </table>
-        </div>
-      </td>
-    </tr>
-    <tr><td>&nbsp;</td></tr>
   </table>
 </body>
 </html>`;
