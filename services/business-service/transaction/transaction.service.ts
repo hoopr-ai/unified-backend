@@ -22,7 +22,6 @@ import {
   TransactionStatus,
   OwnerModel,
   UserModel,
-  UserEntityDetailsModel,
   findTransactionsByUserId,
   findTransactionByIdAndUserId,
   findSuccessTransactionForInvoice,
@@ -197,6 +196,10 @@ export const commitTransactionService = async (
     console.error("License creation failed after payment commit:", err);
   }
 
+  // Fire invoice PDF generation + email right after payment success.
+  // Non-blocking — failure here never affects the commit response.
+  triggerPurchaseEmail(userId, transaction.id!);
+
   return {
     transactionId: formatTransactionId(transaction.id!),
     orderId: formatOrderId(transaction.orderId),
@@ -338,29 +341,23 @@ export const getTransactionDetailService = async (userId: number, transactionId:
   };
 };
 
-export const downloadInvoiceService = async (
-  userId: number,
-  transactionId: number,
-): Promise<{ downloadUrl: string; invoiceNumber: string }> => {
+// ─── Shared invoice builder ───────────────────────────────────────────────────
+// Generates the invoice PDF, uploads it to GCS, and returns everything needed
+// for both the download response and the purchase email.
+// Returns null if the transaction has no purchasable track items.
+const buildAndCacheInvoice = async (userId: number, transactionId: number) => {
   const transaction = await findSuccessTransactionForInvoice(transactionId, userId);
-  if (!transaction) throw new AppError("Transaction not found or payment not completed", 404);
+  if (!transaction) return null;
 
   const txnFormatted = formatTransactionId(transaction.id!);
   const invoiceGcsPath = `invoices/${txnFormatted}/invoice.pdf`;
 
-  // Serve from GCS cache if already generated
-  const cached = await getGCSSignedUrl({ gcsPath: invoiceGcsPath });
-  if (cached) return { downloadUrl: cached, invoiceNumber: txnFormatted };
-
-  // Fetch user details and entity details in parallel
-  const [userRecord, entityDetails] = await Promise.all([
-    UserModel.findByPk(userId, { attributes: ["id", "firstName", "lastName", "email", "mobile"] }),
-    UserEntityDetailsModel.findOne({ where: { userId }, attributes: ["labelName"] }),
-  ]);
+  const userRecord = await UserModel.findByPk(userId, {
+    attributes: ["id", "firstName", "lastName", "email", "mobile"],
+  });
 
   const billing = (transaction.billingAddress ?? {}) as Record<string, any>;
-  const order = (transaction as any).order;
-  const orderInfos: any[] = order?.orderInfos ?? [];
+  const orderInfos: any[] = (transaction as any).order?.orderInfos ?? [];
 
   const items = orderInfos
     .filter((info: any) => info.sku?.track?.trackCode)
@@ -380,50 +377,47 @@ export const downloadInvoiceService = async (
       };
     });
 
-  if (items.length === 0) throw new AppError("No track items found in this order", 400);
+  if (items.length === 0) return null;
 
   const date = new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
     timeZone: "Asia/Kolkata",
   }).format(new Date(transaction.createdAt)).replace(",", "") + " IST";
 
   const buyerFirstName = userRecord?.firstName ?? undefined;
-  const buyerLastName = userRecord?.lastName ?? undefined;
+  const buyerLastName  = userRecord?.lastName  ?? undefined;
   const buyerName =
     [buyerFirstName, buyerLastName].filter(Boolean).join(" ") ||
-    transaction.email ||
-    "Customer";
+    transaction.email || "Customer";
+  const paymentMethod = transaction.paymentMethod ?? "Online";
+  const orderId = formatOrderId(transaction.orderId);
 
   const pdfBuffer = await generateInvoicePdf({
     invoiceNumber: txnFormatted,
-    orderId: formatOrderId(transaction.orderId),
+    orderId,
     date,
-    paymentMethod: transaction.paymentMethod ?? "Online",
+    paymentMethod,
     buyerFirstName,
     buyerLastName,
     buyerName,
     email: transaction.email ?? userRecord?.email ?? "",
     mobile: userRecord?.mobile ?? undefined,
     billingFirstName: billing.firstName,
-    billingLastName: billing.lastName,
-    billingEmail: billing.email,
-    billingMobile: billing.mobile,
+    billingLastName:  billing.lastName,
+    billingEmail:     billing.email,
+    billingMobile:    billing.mobile,
     addressLine1: billing.addressLine1,
     addressLine2: billing.addressLine2,
-    city: billing.city,
-    state: billing.state,
-    postalCode: billing.postalCode,
-    country: billing.country,
+    city:         billing.city,
+    state:        billing.state,
+    postalCode:   billing.postalCode,
+    country:      billing.country,
     gstin: billing.gstin ?? billing.gstNo,
-    pan: billing.pan ?? billing.panNo,
+    pan:   billing.pan   ?? billing.panNo,
     items,
     totalDiscount: transaction.totalDiscount,
-    payAmount: transaction.payAmount,
+    payAmount:     transaction.payAmount,
   });
 
   const downloadUrl = await uploadBufferToGCS({
@@ -432,28 +426,65 @@ export const downloadInvoiceService = async (
     contentType: "application/pdf",
   });
 
-  // Send invoice email with PDF attached — non-blocking so a mail failure
-  // never breaks the download URL response.
-  const recipientEmail = transaction.email ?? userRecord?.email;
-  if (recipientEmail) {
-    const grandTotal = items.reduce((sum, item) => {
-      const net = (item.sellingPrice - (item.discount ?? 0)) * item.qty;
-      return sum + net + (net * (item.gstPercent ?? 18)) / 100;
-    }, 0);
+  return {
+    pdfBuffer,
+    downloadUrl,
+    txnFormatted,
+    invoiceGcsPath,
+    recipientEmail: transaction.email ?? userRecord?.email,
+    buyerFirstName,
+    items,
+    date,
+    paymentMethod,
+    orderId,
+  };
+};
 
-    sendInvoiceEmail({
-      to: recipientEmail,
-      buyerFirstName,
-      transactionId: txnFormatted,
-      orderId: formatOrderId(transaction.orderId),
-      date,
-      paymentMethod: transaction.paymentMethod ?? "Online",
-      grandTotal,
-      items,
-      pdfBuffer,
-      invoiceFilename: `invoice-${txnFormatted}.pdf`,
-    }).catch((err) => console.error("Invoice email failed:", err));
-  }
+// ─── Download invoice (URL only, no email) ────────────────────────────────────
+export const downloadInvoiceService = async (
+  userId: number,
+  transactionId: number,
+): Promise<{ downloadUrl: string; invoiceNumber: string }> => {
+  const transaction = await findSuccessTransactionForInvoice(transactionId, userId);
+  if (!transaction) throw new AppError("Transaction not found or payment not completed", 404);
 
-  return { downloadUrl, invoiceNumber: txnFormatted };
+  const txnFormatted = formatTransactionId(transaction.id!);
+  const invoiceGcsPath = `invoices/${txnFormatted}/invoice.pdf`;
+
+  // Already generated (pre-built on commit) — just return a fresh signed URL
+  const cached = await getGCSSignedUrl({ gcsPath: invoiceGcsPath });
+  if (cached) return { downloadUrl: cached, invoiceNumber: txnFormatted };
+
+  // Not yet cached (e.g. commit email failed) — generate now
+  const result = await buildAndCacheInvoice(userId, transactionId);
+  if (!result) throw new AppError("No track items found in this order", 400);
+
+  return { downloadUrl: result.downloadUrl, invoiceNumber: result.txnFormatted };
+};
+
+// ─── Post-purchase email trigger (called from commitTransactionService) ────────
+const triggerPurchaseEmail = (userId: number, transactionId: number): void => {
+  buildAndCacheInvoice(userId, transactionId)
+    .then(async (result) => {
+      if (!result?.recipientEmail) return;
+
+      const grandTotal = result.items.reduce((sum, item) => {
+        const net = (item.sellingPrice - (item.discount ?? 0)) * item.qty;
+        return sum + net + (net * (item.gstPercent ?? 18)) / 100;
+      }, 0);
+
+      await sendInvoiceEmail({
+        to: result.recipientEmail,
+        buyerFirstName: result.buyerFirstName,
+        transactionId: result.txnFormatted,
+        orderId: result.orderId,
+        date: result.date,
+        paymentMethod: result.paymentMethod,
+        grandTotal,
+        items: result.items,
+        pdfBuffer: result.pdfBuffer,
+        invoiceFilename: `invoice-${result.txnFormatted}.pdf`,
+      });
+    })
+    .catch((err) => console.error("Post-purchase invoice email failed:", err));
 };
