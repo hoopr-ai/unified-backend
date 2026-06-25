@@ -118,41 +118,42 @@ const pickTrackSku = (skus: SkuModel[] | undefined): SkuModel | null => {
   return skus.find((s) => s.itemType === ItemType.TRACK) ?? skus[0];
 };
 
+// Filter tracks by SKU presence WITHOUT joining SKUs into the paginated query —
+// a hasMany join + LIMIT can drop or duplicate track rows (tier/owner are
+// incidental to which rows go missing). Uses an UNCORRELATED subquery on
+// trackCode (no dependency on the main table's internal alias), so it's robust:
+//   hasSku=true  → trackCode IN  (codes that have a TRACK sku)
+//   hasSku=false → trackCode NOT IN (...)  → includes tracks with no SKU at all
+const skuPresenceCondition = (mustHaveSku: boolean) => ({
+  trackCode: {
+    [mustHaveSku ? Op.in : Op.notIn]: Sequelize.literal(
+      `(SELECT "trackCode" FROM "SKUs" WHERE "itemType" = '${ItemType.TRACK}')`,
+    ),
+  },
+});
+
 export const listTracksWithSku = async (
   params: ListTracksWithSkuParams,
 ): Promise<{ rows: TrackSkuRow[]; count: number }> => {
   const offset = (params.page - 1) * params.limit;
   const where = buildTrackWhere(params);
 
-  // hasSku is a constraint on the SKU association: required=true keeps only
-  // tracks that have a SKU; for "missing" we post-filter after a left join
-  // because Sequelize can't express "association is null" in WHERE cleanly here.
-  const skuInclude = {
-    model: SkuModel,
-    as: "skus",
-    required: params.hasSku === true,
-    attributes: [
-      "id",
-      "itemType",
-      "costPrice",
-      "sellingPrice",
-      "gstPercent",
-      "maxUsage",
-      "description",
-      "updatedAt",
-    ],
-  };
+  // hasSku is enforced in SQL via EXISTS so pagination + count stay correct and
+  // no track is ever dropped by a join.
+  if (params.hasSku !== undefined) {
+    const and = (where[Op.and] as unknown[] | undefined) ?? [];
+    and.push(skuPresenceCondition(params.hasSku === true));
+    where[Op.and] = and;
+  }
 
+  // Paginate tracks with NO association join — clean, correct, never drops
+  // null-tier (or any) rows.
   const { count, rows } = await TrackModel.findAndCountAll({
     where,
     attributes: ["id", "trackCode", "name", "tier", "status", "ownerId"],
-    include: [skuInclude],
     order: [["createdAt", "DESC"]],
     limit: params.limit,
     offset,
-    distinct: true,
-    col: "id",
-    subQuery: false,
   });
 
   const json = rows.map((r) => r.toJSON() as {
@@ -162,15 +163,26 @@ export const listTracksWithSku = async (
     tier: string | null;
     status: string | null;
     ownerId: string[] | null;
-    skus?: SkuModel[];
   });
+
+  // Fetch the SKUs for this page's tracks in one separate query, then map.
+  const trackCodes = json.map((t) => t.trackCode);
+  const skuMap = new Map<string, SkuModel>();
+  if (trackCodes.length > 0) {
+    const skus = await SkuModel.findAll({
+      where: { trackCode: { [Op.in]: trackCodes }, itemType: ItemType.TRACK },
+    });
+    for (const s of skus) {
+      if (!skuMap.has(s.trackCode)) skuMap.set(s.trackCode, s);
+    }
+  }
 
   // Resolve owner display names in one batched query.
   const allOwnerIds = json.flatMap((t) => t.ownerId ?? []);
   const ownerMap = await buildOwnerMap(allOwnerIds);
 
-  let mapped: TrackSkuRow[] = json.map((t) => {
-    const sku = pickTrackSku(t.skus);
+  const mapped: TrackSkuRow[] = json.map((t) => {
+    const sku = pickTrackSku(skuMap.has(t.trackCode) ? [skuMap.get(t.trackCode)!] : undefined);
     const ownerIds = t.ownerId ?? [];
     return {
       trackId: t.id,
@@ -197,11 +209,6 @@ export const listTracksWithSku = async (
     };
   });
 
-  // "missing SKU" filter is applied in-memory after the left join.
-  if (params.hasSku === false) {
-    mapped = mapped.filter((r) => r.sku === null);
-  }
-
   return { rows: mapped, count };
 };
 
@@ -216,31 +223,20 @@ export const findTrackCodesByFilter = async (params: {
 }): Promise<string[]> => {
   const where = buildTrackWhere(params);
 
-  const include = params.onlyMissingSku
-    ? [
-        {
-          model: SkuModel,
-          as: "skus",
-          required: false,
-          attributes: ["id"],
-        },
-      ]
-    : [];
+  // "missing SKU only" → trackCode NOT IN (sku codes). No join, no in-memory filter.
+  if (params.onlyMissingSku) {
+    const and = (where[Op.and] as unknown[] | undefined) ?? [];
+    and.push(skuPresenceCondition(false));
+    where[Op.and] = and;
+  }
 
   const rows = await TrackModel.findAll({
     where,
     attributes: ["trackCode"],
-    include,
+    raw: true,
   });
 
-  if (params.onlyMissingSku) {
-    return rows
-      .map((r) => r.toJSON() as { trackCode: string; skus?: { id: string }[] })
-      .filter((r) => !r.skus || r.skus.length === 0)
-      .map((r) => r.trackCode);
-  }
-
-  return rows.map((r) => r.trackCode);
+  return rows.map((r) => (r as unknown as { trackCode: string }).trackCode);
 };
 
 // Validate that every supplied trackCode is a real, ACTIVE track. Returns the
