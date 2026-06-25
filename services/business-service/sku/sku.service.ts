@@ -23,6 +23,7 @@ export interface ListSkusInput {
   search?: string;
   ownerId?: string;
   tier?: string;
+  status?: string;
   hasSku?: boolean;
 }
 
@@ -48,6 +49,7 @@ export const listSkusService = async (
     search: input.search,
     ownerId: input.ownerId,
     tier: input.tier,
+    status: input.status,
     hasSku: input.hasSku,
   });
 
@@ -98,6 +100,7 @@ export interface BulkUpsertInput {
   filter?: {
     ownerId?: string;
     tier?: string;
+    status?: string;
     search?: string;
     onlyMissingSku?: boolean;
   };

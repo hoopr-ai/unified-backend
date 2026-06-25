@@ -59,18 +59,28 @@ export interface ListTracksWithSkuParams {
   search?: string;
   ownerId?: string;
   tier?: string;
+  status?: string;
   // 'true' → only tracks that already have a SKU, 'false' → only tracks missing one
   hasSku?: boolean;
 }
 
 // Build the shared track WHERE clause from the filter inputs.
+//
+// No implicit status filter — the dashboard manages pricing for tracks of ANY
+// status (a SKU can exist on a non-active track). Callers narrow by status
+// explicitly via params.status.
 const buildTrackWhere = (params: {
   search?: string;
   ownerId?: string;
   tier?: string;
+  status?: string;
 }): Record<string | symbol, unknown> => {
-  const where: Record<string | symbol, unknown> = { status: "ACTIVE" };
+  const where: Record<string | symbol, unknown> = {};
   const and: unknown[] = [];
+
+  if (params.status) {
+    and.push({ status: params.status });
+  }
 
   if (params.ownerId) {
     and.push({ ownerId: { [Op.overlap]: [params.ownerId] } });
@@ -219,6 +229,7 @@ export const findTrackCodesByFilter = async (params: {
   search?: string;
   ownerId?: string;
   tier?: string;
+  status?: string;
   onlyMissingSku?: boolean;
 }): Promise<string[]> => {
   const where = buildTrackWhere(params);
@@ -239,14 +250,15 @@ export const findTrackCodesByFilter = async (params: {
   return rows.map((r) => (r as unknown as { trackCode: string }).trackCode);
 };
 
-// Validate that every supplied trackCode is a real, ACTIVE track. Returns the
-// subset that exists so the caller can report unknown codes.
+// Validate that every supplied trackCode is a real track (any status — pricing
+// is allowed on non-active tracks too). Returns the subset that exists so the
+// caller can report unknown codes.
 export const filterExistingTrackCodes = async (
   trackCodes: string[],
 ): Promise<string[]> => {
   if (trackCodes.length === 0) return [];
   const rows = await TrackModel.findAll({
-    where: { trackCode: { [Op.in]: trackCodes }, status: "ACTIVE" },
+    where: { trackCode: { [Op.in]: trackCodes } },
     attributes: ["trackCode"],
     raw: true,
   });
@@ -365,23 +377,34 @@ export const bulkUpsertSkus = async (
   }) as Promise<BulkUpsertResult>;
 };
 
-// Filter dropdown data: owners that actually own at least one active track, plus
-// the distinct set of tiers in use.
+// Filter dropdown data: owners, the distinct set of tiers in use, and the
+// distinct set of track statuses (all computed across every track, not just
+// active ones, since the dashboard now spans all statuses).
 export const getSkuFilterOptions = async (): Promise<{
   owners: { id: string; name: string; type: string | null }[];
   tiers: string[];
+  statuses: string[];
 }> => {
-  // Distinct tiers across active tracks.
+  // Distinct tiers across all tracks.
   const tierRows = (await TrackModel.findAll({
-    where: { status: "ACTIVE", tier: { [Op.ne]: null as unknown as string } },
+    where: { tier: { [Op.ne]: null as unknown as string } },
     attributes: [[Sequelize.fn("DISTINCT", Sequelize.col("tier")), "tier"]],
     order: [["tier", "ASC"]],
     raw: true,
   })) as unknown as { tier: string }[];
   const tiers = tierRows.map((r) => r.tier).filter(Boolean);
 
-  // Owners sorted by name. Active owners only would require a join; the full
-  // owner list is small enough for an admin dropdown and matches findAllOwners.
+  // Distinct track statuses in use.
+  const statusRows = (await TrackModel.findAll({
+    where: { status: { [Op.ne]: null as unknown as string } },
+    attributes: [[Sequelize.fn("DISTINCT", Sequelize.col("status")), "status"]],
+    order: [["status", "ASC"]],
+    raw: true,
+  })) as unknown as { status: string }[];
+  const statuses = statusRows.map((r) => r.status).filter(Boolean);
+
+  // Owners sorted by name. The full owner list is small enough for an admin
+  // dropdown and matches findAllOwners.
   const owners = await OwnerModel.findAll({
     attributes: ["id", "username", "type"],
     order: [["username", "ASC"]],
@@ -394,5 +417,6 @@ export const getSkuFilterOptions = async (): Promise<{
       type: o.type || null,
     })),
     tiers,
+    statuses,
   };
 };

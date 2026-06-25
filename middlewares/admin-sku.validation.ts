@@ -23,6 +23,7 @@ export const listSkusQuerySchema = Joi.object({
   search: Joi.string().trim().allow("").optional(),
   ownerId: Joi.string().uuid().optional(),
   tier: Joi.string().trim().optional(),
+  status: Joi.string().trim().optional(),
   hasSku: Joi.boolean().optional(),
 }).unknown(false);
 
@@ -42,6 +43,7 @@ export const bulkUpsertSkuSchema = Joi.object({
   filter: Joi.object({
     ownerId: Joi.string().uuid().optional(),
     tier: Joi.string().trim().optional(),
+    status: Joi.string().trim().optional(),
     search: Joi.string().trim().allow("").optional(),
     onlyMissingSku: Joi.boolean().optional(),
   })

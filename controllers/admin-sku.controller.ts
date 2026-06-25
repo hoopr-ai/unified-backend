@@ -30,6 +30,7 @@ export const listSkus = catchAsync(async (req: Request, res: Response) => {
     search: value.search,
     ownerId: value.ownerId,
     tier: value.tier,
+    status: value.status,
     hasSku: value.hasSku,
   });
 
