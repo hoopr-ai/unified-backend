@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { authenticateWithSession } from "../middlewares/authenticate";
+import { requireFunctionality } from "../middlewares/requireFunctionality";
 import { validateRequest } from "../middlewares/validateRequest";
-import { Platform, UserRoles } from "../services/dto-service/modules.export";
+import { Platform } from "../services/dto-service/modules.export";
 import {
   upsertSkuSchema,
   bulkUpsertSkuSchema,
@@ -15,24 +16,25 @@ import {
 
 const router = Router();
 
-// Track pricing is high-trust: require an INTERNAL-platform ADMIN token, same
-// guard as /admin/internal-users. platform check is defence-in-depth so a
-// SMASH/ENTERPRISE admin token can't reach catalogue pricing.
-const requireInternalAdmin = authenticateWithSession({
-  roles: [UserRoles.ADMIN],
-  platforms: [Platform.INTERNAL],
-});
+// Require an INTERNAL-platform session, then a `track-pricing` grant. Admins
+// pass the grant check by role; other internal users need the functionality
+// assigned (same id the internal-fe card/route are gated by). platform check is
+// defence-in-depth so a SMASH/ENTERPRISE token can't reach catalogue pricing.
+const requireTrackPricing = [
+  authenticateWithSession({ platforms: [Platform.INTERNAL] }),
+  requireFunctionality("track-pricing"),
+];
 
 // Filter dropdown data (owners + tiers). Registered before the param route.
-router.get("/filters", requireInternalAdmin, getSkuFilters);
+router.get("/filters", ...requireTrackPricing, getSkuFilters);
 
 // Paginated list of tracks + their SKU.
-router.get("/", requireInternalAdmin, listSkus);
+router.get("/", ...requireTrackPricing, listSkus);
 
 // Bulk upsert (explicit codes or owner/tier filter).
 router.post(
   "/bulk",
-  requireInternalAdmin,
+  ...requireTrackPricing,
   validateRequest(bulkUpsertSkuSchema),
   bulkUpsertSkus,
 );
@@ -40,7 +42,7 @@ router.post(
 // Single-track upsert.
 router.put(
   "/:trackCode",
-  requireInternalAdmin,
+  ...requireTrackPricing,
   validateRequest(upsertSkuSchema),
   upsertSku,
 );
