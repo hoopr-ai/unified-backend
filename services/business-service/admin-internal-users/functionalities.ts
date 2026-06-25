@@ -9,6 +9,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "rails",
   "playlists",
   "music-ingestion",
+  "track-pricing",
   // Sales
   "sales-crm",
   "client-credentials",

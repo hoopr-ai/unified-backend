@@ -25,6 +25,7 @@ import contactRoutes from "./routes/contact.route";
 import companyLookupRoutes from "./routes/company-lookup.route";
 import railRoutes from "./routes/rail.route";
 import adminInternalUsersRoutes from "./routes/admin-internal-users.route";
+import adminSkuRoutes from "./routes/admin-sku.route";
 import internalLoginRoutes from "./routes/internal-login.route";
 import userAddressRoutes from "./routes/user-address.route";
 import geographyRoutes from "./routes/geography.route";
@@ -74,6 +75,7 @@ app.use("/contact", contactRoutes);
 app.use("/company-lookup", companyLookupRoutes);
 app.use("/rails", railRoutes);
 app.use("/admin/internal-users", adminInternalUsersRoutes);
+app.use("/admin/skus", adminSkuRoutes);
 app.use("/cart", cartRoutes);
 app.use("/transaction", transactionRoutes);
 
