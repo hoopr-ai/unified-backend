@@ -329,18 +329,26 @@ export const generateInvoicePdf = async (data: InvoicePdfData): Promise<Buffer> 
   const uid = `invoice_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const htmlPath = path.join(tmpDir, `${uid}.html`);
   const expectedPdfPath = path.join(tmpDir, `${uid}.pdf`);
+  // Each invocation gets its own isolated LibreOffice profile so concurrent
+  // requests don't share a lock file and silently produce corrupt output.
+  const profileDir = path.join(tmpDir, `lo_profile_${uid}`);
 
   await fs.promises.writeFile(htmlPath, html, "utf-8");
 
   try {
-    await execAsync(
-      `soffice --headless --convert-to pdf --outdir "${tmpDir}" "${htmlPath}"`,
+    const { stderr } = await execAsync(
+      `soffice --headless --norestore "-env:UserInstallation=file://${profileDir}" --convert-to pdf --outdir "${tmpDir}" "${htmlPath}"`,
       { timeout: 30000 },
     );
+    if (stderr) console.warn("[invoice-pdf] soffice stderr:", stderr);
+
     const raw = await fs.promises.readFile(expectedPdfPath);
+    if (raw.length < 100) throw new Error(`[invoice-pdf] soffice produced a ${raw.length}-byte file — likely a conversion failure`);
+
     return await stripBlankTrailingPages(raw);
   } finally {
     fs.promises.unlink(htmlPath).catch(() => {});
     fs.promises.unlink(expectedPdfPath).catch(() => {});
+    fs.promises.rm(profileDir, { recursive: true, force: true }).catch(() => {});
   }
 };
