@@ -29,7 +29,7 @@ const requireTrackPricing = [
 // Filter dropdown data (owners + tiers + statuses). Before the param route.
 router.get("/filters", ...requireTrackPricing, getSkuFilters);
 
-// Primary-artist typeahead for the multi-select filter.
+// Artist typeahead for the multi-select filter.
 router.get("/artists", ...requireTrackPricing, searchSkuArtists);
 
 // Paginated list of tracks + their SKU.

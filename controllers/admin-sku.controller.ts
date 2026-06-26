@@ -66,7 +66,7 @@ export const getSkuFilters = catchAsync(async (_req: Request, res: Response) => 
   });
 });
 
-// GET /admin/skus/artists?search= — typeahead for the primary-artist filter.
+// GET /admin/skus/artists?search= — typeahead for the artist filter.
 export const searchSkuArtists = catchAsync(
   async (req: Request, res: Response) => {
     const { value, error } = artistSearchQuerySchema.validate(req.query, {

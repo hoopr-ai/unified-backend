@@ -74,7 +74,7 @@ export const getSkuFiltersService = async () => {
   return getSkuFilterOptions();
 };
 
-// Typeahead for the primary-artist filter.
+// Typeahead for the artist filter.
 export const searchSkuArtistsService = async (search: string, limit = 20) => {
   return searchArtistsForFilter(search, limit);
 };
