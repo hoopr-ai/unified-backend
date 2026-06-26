@@ -47,8 +47,13 @@ import {
   deleteSessionByToken,
   isSessionExpiredByInactivity,
   type UserSessionDetails,
+  upsertUserProfile,
+  findUserProfile,
+  updateUserBrandId,
 } from "../../persistence-service/exports";
-import { findBrandById } from "../../persistence-service/brand/modules.export";
+import { findBrandById, updateBrand, saveBrand } from "../../persistence-service/brand/modules.export";
+import { saveOrganization } from "../../persistence-service/exports";
+import { OrganizationStatus, BrandStatus } from "../../dto-service/modules.export";
 import {
   AppError,
   createJWTToken,
@@ -487,7 +492,7 @@ export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number,
 ): Promise<LoginResponseWithSession> => {
-  const { firstName, lastName, mobile, countryCode, profileRole } = data;
+  const { firstName, lastName, mobile, countryCode, profileRole, brandName, instagramLink, youtubeLink, facebookLink } = data;
 
   const user = await findUserById(userId);
   if (!user) {
@@ -507,6 +512,7 @@ export const completeProfileService = async (
       countryCode,
       profileRole,
     );
+    await upsertUserProfile(userId, { instagramLink, youtubeLink, facebookLink });
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
@@ -522,6 +528,36 @@ export const completeProfileService = async (
       );
     }
     throw error;
+  }
+
+  // If a brand name is provided, create or update org + brand and link to user
+  if (brandName) {
+    const normalizedName = brandName.toLowerCase().trim();
+    const now = new Date();
+    const org = await saveOrganization({
+      name: normalizedName,
+      status: OrganizationStatus.ACTIVE,
+      createdBy: userId,
+      createdAt: now,
+    });
+
+    if (user.brandId) {
+      // Invited user — update the existing brand's name and org
+      await updateBrand(user.brandId, {
+        name: normalizedName,
+        organizationId: (org as any).id,
+      });
+    } else {
+      // New self-signed-up user — create a brand and link it
+      const brand = await saveBrand({
+        name: normalizedName,
+        organizationId: (org as any).id,
+        status: BrandStatus.ACTIVE,
+        createdBy: userId,
+        createdAt: now,
+      });
+      await updateUserBrandId(userId, (brand as any).id);
+    }
   }
 
   // Notify existing team members that someone has joined
@@ -554,7 +590,7 @@ export const completeProfileService = async (
   const brand = updatedUser.brandId
     ? await findBrandById(updatedUser.brandId)
     : null;
-  const brandName = (brand as any)?.name ?? undefined;
+  const responseBrandName = (brand as any)?.name ?? undefined;
 
   const token = createJWTToken(
     { userId, email: updatedUser.email, platform: updatedUser.platform, role },
@@ -585,17 +621,22 @@ export const completeProfileService = async (
     token,
     refreshToken,
     session.id!,
-    brandName,
+    responseBrandName,
   );
 };
 
 export const getUserProfileService = async (
   userId: number,
 ): Promise<UserProfileResponse> => {
-  const user = await findUserById(userId);
+  const [user, userProfile] = await Promise.all([
+    findUserById(userId),
+    findUserProfile(userId),
+  ]);
   if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
+
+  const brand = user.brandId ? await findBrandById(user.brandId) : null;
 
   return {
     id: user.id!,
@@ -607,6 +648,10 @@ export const getUserProfileService = async (
     countryCode: user.countryCode,
     profileRole: user.profileRole,
     isProfileComplete: user.isProfileComplete ?? false,
+    instagramLink: userProfile?.instagramLink ?? null,
+    youtubeLink: userProfile?.youtubeLink ?? null,
+    facebookLink: userProfile?.facebookLink ?? null,
+    brandName: (brand as any)?.name ?? undefined,
   };
 };
 
@@ -619,8 +664,10 @@ export const updateUserProfileService = async (
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
 
+  const { instagramLink, youtubeLink, facebookLink, brandName, ...userUpdates } = data;
+
   try {
-    await updateUserProfilePartial(userId, data);
+    await updateUserProfilePartial(userId, userUpdates);
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
@@ -638,7 +685,23 @@ export const updateUserProfileService = async (
     throw error;
   }
 
-  const updatedUser = await findUserById(userId);
+  const socialUpdates: { instagramLink?: string | null; youtubeLink?: string | null; facebookLink?: string | null } = {};
+  if (instagramLink !== undefined) socialUpdates.instagramLink = instagramLink;
+  if (youtubeLink !== undefined) socialUpdates.youtubeLink = youtubeLink;
+  if (facebookLink !== undefined) socialUpdates.facebookLink = facebookLink;
+  if (Object.keys(socialUpdates).length > 0) {
+    await upsertUserProfile(userId, socialUpdates);
+  }
+
+  if (brandName && user.brandId) {
+    await updateBrand(user.brandId, { name: brandName.toLowerCase().trim() });
+  }
+
+  const [updatedUser, userProfile, brand] = await Promise.all([
+    findUserById(userId),
+    findUserProfile(userId),
+    user.brandId ? findBrandById(user.brandId) : Promise.resolve(null),
+  ]);
   if (!updatedUser) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
   }
@@ -652,6 +715,10 @@ export const updateUserProfileService = async (
     mobile: updatedUser.mobile,
     profileRole: updatedUser.profileRole,
     isProfileComplete: updatedUser.isProfileComplete ?? false,
+    instagramLink: userProfile?.instagramLink ?? null,
+    youtubeLink: userProfile?.youtubeLink ?? null,
+    facebookLink: userProfile?.facebookLink ?? null,
+    ...(brand ? { brandName: (brand as any).name } : {}),
   };
 };
 

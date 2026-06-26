@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { LicenseModel, type LicenseDetails, VideoLinkModel } from "./schemas/modules.export";
 import { TrackModel } from "../track/schemas/modules.export";
 import { UserModel } from "../user/schemas/modules.export";
@@ -98,4 +99,20 @@ export const countLicensesWithMissingVideoLinks = async (
   }
 
   return missingCount;
+};
+
+export const findLicensesByUserIdAndTrackCodes = async (
+  userId: number,
+  trackCodes: string[],
+): Promise<{ trackCode: string; id: number }[]> => {
+  const licenses = await LicenseModel.findAll({
+    where: {
+      userId,
+      trackCode: { [Op.in]: trackCodes },
+      type: "pay_per_track",
+    },
+    attributes: ["id", "trackCode"],
+    order: [["createdAt", "DESC"]],
+  });
+  return licenses.map((l) => ({ id: l.id, trackCode: l.trackCode }));
 };

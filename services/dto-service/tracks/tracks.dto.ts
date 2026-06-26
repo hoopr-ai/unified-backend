@@ -40,14 +40,11 @@ export interface HookTiming {
 // SKU info for track details (both standard and premium)
 export interface SkuInfo {
   id: string;
-  name?: string;
   costPrice?: number;
   sellingPrice?: number;
   gstPercent?: number;
   maxUsage?: number;
   description?: string;
-  token: number;
-  skuType: string;
 }
 
 export interface TrackWithArtists {
@@ -65,6 +62,8 @@ export interface TrackWithArtists {
   ownerType?: string;
   ownerSubType?: string;
   ownerCode?: string;
+  isEnterpriseOnly?: boolean; // True for Chartbuster tracks — no price, token-only access
+  sku?: SkuInfo; // SKU pricing info (prices omitted for enterprise-only tracks)
   album?: AlbumInfo; // Album details for the track
   campaign?: CampaignInfo; // Campaign details (amount and type) if active
   hookTimings: unknown; // Hook timing segments (e.g., chorus markers) — always present; `[]` when none
@@ -72,8 +71,7 @@ export interface TrackWithArtists {
 
 // Extended track details with both SKUs and filters
 export interface TrackDetailsWithSkus extends TrackWithArtists {
-  standardSku?: SkuInfo;
-  premiumSku?: SkuInfo;
+  sku?: SkuInfo;
   languages: FilterInfo[];
   genres: FilterInfo[];
   categories: FilterInfo[];
@@ -184,4 +182,5 @@ export interface GetTracksByCodesQuery {
 
 export const UNAUTHENTICATED_RESTRICTED_OWNER_NAMES: string[] = [
   "YRF Music",
+  "Zee Music Company",
 ];

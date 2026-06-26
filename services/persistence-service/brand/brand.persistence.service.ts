@@ -63,6 +63,13 @@ export const findBrandById = async (
   return brand;
 };
 
+export const updateBrand = async (
+  id: number,
+  updates: Partial<BrandDetails>,
+): Promise<void> => {
+  await BrandModel.update(updates, { where: { id } });
+};
+
 export const findBrandsByOrganizationId = async (
   organizationId: number
 ): Promise<BrandDetails[]> => {

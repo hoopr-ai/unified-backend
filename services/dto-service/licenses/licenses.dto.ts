@@ -35,6 +35,7 @@ export interface LicenseResponse {
   unlimitedTokens?: boolean;
   trackId: string;
   trackName?: string;
+  validThrough: Date;
   campaignId?: number | null;
 }
 
@@ -69,6 +70,7 @@ export interface LicenseHistoryItem {
   trackCode?: string;
   tokenCost: number;
   licensedAt: Date;
+  validThrough?: Date | null;
   purchasedDate: Date;
 }
 
@@ -87,6 +89,8 @@ export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   ownerType?: string;
   ownerSubType?: string;
   primaryArtists?: { id: string; name: string }[];
+  type?: string;
+  price?: number;
 }
 
 export interface BrandLicenseHistoryResponse {

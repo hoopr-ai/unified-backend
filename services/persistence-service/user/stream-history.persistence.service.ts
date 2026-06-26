@@ -2,7 +2,7 @@ import { UserStreamHistoryModel, UserStreamHistoryDetails } from "./schemas/user
 import { TrackModel } from "../track/schemas/track.schema";
 import { TrackArtistMappingModel } from "../artists/schemas/track-artist-mapping.schema";
 import { ArtistModel } from "../artists/schemas/artist.schema";
-import { SkuModel, SkuType } from "../sku/modules.export";
+import { SkuModel } from "../sku/modules.export";
 import { StreamType } from "../../dto-service/modules.export";
 
 export interface PaginatedStreamHistory {
@@ -82,8 +82,7 @@ export const getUserStreamHistory = async (
             model: SkuModel,
             as: "skus",
             required: false,
-            where: { skuType: SkuType.STANDARD, active: "Y" },
-            attributes: ["token"],
+            attributes: ["id", "costPrice", "sellingPrice"],
           },
         ],
       },

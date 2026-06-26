@@ -32,6 +32,7 @@ const enumFiles = [
   'dto-service/playlists/playlist.enum.ts',
   'dto-service/faq/faq.enum.ts',
   'dto-service/constants/common.enums.ts',
+  'dto-service/enterprise/enterprise.enum.ts',
 ];
 
 // DTO files to copy

@@ -349,6 +349,31 @@ export const getAllTokenAssignedDetails = async (
   }));
 };
 
+export const brandHasActiveTokens = async (brandId: number): Promise<boolean> => {
+  const types = await getActiveBrandTokenTypes(brandId);
+  return types.size > 0;
+};
+
+// Returns the set of token types that this brand has active balance for
+export const getActiveBrandTokenTypes = async (brandId: number): Promise<Set<string>> => {
+  const tokens = await TokenAssignedModel.findAll({
+    where: {
+      brandId,
+      [Op.or]: [
+        { tokenBalance: { [Op.gt]: 0 } },
+        { isUnlimited: true },
+      ],
+    },
+    attributes: ["type"],
+    raw: true,
+  });
+  const types = new Set<string>();
+  for (const t of tokens) {
+    if ((t as any).type) types.add((t as any).type);
+  }
+  return types;
+};
+
 export const addTokensAssignedByType = async (
   brandId: number,
   type: string,

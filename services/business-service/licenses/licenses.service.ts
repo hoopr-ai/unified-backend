@@ -171,13 +171,17 @@ export const licenseTrackService = async (
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
 
   // Create license record. brandId is null for SOUND_TRACKING_APP (no brand association).
+  const now = new Date();
+  const validThrough = new Date(now);
+  validThrough.setFullYear(validThrough.getFullYear() + 1);
   const licenseDetails: LicenseDetails = {
     brandId,
     userId,
     trackCode: track.trackCode,
     tokenCost: isSoundTrackingApp ? 0 : TOKEN_COST_PER_LICENSE,
-    licensedAt: new Date(),
-    createdAt: new Date(),
+    licensedAt: now,
+    validThrough,
+    createdAt: now,
     campaignId: campaignIdToApply ?? null,
   };
 
@@ -359,6 +363,7 @@ export const licenseTrackService = async (
     unlimitedTokens: deductionWasUnlimited || undefined,
     trackId: track.id,
     trackName: track.name,
+    validThrough: licenseDetails.validThrough!,
     campaignId: campaignIdToApply ?? null,
   };
 };
@@ -532,6 +537,7 @@ export const getBrandLicenseHistoryService = async (
       trackCode: track?.trackCode,
       tokenCost: license.tokenCost,
       licensedAt: license.licensedAt,
+      validThrough: license.validThrough ?? null,
       purchasedDate: license.createdAt,
       userId: license.userId,
       userEmail: licenseUser?.email,
@@ -545,6 +551,8 @@ export const getBrandLicenseHistoryService = async (
       ownerType: ownerTypes.length > 0 ? ownerTypes[0] : undefined,
       ownerSubType: ownerSubTypes.length > 0 ? ownerSubTypes[0] : undefined,
       primaryArtists,
+      type: license.type,
+      price: license.price,
     };
   });
 
@@ -575,12 +583,11 @@ export const downloadTrackService = async (
     throw new AppError("License not found", 404);
   }
 
-  // Verify ownership
-  // Check if the user owns the license directly
-  if (license.userId !== userId) {
+  // Verify ownership — Number() cast handles Sequelize returning BIGINT as string
+  if (Number(license.userId) !== userId) {
     // Or check if the user belongs to the brand that owns the license
     const user = await UserModel.findByPk(userId);
-    if (!user || !user.brandId || user.brandId !== license.brandId) {
+    if (!user || !user.brandId || Number(user.brandId) !== Number(license.brandId)) {
       throw new AppError("Unauthorized access to license", 403);
     }
   }
@@ -622,10 +629,10 @@ export const downloadLicensePdfService = async (
     throw new AppError("License not found", 404);
   }
 
-  // Verify ownership
-  if (license.userId !== userId) {
+  // Verify ownership — Number() cast handles Sequelize returning BIGINT as string
+  if (Number(license.userId) !== userId) {
     const user = await UserModel.findByPk(userId);
-    if (!user || !user.brandId || user.brandId !== license.brandId) {
+    if (!user || !user.brandId || Number(user.brandId) !== Number(license.brandId)) {
       throw new AppError("Unauthorized access to license", 403);
     }
   }
@@ -734,7 +741,7 @@ export const getTokenDetailsService = async (
   }
 
   if (!user.brandId) {
-    throw new AppError("User is not associated with any brand", 400);
+    return { brandId: 0, tokens: [] };
   }
 
   // Using NEW token_assigned table
@@ -899,7 +906,7 @@ export const getMissingVideoLinksService = async (
   }
 
   if (!user.brandId) {
-    throw new AppError("User is not associated with any brand", 400);
+    return { missingVideoLinksCount: 0, missingLink: false };
   }
 
   const missingVideoLinksCount = await countLicensesWithMissingVideoLinks(user.brandId);

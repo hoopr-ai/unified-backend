@@ -38,7 +38,11 @@ export const completeProfileRequestSchema =
     profileRole: Joi.string()
       .valid(...profileRoleValues)
       .required(),
-  });
+    brandName: Joi.string().min(2).max(255).optional(),
+    instagramLink: Joi.string().max(500).optional(),
+    youtubeLink: Joi.string().max(500).optional(),
+    facebookLink: Joi.string().max(500).optional(),
+  }).or("instagramLink", "youtubeLink", "facebookLink");
 
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({
   email: Joi.string().email().required(),
@@ -74,6 +78,10 @@ export const updateProfileRequestSchema = Joi.object({
   profileRole: Joi.string()
     .valid(...profileRoleValues)
     .optional(),
+  instagramLink: Joi.string().uri().max(500).allow(null).optional(),
+  youtubeLink: Joi.string().uri().max(500).allow(null).optional(),
+  facebookLink: Joi.string().uri().max(500).allow(null).optional(),
+  brandName: Joi.string().min(2).max(255).optional(),
 }).min(1);
 
 export const sendOtpRequestSchema = Joi.object<SendOtpRequestData>({
@@ -89,10 +97,16 @@ export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
 
 export const sendEmailOtpRequestSchema = Joi.object<SendEmailOtpRequestData>({
   email: Joi.string().email().required(),
+  platform: Joi.string()
+    .valid(...platformValues)
+    .required(),
 }).unknown(false);
 
 export const verifyEmailOtpRequestSchema =
   Joi.object<VerifyEmailOtpRequestData>({
     email: Joi.string().email().required(),
     otp: Joi.string().length(6).pattern(/^\d+$/).required(),
+    platform: Joi.string()
+      .valid(...platformValues)
+      .required(),
   }).unknown(false);

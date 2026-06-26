@@ -7,6 +7,9 @@ import {
   UserActivityModel,
   UserLikedTrackModel,
   UserStreamHistoryModel,
+  UserProfileModel,
+  UserAddressModel,
+  UserEntityDetailsModel,
 } from "./user/modules.export";
 import { TrackModel, FeaturedTracksModel, ChartTrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
@@ -34,6 +37,10 @@ import {
   TrackKeywordMappingModel,
 } from "./keyword/modules.export";
 import { RailModel, RailItemModel } from "./rail/modules.export";
+import { CountryModel, StateModel, CityModel } from "./geography/modules.export";
+import { CartModel } from "./cart/modules.export";
+import { OrderModel, OrderInfoModel } from "./order/modules.export";
+import { TransactionModel } from "./transaction/modules.export";
 
 config();
 
@@ -85,6 +92,9 @@ sequelize.addModels([
   UserActivityModel,
   UserLikedTrackModel,
   UserStreamHistoryModel,
+  UserProfileModel,
+  UserAddressModel,
+  UserEntityDetailsModel,
   TrackModel,
   AlbumModel,
   FilterModel,
@@ -112,6 +122,13 @@ sequelize.addModels([
   FaqModel,
   RailModel,
   RailItemModel,
+  CountryModel,
+  StateModel,
+  CityModel,
+  CartModel,
+  OrderModel,
+  OrderInfoModel,
+  TransactionModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
