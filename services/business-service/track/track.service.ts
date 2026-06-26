@@ -94,6 +94,9 @@ const normalizeHookTimings = (raw: unknown): unknown => {
   return [];
 };
 
+const getStandardToken = (_track: RawTrackWithMappings): number => {
+  return 1;
+};
 
 // Fetch owner maps from a list of tracks
 const fetchOwnerMaps = async (
@@ -244,6 +247,7 @@ const transformTrackToDto = (
     hasVocals: track.hasVocals,
     trending: track.trending,
     primaryArtists,
+    token: getStandardToken(track),
     isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
