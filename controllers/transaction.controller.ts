@@ -19,8 +19,18 @@ interface AuthRequest extends Request {
   session?: SessionPayload;
 }
 
+// PostgreSQL BIGINT columns come back from the pg driver as strings, so
+// req.session.userId may be "508" (string) even though it's typed as number.
+// Always coerce to number before passing to services.
+const resolveUserId = (session?: SessionPayload): number | null => {
+  const raw = session?.userId;
+  if (raw === undefined || raw === null) return null;
+  const n = Number(raw);
+  return isNaN(n) ? null : n;
+};
+
 export const initTransaction = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
+  const userId = resolveUserId(req.session);
   const email = req.session?.email;
   if (!userId || !email) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
@@ -29,7 +39,7 @@ export const initTransaction = catchAsync(async (req: AuthRequest, res: Response
 });
 
 export const commitTransaction = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
+  const userId = resolveUserId(req.session);
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
   const data = await commitTransactionService(userId, req.body);
@@ -37,7 +47,7 @@ export const commitTransaction = catchAsync(async (req: AuthRequest, res: Respon
 });
 
 export const getTransactions = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
+  const userId = resolveUserId(req.session);
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
   const pageRaw = Array.isArray(req.query.page) ? req.query.page[0] : req.query.page;
@@ -49,7 +59,7 @@ export const getTransactions = catchAsync(async (req: AuthRequest, res: Response
 });
 
 export const getTransactionDetail = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
+  const userId = resolveUserId(req.session);
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
@@ -61,7 +71,7 @@ export const getTransactionDetail = catchAsync(async (req: AuthRequest, res: Res
 });
 
 export const downloadInvoice = catchAsync(async (req: AuthRequest, res: Response) => {
-  const userId = req.session?.userId;
+  const userId = resolveUserId(req.session);
   if (!userId) return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
 
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;

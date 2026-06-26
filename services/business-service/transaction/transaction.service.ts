@@ -138,7 +138,7 @@ export const commitTransactionService = async (
 
   const transaction = await findTransactionByRazorpayOrderId(razorpayOrderId);
   if (!transaction) throw new AppError("Transaction not found", 404);
-  if (transaction.userId !== userId) throw new AppError("Unauthorized", 401);
+  if (Number(transaction.userId) !== Number(userId)) throw new AppError("Unauthorized", 401);
   if (transaction.status === TransactionStatus.SUCCESS) {
     throw new AppError("Transaction already completed", 400);
   }
