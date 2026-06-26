@@ -68,7 +68,7 @@ export interface ListTracksWithSkuParams {
   tier?: string;
   status?: string;
   vocals?: VocalsFilter;
-  // Primary-artist filter (union of these artist ids).
+  // Artist filter (union of these artist ids, any role).
   artistIds?: string[];
   // 'true' → only tracks that already have a SKU, 'false' → only tracks missing one
   hasSku?: boolean;
@@ -85,7 +85,7 @@ const buildTrackWhere = (params: {
   tier?: string;
   status?: string;
   vocals?: VocalsFilter;
-  // Restrict to these track ids — used by the primary-artist filter, which is
+  // Restrict to these track ids — used by the artist filter, which is
   // resolved to track ids up-front (see resolveArtistTrackIds).
   trackIdIn?: string[];
 }): Record<string | symbol, unknown> => {
@@ -112,7 +112,7 @@ const buildTrackWhere = (params: {
     and.push({ hasVocals: { [Op.is]: null } });
   }
 
-  // Primary-artist filter: trackIdIn is pre-resolved. An empty array means the
+  // Artist filter: trackIdIn is pre-resolved. An empty array means the
   // filter matched no tracks → force a no-results clause.
   if (params.trackIdIn) {
     and.push({ id: { [Op.in]: params.trackIdIn } });
@@ -132,16 +132,16 @@ const buildTrackWhere = (params: {
   return where;
 };
 
-// Resolve a set of artist ids to the track ids they are credited on as a
-// PRIMARY artist. Returns deduped track ids (union — a track matches if it has
-// any of the selected primary artists). Pre-resolving keeps the main list query
-// free of a join (which would break pagination, like the SKU join did).
+// Resolve a set of artist ids to the track ids they are credited on (ANY role —
+// not just primary). Returns deduped track ids (union — a track matches if it
+// has any of the selected artists). Pre-resolving keeps the main list query free
+// of a join (which would break pagination, like the SKU join did).
 export const resolveArtistTrackIds = async (
   artistIds: string[],
 ): Promise<string[]> => {
   if (artistIds.length === 0) return [];
   const rows = await TrackArtistMappingModel.findAll({
-    where: { artistId: { [Op.in]: artistIds }, isPrimary: true },
+    where: { artistId: { [Op.in]: artistIds } },
     attributes: ["trackId"],
     raw: true,
   });
@@ -150,7 +150,7 @@ export const resolveArtistTrackIds = async (
   ];
 };
 
-// Typeahead source for the primary-artist filter dropdown.
+// Typeahead source for the artist filter dropdown.
 export const searchArtistsForFilter = async (
   search: string,
   limit = 20,
@@ -219,7 +219,7 @@ export const listTracksWithSku = async (
 ): Promise<{ rows: TrackSkuRow[]; count: number }> => {
   const offset = (params.page - 1) * params.limit;
 
-  // Resolve the primary-artist filter to track ids before building the where.
+  // Resolve the artist filter to track ids before building the where.
   const trackIdIn = params.artistIds?.length
     ? await resolveArtistTrackIds(params.artistIds)
     : undefined;
