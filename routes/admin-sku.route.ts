@@ -10,6 +10,7 @@ import {
 import {
   listSkus,
   getSkuFilters,
+  searchSkuArtists,
   upsertSku,
   bulkUpsertSkus,
 } from "../controllers/admin-sku.controller";
@@ -25,8 +26,11 @@ const requireTrackPricing = [
   requireFunctionality("track-pricing"),
 ];
 
-// Filter dropdown data (owners + tiers). Registered before the param route.
+// Filter dropdown data (owners + tiers + statuses). Before the param route.
 router.get("/filters", ...requireTrackPricing, getSkuFilters);
+
+// Primary-artist typeahead for the multi-select filter.
+router.get("/artists", ...requireTrackPricing, searchSkuArtists);
 
 // Paginated list of tracks + their SKU.
 router.get("/", ...requireTrackPricing, listSkus);

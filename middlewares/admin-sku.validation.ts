@@ -24,7 +24,16 @@ export const listSkusQuerySchema = Joi.object({
   ownerId: Joi.string().uuid().optional(),
   tier: Joi.string().trim().optional(),
   status: Joi.string().trim().optional(),
+  vocals: Joi.string().valid("vocal", "instrumental", "unknown").optional(),
+  // Comma-separated artist ids (GET query). Parsed to an array in the service.
+  artistIds: Joi.string().trim().optional(),
   hasSku: Joi.boolean().optional(),
+}).unknown(false);
+
+// GET /admin/skus/artists?search=
+export const artistSearchQuerySchema = Joi.object({
+  search: Joi.string().trim().allow("").optional(),
+  limit: Joi.number().integer().min(1).max(50).default(20),
 }).unknown(false);
 
 // PUT /admin/skus/:trackCode
@@ -44,6 +53,8 @@ export const bulkUpsertSkuSchema = Joi.object({
     ownerId: Joi.string().uuid().optional(),
     tier: Joi.string().trim().optional(),
     status: Joi.string().trim().optional(),
+    vocals: Joi.string().valid("vocal", "instrumental", "unknown").optional(),
+    artistIds: Joi.array().items(Joi.string().uuid()).single().optional(),
     search: Joi.string().trim().allow("").optional(),
     onlyMissingSku: Joi.boolean().optional(),
   })

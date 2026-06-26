@@ -2,6 +2,13 @@ import { Op, Sequelize } from "sequelize";
 import { SkuModel, ItemType } from "./schemas/sku.schema";
 import { TrackModel } from "../track/schemas/track.schema";
 import { OwnerModel } from "../owner/schemas/owner.schema";
+import {
+  TrackArtistMappingModel,
+  ArtistModel,
+} from "../artists/schemas/modules.export";
+
+// Vocals filter modes (maps to the boolean/null hasVocals column).
+export type VocalsFilter = "vocal" | "instrumental" | "unknown";
 
 // ---------------------------------------------------------------------------
 // Internal-admin SKU (track pricing) persistence layer.
@@ -60,6 +67,9 @@ export interface ListTracksWithSkuParams {
   ownerId?: string;
   tier?: string;
   status?: string;
+  vocals?: VocalsFilter;
+  // Primary-artist filter (union of these artist ids).
+  artistIds?: string[];
   // 'true' → only tracks that already have a SKU, 'false' → only tracks missing one
   hasSku?: boolean;
 }
@@ -74,6 +84,10 @@ const buildTrackWhere = (params: {
   ownerId?: string;
   tier?: string;
   status?: string;
+  vocals?: VocalsFilter;
+  // Restrict to these track ids — used by the primary-artist filter, which is
+  // resolved to track ids up-front (see resolveArtistTrackIds).
+  trackIdIn?: string[];
 }): Record<string | symbol, unknown> => {
   const where: Record<string | symbol, unknown> = {};
   const and: unknown[] = [];
@@ -90,6 +104,20 @@ const buildTrackWhere = (params: {
     and.push({ tier: params.tier });
   }
 
+  if (params.vocals === "vocal") {
+    and.push({ hasVocals: true });
+  } else if (params.vocals === "instrumental") {
+    and.push({ hasVocals: false });
+  } else if (params.vocals === "unknown") {
+    and.push({ hasVocals: { [Op.is]: null } });
+  }
+
+  // Primary-artist filter: trackIdIn is pre-resolved. An empty array means the
+  // filter matched no tracks → force a no-results clause.
+  if (params.trackIdIn) {
+    and.push({ id: { [Op.in]: params.trackIdIn } });
+  }
+
   if (params.search && params.search.trim().length > 0) {
     const term = params.search.trim().replace(/[%_\\]/g, "\\$&");
     and.push({
@@ -102,6 +130,50 @@ const buildTrackWhere = (params: {
 
   if (and.length) where[Op.and] = and;
   return where;
+};
+
+// Resolve a set of artist ids to the track ids they are credited on as a
+// PRIMARY artist. Returns deduped track ids (union — a track matches if it has
+// any of the selected primary artists). Pre-resolving keeps the main list query
+// free of a join (which would break pagination, like the SKU join did).
+export const resolveArtistTrackIds = async (
+  artistIds: string[],
+): Promise<string[]> => {
+  if (artistIds.length === 0) return [];
+  const rows = await TrackArtistMappingModel.findAll({
+    where: { artistId: { [Op.in]: artistIds }, isPrimary: true },
+    attributes: ["trackId"],
+    raw: true,
+  });
+  return [
+    ...new Set(rows.map((r) => (r as unknown as { trackId: string }).trackId)),
+  ];
+};
+
+// Typeahead source for the primary-artist filter dropdown.
+export const searchArtistsForFilter = async (
+  search: string,
+  limit = 20,
+): Promise<{ id: string; name: string; artistCode: string }[]> => {
+  const term = (search ?? "").trim();
+  if (term.length === 0) return [];
+  const escaped = term.replace(/[%_\\]/g, "\\$&");
+  const artists = await ArtistModel.findAll({
+    where: {
+      [Op.or]: [
+        { name: { [Op.iLike]: `%${escaped}%` } },
+        { artistCode: { [Op.iLike]: `%${escaped}%` } },
+      ],
+    },
+    attributes: ["id", "name", "artistCode"],
+    order: [["name", "ASC"]],
+    limit,
+  });
+  return artists.map((a) => ({
+    id: a.id,
+    name: a.name,
+    artistCode: a.artistCode,
+  }));
 };
 
 // Attach owner display info (id, username, type) to a set of ownerId arrays.
@@ -146,7 +218,13 @@ export const listTracksWithSku = async (
   params: ListTracksWithSkuParams,
 ): Promise<{ rows: TrackSkuRow[]; count: number }> => {
   const offset = (params.page - 1) * params.limit;
-  const where = buildTrackWhere(params);
+
+  // Resolve the primary-artist filter to track ids before building the where.
+  const trackIdIn = params.artistIds?.length
+    ? await resolveArtistTrackIds(params.artistIds)
+    : undefined;
+
+  const where = buildTrackWhere({ ...params, trackIdIn });
 
   // hasSku is enforced in SQL via EXISTS so pagination + count stay correct and
   // no track is ever dropped by a join.
@@ -230,9 +308,15 @@ export const findTrackCodesByFilter = async (params: {
   ownerId?: string;
   tier?: string;
   status?: string;
+  vocals?: VocalsFilter;
+  artistIds?: string[];
   onlyMissingSku?: boolean;
 }): Promise<string[]> => {
-  const where = buildTrackWhere(params);
+  const trackIdIn = params.artistIds?.length
+    ? await resolveArtistTrackIds(params.artistIds)
+    : undefined;
+
+  const where = buildTrackWhere({ ...params, trackIdIn });
 
   // "missing SKU only" → trackCode NOT IN (sku codes). No join, no in-memory filter.
   if (params.onlyMissingSku) {

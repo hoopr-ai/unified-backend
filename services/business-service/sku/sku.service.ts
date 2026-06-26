@@ -6,8 +6,10 @@ import {
   upsertSkuForTrack,
   bulkUpsertSkus,
   getSkuFilterOptions,
+  searchArtistsForFilter,
   type SkuValues,
   type TrackSkuRow,
+  type VocalsFilter,
 } from "../../persistence-service/sku/modules.export";
 
 // ---------------------------------------------------------------------------
@@ -24,6 +26,8 @@ export interface ListSkusInput {
   ownerId?: string;
   tier?: string;
   status?: string;
+  vocals?: VocalsFilter;
+  artistIds?: string[];
   hasSku?: boolean;
 }
 
@@ -50,6 +54,8 @@ export const listSkusService = async (
     ownerId: input.ownerId,
     tier: input.tier,
     status: input.status,
+    vocals: input.vocals,
+    artistIds: input.artistIds,
     hasSku: input.hasSku,
   });
 
@@ -66,6 +72,11 @@ export const listSkusService = async (
 
 export const getSkuFiltersService = async () => {
   return getSkuFilterOptions();
+};
+
+// Typeahead for the primary-artist filter.
+export const searchSkuArtistsService = async (search: string, limit = 20) => {
+  return searchArtistsForFilter(search, limit);
 };
 
 // Upsert one track's SKU. Returns the saved SKU and whether it was created.
@@ -101,6 +112,8 @@ export interface BulkUpsertInput {
     ownerId?: string;
     tier?: string;
     status?: string;
+    vocals?: VocalsFilter;
+    artistIds?: string[];
     search?: string;
     onlyMissingSku?: boolean;
   };
