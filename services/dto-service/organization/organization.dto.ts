@@ -13,3 +13,9 @@ export interface CreateOrganizationResponseData {
   status: OrganizationStatus;
   createdAt: Date;
 }
+
+export interface UpdateOrganizationRequestData {
+  name?: string;
+  description?: string;
+  status?: OrganizationStatus;
+}

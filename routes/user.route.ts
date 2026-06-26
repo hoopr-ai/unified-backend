@@ -13,6 +13,7 @@ import {
   getProfile,
   updateProfile,
   getUsers,
+  updateUserById,
   removeInvitedUser,
   sendOtp,
   verifyOtp,
@@ -120,6 +121,17 @@ router.get(
     platforms: [Platform.ENTERPRISE],
   }),
   getUsers,
+);
+
+// Admin edit of a user's basic profile fields (client-credentials console)
+router.put(
+  "/:userId",
+  authenticateWithSession({
+    roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES],
+    platforms: [Platform.ENTERPRISE, Platform.INTERNAL],
+  }),
+  validateRequest(updateProfileRequestSchema),
+  updateUserById,
 );
 
 // Remove invited user — only MASTER and ADMIN can remove, USER cannot
