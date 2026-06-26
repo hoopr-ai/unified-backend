@@ -734,7 +734,7 @@ export const getTokenDetailsService = async (
   }
 
   if (!user.brandId) {
-    throw new AppError("User is not associated with any brand", 400);
+    return { brandId: 0, tokens: [] };
   }
 
   // Using NEW token_assigned table
@@ -899,7 +899,7 @@ export const getMissingVideoLinksService = async (
   }
 
   if (!user.brandId) {
-    throw new AppError("User is not associated with any brand", 400);
+    return { missingVideoLinksCount: 0, missingLink: false };
   }
 
   const missingVideoLinksCount = await countLicensesWithMissingVideoLinks(user.brandId);

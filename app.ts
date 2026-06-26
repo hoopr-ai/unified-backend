@@ -26,6 +26,9 @@ import companyLookupRoutes from "./routes/company-lookup.route";
 import railRoutes from "./routes/rail.route";
 import adminInternalUsersRoutes from "./routes/admin-internal-users.route";
 import internalLoginRoutes from "./routes/internal-login.route";
+import userAddressRoutes from "./routes/user-address.route";
+import geographyRoutes from "./routes/geography.route";
+import cartRoutes from "./routes/cart.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -48,6 +51,8 @@ app.use(activityLoggerMiddleware());
 // directly and never falls through userRoutes. Defence-in-depth — userRoutes has no
 // catch-all today, but a future addition there must not silently shadow login OTP.
 app.use("/user/internal-login", internalLoginRoutes);
+app.use("/user/address", userAddressRoutes);
+app.use("/", geographyRoutes);
 app.use("/user", userRoutes);
 app.use("/filters", filterRoutes);
 app.use("/tracks", trackRoutes);
@@ -68,6 +73,7 @@ app.use("/contact", contactRoutes);
 app.use("/company-lookup", companyLookupRoutes);
 app.use("/rails", railRoutes);
 app.use("/admin/internal-users", adminInternalUsersRoutes);
+app.use("/cart", cartRoutes);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);
