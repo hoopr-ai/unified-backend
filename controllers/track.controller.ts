@@ -22,6 +22,7 @@ import {
 import type { SessionPayload } from "../middlewares/authenticate";
 import { findUserById, findTrackIdByCode } from "../services/persistence-service/exports";
 import { searchBrands } from "../services/persistence-service/brand/brand.persistence.service";
+import { searchArtistsForFilter } from "../services/persistence-service/sku/sku.persistence.service";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -217,6 +218,24 @@ export const searchBrandsController = catchAsync(
       status: HttpStatusCode.OK,
       data: { brands: results },
       message: "Brands fetched successfully",
+    });
+  },
+);
+
+// Artist typeahead for the rails item picker (App Music Programming CMS).
+// Ungated like /tracks/search and /tracks/brands/search — reuses the same
+// persistence query that backs the SKU primary-artist filter dropdown.
+export const searchArtistsController = catchAsync(
+  async (req: Request, res: Response) => {
+    const query = (req.query.q as string) || "";
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+
+    const results = await searchArtistsForFilter(query, Math.min(limit, 50));
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: { artists: results },
+      message: "Artists fetched successfully",
     });
   },
 );

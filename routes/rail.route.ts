@@ -10,6 +10,7 @@ import {
   reorderRails,
   copyRail,
   refreshRails,
+  setRailMode,
   triggerBrandRecommendation,
   clearRailsCache,
 } from "../controllers/rail.controller";
@@ -62,5 +63,8 @@ router.delete("/:railId", adminAuth, deleteRail);
 
 // PATCH /rails/:railId/items - edit rail items (delete, freeze, reorder, add)
 router.patch("/:railId/items", adminAuth, editRailItems);
+
+// PATCH /rails/:railId/mode - toggle populateMode (MANUAL | AUTO)
+router.patch("/:railId/mode", adminAuth, setRailMode);
 
 export default router;

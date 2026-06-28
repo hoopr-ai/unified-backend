@@ -38,6 +38,10 @@ export interface RailDetails {
   brandId?: number | null;
   pageName?: PageName;
   sourceType: RailSourceType;
+  // "MANUAL" (app serves only curated rail_items) or "AUTO" (app auto-fills
+  // from the catalogue; rail_items become PIN/HIDE overrides). Read by the
+  // Content-Recommendation app endpoint; surfaced here so the CMS can toggle it.
+  populateMode?: string | null;
   sourceConfig?: RailSourceConfig | null;
   order: number;
   isVisible: boolean;
@@ -110,6 +114,15 @@ export class RailModel extends Model<RailModel, RailDetails> {
     allowNull: false,
   })
   sourceType!: RailSourceType;
+
+  // App rail population mode: "MANUAL" | "AUTO" (column already exists in the
+  // shared DB; mapped here so the CMS can read/toggle it). Nullable — legacy
+  // rails treat NULL as MANUAL.
+  @Column({
+    type: DataType.STRING(50),
+    allowNull: true,
+  })
+  populateMode?: string | null;
 
   @Column({
     type: DataType.JSONB,
