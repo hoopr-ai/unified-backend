@@ -27,6 +27,7 @@ export interface RailResponse {
   type: RailType;
   subType?: string | null;
   sourceType: RailSourceType;
+  populateMode?: string | null;  // "MANUAL" | "AUTO" — drives the app endpoint
   pageName?: string;  // The page this rail belongs to
   order: number;
   items: RailItemResponse[];

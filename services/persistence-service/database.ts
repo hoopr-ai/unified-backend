@@ -326,6 +326,24 @@ export async function connectDatabase() {
       `);
       console.log("📦 playlists.imageLink ensured.");
 
+      // 3d. Idempotently add rails.populateMode (App Home CMS + the
+      // Content-Recommendation app endpoint read it: 'MANUAL' = serve only the
+      // curated rail_items, 'AUTO' = auto-fill from the catalogue). Nullable —
+      // legacy rails with NULL are treated as MANUAL. Required because rail
+      // reads SELECT every mapped column; without it, GET /rails would error on
+      // a DB that doesn't already have the column.
+      await sequelize.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'rails' AND column_name = 'populateMode'
+          ) THEN
+            ALTER TABLE rails ADD COLUMN "populateMode" VARCHAR(50) NULL;
+          END IF;
+        END $$;
+      `);
+      console.log("📦 rails.populateMode ensured.");
+
       // 4. Ensure triggers + functions exist (idempotent — CREATE OR REPLACE / IF NOT EXISTS)
       await sequelize.query(ENSURE_TRIGGERS_SQL);
       console.log("🔁 Triggers ensured.");

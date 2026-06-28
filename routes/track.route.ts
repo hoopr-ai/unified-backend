@@ -6,6 +6,7 @@ import {
   getTrackDetailsByCode,
   searchTracks,
   searchBrandsController,
+  searchArtistsController,
   getRandomTrackPreview,
   streamTrackPreview,
 } from "../controllers/track.controller";
@@ -17,6 +18,7 @@ const router = Router();
 
 router.get("/search", searchTracks);
 router.get("/brands/search", searchBrandsController);
+router.get("/artists/search", searchArtistsController);
 // Public API - Random track preview with short-lived signed URL (10-30 seconds)
 router.get("/random-preview", getRandomTrackPreview);
 // Public API - Stream track preview (first ~15 seconds, ~600KB)

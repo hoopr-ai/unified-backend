@@ -341,6 +341,23 @@ export const findRailByIdWithoutItems = async (
   return RailModel.findOne({ where: { id: railId } });
 };
 
+// Toggle a rail's populateMode ("MANUAL" | "AUTO"). Returns the updated rail
+// (without items) or null if it doesn't exist. Invalidates the page cache.
+export const updateRailMode = async (
+  railId: number,
+  populateMode: string,
+  updatedById?: number | null,
+): Promise<RailModel | null> => {
+  const rail = await RailModel.findOne({ where: { id: railId } });
+  if (!rail) return null;
+  await RailModel.update(
+    { populateMode, updatedById: updatedById ?? null },
+    { where: { id: railId } },
+  );
+  await invalidateRailsCache(rail.brandId ?? null, rail.pageName);
+  return RailModel.findOne({ where: { id: railId } });
+};
+
 // Paginated fetch of rail items for a given rail, ordered by `order` ASC.
 export const findRailItemsPaginated = async (
   railId: number,

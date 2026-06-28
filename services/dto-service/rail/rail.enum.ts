@@ -5,6 +5,7 @@ export enum RailType {
   MOODS = "MOODS",
   LABELS = "LABELS",
   PLAYLISTS = "PLAYLISTS",
+  ARTISTS = "ARTISTS",
 }
 
 export enum RailSourceType {
@@ -20,6 +21,7 @@ export enum RailItemType {
   MOOD = "MOOD",
   LABEL = "LABEL",
   PLAYLIST = "PLAYLIST",
+  ARTIST = "ARTIST",
 }
 
 export enum PageName {
@@ -28,6 +30,7 @@ export enum PageName {
   INTERNATIONAL = "INTERNATIONAL",
   REGIONAL_AND_INDIE = "REGIONAL_AND_INDIE",
   HOOPR_ORIGINALS = "HOOPR_ORIGINALS",
+  APP_HOME = "APP_HOME",
 }
 
 export enum OwnerType {
@@ -45,6 +48,7 @@ export const PAGE_OWNER_TYPE_MAP: Record<PageName, OwnerType[] | null> = {
   [PageName.INTERNATIONAL]: [OwnerType.INTERNATIONAL],
   [PageName.REGIONAL_AND_INDIE]: [OwnerType.REGIONAL_AND_INDIE],
   [PageName.HOOPR_ORIGINALS]: [OwnerType.HOOPR_ORIGINALS],
+  [PageName.APP_HOME]: null, // null means all owner types allowed
 };
 
 // Helper to check if an owner type is allowed for a page
@@ -71,4 +75,13 @@ export const ITEM_TYPES_WITH_OWNER_RESTRICTION = ["TRACK", "LABEL"];
 // Check if an item type has owner type restrictions
 export function itemTypeHasOwnerRestriction(itemType: string): boolean {
   return ITEM_TYPES_WITH_OWNER_RESTRICTION.includes(itemType);
+}
+
+// Pages whose rails must be fully hand-curated: only MANUAL sourceType is
+// allowed (no QUERY / AI_QUERY). The APP_HOME app CMS curates everything by hand.
+export const MANUAL_ONLY_PAGES: PageName[] = [PageName.APP_HOME];
+
+// Check if a page only allows MANUAL rails
+export function isManualOnlyPage(pageName: string): boolean {
+  return MANUAL_ONLY_PAGES.includes(pageName as PageName);
 }
