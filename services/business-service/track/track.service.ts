@@ -247,7 +247,7 @@ const transformTrackToDto = (
     hasVocals: track.hasVocals,
     trending: track.trending,
     primaryArtists,
-    ...(activeTokenTypes && activeTokenTypes.size > 0 && { token: getStandardToken(track) }),
+    ...(hasTokenForTrack && { token: getStandardToken(track) }),
     isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
