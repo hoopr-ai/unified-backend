@@ -20,8 +20,10 @@
     "@types/newrelic": "^9.14.8",
     "@types/node": "^25.0.6",
     "@types/pg": "^8.16.0",
+    "@types/sharp": "^0.31.1",
     "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.11",
+    "sharp": "^0.35.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
