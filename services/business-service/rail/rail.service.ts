@@ -242,7 +242,7 @@ const hydrateTracks = async (
       hookTimings: track.hookTimings,
       primaryArtists: track.primaryArtists,
       isLiked: likedSet.has(track.trackCode),
-      token: 1,
+      ...(activeTokenTypes.size > 0 && { token: 1 }),
     };
 
     // Add optional fields if they exist (matching getAllTracks API)
