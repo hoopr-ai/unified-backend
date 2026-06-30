@@ -82,6 +82,12 @@ async function createBrandRecommendRail(
   customRailKey?: string,
   pageName: string = "HOME"
 ): Promise<void> {
+  // Do not auto-populate the "Recommended For You" rail on the Hoopr Playlists page.
+  if (pageName === "HOOPR_PLAYLIST") {
+    logger.info(`[BrandRecommend] Skipping recommended rail for pageName=${pageName}`);
+    return;
+  }
+
   const pageNameEnum = pageName as PageName;
 
   const items: RailItemInput[] = trackCodes.map((trackCode, idx) => ({
@@ -150,6 +156,15 @@ async function processSingleBrand(
     brandId: brandId ?? 0,
     success: false,
   };
+
+  // Do not auto-populate the "Recommended For You" rail on the Hoopr Playlists
+  // page — skip before the AI fetch to avoid a wasted round trip.
+  if (pageName === "HOOPR_PLAYLIST") {
+    logger.info(`[BrandRecommend] Skipping recommended rail for pageName=${pageName}, brand ${brandId}`);
+    result.success = true;
+    result.itemCount = 0;
+    return result;
+  }
 
   try {
     const trackCodes = await fetchBrandRecommendTracks(brandId, filters, limit);
