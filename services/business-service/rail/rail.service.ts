@@ -611,6 +611,12 @@ const ensureBrandRecommendedRail = async (
   userBrandId: number,
   pageName: string = "HOME",
 ): Promise<void> => {
+  // Do not auto-populate the "Recommended For You" rail on the Hoopr Playlists page.
+  if (pageName === "HOOPR_PLAYLIST") {
+    console.log(`[BrandRecommend] Skipping recommended rail for pageName=${pageName}`);
+    return;
+  }
+
   const pageNameEnum = pageName as PageName;
 
   // Check for existing rail with any of the possible key formats
