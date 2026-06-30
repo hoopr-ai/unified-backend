@@ -57,7 +57,7 @@ export interface TrackWithArtists {
   hasVocals: boolean | null;
   trending: boolean | null;
   primaryArtists: ArtistInfoTrack[];
-  token: number; // Token required for standard SKU (default: 1)
+  token?: number; // Token required for standard SKU — omitted when brand has no token plan
   isLiked: boolean; // Whether the current user has liked this track
   ownerType?: string;
   ownerSubType?: string;

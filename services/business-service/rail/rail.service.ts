@@ -14,6 +14,7 @@ import {
   isOwnerTypeAllowedForPage,
   getAllowedOwnerTypesForPage,
   itemTypeHasOwnerRestriction,
+  isManualOnlyPage,
 } from "../../dto-service/modules.export";
 import {
   RailModel,
@@ -35,6 +36,7 @@ import {
   updateRailItems,
   UpdateRailItemInput,
   bulkUpdateRailOrders,
+  updateRailMode,
   findTracksByTrackCodes,
   findTracksByFilter,
   findAllTracks,
@@ -52,6 +54,7 @@ import {
   getActiveBrandTokenTypes,
 } from "../../persistence-service/exports";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
+import { ArtistModel } from "../../persistence-service/artists/modules.export";
 import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
 import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
@@ -82,6 +85,8 @@ const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
   [PageName.HOOPR_ORIGINALS]: [
     { type: "assortment", value: ["hooproriginals"] },
   ],
+  [PageName.APP_HOME]: [],
+  [PageName.HOOPR_PLAYLIST]: [],
 };
 
 // Keep brand-scoped row when a default with the same key also exists
@@ -107,6 +112,7 @@ interface HydrationMaps {
   filters: Map<string, unknown>;
   playlists: Map<string, unknown>;
   labels: Map<string, unknown>;
+  artists: Map<string, unknown>;
 }
 
 const hydrateTracks = async (
@@ -237,7 +243,7 @@ const hydrateTracks = async (
       hookTimings: track.hookTimings,
       primaryArtists: track.primaryArtists,
       isLiked: likedSet.has(track.trackCode),
-      token: 1,
+      ...(hasTokenForTrack && { token: 1 }),
     };
 
     // Add optional fields if they exist (matching getAllTracks API)
@@ -337,6 +343,29 @@ const hydrateLabels = async (
   return out;
 };
 
+const hydrateArtists = async (
+  itemCodes: string[],
+): Promise<Map<string, unknown>> => {
+  const out = new Map<string, unknown>();
+  if (itemCodes.length === 0) return out;
+
+  const rows = await ArtistModel.findAll({
+    where: {
+      artistCode: { [Op.in]: itemCodes },
+    },
+    attributes: ["id", "artistCode", "name", "name_slug", "type"],
+  });
+
+  for (const row of rows) {
+    const json = row.toJSON() as unknown as Record<string, unknown>;
+    const code = json.artistCode as string | undefined;
+    // Image is derived client-side from artistCode (CDN-by-code convention),
+    // mirroring how tracks/playlists handle artwork without an uploaded image.
+    if (code) out.set(code, json);
+  }
+  return out;
+};
+
 const collectItemCodes = (
   rails: RailModel[],
 ): {
@@ -344,17 +373,20 @@ const collectItemCodes = (
   filterCodes: string[];
   playlistCodes: string[];
   labelCodes: string[];
+  artistCodes: string[];
 } => {
   const tracks = new Set<string>();
   const filters = new Set<string>();
   const playlists = new Set<string>();
   const labels = new Set<string>();
+  const artists = new Set<string>();
   for (const rail of rails) {
     const items = rail.items ?? [];
     for (const item of items) {
       if (item.itemType === RailItemType.TRACK) tracks.add(item.itemCode);
       else if (item.itemType === RailItemType.PLAYLIST) playlists.add(item.itemCode);
       else if (item.itemType === RailItemType.LABEL) labels.add(item.itemCode);
+      else if (item.itemType === RailItemType.ARTIST) artists.add(item.itemCode);
       else filters.add(item.itemCode);
     }
   }
@@ -363,6 +395,7 @@ const collectItemCodes = (
     filterCodes: Array.from(filters),
     playlistCodes: Array.from(playlists),
     labelCodes: Array.from(labels),
+    artistCodes: Array.from(artists),
   };
 };
 
@@ -371,14 +404,15 @@ const buildHydrationMaps = async (
   userId?: number,
   brandId?: number,
 ): Promise<HydrationMaps> => {
-  const { trackCodes, filterCodes, playlistCodes, labelCodes } = collectItemCodes(rails);
-  const [tracks, filters, playlists, labels] = await Promise.all([
+  const { trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes } = collectItemCodes(rails);
+  const [tracks, filters, playlists, labels, artists] = await Promise.all([
     hydrateTracks(trackCodes, userId, brandId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
     hydrateLabels(labelCodes),
+    hydrateArtists(artistCodes),
   ]);
-  return { tracks, filters, playlists, labels };
+  return { tracks, filters, playlists, labels, artists };
 };
 
 const resolveItem = (
@@ -393,6 +427,9 @@ const resolveItem = (
   }
   if (item.itemType === RailItemType.LABEL) {
     return maps.labels.get(item.itemCode) ?? null;
+  }
+  if (item.itemType === RailItemType.ARTIST) {
+    return maps.artists.get(item.itemCode) ?? null;
   }
   return maps.filters.get(item.itemCode) ?? null;
 };
@@ -482,6 +519,7 @@ const buildRailResponse = (
     type: rail.type,
     subType: rail.subType ?? null,
     sourceType: rail.sourceType,
+    populateMode: rail.populateMode ?? "MANUAL",
     pageName: rail.pageName,
     order: rail.order,
     items,
@@ -819,6 +857,7 @@ const RAIL_TYPE_TO_ITEM_TYPE: Record<RailType, RailItemType> = {
   [RailType.MOODS]: RailItemType.MOOD,
   [RailType.LABELS]: RailItemType.LABEL,
   [RailType.PLAYLISTS]: RailItemType.PLAYLIST,
+  [RailType.ARTISTS]: RailItemType.ARTIST,
 };
 
 // Resolve owner IDs from type filter
@@ -1604,6 +1643,17 @@ export const copyRailService = async (
 
   const sourceItems = sourceRail.items || [];
 
+  // Manual-only pages (e.g. APP_HOME) must stay hand-curated: refuse to copy a
+  // QUERY / AI_QUERY rail onto them (the copied rail would re-execute its query).
+  if (sourceRail.sourceType !== RailSourceType.MANUAL) {
+    const manualOnlyTargets = req.targetPageNames.filter((p) => isManualOnlyPage(p));
+    if (manualOnlyTargets.length > 0) {
+      throw new Error(
+        `Cannot copy rail: Pages [${manualOnlyTargets.join(", ")}] only allow MANUAL rails (no QUERY/AI_QUERY)`,
+      );
+    }
+  }
+
   // Only validate TRACK and LABEL items
   const itemsToValidate = sourceItems
     .filter((item) => itemTypeHasOwnerRestriction(item.itemType))
@@ -1629,6 +1679,21 @@ export const copyRailService = async (
 
   // All validations passed, proceed with copy
   return copyRailToPages(req.railId, req.targetPageNames, req.brandId, updatedById);
+};
+
+// -----------------------------------------------------------------------------
+// Populate-mode toggle: MANUAL (CMS-curated rail_items only) <-> AUTO (app
+// auto-fills from the catalogue; rail_items act as PIN/HIDE overrides). The
+// app endpoint reads `populateMode`; flipping it hands control to/from the CMS.
+// -----------------------------------------------------------------------------
+export const setRailModeService = async (
+  railId: number,
+  populateMode: string,
+  updatedById?: number | null,
+): Promise<{ id: number; populateMode: string } | null> => {
+  const updated = await updateRailMode(railId, populateMode, updatedById);
+  if (!updated) return null;
+  return { id: updated.id, populateMode: updated.populateMode ?? "MANUAL" };
 };
 
 // -----------------------------------------------------------------------------
@@ -1798,20 +1863,23 @@ const buildSeeAllItems = async (
   const filterCodes: string[] = [];
   const playlistCodes: string[] = [];
   const labelCodes: string[] = [];
+  const artistCodes: string[] = [];
   for (const p of itemPairs) {
     if (p.itemType === RailItemType.TRACK) trackCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.PLAYLIST) playlistCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.LABEL) labelCodes.push(p.itemCode);
+    else if (p.itemType === RailItemType.ARTIST) artistCodes.push(p.itemCode);
     else filterCodes.push(p.itemCode);
   }
 
-  const [tracks, filters, playlists, labels] = await Promise.all([
+  const [tracks, filters, playlists, labels, artists] = await Promise.all([
     hydrateTracks(trackCodes, userId, viewerBrandId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
     hydrateLabels(labelCodes),
+    hydrateArtists(artistCodes),
   ]);
-  const maps: HydrationMaps = { tracks, filters, playlists, labels };
+  const maps: HydrationMaps = { tracks, filters, playlists, labels, artists };
 
   let items: RailItemResponse[] = itemPairs
     .map((p) => {

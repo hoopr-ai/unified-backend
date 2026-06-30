@@ -13,6 +13,7 @@ import {
   ReorderRailsRequest,
   copyRailService,
   CopyRailRequest,
+  setRailModeService,
 } from "../services/business-service/modules.export";
 import { triggerManualRefresh, triggerBrandRecommend } from "../services/scheduler-service";
 import {
@@ -26,6 +27,7 @@ import {
   RailType,
   RailSourceType,
   PageName,
+  isManualOnlyPage,
 } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 import { findUserById } from "../services/persistence-service/exports";
@@ -197,6 +199,14 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
 
   const type = b.type as RailType;
   const sourceType = b.sourceType as RailSourceType;
+
+  // Manual-only pages (e.g. APP_HOME) must be hand-curated — reject QUERY/AI_QUERY
+  if (sourceType !== RailSourceType.MANUAL && Array.isArray(b.pageNames)) {
+    const manualOnly = (b.pageNames as string[]).filter(isManualOnlyPage);
+    if (manualOnly.length > 0) {
+      return `Pages [${manualOnly.join(", ")}] only allow MANUAL rails (no QUERY/AI_QUERY)`;
+    }
+  }
 
   if (sourceType === RailSourceType.MANUAL) {
     if (!Array.isArray(b.itemCodes)) return "itemCodes array is required for MANUAL";
@@ -490,15 +500,60 @@ export const copyRail = catchAsync(
     } catch (err) {
       const errorMessage = (err as Error).message;
       // Return BAD_REQUEST for validation errors, NOT_FOUND for other errors
-      const statusCode = errorMessage.includes("Owner type validation failed")
-        ? HttpStatusCode.BAD_REQUEST
-        : HttpStatusCode.NOT_FOUND;
+      const statusCode =
+        errorMessage.includes("Owner type validation failed") ||
+        errorMessage.includes("only allow MANUAL")
+          ? HttpStatusCode.BAD_REQUEST
+          : HttpStatusCode.NOT_FOUND;
       sendResponse(res, {
         status: statusCode,
         data: null,
         message: errorMessage,
       });
     }
+  },
+);
+
+// PATCH /rails/:railId/mode - Toggle a rail's populateMode (MANUAL | AUTO)
+export const setRailMode = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const railId = Number(req.params.railId);
+    if (!Number.isFinite(railId) || railId <= 0) {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: "Invalid railId",
+      });
+      return;
+    }
+
+    const mode = String((req.body as { populateMode?: unknown })?.populateMode ?? "").toUpperCase();
+    if (mode !== "MANUAL" && mode !== "AUTO") {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: "populateMode must be 'MANUAL' or 'AUTO'",
+      });
+      return;
+    }
+
+    const updatedById = req.session?.userId ?? null;
+    const result = await setRailModeService(railId, mode, updatedById);
+
+    if (!result) {
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: ResponseMessages.RailNotFound,
+      });
+      return;
+    }
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: result,
+      message: "Rail mode updated",
+    });
   },
 );
 

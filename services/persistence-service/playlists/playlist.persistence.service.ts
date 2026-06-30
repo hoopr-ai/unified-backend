@@ -8,6 +8,7 @@ import {
   TrackArtistMappingModel,
   ArtistModel,
 } from "../artists/modules.export";
+import { SkuModel } from "../sku/modules.export";
 import { PlaylistStatus } from "../../dto-service/modules.export";
 import { Op } from "sequelize";
 import { sequelize } from "../database";
@@ -76,18 +77,27 @@ export const findTracksByPlaylistId = async (
           "hasVocals",
           "trending",
           "ownerId",
+          "hookTimings",
         ],
         include: [
           {
             model: TrackArtistMappingModel,
             as: "trackArtistMappings",
+            required: false,
             include: [
               {
                 model: ArtistModel,
                 as: "artist",
                 attributes: ["id", "name", "type"],
+                required: false,
               },
             ],
+          },
+          {
+            model: SkuModel,
+            as: "skus",
+            required: false,
+            attributes: ["id", "costPrice", "sellingPrice"],
           },
         ],
       },

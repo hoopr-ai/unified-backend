@@ -247,7 +247,7 @@ const transformTrackToDto = (
     hasVocals: track.hasVocals,
     trending: track.trending,
     primaryArtists,
-    token: getStandardToken(track),
+    ...(hasTokenForTrack && { token: getStandardToken(track) }),
     isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
@@ -410,6 +410,7 @@ const emptyPaginatedResponse = (
 export const transformRawTracksToDto = async (
   tracks: RawTrackWithMappings[],
   likedTrackCodes?: Set<string>,
+  activeTokenTypes?: Set<string>,
 ): Promise<TrackWithArtists[]> => {
   if (tracks.length === 0) return [];
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
@@ -425,6 +426,8 @@ export const transformRawTracksToDto = async (
       ownerTypeMap,
       ownerSubTypeMap,
       ownerCodeMap,
+      undefined,
+      activeTokenTypes,
     );
   });
 };
