@@ -49,11 +49,11 @@ const KEY_VERIFY_ATTEMPTS = (email: string) =>
 const KEY_BLOCK = (email: string) => `email_otp:block:${email.toLowerCase()}`;
 
 // Test account that always receives a fixed OTP (for QA / automated testing).
-const TEST_EMAIL = "test@gsharp.media";
+const TEST_EMAIL = ["test@gsharp.media","demo@hoopr.in"];
 const TEST_OTP = "123456";
 
 const generateOtp = (email: string): string => {
-  if (email.toLowerCase().trim() === TEST_EMAIL) {
+  if (TEST_EMAIL.includes(email.toLowerCase().trim())) {
     return TEST_OTP;
   }
   return Math.floor(
