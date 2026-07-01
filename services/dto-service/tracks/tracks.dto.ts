@@ -171,6 +171,7 @@ export interface GetAllTracksRequestData {
   campaign?: boolean;
   releaseYearFrom?: number;
   releaseYearTo?: number;
+  trackType?: string;
 }
 
 export interface GetTracksByCodesQuery {

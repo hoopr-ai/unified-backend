@@ -71,6 +71,7 @@ export const getAllTracks = catchAsync(
       releaseYearTo: req.body.releaseYearTo
         ? Number(req.body.releaseYearTo)
         : undefined,
+      trackType: req.body.trackType as string | undefined,
     };
     const response = await getAllTracksService(
       query,
