@@ -11,6 +11,7 @@ import {
   FilterInfo,
   Platform,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
+  TOKEN_GATED_TRACK_CODES,
 } from "../../dto-service/modules.export";
 import {
   findAllTracks,
@@ -225,7 +226,8 @@ const transformTrackToDto = (
 
   const isEnterpriseOnly = ownerType === "Chartbusters" && !(activeTokenTypes?.has("Chartbusters") ?? false);
   const hasTokenForTrack = ownerType ? (activeTokenTypes?.has(ownerType) ?? false) : false;
-  const hidePrice = isEnterpriseOnly || hasTokenForTrack;
+  const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
+  const hidePrice = isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack);
 
   let sku: SkuInfo | undefined;
   if (track.skus && track.skus.length > 0) {
@@ -244,6 +246,7 @@ const transformTrackToDto = (
     name_slug: track.name_slug || "",
     waveformLink: toCdnUrl(track.waveformLink),
     mp3Link: toCdnUrl(track.mp3Link),
+    sourceLink: track.sourceLink ?? null,
     hasVocals: track.hasVocals,
     trending: track.trending,
     primaryArtists,
@@ -893,7 +896,8 @@ const transformTrackToDetailsDto = (
     const skuData = track.skus[0];
     const isEnterpriseOnly = baseDto.isEnterpriseOnly === true;
     const hasTokenForTrack = baseDto.ownerType ? (activeTokenTypes?.has(baseDto.ownerType) ?? false) : false;
-    const hidePrice = isEnterpriseOnly || hasTokenForTrack;
+    const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
+    const hidePrice = isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack);
     sku = {
       id: skuData.id || "",
       costPrice: hidePrice ? undefined : skuData.costPrice,

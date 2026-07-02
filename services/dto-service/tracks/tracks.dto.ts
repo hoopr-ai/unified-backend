@@ -54,6 +54,7 @@ export interface TrackWithArtists {
   name_slug: string;
   waveformLink: string | null;
   mp3Link: string | null;
+  sourceLink: string | null;
   hasVocals: boolean | null;
   trending: boolean | null;
   primaryArtists: ArtistInfoTrack[];
@@ -185,3 +186,10 @@ export const UNAUTHENTICATED_RESTRICTED_OWNER_NAMES: string[] = [
   "YRF Music",
   "Zee Music Company",
 ];
+
+// Tracks whose price is hidden by default and only shown to users who hold active tokens for the track's ownerType
+export const TOKEN_GATED_TRACK_CODES: Set<string> = new Set([
+  "20832",
+  "20829",
+  "20830",
+]);
