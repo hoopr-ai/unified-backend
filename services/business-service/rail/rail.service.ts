@@ -9,6 +9,7 @@ import {
   PaginatedRailsResponse,
   RailSeeAllResponse,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
+  TOKEN_GATED_TRACK_CODES,
   PageName,
   OwnerType,
   isOwnerTypeAllowedForPage,
@@ -221,7 +222,8 @@ const hydrateTracks = async (
 
     const isEnterpriseOnly = ownerType === "Chartbusters" && !activeTokenTypes.has("Chartbusters");
     const hasTokenForTrack = ownerType ? activeTokenTypes.has(ownerType) : false;
-    const hidePrice = isEnterpriseOnly || hasTokenForTrack;
+    const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
+    const hidePrice = isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack);
     const skuData = skuMap.get(track.trackCode);
     const sku = skuData
       ? {
