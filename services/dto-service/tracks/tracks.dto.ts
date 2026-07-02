@@ -54,6 +54,7 @@ export interface TrackWithArtists {
   name_slug: string;
   waveformLink: string | null;
   mp3Link: string | null;
+  sourceLink: string | null;
   hasVocals: boolean | null;
   trending: boolean | null;
   primaryArtists: ArtistInfoTrack[];

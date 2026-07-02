@@ -240,6 +240,7 @@ const hydrateTracks = async (
       name_slug: track.name_slug,
       waveformLink: toCdnUrl(track.waveformLink),
       mp3Link: toCdnUrl(track.mp3Link),
+      sourceLink: track.sourceLink,
       hasVocals: track.hasVocals,
       trending: track.trending,
       hookTimings: track.hookTimings,

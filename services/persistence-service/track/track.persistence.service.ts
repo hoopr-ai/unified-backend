@@ -664,6 +664,7 @@ export interface LightweightTrack {
   name_slug: string;
   waveformLink: string | null;
   mp3Link: string | null;
+  sourceLink: string | null;
   hasVocals: boolean | null;
   trending: boolean | null;
   hookTimings: unknown;
@@ -814,7 +815,7 @@ export const findTracksLightweight = async (
     where: whereClause,
     attributes: [
       "id", "trackCode", "name", "name_slug",
-      "waveformLink", "mp3Link", "hasVocals", "trending",
+      "waveformLink", "mp3Link", "sourceLink", "hasVocals", "trending",
       "hookTimings", "ownerId"
     ],
     include: [
@@ -861,6 +862,7 @@ export const findTracksLightweight = async (
       name_slug: json.name_slug,
       waveformLink: json.waveformLink,
       mp3Link: json.mp3Link,
+      sourceLink: json.sourceLink,
       hasVocals: json.hasVocals,
       trending: json.trending,
       hookTimings: json.hookTimings ?? [],

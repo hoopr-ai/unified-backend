@@ -246,6 +246,7 @@ const transformTrackToDto = (
     name_slug: track.name_slug || "",
     waveformLink: toCdnUrl(track.waveformLink),
     mp3Link: toCdnUrl(track.mp3Link),
+    sourceLink: track.sourceLink ?? null,
     hasVocals: track.hasVocals,
     trending: track.trending,
     primaryArtists,
