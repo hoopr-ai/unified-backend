@@ -87,6 +87,7 @@ const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
   ],
   [PageName.APP_HOME]: [],
   [PageName.HOOPR_PLAYLIST]: [],
+  [PageName.HOOPR_SFX]: [],
 };
 
 // Keep brand-scoped row when a default with the same key also exists

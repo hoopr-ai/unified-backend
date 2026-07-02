@@ -32,6 +32,7 @@ export enum PageName {
   HOOPR_ORIGINALS = "HOOPR_ORIGINALS",
   APP_HOME = "APP_HOME",
   HOOPR_PLAYLIST = "HOOPR_PLAYLIST",
+  HOOPR_SFX = "HOOPR_SFX",
 }
 
 export enum OwnerType {
@@ -51,6 +52,7 @@ export const PAGE_OWNER_TYPE_MAP: Record<PageName, OwnerType[] | null> = {
   [PageName.HOOPR_ORIGINALS]: [OwnerType.HOOPR_ORIGINALS],
   [PageName.APP_HOME]: null, // null means all owner types allowed
   [PageName.HOOPR_PLAYLIST]: null, // null means all owner types allowed
+  [PageName.HOOPR_SFX]: null, // null means all owner types allowed
 };
 
 // Helper to check if an owner type is allowed for a page
