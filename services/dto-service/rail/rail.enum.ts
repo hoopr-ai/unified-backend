@@ -33,6 +33,8 @@ export enum PageName {
   APP_HOME = "APP_HOME",
   HOOPR_PLAYLIST = "HOOPR_PLAYLIST",
   HOOPR_SFX = "HOOPR_SFX",
+  APP_PLAYLIST = "APP_PLAYLIST",
+  APP_SFX = "APP_SFX",
 }
 
 export enum OwnerType {
@@ -53,6 +55,8 @@ export const PAGE_OWNER_TYPE_MAP: Record<PageName, OwnerType[] | null> = {
   [PageName.APP_HOME]: null, // null means all owner types allowed
   [PageName.HOOPR_PLAYLIST]: null, // null means all owner types allowed
   [PageName.HOOPR_SFX]: null, // null means all owner types allowed
+  [PageName.APP_PLAYLIST]: null, // null means all owner types allowed
+  [PageName.APP_SFX]: null, // null means all owner types allowed
 };
 
 // Helper to check if an owner type is allowed for a page
@@ -88,4 +92,21 @@ export const MANUAL_ONLY_PAGES: PageName[] = [PageName.APP_HOME];
 // Check if a page only allows MANUAL rails
 export function isManualOnlyPage(pageName: string): boolean {
   return MANUAL_ONLY_PAGES.includes(pageName as PageName);
+}
+
+// Pages that must NOT get an auto-generated "Recommended For You" rail — it is
+// neither created on-demand nor updated by the scheduler for these hand-curated
+// playlist / SFX surfaces.
+export const RECOMMENDATION_EXCLUDED_PAGES: PageName[] = [
+  PageName.HOOPR_PLAYLIST,
+  PageName.HOOPR_SFX,
+  PageName.APP_PLAYLIST,
+  PageName.APP_SFX,
+];
+
+// Check if a page is excluded from the "Recommended For You" rail
+export function isRecommendationExcludedPage(
+  pageName: string | null | undefined
+): boolean {
+  return RECOMMENDATION_EXCLUDED_PAGES.includes(pageName as PageName);
 }
