@@ -16,6 +16,7 @@ import {
   getAllowedOwnerTypesForPage,
   itemTypeHasOwnerRestriction,
   isManualOnlyPage,
+  isRecommendationExcludedPage,
 } from "../../dto-service/modules.export";
 import {
   RailModel,
@@ -88,6 +89,9 @@ const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
   ],
   [PageName.APP_HOME]: [],
   [PageName.HOOPR_PLAYLIST]: [],
+  [PageName.HOOPR_SFX]: [],
+  [PageName.APP_PLAYLIST]: [],
+  [PageName.APP_SFX]: [],
 };
 
 // Keep brand-scoped row when a default with the same key also exists
@@ -614,8 +618,9 @@ const ensureBrandRecommendedRail = async (
   userBrandId: number,
   pageName: string = "HOME",
 ): Promise<void> => {
-  // Do not auto-populate the "Recommended For You" rail on the Hoopr Playlists page.
-  if (pageName === "HOOPR_PLAYLIST") {
+  // Do not auto-populate the "Recommended For You" rail on hand-curated
+  // playlist / SFX pages (Hoopr & App).
+  if (isRecommendationExcludedPage(pageName)) {
     console.log(`[BrandRecommend] Skipping recommended rail for pageName=${pageName}`);
     return;
   }

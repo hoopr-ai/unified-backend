@@ -508,6 +508,10 @@ export const getAllTracksService = async (
     whereClause.releaseDate = releaseDateCondition;
   }
 
+  if (query.trackType) {
+    whereClause.type = query.trackType;
+  }
+
   // Resolve owner IDs from type, ownerCode, and subType filters, then intersect
   const [ownerIdsByType, ownerIdsByCode, ownerIdsBySubType] = await Promise.all([
     resolveOwnerIdsByType(query.type),

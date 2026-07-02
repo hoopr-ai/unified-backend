@@ -1,6 +1,6 @@
 import { Op } from "sequelize";
 import { RailModel } from "../../persistence-service/rail/schemas/rail.schema";
-import { RailSourceType, RailItemType, RailType, PageName } from "../../dto-service/modules.export";
+import { RailSourceType, RailItemType, RailType, PageName, isRecommendationExcludedPage } from "../../dto-service/modules.export";
 import {
   upsertRailWithItems,
   UpsertRailInput,
@@ -82,8 +82,9 @@ async function createBrandRecommendRail(
   customRailKey?: string,
   pageName: string = "HOME"
 ): Promise<void> {
-  // Do not auto-populate the "Recommended For You" rail on the Hoopr Playlists page.
-  if (pageName === "HOOPR_PLAYLIST") {
+  // Do not auto-populate the "Recommended For You" rail on hand-curated
+  // playlist / SFX pages (Hoopr & App).
+  if (isRecommendationExcludedPage(pageName)) {
     logger.info(`[BrandRecommend] Skipping recommended rail for pageName=${pageName}`);
     return;
   }
@@ -157,9 +158,10 @@ async function processSingleBrand(
     success: false,
   };
 
-  // Do not auto-populate the "Recommended For You" rail on the Hoopr Playlists
-  // page — skip before the AI fetch to avoid a wasted round trip.
-  if (pageName === "HOOPR_PLAYLIST") {
+  // Do not auto-populate the "Recommended For You" rail on hand-curated
+  // playlist / SFX pages (Hoopr & App) — skip before the AI fetch to avoid a
+  // wasted round trip.
+  if (isRecommendationExcludedPage(pageName)) {
     logger.info(`[BrandRecommend] Skipping recommended rail for pageName=${pageName}, brand ${brandId}`);
     result.success = true;
     result.itemCount = 0;
