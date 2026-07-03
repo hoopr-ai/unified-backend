@@ -98,9 +98,11 @@ export const licenseTrackService = async (
     }
   }
 
-  // Get user (brand only required for non-SOUND_TRACKING_APP platforms)
+  // Get user (brand only required for non-SOUND_TRACKING_APP platforms).
+  // countryCode + profileRole are needed by the isProfileComplete getter —
+  // it's computed from columns, not a column itself.
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile", "isProfileComplete"],
+    attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile", "countryCode", "profileRole"],
   });
 
   if (!user) {
