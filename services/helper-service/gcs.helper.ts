@@ -3,6 +3,9 @@ import { Storage } from "@google-cloud/storage";
 interface GCSSignedUrlOptions {
   trackId: string;
   expiresInMinutes?: number;
+  // SFX audio lives in a separate stream-source bucket (SFX_BUCKET) under
+  // sfxs/{trackId}/... instead of SELECT_BUCKET's musics/{trackId}/...
+  isSfx?: boolean;
 }
 
 interface GCSSignedUrlResult {
@@ -52,15 +55,19 @@ const getStorageInstance = (): Storage => {
 export const generateGCSSignedUrl = async (
   options: GCSSignedUrlOptions
 ): Promise<GCSSignedUrlResult> => {
-  const { trackId, expiresInMinutes = 30 } = options;
+  const { trackId, expiresInMinutes = 30, isSfx = false } = options;
 
-  const bucketName = process.env.SELECT_BUCKET;
+  const bucketName = isSfx ? process.env.SFX_BUCKET : process.env.SELECT_BUCKET;
   if (!bucketName) {
-    throw new Error("Missing SELECT_BUCKET environment variable");
+    throw new Error(
+      `Missing ${isSfx ? "SFX_BUCKET" : "SELECT_BUCKET"} environment variable`,
+    );
   }
 
   const storage = getStorageInstance();
-  const gcsFilePath = `musics/${trackId}/${trackId}-mp3.mp3`;
+  const gcsFilePath = isSfx
+    ? `sfxs/${trackId}/${trackId}-mp3.mp3`
+    : `musics/${trackId}/${trackId}-mp3.mp3`;
 
   const bucket = storage.bucket(bucketName);
   const file = bucket.file(gcsFilePath);

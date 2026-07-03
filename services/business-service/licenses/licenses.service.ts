@@ -124,13 +124,15 @@ export const licenseTrackService = async (
     throw new AppError("Track not found", 404);
   }
 
-  if (!track.mp3Link) {
-    throw new AppError("Track audio file is not available for download", 400);
-  }
-
   // SFX tracks are free to download — no tokens deducted, no price — but the
   // user must have a completed profile.
   const isSfxTrack = isSfxTrackType(track.type);
+
+  // SFX audio lives in the stream-source bucket (no mp3Link on the track row);
+  // generateGCSSignedUrl verifies the file exists there before signing.
+  if (!isSfxTrack && !track.mp3Link) {
+    throw new AppError("Track audio file is not available for download", 400);
+  }
   if (isSfxTrack && !user.isProfileComplete) {
     throw new AppError(
       "Please complete your profile to download SFX tracks",
@@ -185,7 +187,7 @@ export const licenseTrackService = async (
   }
 
   // Generate GCS signed URL for the track
-  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
+  const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
 
   // Create license record. brandId is null for SOUND_TRACKING_APP (no brand association).
   const now = new Date();
@@ -620,12 +622,14 @@ export const downloadTrackService = async (
     throw new AppError("Track associated with license not found", 404);
   }
 
-  if (!track.mp3Link) {
+  // SFX audio lives in the stream-source bucket and has no mp3Link on the track row
+  const isSfxTrack = isSfxTrackType(track.type);
+  if (!isSfxTrack && !track.mp3Link) {
     throw new AppError("Track audio file is not available for download", 400);
   }
 
   // Generate GCS signed URL for the track
-  const gcsResult = await generateGCSSignedUrl({ trackId: track.id });
+  const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
 
   return {
     downloadLink: gcsResult.downloadLink,
