@@ -4,6 +4,7 @@ import {
   LicenseModel,
   VideoLinkModel,
   type LicenseDetails,
+  type LicenseHistoryCategory,
   countLicensesWithMissingVideoLinks,
 } from "../../persistence-service/licenses/modules.export";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
@@ -48,7 +49,7 @@ import type {
   DownloadTrackRequest,
   DownloadTrackResponse,
 } from "../../dto-service/licenses/modules.export";
-import { Platform } from "../../dto-service/modules.export";
+import { Platform, isSfxTrackType } from "../../dto-service/modules.export";
 
 const TOKEN_COST_PER_LICENSE = 1;
 
@@ -99,7 +100,7 @@ export const licenseTrackService = async (
 
   // Get user (brand only required for non-SOUND_TRACKING_APP platforms)
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile"],
+    attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile", "isProfileComplete"],
   });
 
   if (!user) {
@@ -115,7 +116,7 @@ export const licenseTrackService = async (
   // Get track details including ownerId
   const track = await TrackModel.findOne({
     where: { trackCode },
-    attributes: ["id", "trackCode", "name", "ownerId", "mp3Link"],
+    attributes: ["id", "trackCode", "name", "ownerId", "mp3Link", "type"],
   });
   if (!track) {
     throw new AppError("Track not found", 404);
@@ -124,6 +125,20 @@ export const licenseTrackService = async (
   if (!track.mp3Link) {
     throw new AppError("Track audio file is not available for download", 400);
   }
+
+  // SFX tracks are free to download — no tokens deducted, no price — but the
+  // user must have a completed profile.
+  const isSfxTrack = isSfxTrackType(track.type);
+  if (isSfxTrack && !user.isProfileComplete) {
+    throw new AppError(
+      "Please complete your profile to download SFX tracks",
+      403,
+      "PROFILE_INCOMPLETE",
+    );
+  }
+
+  // Tokens are skipped for SOUND_TRACKING_APP (always free) and for SFX tracks.
+  const skipTokens = isSoundTrackingApp || isSfxTrack;
 
   // Get owners for the track (used for PDF metadata; token matching is skipped for SOUND_TRACKING_APP)
   const ownerIds = track.ownerId || [];
@@ -137,7 +152,7 @@ export const licenseTrackService = async (
   let matchingTokenType: string | null = null;
   let matchingOwnerId: string | null = null;
 
-  if (!isSoundTrackingApp) {
+  if (!skipTokens) {
     if (ownerIds.length === 0) {
       throw new AppError("Track has no owners assigned", 400);
     }
@@ -178,19 +193,20 @@ export const licenseTrackService = async (
     brandId,
     userId,
     trackCode: track.trackCode,
-    tokenCost: isSoundTrackingApp ? 0 : TOKEN_COST_PER_LICENSE,
+    tokenCost: skipTokens ? 0 : TOKEN_COST_PER_LICENSE,
     licensedAt: now,
     validThrough,
     createdAt: now,
     campaignId: campaignIdToApply ?? null,
+    ...(isSfxTrack && { type: "sfx_free", price: 0 }),
   };
 
   const createdLicense = await createLicenseRecord(licenseDetails);
 
-  // Token deduction is skipped entirely for SOUND_TRACKING_APP.
+  // Token deduction is skipped entirely for SOUND_TRACKING_APP and SFX tracks.
   let remainingTokens = 0;
   let deductionWasUnlimited = false;
-  if (!isSoundTrackingApp) {
+  if (!skipTokens) {
     const deduction = await deductTokenAssignedByType(
       brandId!,
       matchingTokenType!,
@@ -275,13 +291,14 @@ export const licenseTrackService = async (
 
   const downloadedByFullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "";
 
-  if (isSoundTrackingApp) {
-    // SOUND_TRACKING_APP: notify only the licensing user (no brand team, no low-credit alerts).
+  if (skipTokens) {
+    // SOUND_TRACKING_APP + free SFX downloads: notify only the licensing user
+    // (no brand team, no low-credit alerts — no credits were consumed).
     if (user.email) {
       sendTrackDownloadNotificationEmail(user.email, {
         recipientFirstName: user.firstName || "",
         trackName: track.name || trackCode,
-        assortmentType: "",
+        assortmentType: isSfxTrack ? "SFX" : "",
         creditsRemaining: 0,
         downloadedByFullName,
       }).catch((err) => {
@@ -365,6 +382,8 @@ export const licenseTrackService = async (
     trackName: track.name,
     validThrough: licenseDetails.validThrough!,
     campaignId: campaignIdToApply ?? null,
+    // Free SFX download — no tokens were deducted; FE can skip token-balance refresh.
+    ...(isSfxTrack && { isSfx: true, freeDownload: true }),
   };
 };
 
@@ -456,6 +475,7 @@ export const getBrandLicenseHistoryService = async (
   userId: number,
   page: number = 1,
   limit: number = 50,
+  category?: LicenseHistoryCategory,
 ): Promise<BrandLicenseHistoryResponse> => {
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
@@ -472,7 +492,7 @@ export const getBrandLicenseHistoryService = async (
 
   const brandId = user.brandId;
 
-  const { rows, count } = await getLicensesByBrandId(brandId, page, limit);
+  const { rows, count } = await getLicensesByBrandId(brandId, page, limit, category);
 
   // Collect all unique owner IDs from tracks
   const allOwnerIds: string[] = [];
@@ -553,6 +573,7 @@ export const getBrandLicenseHistoryService = async (
       primaryArtists,
       type: license.type,
       price: license.price,
+      ...(isSfxTrackType(track?.type) && { isSfx: true, freeDownload: true }),
     };
   });
 

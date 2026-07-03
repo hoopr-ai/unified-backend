@@ -19,7 +19,7 @@ export interface CompleteProfileRequestData {
   countryCode: string;
   profileRole: ProfileRole;
   brandName?: string;
-  instagramLink?: string;
+  instagramLink: string;
   youtubeLink?: string;
   facebookLink?: string;
 }

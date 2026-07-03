@@ -39,10 +39,13 @@ export const completeProfileRequestSchema =
       .valid(...profileRoleValues)
       .required(),
     brandName: Joi.string().min(2).max(255).optional(),
-    instagramLink: Joi.string().max(500).optional(),
+    instagramLink: Joi.string().max(500).required().messages({
+      "any.required": "Instagram link is required",
+      "string.empty": "Instagram link is required",
+    }),
     youtubeLink: Joi.string().max(500).optional(),
     facebookLink: Joi.string().max(500).optional(),
-  }).or("instagramLink", "youtubeLink", "facebookLink");
+  });
 
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({
   email: Joi.string().email().required(),

@@ -104,7 +104,23 @@ export const getBrandLicenseHistory = catchAsync(async (req: AuthRequest, res: R
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
 
-  const response = await getBrandLicenseHistoryService(userId, page, limit);
+  // Optional content filter: 'tracks' (music) or 'sfx'. Omitted = all downloads.
+  const rawCategory = req.query.category as string | undefined;
+  let category: "tracks" | "sfx" | undefined;
+  if (rawCategory !== undefined) {
+    const normalized = rawCategory.toLowerCase();
+    if (normalized !== "tracks" && normalized !== "sfx") {
+      return sendError(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        "Invalid category. Allowed values: tracks, sfx",
+        {},
+      );
+    }
+    category = normalized;
+  }
+
+  const response = await getBrandLicenseHistoryService(userId, page, limit, category);
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,

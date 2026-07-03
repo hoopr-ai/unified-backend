@@ -12,6 +12,7 @@ import {
   Platform,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
   TOKEN_GATED_TRACK_CODES,
+  isSfxTrackType,
 } from "../../dto-service/modules.export";
 import {
   findAllTracks,
@@ -224,10 +225,12 @@ const transformTrackToDto = (
     }
   }
 
+  const isSfx = isSfxTrackType(track.type);
   const isEnterpriseOnly = ownerType === "Chartbusters" && !(activeTokenTypes?.has("Chartbusters") ?? false);
   const hasTokenForTrack = ownerType ? (activeTokenTypes?.has(ownerType) ?? false) : false;
   const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
-  const hidePrice = isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack);
+  // SFX tracks are always free — never show a price for them
+  const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
 
   let sku: SkuInfo | undefined;
   if (track.skus && track.skus.length > 0) {
@@ -250,12 +253,13 @@ const transformTrackToDto = (
     hasVocals: track.hasVocals,
     trending: track.trending,
     primaryArtists,
-    ...(hasTokenForTrack && { token: getStandardToken(track) }),
+    ...(hasTokenForTrack && !isSfx && { token: getStandardToken(track) }),
     isLiked: likedTrackCodes ? likedTrackCodes.has(track.trackCode) : false,
     ...(ownerType !== null && { ownerType: ownerType ?? undefined }),
     ...(ownerSubType !== null && { ownerSubType: ownerSubType ?? undefined }),
     ...(ownerCode !== null && { ownerCode: ownerCode ?? undefined }),
-    ...(isEnterpriseOnly && { isEnterpriseOnly: true }),
+    ...(isEnterpriseOnly && !isSfx && { isEnterpriseOnly: true }),
+    ...(isSfx && { isSfx: true, freeDownload: true }),
     ...(sku && { sku }),
     ...(track.album && { album: track.album }),
     hookTimings: normalizeHookTimings(track.hookTimings),
@@ -894,10 +898,11 @@ const transformTrackToDetailsDto = (
 
   if (track.skus && track.skus.length > 0) {
     const skuData = track.skus[0];
+    const isSfx = isSfxTrackType(track.type);
     const isEnterpriseOnly = baseDto.isEnterpriseOnly === true;
     const hasTokenForTrack = baseDto.ownerType ? (activeTokenTypes?.has(baseDto.ownerType) ?? false) : false;
     const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
-    const hidePrice = isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack);
+    const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
     sku = {
       id: skuData.id || "",
       costPrice: hidePrice ? undefined : skuData.costPrice,
