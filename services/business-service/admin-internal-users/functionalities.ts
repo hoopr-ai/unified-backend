@@ -21,6 +21,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "hoopr-b2c-dashboard",
   "youtube",
   "app-music-programming",
+  "soundtracking",
   "faq",
   // Songfest
   "studio-briefs",
