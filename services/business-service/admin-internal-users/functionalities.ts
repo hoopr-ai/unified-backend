@@ -20,6 +20,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "sftp-manager",
   "hoopr-b2c-dashboard",
   "youtube",
+  "app-music-programming",
   "faq",
   // Songfest
   "studio-briefs",
