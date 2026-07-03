@@ -37,6 +37,8 @@ export interface LicenseResponse {
   trackName?: string;
   validThrough: Date;
   campaignId?: number | null;
+  isSfx?: boolean; // True when the licensed track is an SFX track
+  freeDownload?: boolean; // True when no tokens/payment were required for this license
 }
 
 export interface TokenBalanceItem {

@@ -10,6 +10,7 @@ import {
   RailSeeAllResponse,
   UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
   TOKEN_GATED_TRACK_CODES,
+  isSfxTrackType,
   PageName,
   OwnerType,
   isOwnerTypeAllowedForPage,
@@ -224,10 +225,12 @@ const hydrateTracks = async (
       }
     }
 
+    const isSfx = isSfxTrackType(track.type);
     const isEnterpriseOnly = ownerType === "Chartbusters" && !activeTokenTypes.has("Chartbusters");
     const hasTokenForTrack = ownerType ? activeTokenTypes.has(ownerType) : false;
     const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
-    const hidePrice = isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack);
+    // SFX tracks are always free — never show a price for them
+    const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
     const skuData = skuMap.get(track.trackCode);
     const sku = skuData
       ? {
@@ -250,14 +253,15 @@ const hydrateTracks = async (
       hookTimings: track.hookTimings,
       primaryArtists: track.primaryArtists,
       isLiked: likedSet.has(track.trackCode),
-      ...(hasTokenForTrack && { token: 1 }),
+      ...(hasTokenForTrack && !isSfx && { token: 1 }),
+      ...(isSfx && { isSfx: true, freeDownload: true }),
     };
 
     // Add optional fields if they exist (matching getAllTracks API)
     if (ownerType) trackData.ownerType = ownerType;
     if (ownerSubType) trackData.ownerSubType = ownerSubType;
     if (ownerCode) trackData.ownerCode = ownerCode;
-    if (isEnterpriseOnly) trackData.isEnterpriseOnly = true;
+    if (isEnterpriseOnly && !isSfx) trackData.isEnterpriseOnly = true;
     if (sku) trackData.sku = sku;
     if (albumMap.has(track.id)) trackData.album = albumMap.get(track.id);
 

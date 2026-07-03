@@ -64,6 +64,8 @@ export interface TrackWithArtists {
   ownerSubType?: string;
   ownerCode?: string;
   isEnterpriseOnly?: boolean; // True for Chartbuster tracks — no price, token-only access
+  isSfx?: boolean; // True for SFX tracks
+  freeDownload?: boolean; // True when the track can be downloaded without tokens or payment (profile completion still required)
   sku?: SkuInfo; // SKU pricing info (prices omitted for enterprise-only tracks)
   album?: AlbumInfo; // Album details for the track
   campaign?: CampaignInfo; // Campaign details (amount and type) if active
@@ -129,6 +131,7 @@ export interface RawFilterMappingData {
 export interface RawTrackWithMappings {
   id: string;
   trackCode: string;
+  type?: string | null;
   name: string | null;
   name_slug: string | null;
   description?: string | null;
@@ -186,6 +189,11 @@ export const UNAUTHENTICATED_RESTRICTED_OWNER_NAMES: string[] = [
   "YRF Music",
   "Zee Music Company",
 ];
+
+// SFX tracks are free to download (no tokens, no price) once the user's profile is complete
+export const SFX_TRACK_TYPE = "sfx";
+export const isSfxTrackType = (type?: string | null): boolean =>
+  (type ?? "").toLowerCase() === SFX_TRACK_TYPE;
 
 // Tracks whose price is hidden by default and only shown to users who hold active tokens for the track's ownerType
 export const TOKEN_GATED_TRACK_CODES: Set<string> = new Set([

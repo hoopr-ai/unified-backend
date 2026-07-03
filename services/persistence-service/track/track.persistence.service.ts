@@ -660,6 +660,7 @@ export const getUserUsedCampaignIds = async (
 export interface LightweightTrack {
   id: string;
   trackCode: string;
+  type: string | null;
   name: string;
   name_slug: string;
   waveformLink: string | null;
@@ -814,7 +815,7 @@ export const findTracksLightweight = async (
   const tracks = await TrackModel.findAll({
     where: whereClause,
     attributes: [
-      "id", "trackCode", "name", "name_slug",
+      "id", "trackCode", "type", "name", "name_slug",
       "waveformLink", "mp3Link", "sourceLink", "hasVocals", "trending",
       "hookTimings", "ownerId"
     ],
@@ -858,6 +859,7 @@ export const findTracksLightweight = async (
     result.set(json.trackCode, {
       id: json.id,
       trackCode: json.trackCode,
+      type: json.type ?? null,
       name: json.name,
       name_slug: json.name_slug,
       waveformLink: json.waveformLink,
