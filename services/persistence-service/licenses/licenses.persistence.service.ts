@@ -11,18 +11,35 @@ export const createLicenseRecord = async (
   return license;
 };
 
+// Separates the downloads list by content: 'sfx' → only SFX tracks, 'tracks' → everything else
+export type LicenseHistoryCategory = "tracks" | "sfx";
+
 export const getLicensesByBrandId = async (
   brandId: number,
   page: number = 1,
-  limit: number = 50
+  limit: number = 50,
+  category?: LicenseHistoryCategory,
 ): Promise<{ rows: LicenseModel[]; count: number }> => {
   const offset = (page - 1) * limit;
+
+  // Filter on the joined track's type so old licenses of SFX tracks (created
+  // before SFX became free) still land in the SFX bucket.
+  let trackWhere: Record<string | symbol, unknown> | undefined;
+  if (category === "sfx") {
+    trackWhere = { type: { [Op.iLike]: "sfx" } };
+  } else if (category === "tracks") {
+    trackWhere = {
+      [Op.or]: [{ type: { [Op.notILike]: "sfx" } }, { type: null }],
+    };
+  }
+
   const { rows, count } = await LicenseModel.findAndCountAll({
     where: { brandId },
     include: [
       {
         model: TrackModel,
-        attributes: ["id", "trackCode", "name", "sourceLink", "ownerId"],
+        attributes: ["id", "trackCode", "name", "sourceLink", "ownerId", "type"],
+        ...(trackWhere && { where: trackWhere, required: true }),
         include: [
           {
             model: TrackArtistMappingModel,
@@ -87,11 +104,20 @@ export const countLicensesWithMissingVideoLinks = async (
         model: VideoLinkModel,
         attributes: ["id"],
       },
+      {
+        model: TrackModel,
+        attributes: ["type"],
+        required: false,
+      },
     ],
   });
 
   let missingCount = 0;
   for (const license of licenses) {
+    // Free SFX downloads don't require video links
+    if ((license.track?.type ?? "").toLowerCase() === "sfx") {
+      continue;
+    }
     const videoLinksCount = license.videoLinks?.length ?? 0;
     if (videoLinksCount < requiredVideoLinksCount) {
       missingCount++;

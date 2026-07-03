@@ -4,6 +4,7 @@ import {
   LicenseModel,
   VideoLinkModel,
   type LicenseDetails,
+  type LicenseHistoryCategory,
   countLicensesWithMissingVideoLinks,
 } from "../../persistence-service/licenses/modules.export";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
@@ -474,6 +475,7 @@ export const getBrandLicenseHistoryService = async (
   userId: number,
   page: number = 1,
   limit: number = 50,
+  category?: LicenseHistoryCategory,
 ): Promise<BrandLicenseHistoryResponse> => {
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
@@ -490,7 +492,7 @@ export const getBrandLicenseHistoryService = async (
 
   const brandId = user.brandId;
 
-  const { rows, count } = await getLicensesByBrandId(brandId, page, limit);
+  const { rows, count } = await getLicensesByBrandId(brandId, page, limit, category);
 
   // Collect all unique owner IDs from tracks
   const allOwnerIds: string[] = [];
@@ -571,6 +573,7 @@ export const getBrandLicenseHistoryService = async (
       primaryArtists,
       type: license.type,
       price: license.price,
+      ...(isSfxTrackType(track?.type) && { isSfx: true, freeDownload: true }),
     };
   });
 

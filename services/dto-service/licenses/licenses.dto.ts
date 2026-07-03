@@ -93,6 +93,8 @@ export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   primaryArtists?: { id: string; name: string }[];
   type?: string;
   price?: number;
+  isSfx?: boolean; // True when the licensed track is an SFX track
+  freeDownload?: boolean; // True for SFX — downloaded without tokens/payment
 }
 
 export interface BrandLicenseHistoryResponse {
