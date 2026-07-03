@@ -7,12 +7,14 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
 
   const statusCode = err instanceof AppError ? err.statusCode : 500;
   const message = err instanceof AppError ? err.message : "Internal server error";
+  const errorCode = err instanceof AppError ? err.errorCode : undefined;
 
   res.status(statusCode).json({
     data: {},
     error: {
       code: 1,
       message,
+      ...(errorCode && { errorCode }),
     },
   });
 };

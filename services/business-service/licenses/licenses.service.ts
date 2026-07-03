@@ -132,6 +132,7 @@ export const licenseTrackService = async (
     throw new AppError(
       "Please complete your profile to download SFX tracks",
       403,
+      "PROFILE_INCOMPLETE",
     );
   }
 
