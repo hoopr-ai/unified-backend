@@ -20,6 +20,8 @@ import {
   topTracksQuerySchema,
   customersSummaryQuerySchema,
   customersListQuerySchema,
+  engagementSummaryQuerySchema,
+  userActivityQuerySchema,
 } from "../middlewares/admin-pay-per-track.validation";
 import {
   getOverviewService,
@@ -36,6 +38,9 @@ import {
   getTopTracksService,
   getCustomersSummaryService,
   listCustomersService,
+  getEngagementSummaryService,
+  getUserDetailService,
+  listUserActivityService,
 } from "../services/business-service/pay-per-track/modules.export";
 
 // All endpoints are GETs, so validation happens here on req.query (the same
@@ -194,6 +199,53 @@ export const getCustomersSummary = catchAsync(
       res,
       await getCustomersSummaryService(value),
       "Customer summary fetched.",
+    );
+  },
+);
+
+// GET /admin/pay-per-track/engagement/summary
+export const getEngagementSummary = catchAsync(
+  async (req: Request, res: Response) => {
+    const value = validateQuery<{ startDate: string; endDate: string }>(
+      engagementSummaryQuerySchema,
+      req.query,
+    );
+    ok(
+      res,
+      await getEngagementSummaryService(value),
+      "Engagement summary fetched.",
+    );
+  },
+);
+
+// GET /admin/pay-per-track/users/:id
+export const getUserDetail = catchAsync(async (req: Request, res: Response) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new AppError("Invalid user id.", 400);
+  }
+  const user = await getUserDetailService(userId);
+  if (!user) {
+    throw new AppError("User not found.", 404);
+  }
+  ok(res, user, "User fetched.");
+});
+
+// GET /admin/pay-per-track/users/:id/activity
+export const listUserActivity = catchAsync(
+  async (req: Request, res: Response) => {
+    const userId = Number(req.params.id);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new AppError("Invalid user id.", 400);
+    }
+    const value = validateQuery<{ page: number; limit: number }>(
+      userActivityQuerySchema,
+      req.query,
+    );
+    ok(
+      res,
+      await listUserActivityService({ userId, ...value }),
+      "User activity fetched.",
     );
   },
 );

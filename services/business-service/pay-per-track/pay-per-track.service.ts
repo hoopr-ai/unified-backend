@@ -897,6 +897,13 @@ const FUNNEL_CTES = `
     FROM users u
     WHERE (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL')) AND ${inRange(`u."createdAt"`)}
   ),
+  stream_users AS (
+    SELECT sh."userId" AS uid, MAX(sh."createdAt") AS reached_at
+    FROM user_stream_history sh
+    JOIN ppt ON ppt.id = sh."userId"
+    WHERE ${inRange(`sh."createdAt"`)}
+    GROUP BY 1
+  ),
   cart_users AS (
     SELECT uid, MAX(reached_at) AS reached_at FROM (
       SELECT ua."userId" AS uid, ua."createdAt" AS reached_at
@@ -935,11 +942,13 @@ const FUNNEL_CTES = `
 export const getFunnelService = async (range: DateRange) => {
   const [row] = await q<{
     signups: string;
+    streamed: string;
     addedToCart: string;
     checkoutStarted: string;
     paymentInitiated: string;
     purchased: string;
-    signupAndCart: string;
+    signupAndStream: string;
+    streamAndCart: string;
     cartAndCheckout: string;
     checkoutAndPayment: string;
     paymentAndPaid: string;
@@ -947,11 +956,13 @@ export const getFunnelService = async (range: DateRange) => {
     `WITH ${FUNNEL_CTES}
      SELECT
        (SELECT COUNT(*) FROM signup_users) AS signups,
+       (SELECT COUNT(*) FROM stream_users) AS streamed,
        (SELECT COUNT(*) FROM cart_users) AS "addedToCart",
        (SELECT COUNT(*) FROM checkout_users) AS "checkoutStarted",
        (SELECT COUNT(*) FROM payment_users) AS "paymentInitiated",
        (SELECT COUNT(*) FROM paid_users) AS purchased,
-       (SELECT COUNT(*) FROM signup_users s JOIN cart_users c ON c.uid = s.uid) AS "signupAndCart",
+       (SELECT COUNT(*) FROM signup_users s JOIN stream_users st ON st.uid = s.uid) AS "signupAndStream",
+       (SELECT COUNT(*) FROM stream_users st JOIN cart_users c ON c.uid = st.uid) AS "streamAndCart",
        (SELECT COUNT(*) FROM cart_users c JOIN checkout_users ch ON ch.uid = c.uid) AS "cartAndCheckout",
        (SELECT COUNT(*) FROM checkout_users ch JOIN payment_users p ON p.uid = ch.uid) AS "checkoutAndPayment",
        (SELECT COUNT(*) FROM payment_users p JOIN paid_users pd ON pd.uid = p.uid) AS "paymentAndPaid"`,
@@ -959,6 +970,7 @@ export const getFunnelService = async (range: DateRange) => {
   );
 
   const signups = num(row?.signups);
+  const streamed = num(row?.streamed);
   const addedToCart = num(row?.addedToCart);
   const checkoutStarted = num(row?.checkoutStarted);
   const paymentInitiated = num(row?.paymentInitiated);
@@ -980,13 +992,15 @@ export const getFunnelService = async (range: DateRange) => {
   return {
     stages: [
       { key: "signup", label: "Signed up", users: signups },
+      { key: "streamed", label: "Streamed a track", users: streamed },
       { key: "cart", label: "Added to cart", users: addedToCart },
       { key: "checkout", label: "Started checkout", users: checkoutStarted },
       { key: "payment", label: "Initiated payment", users: paymentInitiated },
       { key: "paid", label: "Purchased", users: purchased },
     ],
     boundaries: [
-      boundary("signup", signups, num(row?.signupAndCart)),
+      boundary("signup", signups, num(row?.signupAndStream)),
+      boundary("streamed", streamed, num(row?.streamAndCart)),
       boundary("cart", addedToCart, num(row?.cartAndCheckout)),
       boundary("checkout", checkoutStarted, num(row?.checkoutAndPayment)),
       boundary("payment", paymentInitiated, num(row?.paymentAndPaid)),
@@ -995,13 +1009,14 @@ export const getFunnelService = async (range: DateRange) => {
 };
 
 interface FunnelDroppedParams extends DateRange {
-  stage: "signup" | "cart" | "checkout" | "payment";
+  stage: "signup" | "streamed" | "cart" | "checkout" | "payment";
   page: number;
   limit: number;
 }
 
 const DROP_STAGE_SQL: Record<FunnelDroppedParams["stage"], { from: string; next: string }> = {
-  signup: { from: "signup_users", next: "cart_users" },
+  signup: { from: "signup_users", next: "stream_users" },
+  streamed: { from: "stream_users", next: "cart_users" },
   cart: { from: "cart_users", next: "checkout_users" },
   checkout: { from: "checkout_users", next: "payment_users" },
   payment: { from: "payment_users", next: "paid_users" },
@@ -1081,12 +1096,18 @@ export const getTopTracksService = async (params: TopTracksParams) => {
     revenue: string;
     buyers: string;
     inCartsNow: string;
+    streams: string;
+    likes: string;
   }>(
     `SELECT s."trackCode", tr.name AS "trackName", oi."skuId",
             COALESCE(SUM(oi.qty), 0) AS units,
             COALESCE(SUM(oi."sellingPrice" * oi.qty - oi.discount), 0) AS revenue,
             COUNT(DISTINCT o."userId") AS buyers,
-            (SELECT COUNT(*) FROM carts c WHERE c."skuId" = oi."skuId") AS "inCartsNow"
+            (SELECT COUNT(*) FROM carts c WHERE c."skuId" = oi."skuId") AS "inCartsNow",
+            (SELECT COUNT(*) FROM user_stream_history sh
+             WHERE sh."trackCode" = s."trackCode" AND ${inRange(`sh."createdAt"`)}) AS streams,
+            (SELECT COUNT(*) FROM user_liked_tracks ul
+             WHERE ul."trackCode" = s."trackCode" AND ${inRange(`ul."createdAt"`)}) AS likes
      FROM order_info oi
      JOIN orders o ON o.id = oi."orderId" AND o.status = 'SUCCESS'
      JOIN users u ON u.id = o."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
@@ -1108,6 +1129,8 @@ export const getTopTracksService = async (params: TopTracksParams) => {
       revenue: num(row.revenue),
       buyers: num(row.buyers),
       inCartsNow: num(row.inCartsNow),
+      streams: num(row.streams),
+      likes: num(row.likes),
     })),
   };
 };
@@ -1241,6 +1264,308 @@ export const listCustomersService = async (params: CustomersListParams) => {
       totalSpend: num(row.totalSpend),
       firstPurchaseAt: row.firstPurchaseAt,
       lastPurchaseAt: row.lastPurchaseAt,
+    })),
+    pagination: buildPagination(params.page, params.limit, totalItems),
+  };
+};
+
+// ─── Engagement ──────────────────────────────────────────────────────────────
+//
+// Pre-checkout activity: streams and likes come from their canonical tables
+// (user_stream_history / user_liked_tracks — indexed, carry trackCode);
+// downloads and video-link submissions only exist as user_activities rows.
+
+const DOWNLOAD_WHERE = `ua.method = 'POST' AND split_part(ua.endpoint, '?', 1) = '/licenses/track-download'`;
+const VIDEO_LINK_WHERE = `ua.method = 'POST' AND split_part(ua.endpoint, '?', 1) = '/licenses/video-links'`;
+
+export const getEngagementSummaryService = async (range: DateRange) => {
+  const [totalsRows, seriesRows, deviceRows, topEngaged] = await Promise.all([
+    q<{
+      streams: string;
+      listeners: string;
+      likes: string;
+      likers: string;
+      downloads: string;
+      videoLinks: string;
+    }>(
+      `SELECT
+         (SELECT COUNT(*) FROM user_stream_history sh
+          JOIN users u ON u.id = sh."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+          WHERE ${inRange(`sh."createdAt"`)}) AS streams,
+         (SELECT COUNT(DISTINCT sh."userId") FROM user_stream_history sh
+          JOIN users u ON u.id = sh."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+          WHERE ${inRange(`sh."createdAt"`)}) AS listeners,
+         (SELECT COUNT(*) FROM user_liked_tracks ul
+          JOIN users u ON u.id = ul."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+          WHERE ${inRange(`ul."createdAt"`)}) AS likes,
+         (SELECT COUNT(DISTINCT ul."userId") FROM user_liked_tracks ul
+          JOIN users u ON u.id = ul."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+          WHERE ${inRange(`ul."createdAt"`)}) AS likers,
+         (SELECT COUNT(*) FROM user_activities ua
+          JOIN users u ON u.id = ua."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+          WHERE ${DOWNLOAD_WHERE} AND ${inRange(`ua."createdAt"`)}) AS downloads,
+         (SELECT COUNT(*) FROM user_activities ua
+          JOIN users u ON u.id = ua."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+          WHERE ${VIDEO_LINK_WHERE} AND ${inRange(`ua."createdAt"`)}) AS "videoLinks"`,
+      range,
+    ),
+    q<{ day: string; kind: string; count: string }>(
+      `SELECT ${istDay(`sh."createdAt"`)} AS day, 'streams' AS kind, COUNT(*) AS count
+       FROM user_stream_history sh
+       JOIN users u ON u.id = sh."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+       WHERE ${inRange(`sh."createdAt"`)}
+       GROUP BY 1
+       UNION ALL
+       SELECT ${istDay(`ul."createdAt"`)}, 'likes', COUNT(*)
+       FROM user_liked_tracks ul
+       JOIN users u ON u.id = ul."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+       WHERE ${inRange(`ul."createdAt"`)}
+       GROUP BY 1
+       UNION ALL
+       SELECT ${istDay(`ua."createdAt"`)}, 'downloads', COUNT(*)
+       FROM user_activities ua
+       JOIN users u ON u.id = ua."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+       WHERE ${DOWNLOAD_WHERE} AND ${inRange(`ua."createdAt"`)}
+       GROUP BY 1
+       ORDER BY 1`,
+      range,
+    ),
+    q<{ deviceType: string; events: string; users: string }>(
+      `SELECT COALESCE(ua."deviceType", 'Unknown') AS "deviceType",
+              COUNT(*) AS events,
+              COUNT(DISTINCT ua."userId") AS users
+       FROM user_activities ua
+       JOIN users u ON u.id = ua."userId" AND (u.platform = :platform OR ((:platform)::text IS NULL AND u.platform <> 'INTERNAL'))
+       WHERE ${inRange(`ua."createdAt"`)}
+       GROUP BY 1
+       ORDER BY 2 DESC`,
+      range,
+    ),
+    q<{
+      userId: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      source: string;
+      streams: string;
+      likes: string;
+      lastStreamAt: Date;
+      totalSpend: string;
+    }>(
+      `WITH s AS (
+         SELECT sh."userId", COUNT(*) AS streams, MAX(sh."createdAt") AS last_stream
+         FROM user_stream_history sh
+         JOIN users su ON su.id = sh."userId" AND (su.platform = :platform OR ((:platform)::text IS NULL AND su.platform <> 'INTERNAL'))
+         WHERE ${inRange(`sh."createdAt"`)}
+         GROUP BY 1
+       )
+       SELECT s."userId", u.email, u."firstName", u."lastName",
+              ${SOURCE_CASE} AS source,
+              s.streams,
+              (SELECT COUNT(*) FROM user_liked_tracks ul
+               WHERE ul."userId" = s."userId" AND ${inRange(`ul."createdAt"`)}) AS likes,
+              s.last_stream AS "lastStreamAt",
+              (SELECT COALESCE(SUM(t."payAmount"), 0) FROM transactions t
+               WHERE t."userId" = s."userId" AND t.status = 'S') AS "totalSpend"
+       FROM s
+       JOIN users u ON u.id = s."userId"
+       LEFT JOIN users creator ON creator.id = u."createdBy"
+       ORDER BY s.streams DESC
+       LIMIT 10`,
+      range,
+    ),
+  ]);
+
+  const totals = totalsRows[0];
+  const byDay = new Map<
+    string,
+    { day: string; streams: number; likes: number; downloads: number }
+  >();
+  for (const row of seriesRows) {
+    const entry =
+      byDay.get(row.day) ?? { day: row.day, streams: 0, likes: 0, downloads: 0 };
+    entry[row.kind as "streams" | "likes" | "downloads"] = num(row.count);
+    byDay.set(row.day, entry);
+  }
+
+  return {
+    streams: num(totals?.streams),
+    uniqueListeners: num(totals?.listeners),
+    likes: num(totals?.likes),
+    uniqueLikers: num(totals?.likers),
+    downloads: num(totals?.downloads),
+    videoLinksSubmitted: num(totals?.videoLinks),
+    series: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)),
+    deviceSplit: deviceRows.map((row) => ({
+      deviceType: row.deviceType,
+      events: num(row.events),
+      users: num(row.users),
+    })),
+    topEngagedUsers: topEngaged.map((row) => ({
+      userId: num(row.userId),
+      email: row.email,
+      name: [row.firstName, row.lastName].filter(Boolean).join(" ") || null,
+      source: row.source,
+      streams: num(row.streams),
+      likes: num(row.likes),
+      lastStreamAt: row.lastStreamAt,
+      totalSpend: num(row.totalSpend),
+    })),
+  };
+};
+
+// ─── User detail & activity timeline ─────────────────────────────────────────
+
+export const getUserDetailService = async (userId: number) => {
+  const [rows] = await q<{
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    platform: string;
+    status: string;
+    emailVerified: boolean | null;
+    mobileVerified: boolean | null;
+    createdAt: Date;
+    source: string;
+    invitedByEmail: string | null;
+    cartItems: string;
+    cartValue: string;
+    streams: string;
+    likes: string;
+    ordersCount: string;
+    totalSpend: string;
+    lastPurchaseAt: Date | null;
+    lastActivityAt: Date | null;
+  }>(
+    `SELECT u.id, u.email, u."firstName", u."lastName", u.platform, u.status,
+            u."emailVerified", u."mobileVerified", u."createdAt",
+            ${SOURCE_CASE} AS source,
+            creator.email AS "invitedByEmail",
+            (SELECT COUNT(*) FROM carts c WHERE c."userId" = u.id) AS "cartItems",
+            (SELECT COALESCE(SUM(COALESCE(s."sellingPrice", 0) * c.qty), 0)
+             FROM carts c LEFT JOIN "SKUs" s ON s.id = c."skuId"
+             WHERE c."userId" = u.id) AS "cartValue",
+            (SELECT COUNT(*) FROM user_stream_history sh WHERE sh."userId" = u.id) AS streams,
+            (SELECT COUNT(*) FROM user_liked_tracks ul WHERE ul."userId" = u.id) AS likes,
+            (SELECT COUNT(DISTINCT t."orderId") FROM transactions t
+             WHERE t."userId" = u.id AND t.status = 'S') AS "ordersCount",
+            (SELECT COALESCE(SUM(t."payAmount"), 0) FROM transactions t
+             WHERE t."userId" = u.id AND t.status = 'S') AS "totalSpend",
+            (SELECT MAX(t."createdAt") FROM transactions t
+             WHERE t."userId" = u.id AND t.status = 'S') AS "lastPurchaseAt",
+            (SELECT MAX(ua."createdAt") FROM user_activities ua
+             WHERE ua."userId" = u.id) AS "lastActivityAt"
+     FROM users u
+     LEFT JOIN users creator ON creator.id = u."createdBy"
+     WHERE u.id = :userId`,
+    { userId },
+  );
+
+  if (!rows) return null;
+  return {
+    id: num(rows.id),
+    email: rows.email,
+    name: [rows.firstName, rows.lastName].filter(Boolean).join(" ") || null,
+    platform: rows.platform,
+    status: rows.status,
+    emailVerified: rows.emailVerified,
+    mobileVerified: rows.mobileVerified,
+    createdAt: rows.createdAt,
+    source: rows.source,
+    invitedByEmail: rows.invitedByEmail,
+    cartItems: num(rows.cartItems),
+    cartValue: num(rows.cartValue),
+    streams: num(rows.streams),
+    likes: num(rows.likes),
+    ordersCount: num(rows.ordersCount),
+    totalSpend: num(rows.totalSpend),
+    lastPurchaseAt: rows.lastPurchaseAt,
+    lastActivityAt: rows.lastActivityAt,
+  };
+};
+
+// Human label for a raw activity row; anything unrecognised falls back to
+// "<ACTION> <path>" so new event types surface without a code change.
+const activityLabel = (
+  action: string,
+  method: string,
+  endpoint: string,
+): string => {
+  const path = endpoint.split("?")[0];
+  switch (action) {
+    case "CHECKOUT_STARTED":
+      return "Started checkout";
+    case "BILLING_ADDRESS_PREFILLED":
+      return "Checkout: billing address prefilled";
+    case "BILLING_ADDRESS_FORM_OPENED":
+      return "Checkout: opened billing form";
+    case "BILLING_ADDRESS_CONTINUED":
+      return "Checkout: continued with saved address";
+    case "LOGIN":
+      return "Logged in";
+    case "LOGOUT":
+      return "Logged out";
+  }
+  if (path === "/stream-history") return "Streamed a track";
+  if (path === "/liked-tracks")
+    return method === "DELETE" ? "Unliked a track" : "Liked a track";
+  if (path === "/cart") return method === "POST" ? "Added to cart" : "Updated cart";
+  if (path === "/transaction/init") return "Initiated payment";
+  if (path === "/transaction/commit") return "Payment confirmed by gateway";
+  if (path === "/licenses/track-download") return "Downloaded a track";
+  if (path.startsWith("/licenses/video-links")) return "Submitted video link";
+  if (path.startsWith("/licenses/track/")) return "Licensed a track";
+  if (path === "/user/address") return "Saved billing address";
+  return `${action} ${path}`;
+};
+
+interface UserActivityParams {
+  userId: number;
+  page: number;
+  limit: number;
+}
+
+export const listUserActivityService = async (params: UserActivityParams) => {
+  const rows = await q<{
+    id: string;
+    action: string;
+    endpoint: string;
+    method: string;
+    statusCode: number | null;
+    deviceType: string | null;
+    browser: string | null;
+    os: string | null;
+    trackCode: string | null;
+    createdAt: Date;
+    totalCount: string;
+  }>(
+    `SELECT ua.id, ua.action, ua.endpoint, ua.method, ua."statusCode",
+            ua."deviceType", ua.browser, ua.os,
+            ua."requestBody"->>'trackCode' AS "trackCode",
+            ua."createdAt",
+            COUNT(*) OVER() AS "totalCount"
+     FROM user_activities ua
+     WHERE ua."userId" = :userId
+     ORDER BY ua."createdAt" DESC
+     LIMIT :limit OFFSET :offset`,
+    { ...params, offset: (params.page - 1) * params.limit },
+  );
+
+  const totalItems = num(rows[0]?.totalCount);
+  return {
+    events: rows.map((row) => ({
+      id: num(row.id),
+      label: activityLabel(row.action, row.method, row.endpoint),
+      action: row.action,
+      endpoint: row.endpoint.split("?")[0],
+      method: row.method,
+      statusCode: row.statusCode,
+      deviceType: row.deviceType,
+      browser: row.browser,
+      os: row.os,
+      trackCode: row.trackCode,
+      createdAt: row.createdAt,
     })),
     pagination: buildPagination(params.page, params.limit, totalItems),
   };

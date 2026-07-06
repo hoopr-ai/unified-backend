@@ -86,7 +86,19 @@ export const funnelQuerySchema = Joi.object({ ...dateRange }).unknown(false);
 export const funnelDroppedQuerySchema = Joi.object({
   ...dateRange,
   ...pagination,
-  stage: Joi.string().valid("signup", "cart", "checkout", "payment").required(),
+  stage: Joi.string()
+    .valid("signup", "streamed", "cart", "checkout", "payment")
+    .required(),
+}).unknown(false);
+
+// GET /admin/pay-per-track/engagement/summary
+export const engagementSummaryQuerySchema = Joi.object({
+  ...dateRange,
+}).unknown(false);
+
+// GET /admin/pay-per-track/users/:id/activity
+export const userActivityQuerySchema = Joi.object({
+  ...pagination,
 }).unknown(false);
 
 // GET /admin/pay-per-track/tracks/top

@@ -17,6 +17,9 @@ import {
   getTopTracks,
   getCustomersSummary,
   listCustomers,
+  getEngagementSummary,
+  getUserDetail,
+  listUserActivity,
 } from "../controllers/admin-pay-per-track.controller";
 
 const router = Router();
@@ -54,5 +57,14 @@ router.get("/tracks/top", ...requirePptDashboard, getTopTracks);
 
 router.get("/customers/summary", ...requirePptDashboard, getCustomersSummary);
 router.get("/customers", ...requirePptDashboard, listCustomers);
+
+router.get(
+  "/engagement/summary",
+  ...requirePptDashboard,
+  getEngagementSummary,
+);
+
+router.get("/users/:id/activity", ...requirePptDashboard, listUserActivity);
+router.get("/users/:id", ...requirePptDashboard, getUserDetail);
 
 export default router;
