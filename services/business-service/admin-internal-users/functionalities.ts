@@ -19,6 +19,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "sage",
   "sftp-manager",
   "hoopr-b2c-dashboard",
+  "pay-per-track-dashboard",
   "youtube",
   "app-music-programming",
   "soundtracking",
