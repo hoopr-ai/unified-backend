@@ -19,6 +19,9 @@ const SESSION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const SKIP_LOGGING_PATTERNS = [
   /^\/health-check/,
   /^\/favicon/,
+  // Journey events write their own user_activities row with the event name as
+  // action — middleware logging here would duplicate every event as CREATE.
+  /^\/journey\//,
   /\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/,
 ];
 

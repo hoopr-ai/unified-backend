@@ -14,7 +14,7 @@ const router = Router();
 
 const businessAddressSchema = Joi.object({
   addressLine1: Joi.string().max(255).required(),
-  addressLine2: Joi.string().max(255).required(),
+  addressLine2: Joi.string().max(255).allow(null, "").optional(),
   country: Joi.string().max(100).required(),
   state: Joi.string().max(100).required(),
   city: Joi.string().max(100).required(),
@@ -25,7 +25,7 @@ const businessAddressSchema = Joi.object({
 
 const billingAddressSchema = Joi.object({
   addressLine1: Joi.string().max(255).required(),
-  addressLine2: Joi.string().max(255).required(),
+  addressLine2: Joi.string().max(255).allow(null, "").optional(),
   country: Joi.string().max(100).required(),
   state: Joi.string().max(100).required(),
   city: Joi.string().max(100).required(),

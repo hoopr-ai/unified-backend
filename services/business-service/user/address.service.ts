@@ -47,7 +47,7 @@ export const upsertBusinessAddressService = async (
 ): Promise<UserAddressAttributes> => {
   return await upsertUserAddress(userId, AddressType.BUSINESS, {
     addressLine1: data.addressLine1,
-    addressLine2: data.addressLine2 ?? null,
+    addressLine2: data.addressLine2 || null,
     country: data.country,
     state: data.state,
     city: data.city,
@@ -64,7 +64,7 @@ export const upsertBillingAddressService = async (
 ): Promise<UserAddressAttributes> => {
   return await upsertUserAddress(userId, AddressType.BILLING, {
     addressLine1: data.addressLine1,
-    addressLine2: data.addressLine2 ?? null,
+    addressLine2: data.addressLine2 || null,
     country: data.country,
     state: data.state,
     city: data.city,
