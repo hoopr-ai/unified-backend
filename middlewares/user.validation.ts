@@ -81,7 +81,15 @@ export const updateProfileRequestSchema = Joi.object({
   profileRole: Joi.string()
     .valid(...profileRoleValues)
     .optional(),
-  instagramLink: Joi.string().uri().max(500).allow(null).optional(),
+  instagramLink: Joi.string()
+    .max(500)
+    .pattern(/^(https?:\/\/\S+|@?[A-Za-z0-9._]{1,30})$/)
+    .allow(null)
+    .optional()
+    .messages({
+      "string.pattern.base":
+        "Instagram link must be a valid URL or username",
+    }),
   youtubeLink: Joi.string().uri().max(500).allow(null).optional(),
   facebookLink: Joi.string().uri().max(500).allow(null).optional(),
   brandName: Joi.string().min(2).max(255).optional(),
