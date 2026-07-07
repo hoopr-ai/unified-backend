@@ -50,17 +50,21 @@ export const commitTransaction = catchAsync(async (req: AuthRequest, res: Respon
 // Unauthenticated — called server-to-server by Razorpay. Authenticity comes
 // from the HMAC signature over the raw body, verified in the service.
 export const razorpayWebhook = catchAsync(async (req: Request, res: Response) => {
-  const signature = req.headers["x-razorpay-signature"];
+  const signatureHeader = req.headers["x-razorpay-signature"];
+  const signature = Array.isArray(signatureHeader) ? signatureHeader[0] : signatureHeader;
   const rawBody = (req as any).rawBody as Buffer | undefined;
 
-  if (!signature || Array.isArray(signature) || !rawBody) {
-    return sendError(res, HttpStatusCode.BAD_REQUEST, "Missing signature or body", {});
+  if (!rawBody) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Missing body", {});
   }
 
   const eventIdHeader = req.headers["x-razorpay-event-id"];
   const eventId = Array.isArray(eventIdHeader) ? eventIdHeader[0] : eventIdHeader;
 
-  const data = await handleRazorpayWebhookService(rawBody, signature, eventId);
+  // Missing signature falls through to the service: it fails verification
+  // there (and gets a webhook_logs row), or is accepted under the
+  // RAZORPAY_WEBHOOK_SKIP_SIGNATURE testing bypass.
+  const data = await handleRazorpayWebhookService(rawBody, signature ?? "", eventId);
   sendResponse(res, { status: HttpStatusCode.OK, data, message: "Webhook processed" });
 });
 
