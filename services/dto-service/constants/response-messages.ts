@@ -50,6 +50,7 @@ export const enum ResponseMessages {
   OtpVerifiedSuccess = "OTP verified successfully",
   GetOwnersSuccess = "Owners fetched successfully",
   GetOccasionsSuccess = "Occasions fetched successfully",
+  GetOccasionDetailSuccess = "Occasion details fetched successfully",
   CreateOccasionSuccess = "Occasion created successfully",
   UpdateOccasionSuccess = "Occasion updated successfully",
   DeleteOccasionSuccess = "Occasion deleted successfully",

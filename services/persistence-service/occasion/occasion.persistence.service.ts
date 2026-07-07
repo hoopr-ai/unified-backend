@@ -56,6 +56,22 @@ export const deleteOccasionById = async (id: number): Promise<boolean> => {
   return deleted > 0;
 };
 
+// Single-occasion detail lookup — resolve by occasionCode OR numeric id, for
+// the public GET /occasions/:idOrCode endpoint.
+export const findOccasionByCodeOrId = async (
+  idOrCode: string,
+): Promise<OccasionModel | null> => {
+  const numericId = /^\d+$/.test(idOrCode) ? Number(idOrCode) : undefined;
+  return await OccasionModel.findOne({
+    where: {
+      [Op.or]:
+        numericId != null
+          ? [{ occasionCode: idOrCode }, { id: numericId }]
+          : [{ occasionCode: idOrCode }],
+    },
+  });
+};
+
 // For rail-item hydration — resolve by occasionCode OR numeric id, mirroring
 // hydratePlaylists' playlistCode-or-id lookup.
 export const findOccasionsByCodesOrIds = async (

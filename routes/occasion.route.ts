@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getOccasions,
+  getOccasionByIdOrCode,
   getTracksByOccasion,
   createOccasion,
   updateOccasion,
@@ -26,5 +27,9 @@ router.delete("/:id", adminAuth, deleteOccasion);
 // ─── Read-side (public) ───────────────────────────────────────────────────────
 router.get("/", getOccasions);
 router.get("/:occasionId/tracks", getTracksByOccasion);
+// Single-occasion detail — by numeric id OR occasionCode slug. Declared after
+// the literal/two-segment routes above; distinct segment count from those, so
+// no ordering conflict.
+router.get("/:idOrCode", getOccasionByIdOrCode);
 
 export default router;

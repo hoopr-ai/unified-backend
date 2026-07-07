@@ -1,6 +1,7 @@
 import {
   findAllOccasions,
   findOccasionById,
+  findOccasionByCodeOrId,
   occasionCodeExists,
   createOccasion,
   updateOccasionById,
@@ -43,6 +44,15 @@ const toOccasionResponse = (o: {
 export const getOccasionsService = async (): Promise<OccasionResponseData[]> => {
   const occasions = await findAllOccasions();
   return occasions.map(toOccasionResponse);
+};
+
+// Single-occasion detail — resolves by occasionCode OR numeric id.
+export const getOccasionByIdOrCodeService = async (
+  idOrCode: string,
+): Promise<OccasionResponseData | null> => {
+  const occasion = await findOccasionByCodeOrId(idOrCode);
+  if (!occasion) return null;
+  return toOccasionResponse(occasion);
 };
 
 // ─── CMS write-side (create / edit / delete / image upload) ────────────────

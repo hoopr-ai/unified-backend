@@ -42,6 +42,13 @@ import { CartModel } from "./cart/modules.export";
 import { OrderModel, OrderInfoModel } from "./order/modules.export";
 import { TransactionModel } from "./transaction/modules.export";
 import { WebhookLogModel } from "./webhook/modules.export";
+import {
+  EmailCampaignModel,
+  EmailCampaignRecipientModel,
+  EmailTemplateModel,
+  EmailSuppressionModel,
+  EmailEventModel,
+} from "./email-campaign/schemas/modules.export";
 
 config();
 
@@ -131,6 +138,11 @@ sequelize.addModels([
   OrderInfoModel,
   TransactionModel,
   WebhookLogModel,
+  EmailCampaignModel,
+  EmailCampaignRecipientModel,
+  EmailTemplateModel,
+  EmailSuppressionModel,
+  EmailEventModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything

@@ -3,6 +3,7 @@ import { catchAsync, sendResponse, sendError } from "../services/helper-service/
 import { ResponseMessages, HttpStatusCode } from "../services/dto-service/modules.export";
 import {
   getOccasionsService,
+  getOccasionByIdOrCodeService,
   getTracksByOccasionService,
   createOccasionService,
   updateOccasionService,
@@ -27,6 +28,17 @@ export const getOccasions = catchAsync(async (_req: Request, res: Response) => {
     data: occasions,
     message: ResponseMessages.GetOccasionsSuccess,
   });
+});
+
+// GET /occasions/:idOrCode — single-occasion detail, resolves by occasionCode
+// OR numeric id (same dual-lookup rails already use for hydration).
+export const getOccasionByIdOrCode = catchAsync(async (req: Request, res: Response) => {
+  const idOrCode = req.params.idOrCode as string;
+  const response = await getOccasionByIdOrCodeService(idOrCode);
+  if (!response) {
+    return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.OccasionNotFound);
+  }
+  sendResponse(res, { status: HttpStatusCode.OK, data: response, message: ResponseMessages.GetOccasionDetailSuccess });
 });
 
 // ─── CMS write-side (admin/music gated in the route) ─────────────────────────
