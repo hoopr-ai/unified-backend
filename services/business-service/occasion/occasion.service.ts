@@ -138,9 +138,10 @@ export interface UploadOccasionImageResult {
   imageLink: string;
 }
 
-// Upload (or replace) an occasion's cover image. Mirrors
-// uploadPlaylistImageService exactly: stores at a code-keyed, version-suffixed
-// GCS path so replacing an image is always a fresh CDN cache miss.
+// Upload (or replace) an occasion's cover image. Stores at the existing
+// enterprise convention `enterprise/web/occasion/<id>.<ext>` (id-keyed, no
+// version suffix) — matches how occasion covers already live in the CDN
+// bucket, e.g. cdn-hooprsmash-com-prod/enterprise/web/occasion/10.webp.
 export const uploadOccasionImageService = async (
   id: number,
   file: { buffer: Buffer; mimetype: string },
@@ -148,10 +149,8 @@ export const uploadOccasionImageService = async (
   const occasion = await findOccasionById(id);
   if (!occasion) return null;
 
-  const key = occasion.occasionCode || occasion.id;
   const ext = EXT_BY_MIME[file.mimetype] || "img";
-  const version = Date.now().toString(36);
-  const gcsPath = `web/occasions/${key}-${version}.${ext}`;
+  const gcsPath = `enterprise/web/occasion/${occasion.id}.${ext}`;
 
   const publicUrl = await uploadPublicImageToGCS({
     buffer: file.buffer,
