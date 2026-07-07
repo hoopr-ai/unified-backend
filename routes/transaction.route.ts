@@ -2,7 +2,7 @@ import { Router } from "express";
 import Joi from "joi";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { validateRequest } from "../middlewares/validateRequest";
-import { initTransaction, commitTransaction, getTransactions, getTransactionDetail, downloadInvoice } from "../controllers/transaction.controller";
+import { initTransaction, commitTransaction, getTransactions, getTransactionDetail, downloadInvoice, razorpayWebhook } from "../controllers/transaction.controller";
 
 const router = Router();
 
@@ -11,6 +11,10 @@ const commitSchema = Joi.object({
   razorpayPaymentId: Joi.string().required(),
   razorpaySignature: Joi.string().required(),
 });
+
+// Razorpay server-to-server callback — must stay above the session auth
+// middleware; authenticated by webhook signature instead.
+router.post("/webhook", razorpayWebhook);
 
 router.use(authenticateWithSession);
 

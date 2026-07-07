@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { TransactionModel, TransactionStatus, type TransactionAttributes } from "./schemas/transaction.schema";
 import { OrderModel } from "../order/schemas/order.schema";
 import { OrderInfoModel } from "../order/schemas/order-info.schema";
@@ -26,6 +27,35 @@ export const updateTransactionStatus = async (
   updates?: Partial<TransactionAttributes>,
 ): Promise<void> => {
   await TransactionModel.update({ status, ...updates }, { where: { id } });
+};
+
+// Atomically flip a transaction to SUCCESS. Returns false if some other path
+// (browser commit vs Razorpay webhook) already claimed it — the caller that
+// gets `true` is the only one allowed to run post-payment side effects
+// (licenses, cart clear, invoice email).
+export const claimTransactionSuccess = async (
+  id: number,
+  updates?: Partial<TransactionAttributes>,
+): Promise<boolean> => {
+  const [updated] = await TransactionModel.update(
+    { status: TransactionStatus.SUCCESS, ...updates },
+    { where: { id, status: { [Op.ne]: TransactionStatus.SUCCESS } } },
+  );
+  return updated > 0;
+};
+
+// Only INITIATED → FAILED: a failed attempt can be retried on the same
+// Razorpay order, and a later capture must still win (FAILED → SUCCESS is
+// allowed by claimTransactionSuccess above).
+export const markTransactionFailedIfInitiated = async (
+  id: number,
+  updates?: Partial<TransactionAttributes>,
+): Promise<boolean> => {
+  const [updated] = await TransactionModel.update(
+    { status: TransactionStatus.FAILED, ...updates },
+    { where: { id, status: TransactionStatus.INITIATED } },
+  );
+  return updated > 0;
 };
 
 const TRACK_ARTIST_INCLUDE = {

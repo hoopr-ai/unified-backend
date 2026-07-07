@@ -11,6 +11,7 @@ import {
   getTransactionsService,
   getTransactionDetailService,
   downloadInvoiceService,
+  handleRazorpayWebhookService,
   parseTransactionId,
 } from "../services/business-service/transaction/transaction.service";
 import type { SessionPayload } from "../middlewares/authenticate";
@@ -44,6 +45,20 @@ export const commitTransaction = catchAsync(async (req: AuthRequest, res: Respon
 
   const data = await commitTransactionService(userId, req.body);
   sendResponse(res, { status: HttpStatusCode.OK, data, message: "Payment successful" });
+});
+
+// Unauthenticated — called server-to-server by Razorpay. Authenticity comes
+// from the HMAC signature over the raw body, verified in the service.
+export const razorpayWebhook = catchAsync(async (req: Request, res: Response) => {
+  const signature = req.headers["x-razorpay-signature"];
+  const rawBody = (req as any).rawBody as Buffer | undefined;
+
+  if (!signature || Array.isArray(signature) || !rawBody) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Missing signature or body", {});
+  }
+
+  const data = await handleRazorpayWebhookService(rawBody, signature);
+  sendResponse(res, { status: HttpStatusCode.OK, data, message: "Webhook processed" });
 });
 
 export const getTransactions = catchAsync(async (req: AuthRequest, res: Response) => {

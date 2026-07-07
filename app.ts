@@ -44,7 +44,15 @@ const corsOptions = getCorsOptions();
 app.options("/{*splat}", cors(corsOptions));
 app.use(cors(corsOptions));
 
-app.use(express.json());
+// Keep the raw request bytes — Razorpay webhook signatures are HMACs over the
+// exact raw body, so re-serialized JSON would not verify.
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      (req as any).rawBody = buf;
+    },
+  }),
+);
 app.use(cookieParser());
 
 await initializeBusinessService();

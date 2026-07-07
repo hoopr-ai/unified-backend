@@ -18,7 +18,8 @@ import {
   OrderStatus,
   createTransaction,
   findTransactionByRazorpayOrderId,
-  updateTransactionStatus,
+  claimTransactionSuccess,
+  markTransactionFailedIfInitiated,
   TransactionStatus,
   OwnerModel,
   UserModel,
@@ -116,48 +117,14 @@ export const initTransactionService = async (userId: number, email: string) => {
   };
 };
 
-export const commitTransactionService = async (
+// Post-payment side effects shared by browser commit and the Razorpay webhook.
+// Must only run once per transaction — callers gate on claimTransactionSuccess.
+const finalizeSuccessfulPayment = async (
   userId: number,
-  data: {
-    razorpayOrderId: string;
-    razorpayPaymentId: string;
-    razorpaySignature: string;
-  },
-) => {
-  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = data;
-
-  // Verify Razorpay signature
-  const expectedSignature = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET as string)
-    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-    .digest("hex");
-
-  if (expectedSignature !== razorpaySignature) {
-    throw new AppError("Payment verification failed", 400);
-  }
-
-  const transaction = await findTransactionByRazorpayOrderId(razorpayOrderId);
-  if (!transaction) throw new AppError("Transaction not found", 404);
-  if (Number(transaction.userId) !== Number(userId)) throw new AppError("Unauthorized", 401);
-  if (transaction.status === TransactionStatus.SUCCESS) {
-    throw new AppError("Transaction already completed", 400);
-  }
-
-  // Fetch payment details from Razorpay
-  const razorpay = getRazorpay();
-  const payment = await razorpay.payments.fetch(razorpayPaymentId);
-
-  const paymentMethod = payment.method
-    ? payment.method.charAt(0).toUpperCase() + payment.method.slice(1)
-    : "Other";
-
-  await updateTransactionStatus(transaction.id!, TransactionStatus.SUCCESS, {
-    razorpayPaymentId,
-    paymentMethod,
-    paymentResponse: payment as object,
-  });
-
-  await updateOrderStatus(transaction.orderId, OrderStatus.SUCCESS);
+  transactionId: number,
+  orderId: number,
+): Promise<number[]> => {
+  await updateOrderStatus(orderId, OrderStatus.SUCCESS);
 
   // Clear the buy-now cart after successful payment
   await clearBuyNowCart(userId);
@@ -167,7 +134,7 @@ export const commitTransactionService = async (
   let licenseIds: number[] = [];
   try {
     const [orderItems, userRecord] = await Promise.all([
-      findOrderInfosWithSku(transaction.orderId),
+      findOrderInfosWithSku(orderId),
       UserModel.findByPk(userId, { attributes: ["id", "brandId"] }),
     ]);
     const brandId = userRecord?.brandId ?? null;
@@ -198,7 +165,83 @@ export const commitTransactionService = async (
 
   // Fire invoice PDF generation + email right after payment success.
   // Non-blocking — failure here never affects the commit response.
-  triggerPurchaseEmail(userId, transaction.id!);
+  triggerPurchaseEmail(userId, transactionId);
+
+  return licenseIds;
+};
+
+// Response for a commit that arrives after the webhook already finalized the
+// transaction — report success (the user did pay) with the existing licenses.
+const alreadyCommittedResponse = async (userId: number, transaction: any) => {
+  let licenseIds: number[] = [];
+  try {
+    const orderItems = await findOrderInfosWithSku(transaction.orderId);
+    const trackCodes = orderItems
+      .map((item) => (item as any).sku?.trackCode)
+      .filter((tc): tc is string => Boolean(tc));
+    if (trackCodes.length) {
+      const licenses = await findLicensesByUserIdAndTrackCodes(userId, [...new Set(trackCodes)]);
+      licenseIds = licenses.map((l) => l.id);
+    }
+  } catch (err) {
+    console.error("License lookup for already-committed transaction failed:", err);
+  }
+  return {
+    transactionId: formatTransactionId(transaction.id!),
+    orderId: formatOrderId(transaction.orderId),
+    status: TransactionStatus.SUCCESS,
+    paymentMethod: transaction.paymentMethod ?? "Other",
+    licenseIds,
+  };
+};
+
+export const commitTransactionService = async (
+  userId: number,
+  data: {
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  },
+) => {
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = data;
+
+  // Verify Razorpay signature
+  const expectedSignature = crypto
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET as string)
+    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+    .digest("hex");
+
+  if (expectedSignature !== razorpaySignature) {
+    throw new AppError("Payment verification failed", 400);
+  }
+
+  const transaction = await findTransactionByRazorpayOrderId(razorpayOrderId);
+  if (!transaction) throw new AppError("Transaction not found", 404);
+  if (Number(transaction.userId) !== Number(userId)) throw new AppError("Unauthorized", 401);
+  if (transaction.status === TransactionStatus.SUCCESS) {
+    // Webhook beat the browser callback — idempotent success, not an error.
+    return alreadyCommittedResponse(userId, transaction);
+  }
+
+  // Fetch payment details from Razorpay
+  const razorpay = getRazorpay();
+  const payment = await razorpay.payments.fetch(razorpayPaymentId);
+
+  const paymentMethod = payment.method
+    ? payment.method.charAt(0).toUpperCase() + payment.method.slice(1)
+    : "Other";
+
+  const claimed = await claimTransactionSuccess(transaction.id!, {
+    razorpayPaymentId,
+    paymentMethod,
+    paymentResponse: payment as object,
+  });
+  if (!claimed) {
+    // Webhook won the race between our status check and the update.
+    return alreadyCommittedResponse(userId, transaction);
+  }
+
+  const licenseIds = await finalizeSuccessfulPayment(userId, transaction.id!, transaction.orderId);
 
   return {
     transactionId: formatTransactionId(transaction.id!),
@@ -207,6 +250,71 @@ export const commitTransactionService = async (
     paymentMethod,
     licenseIds,
   };
+};
+
+// ─── Razorpay webhook (payment.captured / order.paid / payment.failed) ────────
+// Safety net for payments that succeed on Razorpay but never reach /commit
+// (user closed the tab, network drop, app crash). Razorpay retries non-2xx
+// deliveries for 24h, so only signature failures should error out.
+export const handleRazorpayWebhookService = async (
+  rawBody: Buffer | string,
+  signature: string,
+): Promise<{ handled: boolean; reason: string }> => {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secret) throw new AppError("Webhook secret not configured", 500);
+
+  const expectedSignature = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  if (expectedSignature !== signature) {
+    throw new AppError("Invalid webhook signature", 400);
+  }
+
+  const event = JSON.parse(rawBody.toString());
+  const eventType: string = event?.event ?? "";
+  const payment = event?.payload?.payment?.entity;
+  const razorpayOrderId: string | undefined = payment?.order_id;
+
+  if (eventType === "payment.captured" || eventType === "order.paid") {
+    if (!razorpayOrderId) return { handled: false, reason: "no order_id in payload" };
+
+    const transaction = await findTransactionByRazorpayOrderId(razorpayOrderId);
+    if (!transaction) {
+      console.error(`Razorpay webhook: no transaction for order ${razorpayOrderId}`);
+      return { handled: false, reason: "unknown razorpay order" };
+    }
+
+    const paymentMethod = payment.method
+      ? payment.method.charAt(0).toUpperCase() + payment.method.slice(1)
+      : "Other";
+
+    const claimed = await claimTransactionSuccess(transaction.id!, {
+      razorpayPaymentId: payment.id,
+      paymentMethod,
+      paymentResponse: payment as object,
+    });
+    if (!claimed) return { handled: true, reason: "already committed" };
+
+    await finalizeSuccessfulPayment(
+      Number(transaction.userId),
+      transaction.id!,
+      transaction.orderId,
+    );
+    return { handled: true, reason: "committed via webhook" };
+  }
+
+  if (eventType === "payment.failed") {
+    if (!razorpayOrderId) return { handled: false, reason: "no order_id in payload" };
+
+    const transaction = await findTransactionByRazorpayOrderId(razorpayOrderId);
+    if (!transaction) return { handled: false, reason: "unknown razorpay order" };
+
+    const marked = await markTransactionFailedIfInitiated(transaction.id!, {
+      paymentResponse: payment as object,
+    });
+    if (marked) await updateOrderStatus(transaction.orderId, OrderStatus.FAILED);
+    return { handled: marked, reason: marked ? "marked failed" : "not in INITIATED state" };
+  }
+
+  return { handled: false, reason: `ignored event ${eventType}` };
 };
 
 export const formatOrderId = (id: number): string => `ORD-${String(id).padStart(8, "0")}`;
