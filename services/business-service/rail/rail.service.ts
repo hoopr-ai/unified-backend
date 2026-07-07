@@ -58,6 +58,7 @@ import {
 } from "../../persistence-service/exports";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { ArtistModel } from "../../persistence-service/artists/modules.export";
+import { OccasionModel } from "../../persistence-service/occasion/modules.export";
 import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
 import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
@@ -119,6 +120,7 @@ interface HydrationMaps {
   playlists: Map<string, unknown>;
   labels: Map<string, unknown>;
   artists: Map<string, unknown>;
+  occasions: Map<string, unknown>;
 }
 
 const hydrateTracks = async (
@@ -377,6 +379,36 @@ const hydrateArtists = async (
   return out;
 };
 
+const hydrateOccasions = async (
+  itemCodes: string[],
+): Promise<Map<string, unknown>> => {
+  const out = new Map<string, unknown>();
+  if (itemCodes.length === 0) return out;
+
+  const numericIds = itemCodes.filter((c) => /^\d+$/.test(c)).map(Number);
+
+  const rows = await OccasionModel.findAll({
+    where: {
+      [Op.or]: numericIds.length > 0
+        ? [
+            { occasionCode: { [Op.in]: itemCodes } },
+            { id: { [Op.in]: numericIds } },
+          ]
+        : [{ occasionCode: { [Op.in]: itemCodes } }],
+    },
+    attributes: ["id", "occasionCode", "title", "imageLink"],
+  });
+
+  for (const row of rows) {
+    const json = row.toJSON() as unknown as Record<string, unknown>;
+    const id = json.id as number | undefined;
+    const code = json.occasionCode as string | undefined;
+    if (id != null) out.set(String(id), json);
+    if (code) out.set(code, json);
+  }
+  return out;
+};
+
 const collectItemCodes = (
   rails: RailModel[],
 ): {
@@ -385,12 +417,14 @@ const collectItemCodes = (
   playlistCodes: string[];
   labelCodes: string[];
   artistCodes: string[];
+  occasionCodes: string[];
 } => {
   const tracks = new Set<string>();
   const filters = new Set<string>();
   const playlists = new Set<string>();
   const labels = new Set<string>();
   const artists = new Set<string>();
+  const occasions = new Set<string>();
   for (const rail of rails) {
     const items = rail.items ?? [];
     for (const item of items) {
@@ -398,6 +432,7 @@ const collectItemCodes = (
       else if (item.itemType === RailItemType.PLAYLIST) playlists.add(item.itemCode);
       else if (item.itemType === RailItemType.LABEL) labels.add(item.itemCode);
       else if (item.itemType === RailItemType.ARTIST) artists.add(item.itemCode);
+      else if (item.itemType === RailItemType.OCCASION) occasions.add(item.itemCode);
       else filters.add(item.itemCode);
     }
   }
@@ -407,6 +442,7 @@ const collectItemCodes = (
     playlistCodes: Array.from(playlists),
     labelCodes: Array.from(labels),
     artistCodes: Array.from(artists),
+    occasionCodes: Array.from(occasions),
   };
 };
 
@@ -415,15 +451,16 @@ const buildHydrationMaps = async (
   userId?: number,
   brandId?: number,
 ): Promise<HydrationMaps> => {
-  const { trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes } = collectItemCodes(rails);
-  const [tracks, filters, playlists, labels, artists] = await Promise.all([
+  const { trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes, occasionCodes } = collectItemCodes(rails);
+  const [tracks, filters, playlists, labels, artists, occasions] = await Promise.all([
     hydrateTracks(trackCodes, userId, brandId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
     hydrateLabels(labelCodes),
     hydrateArtists(artistCodes),
+    hydrateOccasions(occasionCodes),
   ]);
-  return { tracks, filters, playlists, labels, artists };
+  return { tracks, filters, playlists, labels, artists, occasions };
 };
 
 const resolveItem = (
@@ -441,6 +478,9 @@ const resolveItem = (
   }
   if (item.itemType === RailItemType.ARTIST) {
     return maps.artists.get(item.itemCode) ?? null;
+  }
+  if (item.itemType === RailItemType.OCCASION) {
+    return maps.occasions.get(item.itemCode) ?? null;
   }
   return maps.filters.get(item.itemCode) ?? null;
 };
@@ -870,6 +910,7 @@ const RAIL_TYPE_TO_ITEM_TYPE: Record<RailType, RailItemType> = {
   [RailType.LABELS]: RailItemType.LABEL,
   [RailType.PLAYLISTS]: RailItemType.PLAYLIST,
   [RailType.ARTISTS]: RailItemType.ARTIST,
+  [RailType.OCCASIONS]: RailItemType.OCCASION,
 };
 
 // Resolve owner IDs from type filter
@@ -1876,22 +1917,25 @@ const buildSeeAllItems = async (
   const playlistCodes: string[] = [];
   const labelCodes: string[] = [];
   const artistCodes: string[] = [];
+  const occasionCodes: string[] = [];
   for (const p of itemPairs) {
     if (p.itemType === RailItemType.TRACK) trackCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.PLAYLIST) playlistCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.LABEL) labelCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.ARTIST) artistCodes.push(p.itemCode);
+    else if (p.itemType === RailItemType.OCCASION) occasionCodes.push(p.itemCode);
     else filterCodes.push(p.itemCode);
   }
 
-  const [tracks, filters, playlists, labels, artists] = await Promise.all([
+  const [tracks, filters, playlists, labels, artists, occasions] = await Promise.all([
     hydrateTracks(trackCodes, userId, viewerBrandId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
     hydrateLabels(labelCodes),
     hydrateArtists(artistCodes),
+    hydrateOccasions(occasionCodes),
   ]);
-  const maps: HydrationMaps = { tracks, filters, playlists, labels, artists };
+  const maps: HydrationMaps = { tracks, filters, playlists, labels, artists, occasions };
 
   let items: RailItemResponse[] = itemPairs
     .map((p) => {

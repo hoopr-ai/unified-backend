@@ -6,6 +6,7 @@ export enum RailType {
   LABELS = "LABELS",
   PLAYLISTS = "PLAYLISTS",
   ARTISTS = "ARTISTS",
+  OCCASIONS = "OCCASIONS",
 }
 
 export enum RailSourceType {
@@ -22,6 +23,7 @@ export enum RailItemType {
   LABEL = "LABEL",
   PLAYLIST = "PLAYLIST",
   ARTIST = "ARTIST",
+  OCCASION = "OCCASION",
 }
 
 export enum PageName {

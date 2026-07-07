@@ -8,6 +8,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   // Music
   "rails",
   "playlists",
+  "occasions",
   "music-ingestion",
   "track-pricing",
   // Sales

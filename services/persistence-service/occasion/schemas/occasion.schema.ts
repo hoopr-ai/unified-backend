@@ -16,6 +16,8 @@ export interface OccasionDetails {
   date: string;
   className: string;
   end: string;
+  occasionCode?: string;
+  imageLink?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -41,6 +43,15 @@ export class OccasionModel extends Model<OccasionModel, OccasionDetails> {
 
   @Column({ type: DataType.STRING(20), allowNull: false })
   end!: string;
+
+  // Public/business code — used as the rail item's itemCode. Mirrors
+  // playlists.playlistCode.
+  @Column({ type: DataType.STRING(255), allowNull: true, unique: true })
+  occasionCode?: string;
+
+  // Uploaded cover image URL. Mirrors playlists.imageLink.
+  @Column({ type: DataType.STRING(1024), allowNull: true })
+  imageLink?: string;
 
   @CreatedAt
   @Column({ type: DataType.DATE })
