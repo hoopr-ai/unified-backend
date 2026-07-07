@@ -7,19 +7,36 @@ config();
 // Same SES account as hoopr-backend (limits: 50,000/day, 14/sec). Region and
 // credentials come from env so the account can be rotated without a deploy.
 //   AWS_SES_REGION            (defaults to ap-south-1, hoopr's region)
-//   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (falls back to the default
-//                              provider chain when unset, e.g. instance role)
+//   SES_AWS_ACCESS_KEY_ID / SES_AWS_SECRET_ACCESS_KEY
+//                             dedicated SES credentials — preferred, so ambient
+//                             AWS_* vars used by other tooling on the host can
+//                             never hijack email sending
+//   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (fallback; then the SDK default
+//                             provider chain, e.g. instance role)
 //   SES_SENDER_MAIL           verified sender identity
 //   SES_CONFIGURATION_SET     optional — routes bounce/complaint events to SNS
+import { logger } from "./logger";
+
 const region = process.env.AWS_SES_REGION || "ap-south-1";
 
+const accessKeyId =
+  process.env.SES_AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey =
+  process.env.SES_AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+
 const explicitCredentials =
-  process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY
-    ? {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-      }
+  accessKeyId && secretAccessKey
+    ? { accessKeyId, secretAccessKey }
     : undefined;
+
+// One line at boot so a misconfigured host is diagnosable from the logs alone:
+// which region, and WHICH key is signing (prefix only) — or the default chain.
+logger.info(
+  `[SES] region=${region} sender=${process.env.SES_SENDER_MAIL || "(unset)"} ` +
+    (explicitCredentials
+      ? `key=${explicitCredentials.accessKeyId.slice(0, 8)}… (${process.env.SES_AWS_ACCESS_KEY_ID ? "SES_AWS_*" : "AWS_*"} env)`
+      : "credentials=default provider chain (no env keys found)")
+);
 
 const sesClient = new SESClient({
   region,
