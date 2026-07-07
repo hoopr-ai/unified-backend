@@ -57,7 +57,10 @@ export const razorpayWebhook = catchAsync(async (req: Request, res: Response) =>
     return sendError(res, HttpStatusCode.BAD_REQUEST, "Missing signature or body", {});
   }
 
-  const data = await handleRazorpayWebhookService(rawBody, signature);
+  const eventIdHeader = req.headers["x-razorpay-event-id"];
+  const eventId = Array.isArray(eventIdHeader) ? eventIdHeader[0] : eventIdHeader;
+
+  const data = await handleRazorpayWebhookService(rawBody, signature, eventId);
   sendResponse(res, { status: HttpStatusCode.OK, data, message: "Webhook processed" });
 });
 

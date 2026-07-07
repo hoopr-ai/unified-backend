@@ -41,6 +41,7 @@ import { CountryModel, StateModel, CityModel } from "./geography/modules.export"
 import { CartModel } from "./cart/modules.export";
 import { OrderModel, OrderInfoModel } from "./order/modules.export";
 import { TransactionModel } from "./transaction/modules.export";
+import { WebhookLogModel } from "./webhook/modules.export";
 
 config();
 
@@ -129,6 +130,7 @@ sequelize.addModels([
   OrderModel,
   OrderInfoModel,
   TransactionModel,
+  WebhookLogModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything

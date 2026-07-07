@@ -29,6 +29,7 @@ import {
   createLicenseRecord,
   findLicensesByUserIdAndTrackCodes,
   findUserAddress,
+  createWebhookLog,
 } from "../../persistence-service/exports";
 import { AddressType } from "../../dto-service/modules.export";
 import { Op } from "sequelize";
@@ -252,6 +253,46 @@ export const commitTransactionService = async (
   };
 };
 
+// Persist one webhook_logs row per delivery — fire-and-forget, never lets a
+// logging failure affect the webhook response Razorpay sees.
+const logWebhookDelivery = (
+  rawBody: Buffer | string,
+  details: {
+    eventId?: string;
+    signatureValid: boolean;
+    handled?: boolean | null;
+    result?: string | null;
+    error?: string | null;
+  },
+): void => {
+  let payload: object | null = null;
+  let eventType: string | null = null;
+  let razorpayOrderId: string | null = null;
+  let razorpayPaymentId: string | null = null;
+  try {
+    payload = JSON.parse(rawBody.toString());
+    const p: any = payload;
+    eventType = p?.event ?? null;
+    razorpayOrderId = p?.payload?.payment?.entity?.order_id ?? null;
+    razorpayPaymentId = p?.payload?.payment?.entity?.id ?? null;
+  } catch {
+    // Unparseable body — still log the delivery with what we have.
+  }
+
+  createWebhookLog({
+    provider: "razorpay",
+    eventId: details.eventId ?? null,
+    eventType,
+    razorpayOrderId,
+    razorpayPaymentId,
+    signatureValid: details.signatureValid,
+    handled: details.handled ?? null,
+    result: details.result ?? null,
+    error: details.error ?? null,
+    payload,
+  }).catch((err) => console.error("Webhook DB logging failed:", err));
+};
+
 // ─── Razorpay webhook (payment.captured / order.paid / payment.failed) ────────
 // Safety net for payments that succeed on Razorpay but never reach /commit
 // (user closed the tab, network drop, app crash). Razorpay retries non-2xx
@@ -259,15 +300,35 @@ export const commitTransactionService = async (
 export const handleRazorpayWebhookService = async (
   rawBody: Buffer | string,
   signature: string,
+  eventId?: string,
 ): Promise<{ handled: boolean; reason: string }> => {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   if (!secret) throw new AppError("Webhook secret not configured", 500);
 
   const expectedSignature = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
   if (expectedSignature !== signature) {
+    logWebhookDelivery(rawBody, { eventId, signatureValid: false, error: "Invalid webhook signature" });
     throw new AppError("Invalid webhook signature", 400);
   }
 
+  try {
+    const outcome = await processRazorpayWebhookEvent(rawBody);
+    logWebhookDelivery(rawBody, {
+      eventId,
+      signatureValid: true,
+      handled: outcome.handled,
+      result: outcome.reason,
+    });
+    return outcome;
+  } catch (err) {
+    logWebhookDelivery(rawBody, { eventId, signatureValid: true, error: String(err) });
+    throw err;
+  }
+};
+
+const processRazorpayWebhookEvent = async (
+  rawBody: Buffer | string,
+): Promise<{ handled: boolean; reason: string }> => {
   const event = JSON.parse(rawBody.toString());
   const eventType: string = event?.event ?? "";
   const payment = event?.payload?.payment?.entity;
@@ -315,6 +376,58 @@ export const handleRazorpayWebhookService = async (
   }
 
   return { handled: false, reason: `ignored event ${eventType}` };
+};
+
+// ─── Manual reconciliation (scripts/reconcile-razorpay-order.ts) ──────────────
+// Settles a transaction whose payment was captured at Razorpay but never
+// reached SUCCESS here — e.g. paid before the webhook went live, or the
+// webhook delivery failed. Fetches the order's payments straight from the
+// Razorpay API, so it needs no signature and is safe to re-run (idempotent
+// via claimTransactionSuccess).
+export const reconcileRazorpayOrderService = async (razorpayOrderId: string) => {
+  const transaction = await findTransactionByRazorpayOrderId(razorpayOrderId);
+  if (!transaction) throw new AppError(`No transaction for Razorpay order ${razorpayOrderId}`, 404);
+
+  const txnId = formatTransactionId(transaction.id!);
+  if (transaction.status === TransactionStatus.SUCCESS) {
+    return { reconciled: false, reason: "already SUCCESS", transactionId: txnId };
+  }
+
+  const razorpay = getRazorpay();
+  const { items: payments } = await razorpay.orders.fetchPayments(razorpayOrderId);
+  const captured = payments.find((p: any) => p.status === "captured");
+  if (!captured) {
+    const statuses = payments.map((p: any) => `${p.id}:${p.status}`).join(", ") || "none";
+    return { reconciled: false, reason: `no captured payment (${statuses})`, transactionId: txnId };
+  }
+
+  const paymentMethod = captured.method
+    ? captured.method.charAt(0).toUpperCase() + captured.method.slice(1)
+    : "Other";
+
+  const claimed = await claimTransactionSuccess(transaction.id!, {
+    razorpayPaymentId: captured.id,
+    paymentMethod,
+    paymentResponse: captured as object,
+  });
+  if (!claimed) {
+    return { reconciled: false, reason: "claimed by another path mid-run", transactionId: txnId };
+  }
+
+  const licenseIds = await finalizeSuccessfulPayment(
+    Number(transaction.userId),
+    transaction.id!,
+    transaction.orderId,
+  );
+
+  return {
+    reconciled: true,
+    transactionId: txnId,
+    orderId: formatOrderId(transaction.orderId),
+    razorpayPaymentId: captured.id,
+    paymentMethod,
+    licenseIds,
+  };
 };
 
 export const formatOrderId = (id: number): string => `ORD-${String(id).padStart(8, "0")}`;

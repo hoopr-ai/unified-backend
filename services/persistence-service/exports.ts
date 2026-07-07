@@ -17,3 +17,4 @@ export * from "./rail/modules.export";
 export * from "./cart/modules.export";
 export * from "./order/modules.export";
 export * from "./transaction/modules.export";
+export * from "./webhook/modules.export";
