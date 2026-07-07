@@ -6,6 +6,7 @@ import {
   TrackArtistMappingModel,
   ArtistModel,
 } from "../artists/schemas/modules.export";
+import { AppError } from "../../helper-service/AppError";
 
 // Vocals filter modes (maps to the boolean/null hasVocals column).
 export type VocalsFilter = "vocal" | "instrumental" | "unknown";
@@ -362,6 +363,31 @@ const applyValues = (target: Partial<SkuModel>, values: SkuValues): void => {
     target.description = values.description ?? undefined;
 };
 
+// Selling price can never exceed cost price. Joi already rejects a single
+// request that sets both inconsistently, but a partial update (only one of
+// the two supplied) is validated here against whichever value — new or
+// pre-existing — ends up on the record after the merge. No cap is enforced
+// once either side is unset (null/undefined) — that just means "no ceiling".
+const assertValidPriceOrder = (
+  costPrice: number | null | undefined,
+  sellingPrice: number | null | undefined,
+): void => {
+  if (
+    costPrice === undefined ||
+    costPrice === null ||
+    sellingPrice === undefined ||
+    sellingPrice === null
+  ) {
+    return;
+  }
+  if (sellingPrice > costPrice) {
+    throw new AppError(
+      "Selling price must be less than or equal to cost price.",
+      400,
+    );
+  }
+};
+
 export interface UpsertResult {
   sku: SkuModel;
   created: boolean;
@@ -378,16 +404,21 @@ export const upsertSkuForTrack = async (
 
   if (existing) {
     applyValues(existing, values);
+    assertValidPriceOrder(existing.costPrice, existing.sellingPrice);
     await existing.save();
     return { sku: existing, created: false };
   }
+
+  const costPrice = values.costPrice ?? undefined;
+  const sellingPrice = values.sellingPrice ?? undefined;
+  assertValidPriceOrder(costPrice, sellingPrice);
 
   const created = await SkuModel.create({
     id: generateSkuId(),
     trackCode,
     itemType: ItemType.TRACK,
-    costPrice: values.costPrice ?? undefined,
-    sellingPrice: values.sellingPrice ?? undefined,
+    costPrice,
+    sellingPrice,
     // Defaults match the column defaults / seed script when not supplied.
     gstPercent: values.gstPercent ?? 18,
     maxUsage: values.maxUsage ?? 3,
@@ -433,15 +464,19 @@ export const bulkUpsertSkus = async (
       const existing = existingMap.get(trackCode);
       if (existing) {
         applyValues(existing, values);
+        assertValidPriceOrder(existing.costPrice, existing.sellingPrice);
         await existing.save({ transaction });
         updated += 1;
       } else {
+        const costPrice = values.costPrice ?? undefined;
+        const sellingPrice = values.sellingPrice ?? undefined;
+        assertValidPriceOrder(costPrice, sellingPrice);
         toCreate.push({
           id: generateSkuId(),
           trackCode,
           itemType: ItemType.TRACK,
-          costPrice: values.costPrice ?? undefined,
-          sellingPrice: values.sellingPrice ?? undefined,
+          costPrice,
+          sellingPrice,
           gstPercent: values.gstPercent ?? 18,
           maxUsage: values.maxUsage ?? 3,
           description: values.description ?? undefined,

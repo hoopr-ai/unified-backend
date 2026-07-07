@@ -16,6 +16,28 @@ const skuValuesSchema = {
 const requireAtLeastOneValue = (obj: Joi.ObjectSchema) =>
   obj.or("costPrice", "sellingPrice", "gstPercent", "maxUsage", "description");
 
+// Selling price can never exceed cost price. Only checked when both are
+// supplied in the same payload — a request that only touches one of the two
+// is validated against the other's existing DB value at the service layer
+// instead (see sku.persistence.service.ts), since Joi only sees this request.
+const enforcePriceOrder = (obj: Joi.ObjectSchema) =>
+  obj.custom((value: { costPrice?: number | null; sellingPrice?: number | null }, helpers) => {
+    const { costPrice, sellingPrice } = value;
+    if (
+      costPrice !== undefined &&
+      costPrice !== null &&
+      sellingPrice !== undefined &&
+      sellingPrice !== null &&
+      sellingPrice > costPrice
+    ) {
+      return helpers.error("sku.sellingPriceExceedsCost");
+    }
+    return value;
+  }).messages({
+    "sku.sellingPriceExceedsCost":
+      "Selling price must be less than or equal to cost price.",
+  });
+
 // GET /admin/skus
 export const listSkusQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
@@ -37,8 +59,8 @@ export const artistSearchQuerySchema = Joi.object({
 }).unknown(false);
 
 // PUT /admin/skus/:trackCode
-export const upsertSkuSchema = requireAtLeastOneValue(
-  Joi.object(skuValuesSchema),
+export const upsertSkuSchema = enforcePriceOrder(
+  requireAtLeastOneValue(Joi.object(skuValuesSchema)),
 ).unknown(false);
 
 // POST /admin/skus/bulk — exactly one of trackCodes / filter.
@@ -60,7 +82,9 @@ export const bulkUpsertSkuSchema = Joi.object({
   })
     .min(1)
     .optional(),
-  values: requireAtLeastOneValue(Joi.object(skuValuesSchema)).required(),
+  values: enforcePriceOrder(
+    requireAtLeastOneValue(Joi.object(skuValuesSchema)),
+  ).required(),
 })
   .xor("trackCodes", "filter")
   .unknown(false)
