@@ -313,12 +313,12 @@ export const handleRazorpayWebhookService = async (
       "⚠️ Razorpay webhook signature verification BYPASSED (RAZORPAY_WEBHOOK_SKIP_SIGNATURE=true)",
     );
   } else {
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const secret = process.env.RAZORPAY_KEY_SECRET;
     if (!secret) {
       logWebhookDelivery(rawBody, {
         eventId,
         signatureValid: false,
-        error: "RAZORPAY_WEBHOOK_SECRET not configured",
+        error: "RAZORPAY_KEY_SECRET not configured",
       });
       throw new AppError("Webhook secret not configured", 500);
     }
