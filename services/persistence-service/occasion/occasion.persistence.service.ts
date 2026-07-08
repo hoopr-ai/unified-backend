@@ -1,5 +1,14 @@
 import { Op } from "sequelize";
-import { OccasionModel, type OccasionDetails } from "./schemas/modules.export";
+import {
+  OccasionModel,
+  TrackOccasionMappingModel,
+  type OccasionDetails,
+  type TrackOccasionMappingDetails,
+} from "./schemas/modules.export";
+import { TrackModel } from "../track/schemas/track.schema";
+import { TrackArtistMappingModel, ArtistModel } from "../artists/modules.export";
+import { SkuModel } from "../sku/modules.export";
+import { sequelize } from "../database";
 
 export const saveOccasion = async (
   occasionDetails: OccasionDetails
@@ -90,4 +99,84 @@ export const findOccasionsByCodesOrIds = async (
     },
     attributes: ["id", "occasionCode", "title", "imageLink"],
   });
+};
+
+// ─── CMS-managed track attach/detach (independent of the legacy keyword system) ──
+
+export const findOccasionTrackMappings = async (
+  occasionId: number,
+): Promise<TrackOccasionMappingModel[]> => {
+  return await TrackOccasionMappingModel.findAll({
+    where: { occasionId },
+    order: [["rank", "ASC"]],
+    include: [
+      {
+        model: TrackModel,
+        as: "track",
+        attributes: [
+          "id",
+          "trackCode",
+          "name",
+          "name_slug",
+          "sourceLink",
+          "waveformLink",
+          "mp3Link",
+          "hasVocals",
+          "trending",
+          "ownerId",
+          "hookTimings",
+        ],
+        include: [
+          {
+            model: TrackArtistMappingModel,
+            as: "trackArtistMappings",
+            required: false,
+            include: [
+              {
+                model: ArtistModel,
+                as: "artist",
+                attributes: ["id", "name", "type"],
+                required: false,
+              },
+            ],
+          },
+          {
+            model: SkuModel,
+            as: "skus",
+            required: false,
+            attributes: ["id", "costPrice", "sellingPrice"],
+          },
+        ],
+      },
+    ],
+  });
+};
+
+// Replace the full ordered track set for an occasion. The CMS always sends the
+// complete list, so we wipe existing mappings and bulk-insert the new ones in a
+// single transaction (mirrors setPlaylistTracks).
+export const setOccasionTracks = async (
+  occasionId: number,
+  tracks: { trackId: string; rank: number }[],
+): Promise<void> => {
+  const transaction = await sequelize.transaction();
+  try {
+    await TrackOccasionMappingModel.destroy({ where: { occasionId }, transaction });
+
+    if (tracks.length > 0) {
+      await TrackOccasionMappingModel.bulkCreate(
+        tracks.map((t) => ({ occasionId, trackId: t.trackId, rank: t.rank })) as unknown as TrackOccasionMappingDetails[],
+        { transaction },
+      );
+    }
+
+    await transaction.commit();
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+};
+
+export const deleteOccasionTrackMappings = async (occasionId: number): Promise<void> => {
+  await TrackOccasionMappingModel.destroy({ where: { occasionId } });
 };

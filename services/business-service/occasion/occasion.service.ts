@@ -6,18 +6,25 @@ import {
   createOccasion,
   updateOccasionById,
   deleteOccasionById,
+  findOccasionTrackMappings,
+  setOccasionTracks,
+  deleteOccasionTrackMappings,
 } from "../../persistence-service/occasion/modules.export";
 import { findKeywordIdsByOccasionId, findTracksByKeywordIds } from "../../persistence-service/keyword/modules.export";
-import { getRestrictedOwnersByBrandId } from "../../persistence-service/exports";
+import { getRestrictedOwnersByBrandId, findTrackIdsByTrackCodes } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
-import { buildTracksResponseFromRawData } from "../track/track.service";
+import { buildTracksResponseFromRawData, transformRawTracksToDto } from "../track/track.service";
 import { uploadPublicImageToGCS } from "../../helper-service/gcs.helper";
 import type {
   OccasionResponseData,
   CreateOccasionRequest,
   UpdateOccasionRequest,
 } from "../../dto-service/occasion/modules.export";
-import type { PaginatedTracksResponseData } from "../../dto-service/modules.export";
+import type {
+  PaginatedTracksResponseData,
+  RawTrackWithMappings,
+  TrackWithArtists,
+} from "../../dto-service/modules.export";
 
 const toOccasionResponse = (o: {
   id?: number;
@@ -131,7 +138,12 @@ export const updateOccasionService = async (
 };
 
 export const deleteOccasionService = async (id: number): Promise<boolean> => {
-  return await deleteOccasionById(id);
+  const deleted = await deleteOccasionById(id);
+  if (deleted) {
+    // Hygiene cleanup — no DB-level cascade (constraints: false on the mapping).
+    await deleteOccasionTrackMappings(id);
+  }
+  return deleted;
 };
 
 // mime → file extension for the stored object path.
@@ -177,6 +189,23 @@ export const uploadOccasionImageService = async (
   };
 };
 
+// Occasion-scoped catalogs are bounded (curated by admins / tagged by a
+// handful of keywords), unlike the full track catalog — so unlike
+// findTracksByKeywordIds' own DB-level pagination, we fetch the full
+// keyword-tagged set here and paginate the merged result in memory.
+const MAX_KEYWORD_TAGGED_TRACKS = 1000;
+
+const mappingsToRawTracks = (
+  mappings: { track?: unknown }[],
+): RawTrackWithMappings[] =>
+  mappings
+    .filter((m): m is { track: NonNullable<typeof m.track> } => m.track != null)
+    .map((m) => (m.track as { toJSON: () => unknown }).toJSON() as unknown as RawTrackWithMappings);
+
+// Public/consumer track listing for an occasion — merges the CMS-curated
+// tracks (track_occasion_mappings, admin order preserved) with any
+// legacy keyword-tagged tracks (occasions -> keywords -> track_keyword_mappings),
+// deduped by track id, then paginates the combined set in application code.
 export const getTracksByOccasionService = async (
   occasionId: number,
   page: number,
@@ -184,23 +213,126 @@ export const getTracksByOccasionService = async (
   userId?: number,
   brandId?: number,
 ): Promise<PaginatedTracksResponseData> => {
-  const keywordIds = await findKeywordIdsByOccasionId(occasionId);
-
-  if (keywordIds.length === 0) {
-    return {
-      tracks: [],
-      pagination: { page, limit, totalItems: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false },
-    };
-  }
+  const [curatedMappings, keywordIds] = await Promise.all([
+    findOccasionTrackMappings(occasionId),
+    findKeywordIdsByOccasionId(occasionId),
+  ]);
 
   const excludeOwnerIds = brandId ? await getRestrictedOwnersByBrandId(brandId) : undefined;
+  const excludeOwnerSet = new Set(excludeOwnerIds ?? []);
+
+  const curatedRaw = mappingsToRawTracks(curatedMappings);
+
+  let keywordRaw: RawTrackWithMappings[] = [];
+  if (keywordIds.length > 0) {
+    const keywordResult = await findTracksByKeywordIds(
+      keywordIds,
+      1,
+      MAX_KEYWORD_TAGGED_TRACKS,
+      undefined,
+      excludeOwnerIds,
+    );
+    keywordRaw = keywordResult.rows;
+  }
+
+  const seenIds = new Set(curatedRaw.map((t) => t.id));
+  const merged = [
+    ...curatedRaw,
+    ...keywordRaw.filter((t) => {
+      if (seenIds.has(t.id)) return false;
+      seenIds.add(t.id);
+      return true;
+    }),
+  ];
+
+  // Curated tracks aren't pre-filtered by brand restrictions (unlike the
+  // keyword path, which already applied excludeOwnerIds) — apply it here too.
+  const filtered =
+    excludeOwnerSet.size > 0
+      ? merged.filter((t) => {
+          const ownerIds = (t as unknown as { ownerId?: string[] }).ownerId;
+          return !(Array.isArray(ownerIds) && ownerIds.some((oid) => excludeOwnerSet.has(oid)));
+        })
+      : merged;
+
+  const totalItems = filtered.length;
+  const totalPages = totalItems === 0 ? 0 : Math.ceil(totalItems / limit);
+  const offset = (page - 1) * limit;
+  const pageRows = filtered.slice(offset, offset + limit);
 
   let likedTrackCodes: Set<string> | undefined;
   if (userId) {
-    const likedCodes = await getUserLikedTrackCodes(userId);
-    likedTrackCodes = new Set(likedCodes);
+    likedTrackCodes = new Set(await getUserLikedTrackCodes(userId));
   }
 
-  const rawData = await findTracksByKeywordIds(keywordIds, page, limit, undefined, excludeOwnerIds);
-  return buildTracksResponseFromRawData(rawData, likedTrackCodes);
+  const tracks = await transformRawTracksToDto(pageRows, likedTrackCodes);
+
+  return {
+    tracks,
+    pagination: {
+      page,
+      limit,
+      totalItems,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
+    },
+  };
+};
+
+// ─── CMS-managed track attach/detach ────────────────────────────────────────
+
+export interface OccasionCuratedTracks {
+  tracks: TrackWithArtists[];
+}
+
+// CMS editor's "current tracks" view — only the admin-curated list, not the
+// merged public view above (admins can't edit legacy keyword tags from here).
+export const getOccasionCuratedTracksService = async (
+  occasionId: number,
+): Promise<OccasionCuratedTracks | null> => {
+  const occasion = await findOccasionById(occasionId);
+  if (!occasion) return null;
+
+  const mappings = await findOccasionTrackMappings(occasionId);
+  const tracks = await transformRawTracksToDto(mappingsToRawTracks(mappings));
+  return { tracks };
+};
+
+export interface SetOccasionTracksResult {
+  tracks: TrackWithArtists[];
+  unknownTrackCodes: string[];
+}
+
+// Replace the full ordered curated track list. Unknown/inactive codes are
+// reported back (not silently dropped) so the CMS can surface them — mirrors
+// setPlaylistTracksService. rank is the 0-based position in the supplied order.
+export const setOccasionTracksService = async (
+  occasionId: number,
+  trackCodes: string[],
+): Promise<SetOccasionTracksResult | null> => {
+  const occasion = await findOccasionById(occasionId);
+  if (!occasion) return null;
+
+  const seen = new Set<string>();
+  const orderedCodes = trackCodes.filter((code) => {
+    if (seen.has(code)) return false;
+    seen.add(code);
+    return true;
+  });
+
+  const resolved = await findTrackIdsByTrackCodes(orderedCodes);
+  const codeToId = new Map(resolved.map((t) => [t.trackCode, t.id]));
+  const unknownTrackCodes = orderedCodes.filter((c) => !codeToId.has(c));
+
+  const tracksToSet = orderedCodes
+    .filter((c) => codeToId.has(c))
+    .map((code, index) => ({ trackId: codeToId.get(code)!, rank: index }));
+
+  await setOccasionTracks(occasionId, tracksToSet);
+
+  const mappings = await findOccasionTrackMappings(occasionId);
+  const tracks = await transformRawTracksToDto(mappingsToRawTracks(mappings));
+
+  return { tracks, unknownTrackCodes };
 };

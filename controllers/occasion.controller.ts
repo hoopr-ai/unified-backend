@@ -9,6 +9,8 @@ import {
   updateOccasionService,
   deleteOccasionService,
   uploadOccasionImageService,
+  getOccasionCuratedTracksService,
+  setOccasionTracksService,
 } from "../services/business-service/occasion/modules.export";
 import { findUserById } from "../services/persistence-service/exports";
 import type { SessionPayload } from "../middlewares/authenticate";
@@ -152,5 +154,45 @@ export const getTracksByOccasion = catchAsync(async (req: AuthRequest, res: Resp
     status: HttpStatusCode.OK,
     data: response,
     message: ResponseMessages.GetTracksSuccess,
+  });
+});
+
+// ─── CMS-managed track attach/detach (admin/music gated in the route) ───────
+
+// GET /occasions/:id/curated-tracks — the admin-curated track list only (not
+// the merged public view above).
+export const getOccasionCuratedTracks = catchAsync(async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string, 10);
+  if (!Number.isFinite(id)) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid occasion id");
+  }
+  const result = await getOccasionCuratedTracksService(id);
+  if (!result) {
+    return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.OccasionNotFound);
+  }
+  sendResponse(res, { status: HttpStatusCode.OK, data: result, message: ResponseMessages.GetOccasionTracksSuccess });
+});
+
+// PUT /occasions/:id/tracks — replace the full ordered curated track list
+export const setOccasionTracks = catchAsync(async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string, 10);
+  if (!Number.isFinite(id)) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "Invalid occasion id");
+  }
+  const body = req.body as Partial<{ trackCodes: string[] }>;
+  if (!Array.isArray(body?.trackCodes) || !body.trackCodes.every((c) => typeof c === "string")) {
+    return sendError(res, HttpStatusCode.BAD_REQUEST, "trackCodes must be an array of strings");
+  }
+
+  const result = await setOccasionTracksService(id, body.trackCodes);
+  if (!result) {
+    return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.OccasionNotFound);
+  }
+  sendResponse(res, {
+    status: HttpStatusCode.OK,
+    data: { tracks: result.tracks },
+    message: result.unknownTrackCodes.length > 0
+      ? `Tracks updated. Skipped unknown/inactive codes: ${result.unknownTrackCodes.join(", ")}`
+      : ResponseMessages.SetOccasionTracksSuccess,
   });
 });

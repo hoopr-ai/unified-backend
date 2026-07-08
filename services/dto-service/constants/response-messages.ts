@@ -51,6 +51,8 @@ export const enum ResponseMessages {
   GetOwnersSuccess = "Owners fetched successfully",
   GetOccasionsSuccess = "Occasions fetched successfully",
   GetOccasionDetailSuccess = "Occasion details fetched successfully",
+  GetOccasionTracksSuccess = "Occasion tracks fetched successfully",
+  SetOccasionTracksSuccess = "Occasion tracks updated successfully",
   CreateOccasionSuccess = "Occasion created successfully",
   UpdateOccasionSuccess = "Occasion updated successfully",
   DeleteOccasionSuccess = "Occasion deleted successfully",

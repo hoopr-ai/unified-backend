@@ -29,7 +29,7 @@ import {
 import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
 import { TokenModel, TokenHistoryModel, TokenAssignedModel, TokenDeductionModel } from "./token/modules.export";
-import { OccasionModel } from "./occasion/modules.export";
+import { OccasionModel, TrackOccasionMappingModel } from "./occasion/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import { FaqModel, FaqSectionModel } from "./faq/modules.export";
 import {
@@ -121,6 +121,7 @@ sequelize.addModels([
   TokenAssignedModel,
   TokenDeductionModel,
   OccasionModel,
+  TrackOccasionMappingModel,
   FeaturedTracksModel,
   ChartTrackModel,
   KeywordModel,

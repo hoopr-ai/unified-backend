@@ -7,6 +7,8 @@ import {
   updateOccasion,
   deleteOccasion,
   uploadOccasionImage,
+  getOccasionCuratedTracks,
+  setOccasionTracks,
 } from "../controllers/occasion.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { singleImageUpload } from "../middlewares/image-upload";
@@ -21,6 +23,8 @@ const adminAuth = authenticateWithSession({ roles: [UserRoles.ADMIN, UserRoles.M
 // Declared before "/:occasionId" so the literal-segment routes resolve first.
 router.post("/", adminAuth, createOccasion);
 router.post("/:id/image", adminAuth, singleImageUpload, uploadOccasionImage);
+router.get("/:id/curated-tracks", adminAuth, getOccasionCuratedTracks);
+router.put("/:id/tracks", adminAuth, setOccasionTracks);
 router.put("/:id", adminAuth, updateOccasion);
 router.delete("/:id", adminAuth, deleteOccasion);
 
