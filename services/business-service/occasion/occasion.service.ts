@@ -11,7 +11,12 @@ import {
   deleteOccasionTrackMappings,
 } from "../../persistence-service/occasion/modules.export";
 import { findKeywordIdsByOccasionId, findTracksByKeywordIds } from "../../persistence-service/keyword/modules.export";
-import { getRestrictedOwnersByBrandId, findTrackIdsByTrackCodes } from "../../persistence-service/exports";
+import {
+  getRestrictedOwnersByBrandId,
+  findTrackIdsByTrackCodes,
+  getActiveBrandTokenTypes,
+  getOwnerIdsByNames,
+} from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { buildTracksResponseFromRawData, transformRawTracksToDto } from "../track/track.service";
 import { uploadPublicImageToGCS } from "../../helper-service/gcs.helper";
@@ -20,6 +25,7 @@ import type {
   CreateOccasionRequest,
   UpdateOccasionRequest,
 } from "../../dto-service/occasion/modules.export";
+import { UNAUTHENTICATED_RESTRICTED_OWNER_NAMES } from "../../dto-service/modules.export";
 import type {
   PaginatedTracksResponseData,
   RawTrackWithMappings,
@@ -218,7 +224,28 @@ export const getTracksByOccasionService = async (
     findKeywordIdsByOccasionId(occasionId),
   ]);
 
-  const excludeOwnerIds = brandId ? await getRestrictedOwnersByBrandId(brandId) : undefined;
+  // Same restriction + token logic as the normal tracks API: a brand holding a
+  // Chartbusters token sees the default-restricted (enterprise) owners; other
+  // brands and unauthenticated users get them excluded. activeTokenTypes then
+  // drives the token/price display in transformTrackToDto.
+  let excludeOwnerIds: string[] | undefined;
+  let activeTokenTypes = new Set<string>();
+  if (brandId) {
+    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
+      getRestrictedOwnersByBrandId(brandId),
+      getActiveBrandTokenTypes(brandId),
+      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
+        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
+        : Promise.resolve([]),
+    ]);
+    activeTokenTypes = tokenTypes;
+    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
+    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
+    excludeOwnerIds = combined.length > 0 ? combined : undefined;
+  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
+    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
+    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
+  }
   const excludeOwnerSet = new Set(excludeOwnerIds ?? []);
 
   const curatedRaw = mappingsToRawTracks(curatedMappings);
@@ -265,7 +292,7 @@ export const getTracksByOccasionService = async (
     likedTrackCodes = new Set(await getUserLikedTrackCodes(userId));
   }
 
-  const tracks = await transformRawTracksToDto(pageRows, likedTrackCodes);
+  const tracks = await transformRawTracksToDto(pageRows, likedTrackCodes, activeTokenTypes);
 
   return {
     tracks,
