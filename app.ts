@@ -33,6 +33,12 @@ import geographyRoutes from "./routes/geography.route";
 import cartRoutes from "./routes/cart.route";
 import transactionRoutes from "./routes/transaction.route";
 import journeyRoutes from "./routes/journey.route";
+import {
+  emailCampaignRouter,
+  emailTemplateRouter,
+  emailSuppressionRouter,
+  sesWebhookRouter,
+} from "./routes/email-campaign.route";
 import { initializeBusinessService } from "./services/business-service/initialize.business.service";
 import { errorHandler } from "./middlewares/errorHandler";
 import { activityLoggerMiddleware } from "./services/helper-service/modules.export";
@@ -90,6 +96,10 @@ app.use("/admin/pay-per-track", adminPayPerTrackRoutes);
 app.use("/cart", cartRoutes);
 app.use("/transaction", transactionRoutes);
 app.use("/journey", journeyRoutes);
+app.use("/admin/email-campaigns", emailCampaignRouter);
+app.use("/admin/email-templates", emailTemplateRouter);
+app.use("/admin/email-suppressions", emailSuppressionRouter);
+app.use("/webhooks/ses", sesWebhookRouter);
 
 app.get("/health-check", (req: Request, res: Response) => {
   res.status(200).send(`Hoopr Sage ${process.env.NODE_ENV} Server is Healthy`);

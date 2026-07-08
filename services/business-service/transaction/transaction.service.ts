@@ -302,26 +302,46 @@ export const handleRazorpayWebhookService = async (
   signature: string,
   eventId?: string,
 ): Promise<{ handled: boolean; reason: string }> => {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  if (!secret) throw new AppError("Webhook secret not configured", 500);
+  // TESTING ONLY — RAZORPAY_WEBHOOK_SKIP_SIGNATURE=true accepts deliveries
+  // without verifying the signature. Never enable in production: anyone who
+  // can reach the endpoint could mark transactions as paid.
+  const skipSignature = process.env.RAZORPAY_WEBHOOK_SKIP_SIGNATURE === "true";
+  let signatureValid = false;
 
-  const expectedSignature = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
-  if (expectedSignature !== signature) {
-    logWebhookDelivery(rawBody, { eventId, signatureValid: false, error: "Invalid webhook signature" });
-    throw new AppError("Invalid webhook signature", 400);
+  if (skipSignature) {
+    console.warn(
+      "⚠️ Razorpay webhook signature verification BYPASSED (RAZORPAY_WEBHOOK_SKIP_SIGNATURE=true)",
+    );
+  } else {
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!secret) {
+      logWebhookDelivery(rawBody, {
+        eventId,
+        signatureValid: false,
+        error: "RAZORPAY_KEY_SECRET not configured",
+      });
+      throw new AppError("Webhook secret not configured", 500);
+    }
+
+    const expectedSignature = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+    if (expectedSignature !== signature) {
+      logWebhookDelivery(rawBody, { eventId, signatureValid: false, error: "Invalid webhook signature" });
+      throw new AppError("Invalid webhook signature", 400);
+    }
+    signatureValid = true;
   }
 
   try {
     const outcome = await processRazorpayWebhookEvent(rawBody);
     logWebhookDelivery(rawBody, {
       eventId,
-      signatureValid: true,
+      signatureValid,
       handled: outcome.handled,
-      result: outcome.reason,
+      result: skipSignature ? `[signature bypassed] ${outcome.reason}` : outcome.reason,
     });
     return outcome;
   } catch (err) {
-    logWebhookDelivery(rawBody, { eventId, signatureValid: true, error: String(err) });
+    logWebhookDelivery(rawBody, { eventId, signatureValid, error: String(err) });
     throw err;
   }
 };

@@ -29,6 +29,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "studio-briefs",
   // Marketing (no home-page card; direct-URL route only)
   "marketing",
+  "email-campaigns",
   // Admin
   "admin-dashboard",
   "internal-users",

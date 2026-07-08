@@ -29,7 +29,7 @@ import {
 import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
 import { TokenModel, TokenHistoryModel, TokenAssignedModel, TokenDeductionModel } from "./token/modules.export";
-import { OccasionModel } from "./occasion/modules.export";
+import { OccasionModel, TrackOccasionMappingModel } from "./occasion/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import { FaqModel, FaqSectionModel } from "./faq/modules.export";
 import {
@@ -42,6 +42,13 @@ import { CartModel } from "./cart/modules.export";
 import { OrderModel, OrderInfoModel } from "./order/modules.export";
 import { TransactionModel } from "./transaction/modules.export";
 import { WebhookLogModel } from "./webhook/modules.export";
+import {
+  EmailCampaignModel,
+  EmailCampaignRecipientModel,
+  EmailTemplateModel,
+  EmailSuppressionModel,
+  EmailEventModel,
+} from "./email-campaign/schemas/modules.export";
 
 config();
 
@@ -114,6 +121,7 @@ sequelize.addModels([
   TokenAssignedModel,
   TokenDeductionModel,
   OccasionModel,
+  TrackOccasionMappingModel,
   FeaturedTracksModel,
   ChartTrackModel,
   KeywordModel,
@@ -131,6 +139,11 @@ sequelize.addModels([
   OrderInfoModel,
   TransactionModel,
   WebhookLogModel,
+  EmailCampaignModel,
+  EmailCampaignRecipientModel,
+  EmailTemplateModel,
+  EmailSuppressionModel,
+  EmailEventModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
