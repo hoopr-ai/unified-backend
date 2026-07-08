@@ -89,7 +89,6 @@ export const sendWelcomeEmail = async (
 
 export const sendInviteEmail = async (
   email: string,
-  password: string,
   brandName: string,
   inviterName?: string,
 ): Promise<void> => {
@@ -138,7 +137,7 @@ export const sendInviteEmail = async (
                     ${inviterName ? `<strong>${inviterName}</strong> has invited you to join their team <strong>${brandName}</strong> on Hoopr Smash.` : `You have been invited to join the team <strong>${brandName}</strong> on Hoopr Smash.`}
                   </p>
                   <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
-                    To join, use the credentials below:
+                    To get started, sign in using the email below. We'll send you a one-time password (OTP) to verify your account.
                   </p>
                 </td>
               </tr>
@@ -156,11 +155,6 @@ export const sendInviteEmail = async (
                     <tr>
                       <td style="font-size:15px; padding:4px 0; color:#333;">
                         <strong>Email:</strong> ${email}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="font-size:15px; padding:4px 0; color:#333;">
-                        <strong>Password:</strong> ${password}
                       </td>
                     </tr>
                   </table>
@@ -496,7 +490,6 @@ export const sendTeamJoinNotificationEmail = async (
 
 export const sendAdminCredentialsEmail = async (
   email: string,
-  password: string,
   brandName: string,
 ): Promise<void> => {
   const frontendUrl = process.env.FRONTEND_URL || "https://smash.hoopr.ai";
@@ -535,7 +528,7 @@ export const sendAdminCredentialsEmail = async (
                     Hoopr Smash account for <strong>${brandName}</strong> has been created.
                   </p>
                   <p style="margin:0 0 16px 0; font-size:15px; color:#333; line-height:1.7;">
-                    To access the platform, login using the credentials below:
+                    To get started, sign in using the email below. We'll send you a one-time password (OTP) to verify your account.
                   </p>
                 </td>
               </tr>
@@ -553,11 +546,6 @@ export const sendAdminCredentialsEmail = async (
                     <tr>
                       <td style="font-size:15px; padding:4px 0; color:#333;">
                         <strong>Email:</strong> ${email}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td style="font-size:15px; padding:4px 0; color:#333;">
-                        <strong>Password:</strong> ${password}
                       </td>
                     </tr>
                   </table>

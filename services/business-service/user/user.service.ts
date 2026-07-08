@@ -372,7 +372,7 @@ export const createUserService = async (
   const brandName = (brand as any)?.name || "";
   // For enterprise users, send credentials email. For internal users, we can skip this as they are likely creating their own account.
   if (platform === Platform.ENTERPRISE) {
-      await sendAdminCredentialsEmail(email, password, brandName);
+      await sendAdminCredentialsEmail(email, brandName);
   }
   return {};
 };
@@ -455,7 +455,7 @@ export const inviteUserService = async (
             .filter(Boolean)
             .join(" ")
         : undefined;
-      await sendInviteEmail(email, password, brandName, inviterName);
+      await sendInviteEmail(email, brandName, inviterName);
       return {};
     }
   }
@@ -483,7 +483,7 @@ export const inviteUserService = async (
   const inviterName = invitingUser
     ? [invitingUser.firstName, invitingUser.lastName].filter(Boolean).join(" ")
     : undefined;
-  await sendInviteEmail(email, password, brandName, inviterName);
+  await sendInviteEmail(email, brandName, inviterName);
 
   return {};
 };
