@@ -396,15 +396,47 @@ const hydrateOccasions = async (
           ]
         : [{ occasionCode: { [Op.in]: itemCodes } }],
     },
-    attributes: ["id", "occasionCode", "title", "imageLink"],
+    // Full occasion detail (month/date/className/end/createdAt) so a rail's
+    // occasion item matches the occasion detail API's OccasionResponseData
+    // shape, not just id/code/title/image.
+    attributes: [
+      "id",
+      "occasionCode",
+      "title",
+      "month",
+      "date",
+      "className",
+      "end",
+      "imageLink",
+      "createdAt",
+    ],
   });
 
   for (const row of rows) {
-    const json = row.toJSON() as unknown as Record<string, unknown>;
-    const id = json.id as number | undefined;
-    const code = json.occasionCode as string | undefined;
-    if (id != null) out.set(String(id), json);
-    if (code) out.set(code, json);
+    const o = row.toJSON() as unknown as {
+      id: number;
+      occasionCode?: string | null;
+      title: string;
+      month: string;
+      date: string;
+      className: string;
+      end: string;
+      imageLink?: string | null;
+      createdAt: Date;
+    };
+    const data = {
+      id: o.id,
+      title: o.title,
+      month: o.month,
+      date: o.date,
+      className: o.className,
+      end: o.end,
+      occasionCode: o.occasionCode || null,
+      imageLink: o.imageLink || null,
+      createdAt: o.createdAt,
+    };
+    if (o.id != null) out.set(String(o.id), data);
+    if (o.occasionCode) out.set(o.occasionCode, data);
   }
   return out;
 };
