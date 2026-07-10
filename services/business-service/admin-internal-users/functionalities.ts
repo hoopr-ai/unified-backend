@@ -11,6 +11,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "occasions",
   "music-ingestion",
   "track-pricing",
+  "owner-usage-info",
   // Sales
   "sales-crm",
   "client-credentials",

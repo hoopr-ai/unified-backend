@@ -1,4 +1,5 @@
 import { OwnerModel } from "./modules.export";
+import type { UsageInfoDto } from "../../dto-service/owners/owners.dto";
 import { Op, fn, col, where } from "sequelize";
 
 export const findAllOwners = async (
@@ -11,6 +12,68 @@ export const findAllOwners = async (
     limit,
     offset,
   });
+};
+
+// ── Admin: owner usage-info CMS ───────────────────────────────────────────
+
+/**
+ * Paginated owner list for the usage-info CMS. Optional case-insensitive search
+ * matches ownerCode OR username. Selects usageInfo only to derive the
+ * has-usage-info flag (the full blob is fetched on the detail call).
+ */
+export const findOwnersForAdmin = async (
+  limit: number,
+  offset: number,
+  search?: string,
+): Promise<{ count: number; rows: OwnerModel[] }> => {
+  const trimmed = search?.trim();
+  const whereClause = trimmed
+    ? {
+        [Op.or]: [
+          { ownerCode: { [Op.iLike]: `%${trimmed.replace(/[%_\\]/g, "\\$&")}%` } },
+          { username: { [Op.iLike]: `%${trimmed.replace(/[%_\\]/g, "\\$&")}%` } },
+        ],
+      }
+    : undefined;
+
+  return OwnerModel.findAndCountAll({
+    attributes: ["id", "ownerCode", "username", "type", "usageInfo"],
+    where: whereClause,
+    order: [["username", "ASC"]],
+    limit,
+    offset,
+  });
+};
+
+/** Single owner (all fields the usage-info editor needs) by primary key. */
+export const findOwnerById = async (
+  id: string,
+): Promise<OwnerModel | null> => {
+  return OwnerModel.findByPk(id, {
+    attributes: [
+      "id",
+      "ownerCode",
+      "username",
+      "type",
+      "subType",
+      "category",
+      "usageInfo",
+    ],
+  });
+};
+
+/**
+ * Overwrite an owner's usageInfo JSONB with the validated blob. Returns the
+ * refreshed row, or null if the owner id doesn't exist.
+ */
+export const updateOwnerUsageInfo = async (
+  id: string,
+  usageInfo: UsageInfoDto,
+): Promise<OwnerModel | null> => {
+  const owner = await OwnerModel.findByPk(id);
+  if (!owner) return null;
+  await owner.update({ usageInfo });
+  return owner;
 };
 
 /**
