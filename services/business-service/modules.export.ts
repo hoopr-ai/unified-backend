@@ -8,6 +8,7 @@ export * from "./licenses/licenses.service";
 export * from "./licenses/licenseType.service";
 export * from "./licenses/videoLinks.service";
 export * from "./occasion/modules.export";
+export * from "./quick-add/modules.export";
 export * from "./album/album.service";
 export * from "./faq/faq.service";
 export * from "./company-lookup/company-lookup.service";

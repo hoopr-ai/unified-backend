@@ -7,6 +7,7 @@ export enum RailType {
   PLAYLISTS = "PLAYLISTS",
   ARTISTS = "ARTISTS",
   OCCASIONS = "OCCASIONS",
+  QUICK_ADDS = "QUICK_ADDS",
 }
 
 export enum RailSourceType {
@@ -24,6 +25,7 @@ export enum RailItemType {
   PLAYLIST = "PLAYLIST",
   ARTIST = "ARTIST",
   OCCASION = "OCCASION",
+  QUICK_ADD = "QUICK_ADD",
 }
 
 export enum PageName {

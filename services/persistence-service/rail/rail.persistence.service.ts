@@ -34,6 +34,23 @@ export const invalidateRailsCache = async (brandId?: number | null, pageName?: s
   }
 };
 
+// Wipe every cached rails page, across all brands.
+//
+// Rail responses embed hydrated item payloads (playlist names, occasion covers,
+// quick-add labels/links...), so editing one of those source records makes every
+// brand's cached page stale — not just the 'default' bucket invalidateRailsCache
+// targets when called without a brandId.
+export const invalidateAllRailsCache = async (): Promise<void> => {
+  try {
+    const keys = await redisClient.keys("rails:*");
+    if (keys.length > 0) {
+      await redisClient.del(...keys);
+    }
+  } catch (err) {
+    console.error('[RailsCache] Error invalidating all rails cache:', err);
+  }
+};
+
 // Returns all rails visible to the given brand: brand-specific rows + defaults.
 // Caller dedupes by key (brand row wins).
 // Optimized: Separate queries for rails and items to avoid slow JOINs
