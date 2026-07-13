@@ -25,16 +25,19 @@ export const ALLOWED_FUNCTIONALITIES = [
   "youtube",
   "app-music-programming",
   "soundtracking",
+  "app-modals",
+  "push-notifications",
+  "banners",
   "faq",
   // Songfest
   "studio-briefs",
+  "studio-dashboard",
   // Marketing (no home-page card; direct-URL route only)
   "marketing",
   "email-campaigns",
   // Admin
   "admin-dashboard",
   "internal-users",
-  "banners",
 ] as const;
 
 export type Functionality = (typeof ALLOWED_FUNCTIONALITIES)[number];
