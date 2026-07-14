@@ -1,9 +1,23 @@
-import { Op } from "sequelize";
+import { Op, literal, type Order } from "sequelize";
 import { sequelize } from "../database";
 import { RailModel, RailDetails } from "./schemas/rail.schema";
 import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
 import { PageName } from "../../dto-service/modules.export";
 import { redisClient } from "../../helper-service/redis.client";
+
+// Banner rails are page furniture rather than content: they render as the hero
+// carousel at the very top, so they outrank every other rail regardless of the
+// `order` an admin gave them.
+//
+// This has to be enforced in SQL, not just in the client's sort — rails are
+// paginated (Home fetches 10 at a time), so a banner rail with a high `order`
+// would otherwise land on page 2 and never render at all.
+// `type` is left unqualified deliberately: neither query joins, so there is no
+// ambiguity, and this doesn't depend on how Sequelize aliases the main table.
+const RAIL_DISPLAY_ORDER: Order = [
+  [literal(`CASE WHEN "type" = 'BANNERS' THEN 0 ELSE 1 END`), "ASC"],
+  ["order", "ASC"],
+];
 
 // Cache TTL in seconds (10 minutes for rails, auto-invalidated on updates)
 const RAILS_CACHE_TTL = 600;
@@ -92,7 +106,7 @@ export const findRailsForBrand = async (
       ...brandClause,
       ...pageClause,
     },
-    order: [["order", "ASC"]],
+    order: RAIL_DISPLAY_ORDER,
     raw: false,
   });
 
@@ -187,7 +201,7 @@ export const findRailsForBrandPaginated = async (
   // Step 2: Fetch rails without items (faster query)
   const rails = await RailModel.findAll({
     where: whereClause,
-    order: [["order", "ASC"]],
+    order: RAIL_DISPLAY_ORDER,
     limit,
     offset,
     raw: false,
