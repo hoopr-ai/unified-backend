@@ -8,6 +8,7 @@ export enum RailType {
   ARTISTS = "ARTISTS",
   OCCASIONS = "OCCASIONS",
   QUICK_ADDS = "QUICK_ADDS",
+  BANNERS = "BANNERS",
 }
 
 export enum RailSourceType {
@@ -26,6 +27,7 @@ export enum RailItemType {
   ARTIST = "ARTIST",
   OCCASION = "OCCASION",
   QUICK_ADD = "QUICK_ADD",
+  BANNER = "BANNER",
 }
 
 export enum PageName {
