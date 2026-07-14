@@ -31,6 +31,7 @@ import { OwnerModel } from "./owner/modules.export";
 import { TokenModel, TokenHistoryModel, TokenAssignedModel, TokenDeductionModel } from "./token/modules.export";
 import { OccasionModel, TrackOccasionMappingModel } from "./occasion/modules.export";
 import { QuickAddModel } from "./quick-add/modules.export";
+import { WebBannerModel } from "./web-banner/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import { FaqModel, FaqSectionModel } from "./faq/modules.export";
 import {
@@ -124,6 +125,7 @@ sequelize.addModels([
   OccasionModel,
   TrackOccasionMappingModel,
   QuickAddModel,
+  WebBannerModel,
   FeaturedTracksModel,
   ChartTrackModel,
   KeywordModel,

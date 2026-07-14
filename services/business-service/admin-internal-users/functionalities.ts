@@ -10,6 +10,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "playlists",
   "occasions",
   "quick-add",
+  "web-banners",
   "music-ingestion",
   "track-pricing",
   "owner-usage-info",

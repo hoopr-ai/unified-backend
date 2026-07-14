@@ -12,6 +12,7 @@ export * from "./owner/modules.export";
 export * from "./token/modules.export";
 export * from "./occasion/modules.export";
 export * from "./quick-add/modules.export";
+export * from "./web-banner/modules.export";
 export * from "./campaign/modules.export";
 export * from "./faq/modules.export";
 export * from "./rail/modules.export";

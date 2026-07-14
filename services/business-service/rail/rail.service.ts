@@ -60,6 +60,7 @@ import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { ArtistModel } from "../../persistence-service/artists/modules.export";
 import { OccasionModel } from "../../persistence-service/occasion/modules.export";
 import { QuickAddModel } from "../../persistence-service/quick-add/modules.export";
+import { WebBannerModel } from "../../persistence-service/web-banner/modules.export";
 import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
 import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
@@ -123,6 +124,7 @@ interface HydrationMaps {
   artists: Map<string, unknown>;
   occasions: Map<string, unknown>;
   quickAdds: Map<string, unknown>;
+  banners: Map<string, unknown>;
 }
 
 const hydrateTracks = async (
@@ -500,6 +502,66 @@ const hydrateQuickAdds = async (
   return out;
 };
 
+// Landscape carousel banners for the storefront. Like quick adds, inactive rows
+// are excluded here so buildRailResponse's null-data filter drops them from the
+// rail without the CMS having to unassign them first.
+const hydrateBanners = async (
+  itemCodes: string[],
+): Promise<Map<string, unknown>> => {
+  const out = new Map<string, unknown>();
+  if (itemCodes.length === 0) return out;
+
+  const numericIds = itemCodes.filter((c) => /^\d+$/.test(c)).map(Number);
+
+  const rows = await WebBannerModel.findAll({
+    where: {
+      isActive: true,
+      [Op.or]: numericIds.length > 0
+        ? [
+            { bannerCode: { [Op.in]: itemCodes } },
+            { id: { [Op.in]: numericIds } },
+          ]
+        : [{ bannerCode: { [Op.in]: itemCodes } }],
+    },
+    attributes: [
+      "id",
+      "bannerCode",
+      "title",
+      "imageLink",
+      "mobileImageLink",
+      "linkPath",
+      "linkParams",
+      "isActive",
+    ],
+  });
+
+  for (const row of rows) {
+    const b = row.toJSON() as unknown as {
+      id: number;
+      bannerCode?: string | null;
+      title: string;
+      imageLink?: string | null;
+      mobileImageLink?: string | null;
+      linkPath?: string | null;
+      linkParams?: Record<string, string> | null;
+      isActive: boolean;
+    };
+    const data = {
+      id: Number(b.id),
+      bannerCode: b.bannerCode || null,
+      title: b.title,
+      imageLink: b.imageLink || null,
+      mobileImageLink: b.mobileImageLink || null,
+      linkPath: b.linkPath || null,
+      linkParams: b.linkParams ?? null,
+      isActive: b.isActive,
+    };
+    if (b.id != null) out.set(String(b.id), data);
+    if (b.bannerCode) out.set(b.bannerCode, data);
+  }
+  return out;
+};
+
 const collectItemCodes = (
   rails: RailModel[],
 ): {
@@ -510,6 +572,7 @@ const collectItemCodes = (
   artistCodes: string[];
   occasionCodes: string[];
   quickAddCodes: string[];
+  bannerCodes: string[];
 } => {
   const tracks = new Set<string>();
   const filters = new Set<string>();
@@ -518,6 +581,7 @@ const collectItemCodes = (
   const artists = new Set<string>();
   const occasions = new Set<string>();
   const quickAdds = new Set<string>();
+  const banners = new Set<string>();
   for (const rail of rails) {
     const items = rail.items ?? [];
     for (const item of items) {
@@ -527,6 +591,7 @@ const collectItemCodes = (
       else if (item.itemType === RailItemType.ARTIST) artists.add(item.itemCode);
       else if (item.itemType === RailItemType.OCCASION) occasions.add(item.itemCode);
       else if (item.itemType === RailItemType.QUICK_ADD) quickAdds.add(item.itemCode);
+      else if (item.itemType === RailItemType.BANNER) banners.add(item.itemCode);
       else filters.add(item.itemCode);
     }
   }
@@ -538,6 +603,7 @@ const collectItemCodes = (
     artistCodes: Array.from(artists),
     occasionCodes: Array.from(occasions),
     quickAddCodes: Array.from(quickAdds),
+    bannerCodes: Array.from(banners),
   };
 };
 
@@ -546,9 +612,11 @@ const buildHydrationMaps = async (
   userId?: number,
   brandId?: number,
 ): Promise<HydrationMaps> => {
-  const { trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes, occasionCodes, quickAddCodes } =
-    collectItemCodes(rails);
-  const [tracks, filters, playlists, labels, artists, occasions, quickAdds] = await Promise.all([
+  const {
+    trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes,
+    occasionCodes, quickAddCodes, bannerCodes,
+  } = collectItemCodes(rails);
+  const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
     hydrateTracks(trackCodes, userId, brandId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
@@ -556,8 +624,9 @@ const buildHydrationMaps = async (
     hydrateArtists(artistCodes),
     hydrateOccasions(occasionCodes),
     hydrateQuickAdds(quickAddCodes),
+    hydrateBanners(bannerCodes),
   ]);
-  return { tracks, filters, playlists, labels, artists, occasions, quickAdds };
+  return { tracks, filters, playlists, labels, artists, occasions, quickAdds, banners };
 };
 
 const resolveItem = (
@@ -581,6 +650,9 @@ const resolveItem = (
   }
   if (item.itemType === RailItemType.QUICK_ADD) {
     return maps.quickAdds.get(item.itemCode) ?? null;
+  }
+  if (item.itemType === RailItemType.BANNER) {
+    return maps.banners.get(item.itemCode) ?? null;
   }
   return maps.filters.get(item.itemCode) ?? null;
 };
@@ -1012,6 +1084,7 @@ const RAIL_TYPE_TO_ITEM_TYPE: Record<RailType, RailItemType> = {
   [RailType.ARTISTS]: RailItemType.ARTIST,
   [RailType.OCCASIONS]: RailItemType.OCCASION,
   [RailType.QUICK_ADDS]: RailItemType.QUICK_ADD,
+  [RailType.BANNERS]: RailItemType.BANNER,
 };
 
 // Resolve owner IDs from type filter
@@ -2020,6 +2093,7 @@ const buildSeeAllItems = async (
   const artistCodes: string[] = [];
   const occasionCodes: string[] = [];
   const quickAddCodes: string[] = [];
+  const bannerCodes: string[] = [];
   for (const p of itemPairs) {
     if (p.itemType === RailItemType.TRACK) trackCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.PLAYLIST) playlistCodes.push(p.itemCode);
@@ -2027,10 +2101,11 @@ const buildSeeAllItems = async (
     else if (p.itemType === RailItemType.ARTIST) artistCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.OCCASION) occasionCodes.push(p.itemCode);
     else if (p.itemType === RailItemType.QUICK_ADD) quickAddCodes.push(p.itemCode);
+    else if (p.itemType === RailItemType.BANNER) bannerCodes.push(p.itemCode);
     else filterCodes.push(p.itemCode);
   }
 
-  const [tracks, filters, playlists, labels, artists, occasions, quickAdds] = await Promise.all([
+  const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
     hydrateTracks(trackCodes, userId, viewerBrandId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
@@ -2038,8 +2113,11 @@ const buildSeeAllItems = async (
     hydrateArtists(artistCodes),
     hydrateOccasions(occasionCodes),
     hydrateQuickAdds(quickAddCodes),
+    hydrateBanners(bannerCodes),
   ]);
-  const maps: HydrationMaps = { tracks, filters, playlists, labels, artists, occasions, quickAdds };
+  const maps: HydrationMaps = {
+    tracks, filters, playlists, labels, artists, occasions, quickAdds, banners,
+  };
 
   let items: RailItemResponse[] = itemPairs
     .map((p) => {
