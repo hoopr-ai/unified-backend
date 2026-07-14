@@ -98,6 +98,21 @@ const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
   [PageName.APP_SFX]: [],
 };
 
+// Banner rails are the hero carousel at the top of the page, so they outrank
+// every other rail regardless of `order`. This must be applied wherever rails
+// are sorted — notably the "Recommended For You" rail is created with
+// `order = minOrder - 1` specifically to float to the top, so a plain
+// order-ascending sort would put it above the banners.
+//
+// Mirrors RAIL_DISPLAY_ORDER in rail.persistence.service.ts, which enforces the
+// same rule in SQL (it has to: rails are paginated, so a banner rail with a high
+// `order` would otherwise land on a later page and never render).
+const railDisplayRank = (rail: RailModel): number =>
+  rail.type === RailType.BANNERS ? 0 : 1;
+
+const compareRailsForDisplay = (a: RailModel, b: RailModel): number =>
+  railDisplayRank(a) - railDisplayRank(b) || a.order - b.order;
+
 // Keep brand-scoped row when a default with the same key also exists
 const resolveBrandOverrides = (rails: RailModel[]): RailModel[] => {
   const byKey = new Map<string, RailModel>();
@@ -113,7 +128,7 @@ const resolveBrandOverrides = (rails: RailModel[]): RailModel[] => {
       byKey.set(rail.key, rail);
     }
   }
-  return Array.from(byKey.values()).sort((a, b) => a.order - b.order);
+  return Array.from(byKey.values()).sort(compareRailsForDisplay);
 };
 
 interface HydrationMaps {
