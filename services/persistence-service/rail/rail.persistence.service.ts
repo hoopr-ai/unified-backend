@@ -22,22 +22,34 @@ const RAIL_DISPLAY_ORDER: Order = [
 // Cache TTL in seconds (10 minutes for rails, auto-invalidated on updates)
 const RAILS_CACHE_TTL = 600;
 
+// Version prefix for every rails cache key.
+//
+// Cached entries store a *page* of rails — the row set, not just their contents
+// — so a change to the ordering or paging rules makes existing entries wrong,
+// not merely stale: a page-1 entry written under the old order can be missing
+// the banner rail entirely. Bump this whenever RAIL_DISPLAY_ORDER or the paging
+// logic changes; old keys are then simply never read again and age out on their
+// own TTL.
+//
+// v2: banner rails forced to sort ahead of all others.
+const RAILS_CACHE_PREFIX = "rails:v2";
+
 // Build cache key for rails query
 const buildRailsCacheKey = (brandId?: number, pageName?: string, page?: number, limit?: number): string => {
-  return `rails:${brandId ?? 'default'}:${pageName ?? 'all'}:${page ?? 0}:${limit ?? 0}`;
+  return `${RAILS_CACHE_PREFIX}:${brandId ?? 'default'}:${pageName ?? 'all'}:${page ?? 0}:${limit ?? 0}`;
 };
 
 // Invalidate rails cache for a brand/page
 export const invalidateRailsCache = async (brandId?: number | null, pageName?: string): Promise<void> => {
   try {
-    const pattern = `rails:${brandId ?? 'default'}:${pageName ?? '*'}:*`;
+    const pattern = `${RAILS_CACHE_PREFIX}:${brandId ?? 'default'}:${pageName ?? '*'}:*`;
     const keys = await redisClient.keys(pattern);
     if (keys.length > 0) {
       await redisClient.del(...keys);
     }
     // Also invalidate 'all' pages cache
     if (pageName) {
-      const allPattern = `rails:${brandId ?? 'default'}:all:*`;
+      const allPattern = `${RAILS_CACHE_PREFIX}:${brandId ?? 'default'}:all:*`;
       const allKeys = await redisClient.keys(allPattern);
       if (allKeys.length > 0) {
         await redisClient.del(...allKeys);
@@ -56,6 +68,7 @@ export const invalidateRailsCache = async (brandId?: number | null, pageName?: s
 // targets when called without a brandId.
 export const invalidateAllRailsCache = async (): Promise<void> => {
   try {
+    // Deliberately matches every version prefix, not just the current one.
     const keys = await redisClient.keys("rails:*");
     if (keys.length > 0) {
       await redisClient.del(...keys);
