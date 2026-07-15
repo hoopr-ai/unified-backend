@@ -10,7 +10,7 @@ import {
   getOccasionCuratedTracks,
   setOccasionTracks,
 } from "../controllers/occasion.controller";
-import { authenticateWithSession } from "../middlewares/authenticate";
+import { authenticateWithSession, optionalAuthenticate } from "../middlewares/authenticate";
 import { singleImageUpload } from "../middlewares/image-upload";
 import { UserRoles } from "../services/dto-service/modules.export";
 
@@ -30,7 +30,7 @@ router.delete("/:id", adminAuth, deleteOccasion);
 
 // ─── Read-side (public) ───────────────────────────────────────────────────────
 router.get("/", getOccasions);
-router.get("/:occasionId/tracks", getTracksByOccasion);
+router.get("/:occasionId/tracks", optionalAuthenticate, getTracksByOccasion);
 // Single-occasion detail — by numeric id OR occasionCode slug. Declared after
 // the literal/two-segment routes above; distinct segment count from those, so
 // no ordering conflict.
