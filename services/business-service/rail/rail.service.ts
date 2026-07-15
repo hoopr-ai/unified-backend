@@ -2230,7 +2230,11 @@ export const getRailSeeAllService = async (
     return envelope(items, count);
   };
 
-  if (rail.sourceType === RailSourceType.MANUAL || !reExecute) {
+  // MANUAL populate mode means the curated rail_items ARE the content, even for
+  // QUERY/AI_QUERY source rails (mirrors the app fetch, which never re-queries at
+  // read time). Only AUTO rails should re-execute the underlying query here.
+  const isManualMode = (rail.populateMode ?? "MANUAL") !== "AUTO";
+  if (rail.sourceType === RailSourceType.MANUAL || isManualMode || !reExecute) {
     return paginateSnapshot();
   }
 
