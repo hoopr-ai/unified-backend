@@ -38,7 +38,6 @@ import { Platform, UserRoles } from "../services/dto-service/modules.export";
 
 const adminAuth = [
   authenticateWithSession({
-    roles: [UserRoles.ADMIN, UserRoles.MARKETING],
     platforms: [Platform.INTERNAL],
   }),
   requireFunctionality("email-campaigns"),
