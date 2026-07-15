@@ -5,17 +5,26 @@ import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
 import { PageName } from "../../dto-service/modules.export";
 import { redisClient } from "../../helper-service/redis.client";
 
-// Banner rails are page furniture rather than content: they render as the hero
-// carousel at the very top, so they outrank every other rail regardless of the
-// `order` an admin gave them.
+// Rails render in tiers that outrank the plain `order` an admin gave them:
+//   0 — BANNERS: page furniture, the hero carousel at the very top.
+//   1 — pinned rails (sourceConfig.pinnedTop): admin-curated rails that must sit
+//       ABOVE the auto-injected "Recommended For You" rail.
+//   2 — everything else, including "Recommended For You" itself, which is created
+//       with `order = minOrder - 1` so it floats to the top of this tier.
 //
 // This has to be enforced in SQL, not just in the client's sort — rails are
-// paginated (Home fetches 10 at a time), so a banner rail with a high `order`
-// would otherwise land on page 2 and never render at all.
-// `type` is left unqualified deliberately: neither query joins, so there is no
-// ambiguity, and this doesn't depend on how Sequelize aliases the main table.
+// paginated (Home fetches 10 at a time), so a rail with a high `order` would
+// otherwise land on page 2 and never render at all.
+// `type`/`sourceConfig` are left unqualified deliberately: neither query joins,
+// so there is no ambiguity, and this doesn't depend on how Sequelize aliases the
+// main table.
 const RAIL_DISPLAY_ORDER: Order = [
-  [literal(`CASE WHEN "type" = 'BANNERS' THEN 0 ELSE 1 END`), "ASC"],
+  [
+    literal(
+      `CASE WHEN "type" = 'BANNERS' THEN 0 WHEN "sourceConfig"->>'pinnedTop' = 'true' THEN 1 ELSE 2 END`,
+    ),
+    "ASC",
+  ],
   ["order", "ASC"],
 ];
 
@@ -32,7 +41,9 @@ const RAILS_CACHE_TTL = 600;
 // own TTL.
 //
 // v2: banner rails forced to sort ahead of all others.
-const RAILS_CACHE_PREFIX = "rails:v2";
+// v3: pinned rails (sourceConfig.pinnedTop) inserted between banners and the
+//     rest, so they outrank the "Recommended For You" rail.
+const RAILS_CACHE_PREFIX = "rails:v3";
 
 // Build cache key for rails query
 const buildRailsCacheKey = (brandId?: number, pageName?: string, page?: number, limit?: number): string => {

@@ -32,6 +32,9 @@ export interface RailResponse {
   order: number;
   items: RailItemResponse[];
   seeMore?: RailSeeMoreDescriptor | null;
+  // Pinned into display tier 1 (above "Recommended For You"). Surfaced so the CMS
+  // can show/round-trip the flag on edit; mirrors sourceConfig.pinnedTop.
+  pinnedTop?: boolean;
 }
 
 export interface PaginatedRailsResponse {

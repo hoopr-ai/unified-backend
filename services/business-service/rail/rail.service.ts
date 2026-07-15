@@ -98,17 +98,21 @@ const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
   [PageName.APP_SFX]: [],
 };
 
-// Banner rails are the hero carousel at the top of the page, so they outrank
-// every other rail regardless of `order`. This must be applied wherever rails
-// are sorted — notably the "Recommended For You" rail is created with
-// `order = minOrder - 1` specifically to float to the top, so a plain
-// order-ascending sort would put it above the banners.
+// Rails sort in tiers that outrank the plain `order`:
+//   0 — BANNERS: the hero carousel at the very top.
+//   1 — pinned rails (sourceConfig.pinnedTop): admin-curated rails that must sit
+//       ABOVE the auto-injected "Recommended For You" rail.
+//   2 — everything else, including "Recommended For You" itself, which is created
+//       with `order = minOrder - 1` so it floats to the top of this tier.
 //
 // Mirrors RAIL_DISPLAY_ORDER in rail.persistence.service.ts, which enforces the
-// same rule in SQL (it has to: rails are paginated, so a banner rail with a high
-// `order` would otherwise land on a later page and never render).
-const railDisplayRank = (rail: RailModel): number =>
-  rail.type === RailType.BANNERS ? 0 : 1;
+// same rule in SQL (it has to: rails are paginated, so a high-`order` rail would
+// otherwise land on a later page and never render).
+const railDisplayRank = (rail: RailModel): number => {
+  if (rail.type === RailType.BANNERS) return 0;
+  if (rail.sourceConfig?.pinnedTop === true) return 1;
+  return 2;
+};
 
 const compareRailsForDisplay = (a: RailModel, b: RailModel): number =>
   railDisplayRank(a) - railDisplayRank(b) || a.order - b.order;
@@ -681,6 +685,9 @@ const extractSeeMore = (
   return seeMore ?? null;
 };
 
+const extractPinnedTop = (rail: RailModel): boolean =>
+  rail.sourceConfig?.pinnedTop === true;
+
 // Get owner type from hydrated item data
 const getOwnerTypeFromItemData = (itemType: string, data: unknown): string | null => {
   if (!data || typeof data !== "object") return null;
@@ -762,6 +769,7 @@ const buildRailResponse = (
     order: rail.order,
     items,
     seeMore: extractSeeMore(rail),
+    pinnedTop: extractPinnedTop(rail),
   };
 };
 
@@ -1029,6 +1037,9 @@ export interface UpsertRailRequest {
   order?: number;
   isVisible?: boolean;
   limit?: number;
+  // Pins this rail into display tier 1, above the auto-injected "Recommended For
+  // You" rail (which lives in tier 2). Persisted as sourceConfig.pinnedTop.
+  pinnedTop?: boolean;
   seeMore?: RailSeeMoreDescriptor | null;
   // MANUAL: caller-supplied items (tracks/filters/playlists)
   itemCodes?: string[];
@@ -1677,6 +1688,7 @@ export const upsertRailService = async (
 
   // Build sourceConfig once
   const sourceConfig: Record<string, unknown> = {};
+  if (req.pinnedTop) sourceConfig.pinnedTop = true;
   if (req.seeMore) sourceConfig.seeMore = req.seeMore;
   if (req.query) sourceConfig.query = req.query;
   if (req.aiQuery) {
