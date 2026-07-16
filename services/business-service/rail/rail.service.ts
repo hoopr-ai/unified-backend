@@ -756,6 +756,21 @@ const buildRailResponse = (
     items = items.slice(0, itemLimit);
   }
 
+  // CMS round-trip fields — mirrors the pinnedTop pattern: the internal Rails
+  // CMS re-opens rails in its edit wizard and needs the original source
+  // configuration back, not just the hydrated display items. Public clients
+  // ignore these extra keys.
+  const cfg = (rail.sourceConfig ?? {}) as {
+    query?: RailSourceConfigQuery;
+    aiQuery?: RailSourceConfigAiQuery;
+  };
+  // Strip headers from the echoed aiQuery — the write path already omits them,
+  // but rails persisted before that guard may still carry secrets.
+  const cmsAiQuery =
+    rail.sourceType === RailSourceType.AI_QUERY && cfg.aiQuery
+      ? (({ headers: _headers, ...rest }) => rest)(cfg.aiQuery)
+      : undefined;
+
   return {
     id: rail.id,
     key: rail.key,
@@ -770,6 +785,25 @@ const buildRailResponse = (
     items,
     seeMore: extractSeeMore(rail),
     pinnedTop: extractPinnedTop(rail),
+    brandId: rail.brandId ?? null,
+    isVisible: rail.isVisible,
+    pageNames: rail.pageName ? [rail.pageName] : [],
+    ...(rail.sourceType === RailSourceType.MANUAL
+      ? {
+          // Raw curated codes, from rail_items directly — the hydrated `items`
+          // list above drops entries whose lookup failed or that the page's
+          // owner-type rules hide, and an edit round-trip through that filtered
+          // view would silently shrink the admin's saved list.
+          itemCodes: (rail.items ?? [])
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map((item) => item.itemCode),
+        }
+      : {}),
+    ...(rail.sourceType === RailSourceType.QUERY && cfg.query
+      ? { query: cfg.query as Record<string, unknown> }
+      : {}),
+    ...(cmsAiQuery ? { aiQuery: cmsAiQuery as Record<string, unknown> } : {}),
   };
 };
 
