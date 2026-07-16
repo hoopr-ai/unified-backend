@@ -1164,6 +1164,26 @@ const intersectOwnerIds = (
   return a.filter((id) => setB.has(id));
 };
 
+// Resolve the movie/album-type filter into a track-id restriction that any query
+// path can apply. `movie` is independent of the other toggles (the CMS surfaces
+// it as its own "Movie tracks only / Exclude movie tracks" control), so it must
+// be honoured on its own and must compose with a filterIds/genre selection.
+//   - undefined  → no constraint
+//   - true       → only movie tracks; "EMPTY" when there are none (nothing matches)
+//   - false      → exclude movie tracks
+type MovieConstraint = { includeTrackIds?: string[]; excludeTrackIds?: string[] };
+const resolveMovieConstraint = async (
+  movie: boolean | undefined,
+): Promise<MovieConstraint | "EMPTY" | null> => {
+  if (movie === undefined) return null;
+  const movieTrackIds = await findTrackIdsByAlbumType("movie");
+  if (movie === true) {
+    return movieTrackIds.length === 0 ? "EMPTY" : { includeTrackIds: movieTrackIds };
+  }
+  // movie === false: only meaningful when there are movie tracks to exclude
+  return movieTrackIds.length > 0 ? { excludeTrackIds: movieTrackIds } : {};
+};
+
 // QUERY path: use findAllTracks with all query parameters or findTracksByFilter
 const resolveQueryTracks = async (
   req: UpsertRailRequest,
@@ -1207,6 +1227,15 @@ const resolveQueryTracks = async (
       : query.excludeOwnerIds;
   }
 
+  // The movie/album-type filter is INDEPENDENT of `popular` — the CMS exposes it
+  // as its own "Movie tracks only / Exclude" control, so it must be honoured
+  // whenever set, and it must also layer onto the filterIds path. Resolve it once
+  // and hand it to whichever query path runs below. (Previously it lived inside
+  // the `popular` block, so a "movie only" rail with no `popular` toggle silently
+  // matched every track — indie songs leaked into movie-only rails.)
+  const movieConstraint = await resolveMovieConstraint(query.movie);
+  if (movieConstraint === "EMPTY") return [];
+
   // If filterIds are provided, use findTracksByFilter
   if (hasFilterIds) {
     const result = await findTracksByFilter({
@@ -1216,6 +1245,8 @@ const resolveQueryTracks = async (
       ownerIds: query.ownerIds,
       excludeOwnerIds,
       excludeTiers: query.excludeTiers,
+      includeTrackIds: movieConstraint?.includeTrackIds,
+      excludeTrackIds: movieConstraint?.excludeTrackIds,
     });
 
     const codes: string[] = [];
@@ -1240,17 +1271,12 @@ const resolveQueryTracks = async (
         { jioSaavanStream: { [Op.gt]: "0" } },
         { jioSaavanStream: null },
       ];
+    }
 
-      // Filter by album type based on movie parameter
-      const movieTrackIds = await findTrackIdsByAlbumType("movie");
-      if (query.movie === true) {
-        if (movieTrackIds.length === 0) return [];
-        whereClause.id = { [Op.in]: movieTrackIds };
-      } else if (query.movie === false) {
-        if (movieTrackIds.length > 0) {
-          whereClause.id = { [Op.notIn]: movieTrackIds };
-        }
-      }
+    if (movieConstraint?.includeTrackIds) {
+      whereClause.id = { [Op.in]: movieConstraint.includeTrackIds };
+    } else if (movieConstraint?.excludeTrackIds) {
+      whereClause.id = { [Op.notIn]: movieConstraint.excludeTrackIds };
     }
 
     if (query.newOnHoopr === true) {
@@ -2021,6 +2047,12 @@ const resolveQueryTracksPaginated = async (
       : query.excludeOwnerIds;
   }
 
+  // Movie is an independent album-type filter (see resolveQueryTracks): apply it
+  // regardless of `popular` and on the filterIds path too, so the See-All re-run
+  // matches the same set the snapshot was built from.
+  const movieConstraint = await resolveMovieConstraint(query.movie);
+  if (movieConstraint === "EMPTY") return { codes: [], total: 0 };
+
   if (hasFilterIds) {
     const result = await findTracksByFilter({
       filterIds: query.filterIds!,
@@ -2029,6 +2061,8 @@ const resolveQueryTracksPaginated = async (
       ownerIds: query.ownerIds,
       excludeOwnerIds,
       excludeTiers: query.excludeTiers,
+      includeTrackIds: movieConstraint?.includeTrackIds,
+      excludeTrackIds: movieConstraint?.excludeTrackIds,
     });
     const codes: string[] = [];
     for (const row of result.rows ?? []) {
@@ -2050,15 +2084,11 @@ const resolveQueryTracksPaginated = async (
         { jioSaavanStream: { [Op.gt]: "0" } },
         { jioSaavanStream: null },
       ];
-      const movieTrackIds = await findTrackIdsByAlbumType("movie");
-      if (query.movie === true) {
-        if (movieTrackIds.length === 0) return { codes: [], total: 0 };
-        whereClause.id = { [Op.in]: movieTrackIds };
-      } else if (query.movie === false) {
-        if (movieTrackIds.length > 0) {
-          whereClause.id = { [Op.notIn]: movieTrackIds };
-        }
-      }
+    }
+    if (movieConstraint?.includeTrackIds) {
+      whereClause.id = { [Op.in]: movieConstraint.includeTrackIds };
+    } else if (movieConstraint?.excludeTrackIds) {
+      whereClause.id = { [Op.notIn]: movieConstraint.excludeTrackIds };
     }
     if (query.newOnHoopr === true) {
       const oneWeekAgo = new Date();

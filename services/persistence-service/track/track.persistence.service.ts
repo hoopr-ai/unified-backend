@@ -437,6 +437,11 @@ export interface GetTracksByFilterParams {
   ownerIds?: string[];
   excludeOwnerIds?: string[];
   excludeTiers?: string[];
+  // Restrict the matched tracks to / away from a set of track ids. Used to layer
+  // the movie album-type filter on top of a genre/filter selection (e.g. the
+  // "Bollywood Hits" rail = genre-bollywood filter AND movie tracks only).
+  includeTrackIds?: string[];
+  excludeTrackIds?: string[];
 }
 
 export interface RawFilterMappingResult {
@@ -514,7 +519,7 @@ export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {
 
-  const { filterIds, page, limit, ownerIds, excludeOwnerIds, excludeTiers } = params;
+  const { filterIds, page, limit, ownerIds, excludeOwnerIds, excludeTiers, includeTrackIds, excludeTrackIds } = params;
   const offset = (page - 1) * limit;
 
   const conditions: any[] = [];
@@ -553,6 +558,12 @@ export const findTracksByFilter = async (
   const trackWhere: any = {
     status: "ACTIVE"
   };
+
+  if (Array.isArray(includeTrackIds) && includeTrackIds.length) {
+    trackWhere.id = { [Op.in]: includeTrackIds };
+  } else if (Array.isArray(excludeTrackIds) && excludeTrackIds.length) {
+    trackWhere.id = { [Op.notIn]: excludeTrackIds };
+  }
 
   if (conditions.length) {
     trackWhere[Op.and] = conditions;
