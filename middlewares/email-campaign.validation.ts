@@ -23,7 +23,7 @@ const MAX_RATE_PER_SEC = 13;
 const tuningFields = {
   dailyQuota: Joi.number().integer().min(1).max(MAX_DAILY_QUOTA).optional(),
   ratePerSec: Joi.number().integer().min(1).max(MAX_RATE_PER_SEC).optional(),
-  batchSize: Joi.number().integer().min(1).max(5000).optional(),
+  batchSize: Joi.number().integer().min(1).max(50000).optional(),
   maxAttempts: Joi.number().integer().min(1).max(5).optional(),
 };
 
