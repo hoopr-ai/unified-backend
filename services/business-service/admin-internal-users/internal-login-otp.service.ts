@@ -188,12 +188,16 @@ export const verifyInternalLoginOtpService = async (
   await redisClient.del(KEY_RESEND(email));
 
   const { role, functionalities } = await findUserRoleWithRestrictions(user.id!);
+  // The grant list rides in the token too (not just the response body):
+  // INTERNAL CMS backends (Content-Recommendation's
+  // require_admin_or_functionality) authorise non-admins from this claim.
   const token = createJWTToken(
     {
       userId: user.id,
       email: user.email,
       platform: user.platform,
       role,
+      functionalities,
     },
     AccessTokenExpiry
   );
