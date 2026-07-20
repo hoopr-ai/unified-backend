@@ -51,14 +51,14 @@ export class UserSessionModel extends Model<UserSessionModel, UserSessionDetails
 
   @Index({ name: "idx_session_token", unique: true })
   @Column({
-    type: DataType.STRING(500),
+    type: DataType.TEXT,
     allowNull: false,
   })
   sessionToken!: string;
 
   @Index({ name: "idx_session_refresh_token", unique: true })
   @Column({
-    type: DataType.STRING(500),
+    type: DataType.TEXT,
     allowNull: true,
   })
   refreshToken?: string;
