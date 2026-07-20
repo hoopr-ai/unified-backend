@@ -530,8 +530,10 @@ export const completeProfileService = async (
     throw error;
   }
 
-  // If a brand name is provided, create or update org + brand and link to user
-  if (brandName) {
+  // If a brand name is provided by a self-signed-up user (no brand yet),
+  // create an organization + brand and link them. Invited users already
+  // belong to a brand — leave the brand and its organization untouched.
+  if (brandName && !user.brandId) {
     const normalizedName = brandName.toLowerCase().trim();
     const now = new Date();
     const org = await saveOrganization({
@@ -541,23 +543,14 @@ export const completeProfileService = async (
       createdAt: now,
     });
 
-    if (user.brandId) {
-      // Invited user — update the existing brand's name and org
-      await updateBrand(user.brandId, {
-        name: normalizedName,
-        organizationId: (org as any).id,
-      });
-    } else {
-      // New self-signed-up user — create a brand and link it
-      const brand = await saveBrand({
-        name: normalizedName,
-        organizationId: (org as any).id,
-        status: BrandStatus.ACTIVE,
-        createdBy: userId,
-        createdAt: now,
-      });
-      await updateUserBrandId(userId, (brand as any).id);
-    }
+    const brand = await saveBrand({
+      name: normalizedName,
+      organizationId: (org as any).id,
+      status: BrandStatus.ACTIVE,
+      createdBy: userId,
+      createdAt: now,
+    });
+    await updateUserBrandId(userId, (brand as any).id);
   }
 
   // Notify existing team members that someone has joined
