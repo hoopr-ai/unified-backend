@@ -26,6 +26,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   "pay-per-track-dashboard",
   "youtube",
   "app-music-programming",
+  "create-and-earn",
   "soundtracking",
   "app-modals",
   "push-notifications",
