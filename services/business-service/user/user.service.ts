@@ -25,6 +25,7 @@ import {
   findUserByEmailAndPlatform,
   reactivateUser,
   findUserRole,
+  findUserRoleWithRestrictions,
   saveUser,
   saveUserRole,
   updateUserPassword,
@@ -140,8 +141,22 @@ export const userLoginService = async (
   const user = await findActiveUser(email, platform);
   await comparePasswordsEncrypted(password, user.password);
   const role = await findUserRole(user.id!);
+  // INTERNAL CMS backends (e.g. Content-Recommendation's
+  // require_admin_or_functionality) authorise non-admins from a
+  // `functionalities` claim in the access token, so INTERNAL tokens must carry
+  // the grant list. Other platforms have no grants — keep their tokens lean.
+  const functionalities =
+    user.platform === Platform.INTERNAL
+      ? (await findUserRoleWithRestrictions(user.id!)).functionalities
+      : undefined;
   const token = createJWTToken(
-    { userId: user.id, email: user.email, platform: user.platform, role },
+    {
+      userId: user.id,
+      email: user.email,
+      platform: user.platform,
+      role,
+      ...(functionalities !== undefined ? { functionalities } : {}),
+    },
     AccessTokenExpiry,
   );
 
@@ -284,9 +299,25 @@ export const refreshTokenService = async (
   }
 
   const role = await findUserRole(session.userId);
+  // Same INTERNAL-only `functionalities` claim as login — a refreshed token
+  // must keep (and re-read) the grant list or CMS access would silently drop
+  // after the first refresh. Re-reading also picks up grant changes without a
+  // re-login.
+  const refreshedFunctionalities =
+    user.platform === Platform.INTERNAL
+      ? (await findUserRoleWithRestrictions(session.userId)).functionalities
+      : undefined;
 
   const newAccessToken = createJWTToken(
-    { userId: user.id, email: user.email, platform: user.platform, role },
+    {
+      userId: user.id,
+      email: user.email,
+      platform: user.platform,
+      role,
+      ...(refreshedFunctionalities !== undefined
+        ? { functionalities: refreshedFunctionalities }
+        : {}),
+    },
     AccessTokenExpiry,
   );
 

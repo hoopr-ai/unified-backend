@@ -41,6 +41,7 @@ export interface OwnerDetails {
   licenseStart?: Date;
   licenseEnd?: Date;
   isActive?: boolean;
+  isParent?: boolean;
   IPRS?: number;
   remarks?: string;
   metadata?: object;
@@ -134,6 +135,13 @@ export class OwnerModel extends Model<OwnerModel, OwnerDetails> {
     allowNull: true,
   })
   isActive?: boolean;
+
+  @Default(false)
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+  })
+  isParent!: boolean;
 
   @Default(0)
   @Column({
