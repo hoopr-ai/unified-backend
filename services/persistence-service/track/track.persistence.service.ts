@@ -515,6 +515,60 @@ export const findTrackByTrackCode = async (
   return track ? (track.toJSON() as RawTrackWithMappings) : null;
 };
 
+// Filter results are interleaved by owner type so every assortment is
+// represented at the top of the list instead of one type dominating.
+// Chartbusters leads each cycle and gets an extra slot per cycle to stay
+// promoted; unlisted owner types fall in after the ranked ones.
+const OWNER_TYPE_CYCLE = [
+  "chartbusters",
+  "international",
+  "regional&indie",
+  "hooproriginals",
+];
+const OWNER_TYPE_SLOTS_PER_CYCLE: Record<string, number> = {
+  chartbusters: 2,
+};
+
+const normalizeOwnerType = (value: string): string =>
+  value.trim().replace(/[\s_]+/g, "").toLowerCase();
+
+const interleaveTrackIdsByOwnerType = (
+  tracks: { id: string; ownerId: string[] }[],
+  ownerTypeById: Map<string, string>,
+): string[] => {
+  const groups = new Map<string, string[]>();
+  for (const track of tracks) {
+    const ownerType = track.ownerId
+      .map((oid) => ownerTypeById.get(oid))
+      .find((t): t is string => !!t);
+    const key = ownerType ? normalizeOwnerType(ownerType) : "other";
+    const group = groups.get(key);
+    if (group) group.push(track.id);
+    else groups.set(key, [track.id]);
+  }
+
+  const cycle = [
+    ...OWNER_TYPE_CYCLE,
+    ...[...groups.keys()].filter((k) => !OWNER_TYPE_CYCLE.includes(k)),
+  ];
+
+  const cursors = new Map<string, number>();
+  const result: string[] = [];
+  while (result.length < tracks.length) {
+    for (const type of cycle) {
+      const group = groups.get(type);
+      if (!group) continue;
+      const slots = OWNER_TYPE_SLOTS_PER_CYCLE[type] ?? 1;
+      let cursor = cursors.get(type) ?? 0;
+      for (let i = 0; i < slots && cursor < group.length; i++) {
+        result.push(group[cursor++]);
+      }
+      cursors.set(type, cursor);
+    }
+  }
+  return result;
+};
+
 export const findTracksByFilter = async (
   params: GetTracksByFilterParams,
 ): Promise<PaginatedRawFilterTracks> => {
@@ -569,75 +623,92 @@ export const findTracksByFilter = async (
     trackWhere[Op.and] = conditions;
   }
 
-  const now = new Date();
-  const { count, rows: mappings } =
-    await TrackFilterMappingModel.findAndCountAll({
-      where: {
-        filterId: { [Op.in]: filterIds }
+  // Step 1: fetch every matching (trackId, ownerId) pair without the heavy
+  // joins, deterministically ordered so pagination stays stable across
+  // requests.
+  const lightweightMappings = await TrackFilterMappingModel.findAll({
+    where: {
+      filterId: { [Op.in]: filterIds }
+    },
+    attributes: ["trackId"],
+    include: [
+      {
+        model: TrackModel,
+        as: "track",
+        where: trackWhere,
+        required: true,
+        attributes: ["id", "ownerId", "createdAt"],
       },
-      limit,
-      offset,
-      distinct: true,
-      col: "id",
-      include: [
-        {
-          model: TrackModel,
-          as: "track",
-          where: trackWhere,
-          required: true,
-          include: [
-            {
-              model: TrackArtistMappingModel,
-              as: "trackArtistMappings",
-              required: false,
-              include: [
-                {
-                  model: ArtistModel,
-                  as: "artist",
-                  attributes: ["id", "name", "type"],
-                  required: false,
-                },
-              ],
-            },
-            {
-              model: SkuModel,
-              as: "skus",
-              required: false,
-              attributes: ["id", "costPrice", "sellingPrice"],
-            },
-            {
-              model: CampaignModel,
-              as: "campaign",
-              required: false,
-              attributes: ["amount", "amountType", "currentUsage", "totalUsage", "validFrom", "validTill"],
-              where: {
-                status: CampaignStatus.ACTIVE,
-                validFrom: { [Op.lte]: now },
-                validTill: { [Op.gte]: now },
-              },
-            },
-          ],
-        },
-      ],
-    });
+    ],
+    order: [
+      [{ model: TrackModel, as: "track" }, "createdAt", "DESC"],
+      [{ model: TrackModel, as: "track" }, "id", "ASC"],
+    ],
+  });
 
-  // Debug: Log hookTimings for first few tracks in filter query
-  if (mappings.length > 0) {
-    mappings.slice(0, 3).forEach((mapping, idx) => {
-      if (mapping.track) {
-        const rawVal = mapping.track.getDataValue("hookTimings");
-        const jsonVal = mapping.track.toJSON();
-        console.log(`[DEBUG findTracksByFilter] Track ${idx} (${mapping.track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
-      }
+  // Dedupe tracks mapped to more than one of the requested filters
+  const seenTrackIds = new Set<string>();
+  const candidateTracks: { id: string; ownerId: string[] }[] = [];
+  for (const mapping of lightweightMappings) {
+    const track = mapping.track;
+    if (!track || seenTrackIds.has(track.id)) continue;
+    seenTrackIds.add(track.id);
+    candidateTracks.push({ id: track.id, ownerId: track.ownerId || [] });
+  }
+
+  // Step 2: resolve owner types and interleave so every owner type is
+  // represented at the top of the list, Chartbusters first.
+  const distinctOwnerIds = [
+    ...new Set(candidateTracks.flatMap((t) => t.ownerId)),
+  ];
+  const ownerTypeById = new Map<string, string>();
+  if (distinctOwnerIds.length > 0) {
+    const owners = await OwnerModel.findAll({
+      where: { id: { [Op.in]: distinctOwnerIds } },
+      attributes: ["id", "type"],
+    });
+    owners.forEach((owner) => {
+      if (owner.type) ownerTypeById.set(owner.id, owner.type);
     });
   }
 
+  const orderedTrackIds = interleaveTrackIdsByOwnerType(
+    candidateTracks,
+    ownerTypeById,
+  );
+  const count = orderedTrackIds.length;
+  const pageTrackIds = orderedTrackIds.slice(offset, offset + limit);
+
+  if (pageTrackIds.length === 0) {
+    return { rows: [], count, page, limit };
+  }
+
+  // Step 3: fetch full track data for just this page and restore the
+  // interleaved order.
+  const pageTracks = await TrackModel.findAll({
+    where: { id: { [Op.in]: pageTrackIds } },
+    include: [
+      ...getArtistInclude(),
+      ...getStandardSkuInclude(),
+      ...getActiveCampaignInclude(),
+    ],
+  });
+  const trackById = new Map(pageTracks.map((t) => [t.id, t]));
+  const orderedPageTracks = pageTrackIds
+    .map((id) => trackById.get(id))
+    .filter((t): t is TrackModel => !!t);
+
+  // Debug: Log hookTimings for first few tracks in filter query
+  orderedPageTracks.slice(0, 3).forEach((track, idx) => {
+    const rawVal = track.getDataValue("hookTimings");
+    const jsonVal = track.toJSON();
+    console.log(`[DEBUG findTracksByFilter] Track ${idx} (${track.trackCode}): rawHookTimings=`, rawVal, `toJSON.hookTimings=`, (jsonVal as any).hookTimings);
+  });
+
   return {
-    rows: mappings.map((mapping) => ({
-      trackId: mapping.trackId,
-      track: mapping.track
-        ? (mapping.track.toJSON() as RawTrackWithMappings)
-        : null,
+    rows: orderedPageTracks.map((track) => ({
+      trackId: track.id,
+      track: track.toJSON() as RawTrackWithMappings,
     })),
     count,
     page,
