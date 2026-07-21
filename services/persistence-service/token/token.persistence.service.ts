@@ -6,7 +6,7 @@ import { UserModel } from "../user/schemas/user.schema";
 import { sequelize } from "../database";
 import { fn, col, literal, Op } from "sequelize";
 import { DealType } from "../../dto-service/modules.export";
-import { INTERNAL_BRAND_NAMES } from "../../helper-service/internal-brands.helper";
+import { INTERNAL_BRAND_IDS } from "../../helper-service/internal-brands.helper";
 
 export { TokenDeductionReason };
 
@@ -780,7 +780,7 @@ export const getAllTokensWithFilters = async (
         attributes: ["id", "name"],
         required: excludeInternal,
         where: excludeInternal
-          ? { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } }
+          ? { id: { [Op.notIn]: INTERNAL_BRAND_IDS as number[] } }
           : undefined,
       },
     ],
@@ -802,9 +802,9 @@ export const getTokenSummaryAggregatedByType = async (
   // Unlimited rows contribute 0 to the sums; hasUnlimited surfaces them via BOOL_OR
   // so the FE can render "Unlimited" instead of misreading the finite-only totals.
   //
-  // When excludeInternalBrands is on, we join brands and drop any row whose brand
-  // name matches the internal-brand list (Hoopr / Nova Media Co.) so internal
-  // allocations don't inflate the public-facing type totals.
+  // When excludeInternalBrands is on, we join brands and drop any row whose
+  // brand ID is in the internal-brand list so internal allocations don't
+  // inflate the public-facing type totals.
   const excludeInternal = options.excludeInternalBrands ?? true;
 
   const include = excludeInternal
@@ -814,7 +814,7 @@ export const getTokenSummaryAggregatedByType = async (
           as: "brand",
           attributes: [] as string[],
           required: true,
-          where: { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } },
+          where: { id: { [Op.notIn]: INTERNAL_BRAND_IDS as number[] } },
         },
       ]
     : undefined;
@@ -864,7 +864,7 @@ export const getBrandsWithTokens = async (
         attributes: ["name"],
         required: excludeInternal,
         where: excludeInternal
-          ? { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } }
+          ? { id: { [Op.notIn]: INTERNAL_BRAND_IDS as number[] } }
           : undefined,
       },
     ],
@@ -921,7 +921,7 @@ export const getAllDeductionsWithFilters = async (
             attributes: ["id", "name"],
             required: excludeInternal,
             where: excludeInternal
-              ? { name: { [Op.notIn]: INTERNAL_BRAND_NAMES as string[] } }
+              ? { id: { [Op.notIn]: INTERNAL_BRAND_IDS as number[] } }
               : undefined,
           },
         ],
