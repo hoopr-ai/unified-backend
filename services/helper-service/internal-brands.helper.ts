@@ -7,6 +7,7 @@
 // Note: "Nova Media Co." has no row in the brands table today — if one is
 // created, add its ID here.
 export const INTERNAL_BRAND_IDS: readonly number[] = Object.freeze([
+  46,
   20,
   24, // hoopr (primary internal account)
   179, // hoopr (duplicate account)
