@@ -1,53 +1,10 @@
-// Canonical catalog of INTERNAL CMS functionalities.
+// INTERNAL CMS functionality helpers.
 //
-// Each id maps ~1:1 to a CMS item (card + route) in internal-fe. A non-admin
-// user is granted a subset of these; ADMIN sees everything regardless of the
-// list. Keep this list in sync with internal-fe's src/services/functionalities.ts.
-
-export const ALLOWED_FUNCTIONALITIES = [
-  // Music
-  "rails",
-  "playlists",
-  "occasions",
-  "quick-add",
-  "web-banners",
-  "music-ingestion",
-  "track-pricing",
-  "owner-usage-info",
-  // Sales
-  "sales-crm",
-  "client-credentials",
-  "tokens",
-  "sales-tool",
-  "video-links",
-  "sage",
-  "sftp-manager",
-  "hoopr-b2c-dashboard",
-  "pay-per-track-dashboard",
-  "youtube",
-  "app-music-programming",
-  "create-and-earn",
-  "soundtracking",
-  "app-modals",
-  "push-notifications",
-  "banners",
-  "faq",
-  // Songfest
-  "studio-briefs",
-  "studio-dashboard",
-  // Marketing (no home-page card; direct-URL route only)
-  "marketing",
-  "email-campaigns",
-  "utm-builder",
-  // Admin
-  "admin-dashboard",
-  "internal-users",
-] as const;
-
-export type Functionality = (typeof ALLOWED_FUNCTIONALITIES)[number];
-
-export const isAllowedFunctionality = (v: string): v is Functionality =>
-  (ALLOWED_FUNCTIONALITIES as readonly string[]).includes(v);
+// The catalog of functionality ids lives in internal-fe
+// (src/services/functionalities.ts) and is the single source of truth. The
+// backend no longer validates grant ids against a fixed list — whatever the
+// grant UI sends is stored as-is (each CMS endpoint enforces its own
+// server-side authorization, so an unknown id unlocks nothing).
 
 // Safely pull the functionality list out of the `restrictions` JSONB, which is
 // a union (the new { functionalities } object, the legacy entry array, or null).

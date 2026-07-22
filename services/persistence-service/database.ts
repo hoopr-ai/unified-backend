@@ -10,6 +10,7 @@ import {
   UserProfileModel,
   UserAddressModel,
   UserEntityDetailsModel,
+  AccessRequestModel,
 } from "./user/modules.export";
 import { TrackModel, FeaturedTracksModel, ChartTrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
@@ -105,6 +106,7 @@ sequelize.addModels([
   UserProfileModel,
   UserAddressModel,
   UserEntityDetailsModel,
+  AccessRequestModel,
   TrackModel,
   AlbumModel,
   FilterModel,
