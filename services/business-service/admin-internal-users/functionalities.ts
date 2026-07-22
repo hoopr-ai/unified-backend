@@ -38,6 +38,7 @@ export const ALLOWED_FUNCTIONALITIES = [
   // Marketing (no home-page card; direct-URL route only)
   "marketing",
   "email-campaigns",
+  "utm-builder",
   // Admin
   "admin-dashboard",
   "internal-users",
