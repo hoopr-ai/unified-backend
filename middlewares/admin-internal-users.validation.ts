@@ -1,12 +1,14 @@
 import Joi from "joi";
-import { ALLOWED_FUNCTIONALITIES } from "../services/business-service/admin-internal-users/functionalities";
 
 const ALLOWED_ROLES = ["admin", "sales", "marketing", "music", "songfest"];
 
 // Per-user functionality grant. Optional on create (defaults to []); for an
 // admin role the FE may omit it entirely (admins get everything by role).
+// Ids are NOT checked against a fixed catalog — internal-fe owns the catalog and
+// whatever it sends is accepted (each CMS endpoint enforces its own auth, so an
+// unknown id unlocks nothing). We only require non-empty, de-duplicated strings.
 const functionalitiesField = Joi.array()
-  .items(Joi.string().valid(...ALLOWED_FUNCTIONALITIES))
+  .items(Joi.string().trim().min(1))
   .unique();
 
 // Loose mobile validator — accepts E.164-ish (+ optional, then 8-15 digits).

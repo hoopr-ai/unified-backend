@@ -21,7 +21,7 @@ import {
   type UserDetails,
   type UserRoleDetails,
 } from "../../persistence-service/user/modules.export";
-import { isAllowedFunctionality, extractFunctionalities } from "./functionalities";
+import { extractFunctionalities } from "./functionalities";
 import { generateInternalUserPassword } from "./password.helper";
 import { sendInternalUserWelcomeEmail } from "./email.helper";
 import { recordInternalUserAudit } from "./audit.helper";
@@ -392,12 +392,10 @@ export const updateInternalUserFunctionalitiesService = async (
     throw new AppError("Internal user not found.", 404);
   }
 
-  // Defence-in-depth beyond Joi: never trust the list past the catalog.
-  const invalid = functionalities.filter((f) => !isAllowedFunctionality(f));
-  if (invalid.length > 0) {
-    throw new AppError(`Unknown functionalities: ${invalid.join(", ")}`, 400);
-  }
-
+  // Functionality ids are not validated against a fixed catalog — whatever the
+  // internal-fe grant UI sends is accepted and stored. The FE is the source of
+  // truth for the catalog; each CMS endpoint still enforces its own server-side
+  // authorization, so an unknown id simply unlocks nothing.
   const dbRole = await findUserRole(targetUserId);
   if (dbRole === UserRoles.ADMIN) {
     throw new AppError(
