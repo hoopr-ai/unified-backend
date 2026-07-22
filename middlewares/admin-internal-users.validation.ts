@@ -40,6 +40,28 @@ export const updateInternalUserFunctionalitiesSchema = Joi.object({
   functionalities: functionalitiesField.required(),
 }).unknown(false);
 
+// POST /admin/internal-users/access-requests — a non-admin asks for access.
+// functionalities ids are NOT checked against a catalog (FE owns it); we only
+// require non-empty strings + at least one admin to ask.
+export const createAccessRequestSchema = Joi.object({
+  functionalities: Joi.array()
+    .items(Joi.string().trim().min(1))
+    .min(1)
+    .unique()
+    .required(),
+  adminIds: Joi.array()
+    .items(Joi.number().integer().positive())
+    .min(1)
+    .unique()
+    .required(),
+  note: Joi.string().trim().max(1000).allow("", null).optional(),
+}).unknown(false);
+
+// POST /admin/internal-users/access-requests/:id/reject — optional note.
+export const rejectAccessRequestSchema = Joi.object({
+  reviewNote: Joi.string().trim().max(1000).allow("", null).optional(),
+}).unknown(false);
+
 export const listInternalUsersQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   limit: Joi.number().integer().min(1).max(100).default(25),

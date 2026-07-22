@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { authenticateWithSession } from "../middlewares/authenticate";
+import { requireFunctionality } from "../middlewares/requireFunctionality";
 import { validateRequest } from "../middlewares/validateRequest";
-import { Platform, UserRoles } from "../services/dto-service/modules.export";
+import { Platform } from "../services/dto-service/modules.export";
 import {
   createInternalUserSchema,
   updateInternalUserFunctionalitiesSchema,
+  createAccessRequestSchema,
+  rejectAccessRequestSchema,
 } from "../middlewares/admin-internal-users.validation";
 import {
   createInternalUser,
@@ -14,54 +17,96 @@ import {
   updateInternalUserFunctionalities,
   getInternalUserMe,
 } from "../controllers/admin-internal-users.controller";
+import {
+  listApprovableAdmins,
+  createAccessRequest,
+  listMyAccessRequests,
+  listAccessRequests,
+  approveAccessRequest,
+  rejectAccessRequest,
+} from "../controllers/access-request.controller";
 
 const router = Router();
 
-// Strictly INTERNAL admin: JWT must have role=ADMIN AND platform=INTERNAL.
-// platform check is defence-in-depth — a SMASH/ENTERPRISE admin token must not
-// be able to manage Hoopr employees.
-const requireInternalAdmin = authenticateWithSession({
-  roles: [UserRoles.ADMIN],
-  platforms: [Platform.INTERNAL],
-});
-
-// Any logged-in INTERNAL user (not just admins) — used by /me to re-pull the
-// caller's own live access.
+// Any logged-in INTERNAL user (not just admins). Used by /me, the access-request
+// creation flow, and the admins picker.
 const requireInternalUser = authenticateWithSession({
   platforms: [Platform.INTERNAL],
 });
 
+// The Internal Users CONSOLE is now functionality-gated, not role-gated:
+// authenticated INTERNAL user + the `internal-users` grant. Admins pass the
+// grant check by role (requireFunctionality bypasses ADMIN). This is the
+// deliberate "no admin-only functionality" model — see docs/ACCESS-MODEL.md.
+// Do NOT revert this to a `roles: [ADMIN]` guard.
+const requireInternalUsersConsole = [
+  authenticateWithSession({ platforms: [Platform.INTERNAL] }),
+  requireFunctionality("internal-users"),
+];
+
+// ── Internal user management (console) ──────────────────────────────────────
 router.post(
   "/",
-  requireInternalAdmin,
+  ...requireInternalUsersConsole,
   validateRequest(createInternalUserSchema),
   createInternalUser
 );
 
-router.get("/", requireInternalAdmin, listInternalUsers);
+router.get("/", ...requireInternalUsersConsole, listInternalUsers);
 
-// Caller's own live role + functionalities. Any internal user, not just admins.
+// Caller's own live role + functionalities. Any internal user, not just console.
 router.get("/me", requireInternalUser, getInternalUserMe);
 
-// v2: deactivate / reactivate. Replaces the v1 reset-password endpoint — admins no longer
-// touch passwords. Users set their own (optional) password via the existing
-// /user/forgot-password OTP→reset flow.
+// ── Access requests ─────────────────────────────────────────────────────────
+// Picker data + self-service create + "my requests": any authenticated internal
+// user. Listing/approving/rejecting: console (admins + internal-users holders).
+router.get("/admins", requireInternalUser, listApprovableAdmins);
+
+router.post(
+  "/access-requests",
+  requireInternalUser,
+  validateRequest(createAccessRequestSchema),
+  createAccessRequest
+);
+
+router.get("/access-requests/mine", requireInternalUser, listMyAccessRequests);
+
+router.get(
+  "/access-requests",
+  ...requireInternalUsersConsole,
+  listAccessRequests
+);
+
+router.post(
+  "/access-requests/:id/approve",
+  ...requireInternalUsersConsole,
+  approveAccessRequest
+);
+
+router.post(
+  "/access-requests/:id/reject",
+  ...requireInternalUsersConsole,
+  validateRequest(rejectAccessRequestSchema),
+  rejectAccessRequest
+);
+
+// ── Deactivate / reactivate / grant edits (console) ─────────────────────────
 router.post(
   "/:id/deactivate",
-  requireInternalAdmin,
+  ...requireInternalUsersConsole,
   deactivateInternalUser
 );
 
 router.post(
   "/:id/reactivate",
-  requireInternalAdmin,
+  ...requireInternalUsersConsole,
   reactivateInternalUser
 );
 
-// Replace a non-admin user's functionality grant list. Admin-only.
+// Replace a non-admin user's functionality grant list.
 router.patch(
   "/:id/functionalities",
-  requireInternalAdmin,
+  ...requireInternalUsersConsole,
   validateRequest(updateInternalUserFunctionalitiesSchema),
   updateInternalUserFunctionalities
 );
