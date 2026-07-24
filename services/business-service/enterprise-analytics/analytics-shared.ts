@@ -1,5 +1,6 @@
 import { QueryTypes } from "sequelize";
 import { sequelize } from "../../persistence-service/database";
+import { INTERNAL_BRAND_IDS } from "../../helper-service/internal-brands.helper";
 
 // ─── Enterprise analytics shared helpers ─────────────────────────────────────
 //
@@ -60,8 +61,40 @@ export interface DateRange {
   [key: string]: unknown;
 }
 
-// Active enterprise brands — every dashboard scopes to this set.
-export const ACTIVE_BRANDS = `brands b WHERE b.status = 'ACTIVE'`;
+// ─── Brand population ────────────────────────────────────────────────────────
+//
+// A brand only counts as a CUSTOMER when it has a token pack or at least one
+// license (download). Active brands that never got either are LEADS — they
+// appear only on the Leads page, never in dashboard metrics. Two exclusions
+// apply everywhere (customers AND leads): Hoopr-owned internal brand ids
+// (helper-service/internal-brands.helper.ts) and any brand with a
+// @gsharp.media user (internal test accounts).
+
+const INTERNAL_IDS_SQL = INTERNAL_BRAND_IDS.join(", ");
+
+export const brandExclusions = (alias = "b"): string => `
+  ${alias}.id NOT IN (${INTERNAL_IDS_SQL})
+  AND NOT EXISTS (
+    SELECT 1 FROM users xg
+    WHERE xg."brandId" = ${alias}.id AND xg.email ILIKE '%@gsharp.media'
+  )`;
+
+export const isCustomer = (alias = "b"): string => `(
+  EXISTS (SELECT 1 FROM token_assigned xt WHERE xt."brandId" = ${alias}.id)
+  OR EXISTS (SELECT 1 FROM licenses xl WHERE xl."brandId" = ${alias}.id)
+)`;
+
+export const customerPred = (alias = "b"): string =>
+  `${alias}.status = 'ACTIVE' AND ${brandExclusions(alias)} AND ${isCustomer(alias)}`;
+
+// Join snippet for event-table queries (deductions, licenses, video_links,
+// searches, sessions) so internal/lead activity never leaks into metrics.
+export const customerBrandJoin = (fkExpr: string, alias = "cb"): string =>
+  `JOIN brands ${alias} ON ${alias}.id = ${fkExpr} AND ${customerPred(alias)}`;
+
+// Customer enterprise brands — every dashboard metric scopes to this set.
+// Kept in the `brands b WHERE <pred>` shape so callers can append `AND ...`.
+export const ACTIVE_BRANDS = `brands b WHERE ${customerPred("b")}`;
 
 // ─── Health score (computed, never stored) ───────────────────────────────────
 //

@@ -9,6 +9,8 @@ import {
   istMonth,
   ACTIVE_BRANDS,
   HEALTH_NOW,
+  customerPred,
+  customerBrandJoin,
   type DateRange,
 } from "./analytics-shared";
 
@@ -20,7 +22,7 @@ const brandActiveSince = (interval: string): string => `
   SELECT COUNT(DISTINCT u."brandId") AS count
   FROM user_sessions s
   JOIN users u ON u.id = s."userId" AND u."brandId" IS NOT NULL
-  JOIN brands b ON b.id = u."brandId" AND b.status = 'ACTIVE'
+  JOIN brands b ON b.id = u."brandId" AND ${customerPred("b")}
   WHERE s."createdAt" >= NOW() - INTERVAL '${interval}'`;
 
 // Section 1 + 7 — customer overview KPIs and the health-mix donut.
@@ -45,7 +47,7 @@ export const getFounderOverviewService = async (range: DateRange) => {
                 COUNT(DISTINCT u."brandId") AS count
          FROM user_sessions s
          JOIN users u ON u.id = s."userId" AND u."brandId" IS NOT NULL
-         JOIN brands b ON b.id = u."brandId" AND b.status = 'ACTIVE'
+         JOIN brands b ON b.id = u."brandId" AND ${customerPred("b")}
          WHERE s."createdAt" >= NOW() - INTERVAL '12 weeks'
          GROUP BY 1 ORDER BY 1`,
       ),
@@ -83,7 +85,7 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
                 COALESCE(SUM(ta."tokenBalance"), 0) AS balance,
                 COUNT(DISTINCT ta."brandId") AS brands
          FROM token_assigned ta
-         JOIN brands b ON b.id = ta."brandId" AND b.status = 'ACTIVE'
+         JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
          WHERE ta."isUnlimited" IS NOT TRUE
            AND (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())`,
       ),
@@ -91,6 +93,7 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
         `SELECT COALESCE(SUM(td."deductedTokenCount"), 0) AS consumed
          FROM token_deduction td
          JOIN token_assigned ta ON ta.id = td."tokenAssignedId" AND ta."isUnlimited" IS NOT TRUE
+         ${customerBrandJoin('ta."brandId"')}
          WHERE ${inRange(`td."deductedAt"`)}`,
         range,
       ),
@@ -99,6 +102,7 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
                 COALESCE(SUM(td."deductedTokenCount"), 0) AS consumed
          FROM token_deduction td
          JOIN token_assigned ta ON ta.id = td."tokenAssignedId" AND ta."isUnlimited" IS NOT TRUE
+         ${customerBrandJoin('ta."brandId"')}
          WHERE ${inRange(`td."deductedAt"`)}
          GROUP BY 1 ORDER BY 1`,
         range,
@@ -115,7 +119,7 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
                       / NULLIF(SUM(ta."totalAssignedToken"), 0), 1) AS utilization,
                 MIN(ta."expiryDate") AS expiry
          FROM token_assigned ta
-         JOIN brands b ON b.id = ta."brandId" AND b.status = 'ACTIVE'
+         JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
          WHERE ta."isUnlimited" IS NOT TRUE
            AND (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
          GROUP BY 1, 2
@@ -136,7 +140,7 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
                       / NULLIF(SUM(ta."totalAssignedToken"), 0), 1) AS utilization,
                 EXTRACT(DAY FROM NOW() - MIN(ta."createdAt"))::int AS pack_age_days
          FROM token_assigned ta
-         JOIN brands b ON b.id = ta."brandId" AND b.status = 'ACTIVE'
+         JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
          WHERE ta."isUnlimited" IS NOT TRUE
            AND (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
          GROUP BY 1, 2
@@ -268,7 +272,7 @@ export const getFounderEngagementService = async (range: DateRange) => {
               COUNT(DISTINCT u."brandId") AS weekly_brands
        FROM user_sessions s
        JOIN users u ON u.id = s."userId" AND u."brandId" IS NOT NULL
-       JOIN brands b ON b.id = u."brandId" AND b.status = 'ACTIVE'
+       JOIN brands b ON b.id = u."brandId" AND ${customerPred("b")}
        WHERE ${inRange(`s."createdAt"`)}
        GROUP BY 1 ORDER BY 1`,
       range,
@@ -277,6 +281,8 @@ export const getFounderEngagementService = async (range: DateRange) => {
       `SELECT ${istWeek(`td."deductedAt"`)} AS week,
               COALESCE(SUM(td."deductedTokenCount"), 0) AS tokens
        FROM token_deduction td
+       JOIN token_assigned ta ON ta.id = td."tokenAssignedId"
+       ${customerBrandJoin('ta."brandId"')}
        WHERE ${inRange(`td."deductedAt"`)}
        GROUP BY 1 ORDER BY 1`,
       range,
@@ -284,6 +290,7 @@ export const getFounderEngagementService = async (range: DateRange) => {
     q<{ week: string; reels: string }>(
       `SELECT ${istWeek(`vl."createdAt"`)} AS week, COUNT(*) AS reels
        FROM video_links vl
+       ${customerBrandJoin('vl."brandId"')}
        WHERE ${inRange(`vl."createdAt"`)}
        GROUP BY 1 ORDER BY 1`,
       range,
@@ -351,6 +358,7 @@ export const getFounderMusicService = async (range: DateRange) => {
                 COUNT(*) FILTER (WHERE l."licensedAt" >= NOW() - INTERVAL '14 days'
                                    AND l."licensedAt" < NOW() - INTERVAL '7 days') AS prev_downloads
          FROM licenses l
+         ${customerBrandJoin('l."brandId"')}
          LEFT JOIN tracks t ON t."trackCode" = l."trackCode"
          GROUP BY 1
          HAVING COUNT(*) FILTER (WHERE ${inRange(`l."licensedAt"`)}) > 0
@@ -361,6 +369,7 @@ export const getFounderMusicService = async (range: DateRange) => {
       q<{ artist: string; downloads: string }>(
         `SELECT a.name AS artist, COUNT(*) AS downloads
          FROM licenses l
+         ${customerBrandJoin('l."brandId"')}
          JOIN tracks t ON t."trackCode" = l."trackCode"
          JOIN track_artist_mappings tam ON tam."trackId" = t.id AND tam."isPrimary" IS TRUE
          JOIN artists a ON a.id = tam."artistId"
@@ -371,6 +380,7 @@ export const getFounderMusicService = async (range: DateRange) => {
       q<{ name: string; downloads: string }>(
         `SELECT f.name, COUNT(*) AS downloads
          FROM licenses l
+         ${customerBrandJoin('l."brandId"')}
          JOIN tracks t ON t."trackCode" = l."trackCode"
          JOIN track_filter_mappings tfm ON tfm."trackId" = t.id
          JOIN filters f ON f.id = tfm."filterId" AND f.type = 'genre'
@@ -381,6 +391,7 @@ export const getFounderMusicService = async (range: DateRange) => {
       q<{ name: string; downloads: string }>(
         `SELECT f.name, COUNT(*) AS downloads
          FROM licenses l
+         ${customerBrandJoin('l."brandId"')}
          JOIN tracks t ON t."trackCode" = l."trackCode"
          JOIN track_filter_mappings tfm ON tfm."trackId" = t.id
          JOIN filters f ON f.id = tfm."filterId" AND f.type = 'language'
@@ -396,6 +407,7 @@ export const getFounderMusicService = async (range: DateRange) => {
                 COUNT(*) FILTER (WHERE l."licensedAt" >= NOW() - INTERVAL '14 days'
                                    AND l."licensedAt" < NOW() - INTERVAL '7 days') AS last_week
          FROM licenses l
+         ${customerBrandJoin('l."brandId"')}
          LEFT JOIN tracks t ON t."trackCode" = l."trackCode"
          WHERE l."licensedAt" >= NOW() - INTERVAL '14 days'
          GROUP BY 1
@@ -471,7 +483,7 @@ export const getFounderRetentionService = async () => {
                     AND nxt.id <> ta.id
                 ) AS renewed
          FROM token_assigned ta
-         JOIN brands b ON b.id = ta."brandId" AND b.status = 'ACTIVE'
+         JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
          WHERE ta."expiryDate" IS NOT NULL
            AND ta."expiryDate" < NOW()
            AND ta."expiryDate" >= NOW() - INTERVAL '12 months'
