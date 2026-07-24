@@ -6,6 +6,7 @@ import {
   ACTIVE_BRANDS,
   HEALTH_NOW,
   healthCte,
+  customerPred,
 } from "./analytics-shared";
 
 // ─── Customer Success dashboard ──────────────────────────────────────────────
@@ -37,7 +38,11 @@ const ACCOUNT_CTE = `
   ),
   recency AS (
     SELECT b.id AS brand_id,
-           (SELECT MAX(u."lastLoginAt") FROM users u WHERE u."brandId" = b.id) AS last_active,
+           GREATEST(
+             (SELECT MAX(u."lastLoginAt") FROM users u WHERE u."brandId" = b.id),
+             (SELECT MAX(s."createdAt") FROM user_sessions s
+              JOIN users u ON u.id = s."userId" WHERE u."brandId" = b.id)
+           ) AS last_active,
            (SELECT MAX(vl."createdAt") FROM video_links vl WHERE vl."brandId" = b.id) AS last_reel,
            (SELECT COUNT(*) FROM users u WHERE u."brandId" = b.id AND u.status = 'ACTIVE') AS seats,
            (SELECT COUNT(DISTINCT s."userId") FROM user_sessions s
@@ -136,7 +141,7 @@ const fetchAccounts = async (): Promise<Account[]> => {
      JOIN recency r ON r.brand_id = b.id
      JOIN health_banded hb ON hb.brand_id = b.id
      JOIN prev_health_banded phb ON phb.brand_id = b.id
-     WHERE b.status = 'ACTIVE'
+     WHERE ${customerPred("b")}
      ORDER BY hb.score ASC, b.name ASC`,
   );
   return rows.map(toAccount);

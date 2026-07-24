@@ -25,5 +25,10 @@ export const csAccountsQuerySchema = Joi.object({
   healthTier: Joi.string().valid("HEALTHY", "MODERATE", "AT_RISK").optional(),
 }).unknown(false);
 
+// GET /admin/enterprise-analytics/leads
+export const leadsQuerySchema = Joi.object({
+  search: Joi.string().max(100).optional(),
+}).unknown(false);
+
 // GET endpoints with no parameters (funnel, retention, alerts).
 export const emptyQuerySchema = Joi.object({}).unknown(false);

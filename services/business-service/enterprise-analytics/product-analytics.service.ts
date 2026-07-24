@@ -6,6 +6,8 @@ import {
   inRange,
   istDay,
   ACTIVE_BRANDS,
+  customerPred,
+  customerBrandJoin,
   type DateRange,
 } from "./analytics-shared";
 
@@ -41,8 +43,10 @@ export const getProductFunnelService = async (range: DateRange) => {
               COUNT(*) FILTER (WHERE searched AND downloaded) AS downloaded,
               COUNT(*) FILTER (WHERE searched AND downloaded AND reeled) AS reeled,
               (SELECT COUNT(*) FROM brand_search_history sh
+               ${customerBrandJoin('sh."brandId"')}
                WHERE ${inRange(`sh."createdAt"`)}) AS total_searches,
               (SELECT COUNT(DISTINCT sh."userId") FROM brand_search_history sh
+               ${customerBrandJoin('sh."brandId"')}
                WHERE ${inRange(`sh."createdAt"`)} AND sh."userId" IS NOT NULL) AS searching_users
        FROM brand_stage`,
       range,
@@ -52,6 +56,7 @@ export const getProductFunnelService = async (range: DateRange) => {
               COUNT(*) AS searches,
               COUNT(DISTINCT sh."brandId") AS brands
        FROM brand_search_history sh
+       ${customerBrandJoin('sh."brandId"')}
        WHERE ${inRange(`sh."createdAt"`)}
        GROUP BY 1 ORDER BY 1`,
       range,
@@ -92,13 +97,15 @@ export const getProductSearchInsightsService = async (range: DateRange) => {
                 COUNT(*) AS searches,
                 COUNT(DISTINCT sh."brandId") AS brands
          FROM brand_search_history sh
+         ${customerBrandJoin('sh."brandId"')}
          WHERE ${inRange(`sh."createdAt"`)} AND COALESCE(TRIM(sh.query), '') <> ''
          GROUP BY 1 ORDER BY 2 DESC LIMIT 20`,
         range,
       ),
       q<{ filter_type: string; uses: string }>(
         `SELECT f->>'type' AS filter_type, COUNT(*) AS uses
-         FROM brand_search_history sh,
+         FROM brand_search_history sh
+         ${customerBrandJoin('sh."brandId"')},
               jsonb_array_elements(sh.filters) AS f
          WHERE ${inRange(`sh."createdAt"`)} AND sh.filters IS NOT NULL
          GROUP BY 1 ORDER BY 2 DESC LIMIT 12`,
@@ -112,7 +119,8 @@ export const getProductSearchInsightsService = async (range: DateRange) => {
                   ELSE f->>'value'
                 END AS filter_value,
                 COUNT(*) AS uses
-         FROM brand_search_history sh,
+         FROM brand_search_history sh
+         ${customerBrandJoin('sh."brandId"')},
               jsonb_array_elements(sh.filters) AS f
          WHERE ${inRange(`sh."createdAt"`)} AND sh.filters IS NOT NULL
          GROUP BY 1, 2 ORDER BY 3 DESC LIMIT 20`,
@@ -125,6 +133,7 @@ export const getProductSearchInsightsService = async (range: DateRange) => {
                 (SELECT COUNT(*) FROM licenses l
                  WHERE l."brandId" = sh."brandId" AND ${inRange(`l."licensedAt"`)}) AS downloads
          FROM brand_search_history sh
+         ${customerBrandJoin('sh."brandId"')}
          WHERE ${inRange(`sh."createdAt"`)}
          GROUP BY sh."brandId" ORDER BY 3 DESC LIMIT 15`,
         range,
@@ -165,6 +174,7 @@ export const getProductTokenSpendService = async (range: DateRange) => {
                 SUM(td."deductedTokenCount") AS tokens
          FROM token_deduction td
          JOIN token_assigned ta ON ta.id = td."tokenAssignedId"
+         ${customerBrandJoin('ta."brandId"')}
          WHERE ${inRange(`td."deductedAt"`)}
          GROUP BY 1, 2
        )
@@ -181,6 +191,7 @@ export const getProductTokenSpendService = async (range: DateRange) => {
                   AND vl."createdAt" <= l."licensedAt" + INTERVAL '30 days'
               )) AS no_reel
        FROM licenses l
+       ${customerBrandJoin('l."brandId"')}
        WHERE ${inRange(`l."licensedAt"`)}
          AND l."licensedAt" <= NOW() - INTERVAL '30 days'`,
       range,
@@ -191,6 +202,7 @@ export const getProductTokenSpendService = async (range: DateRange) => {
               percentile_cont(0.9) WITHIN GROUP (ORDER BY
                 EXTRACT(EPOCH FROM (vl."createdAt" - l."licensedAt")) / 86400) AS p90_days
        FROM video_links vl
+       ${customerBrandJoin('vl."brandId"')}
        JOIN licenses l ON l.id = vl."licenseId"
        WHERE ${inRange(`vl."createdAt"`)} AND vl."createdAt" >= l."licensedAt"`,
       range,
@@ -199,6 +211,8 @@ export const getProductTokenSpendService = async (range: DateRange) => {
       `SELECT td.reason, COUNT(*) AS deductions,
               COALESCE(SUM(td."deductedTokenCount"), 0) AS tokens
        FROM token_deduction td
+       JOIN token_assigned ta ON ta.id = td."tokenAssignedId"
+       ${customerBrandJoin('ta."brandId"')}
        WHERE ${inRange(`td."deductedAt"`)}
        GROUP BY 1`,
       range,
@@ -275,6 +289,7 @@ export const getProductBehaviorService = async (range: DateRange) => {
                           AND s."lastActivityAt" - s."createdAt" <= INTERVAL '12 hours') AS median_minutes
        FROM user_sessions s
        JOIN users u ON u.id = s."userId" AND u."brandId" IS NOT NULL
+       ${customerBrandJoin('u."brandId"')}
        WHERE ${inRange(`s."createdAt"`)}`,
       range,
     ),
@@ -282,6 +297,7 @@ export const getProductBehaviorService = async (range: DateRange) => {
       `SELECT s."deviceType" AS device_type, COUNT(*) AS sessions
        FROM user_sessions s
        JOIN users u ON u.id = s."userId" AND u."brandId" IS NOT NULL
+       ${customerBrandJoin('u."brandId"')}
        WHERE ${inRange(`s."createdAt"`)}
        GROUP BY 1 ORDER BY 2 DESC`,
       range,
