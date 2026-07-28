@@ -52,6 +52,10 @@ import {
   EmailSuppressionModel,
   EmailEventModel,
 } from "./email-campaign/schemas/modules.export";
+import {
+  MonitoredUrlModel,
+  MonitorCheckModel,
+} from "./url-monitor/schemas/modules.export";
 
 config();
 
@@ -150,6 +154,8 @@ sequelize.addModels([
   EmailTemplateModel,
   EmailSuppressionModel,
   EmailEventModel,
+  MonitoredUrlModel,
+  MonitorCheckModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything

@@ -12,9 +12,15 @@ import {
   scheduleEmailCampaignTicks,
   triggerEmailCampaignTick,
 } from "./queues/email-campaign.queue";
+import {
+  urlMonitorQueue,
+  scheduleUrlMonitor,
+  triggerUrlCheck,
+} from "./queues/url-monitor.queue";
 import { railRefreshWorker } from "./workers/rail-refresh.worker";
 import { brandRecommendWorker } from "./workers/brand-recommend.worker";
 import { emailCampaignWorker } from "./workers/email-campaign.worker";
+import { urlMonitorWorker } from "./workers/url-monitor.worker";
 import { logger } from "../helper-service/logger";
 
 export async function initializeScheduler(): Promise<void> {
@@ -32,6 +38,9 @@ export async function initializeScheduler(): Promise<void> {
     await scheduleEmailCampaignTicks();
     logger.info("[Scheduler] Email campaign tick scheduled (every minute)");
 
+    await scheduleUrlMonitor();
+    logger.info("[Scheduler] URL monitor job scheduled (every 5 minutes)");
+
     const repeatableJobs = await railRefreshQueue.getRepeatableJobs();
     logger.info(`[Scheduler] Active repeatable jobs: ${repeatableJobs.length}`);
 
@@ -40,9 +49,11 @@ export async function initializeScheduler(): Promise<void> {
       await railRefreshWorker.close();
       await brandRecommendWorker.close();
       await emailCampaignWorker.close();
+      await urlMonitorWorker.close();
       await railRefreshQueue.close();
       await brandRecommendQueue.close();
       await emailCampaignQueue.close();
+      await urlMonitorQueue.close();
       logger.info("[Scheduler] Shutdown complete");
     };
 
@@ -57,5 +68,6 @@ export async function initializeScheduler(): Promise<void> {
 export { railRefreshQueue, railRefreshWorker, triggerManualRefresh };
 export { emailCampaignQueue, emailCampaignWorker, triggerEmailCampaignTick };
 export { brandRecommendQueue, brandRecommendWorker, triggerBrandRecommend };
+export { urlMonitorQueue, urlMonitorWorker, triggerUrlCheck };
 export { executeRailRefresh } from "./jobs/rail-refresh.job";
 export { executeBrandRecommend } from "./jobs/brand-recommend.job";
