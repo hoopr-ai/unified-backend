@@ -37,6 +37,7 @@ import geographyRoutes from "./routes/geography.route";
 import cartRoutes from "./routes/cart.route";
 import transactionRoutes from "./routes/transaction.route";
 import journeyRoutes from "./routes/journey.route";
+import urlMonitorRoutes from "./routes/url-monitor.route";
 import {
   emailCampaignRouter,
   emailTemplateRouter,
@@ -101,6 +102,7 @@ app.use("/admin/skus", adminSkuRoutes);
 app.use("/admin/owners", adminOwnerRoutes);
 app.use("/admin/pay-per-track", adminPayPerTrackRoutes);
 app.use("/admin/enterprise-analytics", adminEnterpriseAnalyticsRoutes);
+app.use("/admin/url-monitor", urlMonitorRoutes);
 app.use("/cart", cartRoutes);
 app.use("/transaction", transactionRoutes);
 app.use("/journey", journeyRoutes);
