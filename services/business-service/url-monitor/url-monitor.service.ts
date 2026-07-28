@@ -108,8 +108,12 @@ export const checkSsl = (urlString: string): Promise<SslResult> => {
         }
         const expiresAt = new Date(cert.valid_to);
         const daysRemaining = Math.floor((expiresAt.getTime() - Date.now()) / 86_400_000);
-        const issuerRecord = cert.issuer as Record<string, string> | undefined;
-        const issuer = issuerRecord?.O || issuerRecord?.CN || null;
+        // issuer fields are typed string | string[] depending on @types/node
+        // version — normalize to a single display string.
+        const issuerField = cert.issuer?.O ?? cert.issuer?.CN ?? null;
+        const issuer = Array.isArray(issuerField)
+          ? issuerField[0] ?? null
+          : issuerField;
         const error = socket.authorized
           ? null
           : truncate(String(socket.authorizationError ?? "Certificate not trusted"));
