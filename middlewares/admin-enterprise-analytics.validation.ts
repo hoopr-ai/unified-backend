@@ -25,6 +25,12 @@ export const csAccountsQuerySchema = Joi.object({
   healthTier: Joi.string().valid("HEALTHY", "MODERATE", "AT_RISK").optional(),
 }).unknown(false);
 
+// GET /admin/enterprise-analytics/cs/token-accounts
+export const csTokenAccountsQuerySchema = Joi.object({
+  search: Joi.string().max(100).optional(),
+  packStatus: Joi.string().valid("ACTIVE", "EXPIRED").optional(),
+}).unknown(false);
+
 // GET /admin/enterprise-analytics/leads
 export const leadsQuerySchema = Joi.object({
   search: Joi.string().max(100).optional(),

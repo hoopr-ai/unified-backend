@@ -11,6 +11,7 @@ import {
   getFounderRetention,
   getCsAccounts,
   getCsAlerts,
+  getCsTokenAccounts,
   getLeads,
   getProductFunnel,
   getProductSearchInsights,
@@ -37,6 +38,7 @@ router.get("/founder/music", ...requireDashboard, getFounderMusic);
 router.get("/founder/retention", ...requireDashboard, getFounderRetention);
 
 router.get("/cs/accounts", ...requireDashboard, getCsAccounts);
+router.get("/cs/token-accounts", ...requireDashboard, getCsTokenAccounts);
 router.get("/cs/alerts", ...requireDashboard, getCsAlerts);
 
 router.get("/leads", ...requireDashboard, getLeads);

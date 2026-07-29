@@ -9,6 +9,7 @@ import { HttpStatusCode } from "../services/dto-service/constants/modules.export
 import {
   rangeQuerySchema,
   csAccountsQuerySchema,
+  csTokenAccountsQuerySchema,
   leadsQuerySchema,
   emptyQuerySchema,
 } from "../middlewares/admin-enterprise-analytics.validation";
@@ -21,6 +22,7 @@ import {
   getFounderRetentionService,
   getCsAccountsService,
   getCsAlertsService,
+  getCsTokenAccountsService,
   getLeadsService,
   getProductFunnelService,
   getProductSearchInsightsService,
@@ -87,6 +89,14 @@ export const getCsAccounts = catchAsync(async (req: Request, res: Response) => {
     req.query,
   );
   ok(res, await getCsAccountsService(value), "CS accounts fetched.");
+});
+
+export const getCsTokenAccounts = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<{ search?: string; packStatus?: string }>(
+    csTokenAccountsQuerySchema,
+    req.query,
+  );
+  ok(res, await getCsTokenAccountsService(value), "Token accounts fetched.");
 });
 
 export const getCsAlerts = catchAsync(async (req: Request, res: Response) => {
