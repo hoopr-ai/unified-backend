@@ -11,6 +11,7 @@ import {
   HEALTH_NOW,
   customerPred,
   customerBrandJoin,
+  isNativePack,
   type DateRange,
 } from "./analytics-shared";
 
@@ -77,7 +78,7 @@ export const getFounderOverviewService = async (range: DateRange) => {
 
 // Section 2 — token economics. Unlimited packs are excluded from every number.
 export const getFounderTokenEconomicsService = async (range: DateRange) => {
-  const [issued, consumed, series, nearingDepletion, barelyTouched] =
+  const [issued, consumed, reels, series, nearingDepletion, nativeOnly] =
     await Promise.all([
       // Packs currently in force: not expired, finite.
       q<{ issued: string; balance: string; brands: string }>(
@@ -97,6 +98,13 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
          WHERE ${inRange(`td."deductedAt"`)}`,
         range,
       ),
+      q<{ reels: string }>(
+        `SELECT COUNT(*) AS reels
+         FROM video_links vl
+         ${customerBrandJoin('vl."brandId"')}
+         WHERE ${inRange(`vl."createdAt"`)}`,
+        range,
+      ),
       q<{ day: string; consumed: string }>(
         `SELECT ${istDay(`td."deductedAt"`)} AS day,
                 COALESCE(SUM(td."deductedTokenCount"), 0) AS consumed
@@ -107,7 +115,9 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
          GROUP BY 1 ORDER BY 1`,
         range,
       ),
-      // <15% kitty left on an in-force pack → expansion/top-up conversation.
+      // Fewer than 15 non-Native tokens left overall on in-force packs.
+      // Native (Hoopr Originals) packs are ignored entirely, and brands with
+      // an in-force unlimited pack can't deplete.
       q<{
         brand_id: string; brand_name: string; issued: string; balance: string;
         utilization: string; expiry: string | null;
@@ -121,35 +131,35 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
          FROM token_assigned ta
          JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
          WHERE ta."isUnlimited" IS NOT TRUE
+           AND NOT ${isNativePack("ta")}
            AND (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
          GROUP BY 1, 2
          HAVING SUM(ta."totalAssignedToken") > 0
-            AND SUM(ta."tokenBalance") < 0.15 * SUM(ta."totalAssignedToken")
-         ORDER BY utilization DESC
-         LIMIT 20`,
+            AND SUM(ta."tokenBalance") < 15
+            AND NOT EXISTS (
+              SELECT 1 FROM token_assigned ux
+              WHERE ux."brandId" = ta."brandId"
+                AND ux."isUnlimited" IS TRUE
+                AND (ux."expiryDate" IS NULL OR ux."expiryDate" >= NOW())
+            )
+         ORDER BY balance ASC, brand_name ASC`,
       ),
-      // <10% used 60+ days after purchase → the highest-priority risk list.
+      // Brands whose every in-force pack is Native (Hoopr Originals) — they
+      // have tokens but only for the Native catalogue.
       q<{
         brand_id: string; brand_name: string; issued: string; balance: string;
-        utilization: string; pack_age_days: string;
+        expiry: string | null;
       }>(
         `SELECT ta."brandId" AS brand_id, b.name AS brand_name,
                 SUM(ta."totalAssignedToken") AS issued,
                 SUM(ta."tokenBalance") AS balance,
-                ROUND(100.0 * (SUM(ta."totalAssignedToken") - SUM(ta."tokenBalance"))
-                      / NULLIF(SUM(ta."totalAssignedToken"), 0), 1) AS utilization,
-                EXTRACT(DAY FROM NOW() - MIN(ta."createdAt"))::int AS pack_age_days
+                MIN(ta."expiryDate") AS expiry
          FROM token_assigned ta
          JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
-         WHERE ta."isUnlimited" IS NOT TRUE
-           AND (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
+         WHERE (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
          GROUP BY 1, 2
-         HAVING SUM(ta."totalAssignedToken") > 0
-            AND (SUM(ta."totalAssignedToken") - SUM(ta."tokenBalance"))
-                < 0.10 * SUM(ta."totalAssignedToken")
-            AND MIN(ta."createdAt") < NOW() - INTERVAL '60 days'
-         ORDER BY pack_age_days DESC
-         LIMIT 20`,
+         HAVING BOOL_AND(${isNativePack("ta")})
+         ORDER BY balance DESC, brand_name ASC`,
       ),
     ]);
 
@@ -161,6 +171,7 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
     totalTokenBalance: totalBalance,
     brandsWithActivePacks: num(issued[0]?.brands),
     tokensConsumedInRange: num(consumed[0]?.consumed),
+    reelsPostedInRange: num(reels[0]?.reels),
     consumptionSeries: series.map((r) => ({ day: r.day, consumed: num(r.consumed) })),
     avgKittyUtilizationPct: pct(totalIssued - totalBalance, totalIssued),
     brandsNearingDepletion: nearingDepletion.map((r) => ({
@@ -171,13 +182,12 @@ export const getFounderTokenEconomicsService = async (range: DateRange) => {
       utilizationPct: num(r.utilization),
       expiryDate: r.expiry,
     })),
-    brandsBarelyTouchingKitty: barelyTouched.map((r) => ({
+    brandsWithOnlyNativeTokens: nativeOnly.map((r) => ({
       brandId: num(r.brand_id),
       brandName: r.brand_name,
       tokensIssued: num(r.issued),
       tokensLeft: num(r.balance),
-      utilizationPct: num(r.utilization),
-      packAgeDays: num(r.pack_age_days),
+      expiryDate: r.expiry,
     })),
   };
 };
@@ -434,6 +444,170 @@ export const getFounderMusicService = async (range: DateRange) => {
       name: r.name ?? r.track_code,
       thisWeek: num(r.this_week),
       lastWeek: num(r.last_week),
+    })),
+  };
+};
+
+// ─── Customer health scores (drill-down) ─────────────────────────────────────
+// One row per brand with the exact score, tier, and the raw signal values the
+// score is built from, so the FE can explain WHY a brand landed in its tier
+// ("No login in the last 7 days: -15"). Weights live in healthCte; the FE
+// mirrors them for display only.
+export const getFounderHealthScoresService = async () => {
+  const rows = await q<{
+    brand_id: string;
+    brand_name: string;
+    reel_30d: boolean;
+    reels_90d: string;
+    download_30d: boolean;
+    login_7d: boolean;
+    active_weeks_4w: string;
+    search_30d: boolean;
+    active_seats_30d: string;
+    score: string;
+    tier: string;
+    renewal_soon: boolean;
+  }>(
+    `WITH ${HEALTH_NOW}
+     SELECT hs.brand_id, b.name AS brand_name,
+            hs.reel_30d, hs.reels_90d, hs.download_30d, hs.login_7d,
+            hs.active_weeks_4w, hs.search_30d, hs.active_seats_30d,
+            hb.score, hb.tier, hb.renewal_soon
+     FROM health_signals hs
+     JOIN health_banded hb ON hb.brand_id = hs.brand_id
+     JOIN brands b ON b.id = hs.brand_id
+     ORDER BY hb.score ASC, b.name ASC`,
+  );
+  return {
+    brands: rows.map((r) => ({
+      brandId: num(r.brand_id),
+      brandName: r.brand_name,
+      healthScore: num(r.score),
+      healthTier: r.tier,
+      renewalSoon: r.renewal_soon === true,
+      signals: {
+        reel30d: r.reel_30d === true,
+        reels90d: num(r.reels_90d),
+        download30d: r.download_30d === true,
+        login7d: r.login_7d === true,
+        activeWeeks4w: num(r.active_weeks_4w),
+        search30d: r.search_30d === true,
+        activeSeats30d: num(r.active_seats_30d),
+      },
+    })),
+  };
+};
+
+// ─── Top users per brand (drill-down) ────────────────────────────────────────
+// Every team member of every customer brand with lifetime token spend (via
+// deduction → license → user; internal deductions carry no user and are
+// excluded), lifetime downloads, and last-active. The FE surfaces the top
+// spender per brand and expands to the full member breakdown on click.
+export const getFounderTopUsersService = async () => {
+  const rows = await q<{
+    brand_id: string;
+    brand_name: string;
+    user_id: string;
+    user_name: string | null;
+    email: string;
+    user_status: string;
+    tokens: string | null;
+    downloads: string;
+    last_active: string | null;
+  }>(
+    `WITH member_tokens AS (
+       SELECT l."userId" AS user_id, SUM(td."deductedTokenCount") AS tokens
+       FROM token_deduction td
+       JOIN licenses l ON l.id = td."licenseId"
+       GROUP BY 1
+     )
+     SELECT u."brandId" AS brand_id, b.name AS brand_name,
+            u.id AS user_id,
+            NULLIF(TRIM(CONCAT(u."firstName", ' ', u."lastName")), '') AS user_name,
+            u.email,
+            u.status AS user_status,
+            mt.tokens,
+            (SELECT COUNT(*) FROM licenses l2 WHERE l2."userId" = u.id) AS downloads,
+            GREATEST(
+              u."lastLoginAt",
+              (SELECT MAX(s."createdAt") FROM user_sessions s WHERE s."userId" = u.id)
+            ) AS last_active
+     FROM users u
+     JOIN brands b ON b.id = u."brandId" AND ${customerPred("b")}
+     LEFT JOIN member_tokens mt ON mt.user_id = u.id
+     ORDER BY b.name ASC, COALESCE(mt.tokens, 0) DESC, u.email ASC`,
+  );
+
+  const byBrand = new Map<
+    number,
+    { brandId: number; brandName: string; members: Array<{
+      userId: number; name: string; email: string; status: string;
+      tokensSpent: number; downloads: number; lastActiveAt: string | null;
+    }> }
+  >();
+  for (const r of rows) {
+    const brandId = num(r.brand_id);
+    let entry = byBrand.get(brandId);
+    if (!entry) {
+      entry = { brandId, brandName: r.brand_name, members: [] };
+      byBrand.set(brandId, entry);
+    }
+    entry.members.push({
+      userId: num(r.user_id),
+      name: r.user_name ?? r.email,
+      email: r.email,
+      status: r.user_status,
+      tokensSpent: num(r.tokens),
+      downloads: num(r.downloads),
+      lastActiveAt: r.last_active,
+    });
+  }
+
+  // Members arrive sorted tokens-desc, so members[0] is the brand's top user.
+  const brands = [...byBrand.values()].sort(
+    (a, b) =>
+      (b.members[0]?.tokensSpent ?? 0) - (a.members[0]?.tokensSpent ?? 0) ||
+      a.brandName.localeCompare(b.brandName),
+  );
+  return { brands };
+};
+
+// ─── Track downloaders (drill-down) ──────────────────────────────────────────
+// Who downloaded a given track within the range — powers the click-through on
+// Music Insights download counts.
+export const getFounderTrackDownloadersService = async (
+  params: DateRange & { trackCode: string },
+) => {
+  const rows = await q<{
+    user_id: string;
+    user_name: string | null;
+    email: string;
+    brand_name: string;
+    downloads: string;
+    last_downloaded_at: string;
+  }>(
+    `SELECT u.id AS user_id,
+            NULLIF(TRIM(CONCAT(u."firstName", ' ', u."lastName")), '') AS user_name,
+            u.email,
+            cb.name AS brand_name,
+            COUNT(*) AS downloads,
+            MAX(l."licensedAt") AS last_downloaded_at
+     FROM licenses l
+     ${customerBrandJoin('l."brandId"')}
+     JOIN users u ON u.id = l."userId"
+     WHERE l."trackCode" = :trackCode AND ${inRange(`l."licensedAt"`)}
+     GROUP BY 1, 2, 3, 4
+     ORDER BY downloads DESC, last_downloaded_at DESC`,
+    params,
+  );
+  return {
+    users: rows.map((r) => ({
+      userId: num(r.user_id),
+      name: r.user_name ?? r.email,
+      email: r.email,
+      brandName: r.brand_name,
+      downloads: num(r.downloads),
+      lastDownloadedAt: r.last_downloaded_at,
     })),
   };
 };

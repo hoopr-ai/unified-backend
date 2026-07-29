@@ -63,12 +63,12 @@ export interface DateRange {
 
 // ─── Brand population ────────────────────────────────────────────────────────
 //
-// A brand only counts as a CUSTOMER when it has a token pack or at least one
-// license (download). Active brands that never got either are LEADS — they
-// appear only on the Leads page, never in dashboard metrics. Two exclusions
-// apply everywhere (customers AND leads): Hoopr-owned internal brand ids
-// (helper-service/internal-brands.helper.ts) and any brand with a
-// @gsharp.media user (internal test accounts).
+// A brand only counts as a CUSTOMER when it has (or ever had) a token pack —
+// "accounts with tokens", past or present. Active brands that never got a
+// pack are LEADS — they appear only on the Leads page, never in dashboard
+// metrics. Two exclusions apply everywhere (customers AND leads): Hoopr-owned
+// internal brand ids (helper-service/internal-brands.helper.ts) and any brand
+// with a @gsharp.media user (internal test accounts).
 
 const INTERNAL_IDS_SQL = INTERNAL_BRAND_IDS.join(", ");
 
@@ -81,11 +81,15 @@ export const brandExclusions = (alias = "b"): string => `
 
 export const isCustomer = (alias = "b"): string => `(
   EXISTS (SELECT 1 FROM token_assigned xt WHERE xt."brandId" = ${alias}.id)
-  OR EXISTS (SELECT 1 FROM licenses xl WHERE xl."brandId" = ${alias}.id)
 )`;
 
 export const customerPred = (alias = "b"): string =>
   `${alias}.status = 'ACTIVE' AND ${brandExclusions(alias)} AND ${isCustomer(alias)}`;
+
+// "Native" tokens = Hoopr Originals catalogue packs. The pack `type` column is
+// a free string with legacy casing variants, so match case-insensitively.
+export const isNativePack = (alias = "ta"): string =>
+  `LOWER(TRIM(${alias}."type")) = 'hoopr originals'`;
 
 // Join snippet for event-table queries (deductions, licenses, video_links,
 // searches, sessions) so internal/lead activity never leaks into metrics.
