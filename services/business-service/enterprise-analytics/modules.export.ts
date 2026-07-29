@@ -5,6 +5,9 @@ export {
   getFounderEngagementService,
   getFounderMusicService,
   getFounderRetentionService,
+  getFounderHealthScoresService,
+  getFounderTopUsersService,
+  getFounderTrackDownloadersService,
 } from "./founder-analytics.service";
 export {
   getCsAccountsService,

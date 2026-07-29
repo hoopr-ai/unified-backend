@@ -8,6 +8,7 @@ import {
 import { HttpStatusCode } from "../services/dto-service/constants/modules.export";
 import {
   rangeQuerySchema,
+  trackDownloadersQuerySchema,
   csAccountsQuerySchema,
   csTokenAccountsQuerySchema,
   leadsQuerySchema,
@@ -20,6 +21,9 @@ import {
   getFounderEngagementService,
   getFounderMusicService,
   getFounderRetentionService,
+  getFounderHealthScoresService,
+  getFounderTopUsersService,
+  getFounderTrackDownloadersService,
   getCsAccountsService,
   getCsAlertsService,
   getCsTokenAccountsService,
@@ -79,6 +83,24 @@ export const getFounderMusic = catchAsync(async (req: Request, res: Response) =>
 export const getFounderRetention = catchAsync(async (req: Request, res: Response) => {
   validateQuery(emptyQuerySchema, req.query);
   ok(res, await getFounderRetentionService(), "Retention fetched.");
+});
+
+export const getFounderHealthScores = catchAsync(async (req: Request, res: Response) => {
+  validateQuery(emptyQuerySchema, req.query);
+  ok(res, await getFounderHealthScoresService(), "Health scores fetched.");
+});
+
+export const getFounderTopUsers = catchAsync(async (req: Request, res: Response) => {
+  validateQuery(emptyQuerySchema, req.query);
+  ok(res, await getFounderTopUsersService(), "Top users fetched.");
+});
+
+export const getFounderTrackDownloaders = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range & { trackCode: string }>(
+    trackDownloadersQuerySchema,
+    req.query,
+  );
+  ok(res, await getFounderTrackDownloadersService(value), "Track downloaders fetched.");
 });
 
 // ─── Customer Success ────────────────────────────────────────────────────────

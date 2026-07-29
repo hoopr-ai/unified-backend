@@ -19,6 +19,12 @@ const defaultRange = {
 
 export const rangeQuerySchema = Joi.object({ ...defaultRange }).unknown(false);
 
+// GET /admin/enterprise-analytics/founder/music/track-downloaders
+export const trackDownloadersQuerySchema = Joi.object({
+  ...defaultRange,
+  trackCode: Joi.string().max(100).required(),
+}).unknown(false);
+
 // GET /admin/enterprise-analytics/cs/accounts
 export const csAccountsQuerySchema = Joi.object({
   search: Joi.string().max(100).optional(),
