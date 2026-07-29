@@ -7,6 +7,7 @@ import {
   HEALTH_NOW,
   healthCte,
   customerPred,
+  brandExclusions,
 } from "./analytics-shared";
 
 // ─── Customer Success dashboard ──────────────────────────────────────────────
@@ -159,6 +160,96 @@ export const getCsAccountsService = async (filters: {
   }
   if (filters.healthTier) {
     accounts = accounts.filter((a) => a.healthTier === filters.healthTier);
+  }
+  return { accounts, totalCount: accounts.length };
+};
+
+// ─── Accounts with tokens (past or present) ──────────────────────────────────
+// Every brand that has EVER been assigned a token pack — including packs that
+// have since expired. Lifetime issued/consumed plus current pack status.
+// Unlike the worklist above, this does not require an in-force pack or an
+// ACTIVE brand (churned accounts belong here too); only the standard internal
+// brand exclusions apply. Brand status is surfaced so churn is visible.
+
+interface TokenAccountRow {
+  brand_id: string;
+  brand_name: string;
+  brand_status: string;
+  packs: string;
+  issued: string | null;
+  balance: string | null;
+  usable_balance: string | null;
+  has_unlimited: boolean | null;
+  has_active_pack: boolean | null;
+  first_pack_at: string | null;
+  last_pack_at: string | null;
+  latest_expiry: string | null;
+}
+
+const toTokenAccount = (r: TokenAccountRow) => {
+  const issued = num(r.issued);
+  const balance = num(r.balance);
+  const consumed = Math.max(issued - balance, 0);
+  return {
+    brandId: num(r.brand_id),
+    brandName: r.brand_name,
+    brandStatus: r.brand_status,
+    packStatus: r.has_active_pack === true ? "ACTIVE" : "EXPIRED",
+    hasUnlimitedPack: r.has_unlimited === true,
+    totalPacks: num(r.packs),
+    tokensIssuedLifetime: issued,
+    tokensConsumedLifetime: consumed,
+    // Balance still spendable today — expired packs' leftover tokens are dead.
+    tokensLeft: num(r.usable_balance),
+    utilizationPct: issued > 0 ? pct(consumed, issued) : null,
+    firstPackAt: r.first_pack_at,
+    lastPackAt: r.last_pack_at,
+    latestExpiryDate: r.latest_expiry,
+  };
+};
+
+export type TokenAccount = ReturnType<typeof toTokenAccount>;
+
+// GET /cs/token-accounts — accounts with a past or present token pack.
+export const getCsTokenAccountsService = async (filters: {
+  search?: string;
+  packStatus?: string;
+}) => {
+  const rows = await q<TokenAccountRow>(
+    `WITH pack_stats AS (
+       SELECT ta."brandId" AS brand_id,
+              COUNT(*) AS packs,
+              SUM(CASE WHEN ta."isUnlimited" IS TRUE THEN 0
+                       ELSE ta."totalAssignedToken" END) AS issued,
+              SUM(CASE WHEN ta."isUnlimited" IS TRUE THEN 0
+                       ELSE ta."tokenBalance" END) AS balance,
+              SUM(CASE WHEN ta."isUnlimited" IS NOT TRUE
+                        AND (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
+                       THEN ta."tokenBalance" ELSE 0 END) AS usable_balance,
+              BOOL_OR(ta."isUnlimited" IS TRUE) AS has_unlimited,
+              BOOL_OR(ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW()) AS has_active_pack,
+              MIN(ta."createdAt") AS first_pack_at,
+              MAX(ta."createdAt") AS last_pack_at,
+              MAX(ta."expiryDate") AS latest_expiry
+       FROM token_assigned ta
+       GROUP BY 1
+     )
+     SELECT b.id AS brand_id, b.name AS brand_name, b.status AS brand_status,
+            ps.packs, ps.issued, ps.balance, ps.usable_balance,
+            ps.has_unlimited, ps.has_active_pack,
+            ps.first_pack_at, ps.last_pack_at, ps.latest_expiry
+     FROM pack_stats ps
+     JOIN brands b ON b.id = ps.brand_id
+     WHERE ${brandExclusions("b")}
+     ORDER BY ps.last_pack_at DESC, b.name ASC`,
+  );
+  let accounts = rows.map(toTokenAccount);
+  if (filters.search) {
+    const needle = filters.search.toLowerCase();
+    accounts = accounts.filter((a) => a.brandName.toLowerCase().includes(needle));
+  }
+  if (filters.packStatus) {
+    accounts = accounts.filter((a) => a.packStatus === filters.packStatus);
   }
   return { accounts, totalCount: accounts.length };
 };
