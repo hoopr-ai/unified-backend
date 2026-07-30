@@ -11,6 +11,11 @@ import {
   trackDownloadersQuerySchema,
   brandsBreakdownQuerySchema,
   tokenBreakdownQuerySchema,
+  brandDetailQuerySchema,
+  musicEntityQuerySchema,
+  funnelBrandsQuerySchema,
+  queryDetailQuerySchema,
+  featureBrandsQuerySchema,
   csAccountsQuerySchema,
   csTokenAccountsQuerySchema,
   leadsQuerySchema,
@@ -29,6 +34,12 @@ import {
   getFounderBrandsBreakdownService,
   getFounderTokenBreakdownService,
   getFounderRenewalBreakdownService,
+  getFounderBrandDetailService,
+  getFounderMusicEntityService,
+  getFounderEngagementBrandsService,
+  getFounderFunnelBrandsService,
+  getProductQueryDetailService,
+  getProductFeatureBrandsService,
   getCsAccountsService,
   getCsAlertsService,
   getCsTokenAccountsService,
@@ -127,6 +138,50 @@ export const getFounderTokenBreakdown = catchAsync(async (req: Request, res: Res
 export const getFounderRenewalBreakdown = catchAsync(async (req: Request, res: Response) => {
   validateQuery(emptyQuerySchema, req.query);
   ok(res, await getFounderRenewalBreakdownService(), "Renewal breakdown fetched.");
+});
+
+export const getFounderBrandDetail = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<{ brandId: number }>(brandDetailQuerySchema, req.query);
+  const detail = await getFounderBrandDetailService(value);
+  if (!detail.brand) throw new AppError("Brand not found.", 404);
+  ok(res, detail, "Brand detail fetched.");
+});
+
+export const getFounderMusicEntity = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range & { type: string; name: string }>(
+    musicEntityQuerySchema,
+    req.query,
+  );
+  ok(res, await getFounderMusicEntityService(value), "Entity downloads fetched.");
+});
+
+export const getFounderEngagementBrands = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range>(rangeQuerySchema, req.query);
+  ok(res, await getFounderEngagementBrandsService(value), "Engagement brands fetched.");
+});
+
+export const getFounderFunnelBrands = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range & { scope: string; stage: string }>(
+    funnelBrandsQuerySchema,
+    req.query,
+  );
+  ok(res, await getFounderFunnelBrandsService(value), "Funnel brands fetched.");
+});
+
+export const getProductQueryDetail = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range & { query: string }>(
+    queryDetailQuerySchema,
+    req.query,
+  );
+  ok(res, await getProductQueryDetailService(value), "Query detail fetched.");
+});
+
+export const getProductFeatureBrands = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range & { feature: string }>(
+    featureBrandsQuerySchema,
+    req.query,
+  );
+  ok(res, await getProductFeatureBrandsService(value), "Feature brands fetched.");
 });
 
 // ─── Customer Success ────────────────────────────────────────────────────────

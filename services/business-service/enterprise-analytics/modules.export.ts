@@ -13,6 +13,14 @@ export {
   getFounderRenewalBreakdownService,
 } from "./founder-analytics.service";
 export {
+  getFounderBrandDetailService,
+  getFounderMusicEntityService,
+  getFounderEngagementBrandsService,
+  getFounderFunnelBrandsService,
+  getProductQueryDetailService,
+  getProductFeatureBrandsService,
+} from "./drilldown-analytics.service";
+export {
   getCsAccountsService,
   getCsAlertsService,
   getCsTokenAccountsService,

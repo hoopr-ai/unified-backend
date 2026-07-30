@@ -25,6 +25,37 @@ export const trackDownloadersQuerySchema = Joi.object({
   trackCode: Joi.string().max(100).required(),
 }).unknown(false);
 
+// GET /admin/enterprise-analytics/founder/brand-detail
+export const brandDetailQuerySchema = Joi.object({
+  brandId: Joi.number().integer().positive().required(),
+}).unknown(false);
+
+// GET /admin/enterprise-analytics/founder/music/entity-downloads
+export const musicEntityQuerySchema = Joi.object({
+  ...defaultRange,
+  type: Joi.string().valid("artist", "genre", "language").required(),
+  name: Joi.string().max(200).required(),
+}).unknown(false);
+
+// GET /admin/enterprise-analytics/founder/funnel-brands
+export const funnelBrandsQuerySchema = Joi.object({
+  ...defaultRange,
+  scope: Joi.string().valid("adoption", "search").required(),
+  stage: Joi.string().max(30).required(),
+}).unknown(false);
+
+// GET /admin/enterprise-analytics/product/query-detail
+export const queryDetailQuerySchema = Joi.object({
+  ...defaultRange,
+  query: Joi.string().max(200).required(),
+}).unknown(false);
+
+// GET /admin/enterprise-analytics/product/feature-brands
+export const featureBrandsQuerySchema = Joi.object({
+  ...defaultRange,
+  feature: Joi.string().valid("search", "filters", "preview", "download", "reel").required(),
+}).unknown(false);
+
 // GET /admin/enterprise-analytics/founder/brands-breakdown
 export const brandsBreakdownQuerySchema = Joi.object({
   ...defaultRange,
