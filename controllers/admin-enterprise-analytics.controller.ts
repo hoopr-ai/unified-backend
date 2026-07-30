@@ -9,6 +9,8 @@ import { HttpStatusCode } from "../services/dto-service/constants/modules.export
 import {
   rangeQuerySchema,
   trackDownloadersQuerySchema,
+  brandsBreakdownQuerySchema,
+  tokenBreakdownQuerySchema,
   csAccountsQuerySchema,
   csTokenAccountsQuerySchema,
   leadsQuerySchema,
@@ -24,6 +26,9 @@ import {
   getFounderHealthScoresService,
   getFounderTopUsersService,
   getFounderTrackDownloadersService,
+  getFounderBrandsBreakdownService,
+  getFounderTokenBreakdownService,
+  getFounderRenewalBreakdownService,
   getCsAccountsService,
   getCsAlertsService,
   getCsTokenAccountsService,
@@ -101,6 +106,27 @@ export const getFounderTrackDownloaders = catchAsync(async (req: Request, res: R
     req.query,
   );
   ok(res, await getFounderTrackDownloadersService(value), "Track downloaders fetched.");
+});
+
+export const getFounderBrandsBreakdown = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range & { filter: string }>(
+    brandsBreakdownQuerySchema,
+    req.query,
+  );
+  ok(res, await getFounderBrandsBreakdownService(value), "Brands breakdown fetched.");
+});
+
+export const getFounderTokenBreakdown = catchAsync(async (req: Request, res: Response) => {
+  const value = validateQuery<Range & { metric: string }>(
+    tokenBreakdownQuerySchema,
+    req.query,
+  );
+  ok(res, await getFounderTokenBreakdownService(value), "Token breakdown fetched.");
+});
+
+export const getFounderRenewalBreakdown = catchAsync(async (req: Request, res: Response) => {
+  validateQuery(emptyQuerySchema, req.query);
+  ok(res, await getFounderRenewalBreakdownService(), "Renewal breakdown fetched.");
 });
 
 // ─── Customer Success ────────────────────────────────────────────────────────

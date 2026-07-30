@@ -12,6 +12,9 @@ import {
   getFounderHealthScores,
   getFounderTopUsers,
   getFounderTrackDownloaders,
+  getFounderBrandsBreakdown,
+  getFounderTokenBreakdown,
+  getFounderRenewalBreakdown,
   getCsAccounts,
   getCsAlerts,
   getCsTokenAccounts,
@@ -42,6 +45,9 @@ router.get("/founder/retention", ...requireDashboard, getFounderRetention);
 router.get("/founder/health-scores", ...requireDashboard, getFounderHealthScores);
 router.get("/founder/top-users", ...requireDashboard, getFounderTopUsers);
 router.get("/founder/music/track-downloaders", ...requireDashboard, getFounderTrackDownloaders);
+router.get("/founder/brands-breakdown", ...requireDashboard, getFounderBrandsBreakdown);
+router.get("/founder/token-breakdown", ...requireDashboard, getFounderTokenBreakdown);
+router.get("/founder/renewal-breakdown", ...requireDashboard, getFounderRenewalBreakdown);
 
 router.get("/cs/accounts", ...requireDashboard, getCsAccounts);
 router.get("/cs/token-accounts", ...requireDashboard, getCsTokenAccounts);
