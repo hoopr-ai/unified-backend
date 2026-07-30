@@ -15,6 +15,12 @@ import {
   getFounderBrandsBreakdown,
   getFounderTokenBreakdown,
   getFounderRenewalBreakdown,
+  getFounderBrandDetail,
+  getFounderMusicEntity,
+  getFounderEngagementBrands,
+  getFounderFunnelBrands,
+  getProductQueryDetail,
+  getProductFeatureBrands,
   getCsAccounts,
   getCsAlerts,
   getCsTokenAccounts,
@@ -48,6 +54,12 @@ router.get("/founder/music/track-downloaders", ...requireDashboard, getFounderTr
 router.get("/founder/brands-breakdown", ...requireDashboard, getFounderBrandsBreakdown);
 router.get("/founder/token-breakdown", ...requireDashboard, getFounderTokenBreakdown);
 router.get("/founder/renewal-breakdown", ...requireDashboard, getFounderRenewalBreakdown);
+router.get("/founder/brand-detail", ...requireDashboard, getFounderBrandDetail);
+router.get("/founder/music/entity-downloads", ...requireDashboard, getFounderMusicEntity);
+router.get("/founder/engagement-brands", ...requireDashboard, getFounderEngagementBrands);
+router.get("/founder/funnel-brands", ...requireDashboard, getFounderFunnelBrands);
+router.get("/product/query-detail", ...requireDashboard, getProductQueryDetail);
+router.get("/product/feature-brands", ...requireDashboard, getProductFeatureBrands);
 
 router.get("/cs/accounts", ...requireDashboard, getCsAccounts);
 router.get("/cs/token-accounts", ...requireDashboard, getCsTokenAccounts);
