@@ -8,6 +8,9 @@ export {
   getFounderHealthScoresService,
   getFounderTopUsersService,
   getFounderTrackDownloadersService,
+  getFounderBrandsBreakdownService,
+  getFounderTokenBreakdownService,
+  getFounderRenewalBreakdownService,
 } from "./founder-analytics.service";
 export {
   getCsAccountsService,

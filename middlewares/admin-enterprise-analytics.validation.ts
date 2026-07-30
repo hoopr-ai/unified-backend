@@ -25,6 +25,18 @@ export const trackDownloadersQuerySchema = Joi.object({
   trackCode: Joi.string().max(100).required(),
 }).unknown(false);
 
+// GET /admin/enterprise-analytics/founder/brands-breakdown
+export const brandsBreakdownQuerySchema = Joi.object({
+  ...defaultRange,
+  filter: Joi.string().valid("all", "new").default("all"),
+}).unknown(false);
+
+// GET /admin/enterprise-analytics/founder/token-breakdown
+export const tokenBreakdownQuerySchema = Joi.object({
+  ...defaultRange,
+  metric: Joi.string().valid("issued", "spent", "reels").required(),
+}).unknown(false);
+
 // GET /admin/enterprise-analytics/cs/accounts
 export const csAccountsQuerySchema = Joi.object({
   search: Joi.string().max(100).optional(),

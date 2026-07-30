@@ -448,6 +448,208 @@ export const getFounderMusicService = async (range: DateRange) => {
   };
 };
 
+// ─── Brands breakdown (drill-down) ───────────────────────────────────────────
+// The exact brands behind the Overview tiles: filter=all → Total Brands,
+// filter=new → Newly Onboarded Brands in the date range. One row per brand
+// with onboarding date, health, and current kitty, so the tile number is
+// fully accounted for.
+export const getFounderBrandsBreakdownService = async (
+  params: DateRange & { filter: string },
+) => {
+  const newOnly = params.filter === "new";
+  const rows = await q<{
+    brand_id: string;
+    brand_name: string;
+    onboarded_at: string;
+    score: string;
+    tier: string;
+    packs: string | null;
+    issued: string | null;
+    balance: string | null;
+    has_unlimited: boolean | null;
+    last_active: string | null;
+  }>(
+    `WITH ${HEALTH_NOW},
+     packs AS (
+       SELECT ta."brandId" AS brand_id,
+              COUNT(*) AS packs,
+              SUM(CASE WHEN ta."isUnlimited" IS TRUE THEN 0
+                       ELSE ta."totalAssignedToken" END) AS issued,
+              SUM(CASE WHEN ta."isUnlimited" IS TRUE THEN 0
+                       ELSE ta."tokenBalance" END) AS balance,
+              BOOL_OR(ta."isUnlimited" IS TRUE) AS has_unlimited
+       FROM token_assigned ta
+       WHERE (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
+       GROUP BY 1
+     )
+     SELECT b.id AS brand_id, b.name AS brand_name, b."createdAt" AS onboarded_at,
+            hb.score, hb.tier,
+            p.packs, p.issued, p.balance, p.has_unlimited,
+            GREATEST(
+              (SELECT MAX(u."lastLoginAt") FROM users u WHERE u."brandId" = b.id),
+              (SELECT MAX(s."createdAt") FROM user_sessions s
+               JOIN users u ON u.id = s."userId" WHERE u."brandId" = b.id)
+            ) AS last_active
+     FROM brands b
+     JOIN health_banded hb ON hb.brand_id = b.id
+     LEFT JOIN packs p ON p.brand_id = b.id
+     WHERE ${customerPred("b")}
+       ${newOnly ? `AND ${inRange(`b."createdAt"`)}` : ""}
+     ORDER BY b."createdAt" DESC, b.name ASC`,
+    params,
+  );
+  return {
+    filter: newOnly ? "new" : "all",
+    brands: rows.map((r) => ({
+      brandId: num(r.brand_id),
+      brandName: r.brand_name,
+      onboardedAt: r.onboarded_at,
+      healthScore: num(r.score),
+      healthTier: r.tier,
+      activePacks: num(r.packs),
+      tokensIssued: num(r.issued),
+      tokensLeft: num(r.balance),
+      hasUnlimitedPack: r.has_unlimited === true,
+      lastActiveAt: r.last_active,
+    })),
+  };
+};
+
+// ─── Token economics breakdown (drill-down) ──────────────────────────────────
+// Per-brand rows behind each Token Economics tile, using the exact same
+// filters as the tile itself so the rows sum to the headline number.
+//   issued → in-force finite packs per brand
+//   spent  → token deductions in range per brand (finite packs only)
+//   reels  → reels posted in range per brand
+export const getFounderTokenBreakdownService = async (
+  params: DateRange & { metric: string },
+) => {
+  if (params.metric === "issued") {
+    const rows = await q<{
+      brand_id: string; brand_name: string; packs: string; pack_types: string | null;
+      issued: string; balance: string; expiry: string | null;
+    }>(
+      `SELECT ta."brandId" AS brand_id, b.name AS brand_name,
+              COUNT(*) AS packs,
+              STRING_AGG(DISTINCT ta."type", ', ') AS pack_types,
+              SUM(ta."totalAssignedToken") AS issued,
+              SUM(ta."tokenBalance") AS balance,
+              MIN(ta."expiryDate") AS expiry
+       FROM token_assigned ta
+       JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
+       WHERE ta."isUnlimited" IS NOT TRUE
+         AND (ta."expiryDate" IS NULL OR ta."expiryDate" >= NOW())
+       GROUP BY 1, 2
+       ORDER BY issued DESC, brand_name ASC`,
+    );
+    return {
+      metric: "issued",
+      rows: rows.map((r) => ({
+        brandId: num(r.brand_id),
+        brandName: r.brand_name,
+        packs: num(r.packs),
+        packTypes: r.pack_types,
+        tokensIssued: num(r.issued),
+        tokensLeft: num(r.balance),
+        expiryDate: r.expiry,
+      })),
+    };
+  }
+  if (params.metric === "spent") {
+    const rows = await q<{
+      brand_id: string; brand_name: string; spent: string; deductions: string;
+      last_spent_at: string | null;
+    }>(
+      `SELECT ta."brandId" AS brand_id, cb.name AS brand_name,
+              COALESCE(SUM(td."deductedTokenCount"), 0) AS spent,
+              COUNT(*) AS deductions,
+              MAX(td."deductedAt") AS last_spent_at
+       FROM token_deduction td
+       JOIN token_assigned ta ON ta.id = td."tokenAssignedId" AND ta."isUnlimited" IS NOT TRUE
+       ${customerBrandJoin('ta."brandId"')}
+       WHERE ${inRange(`td."deductedAt"`)}
+       GROUP BY 1, 2
+       ORDER BY spent DESC, brand_name ASC`,
+      params,
+    );
+    return {
+      metric: "spent",
+      rows: rows.map((r) => ({
+        brandId: num(r.brand_id),
+        brandName: r.brand_name,
+        tokensSpent: num(r.spent),
+        deductions: num(r.deductions),
+        lastSpentAt: r.last_spent_at,
+      })),
+    };
+  }
+  // reels
+  const rows = await q<{
+    brand_id: string; brand_name: string; reels: string; last_reel_at: string | null;
+  }>(
+    `SELECT vl."brandId" AS brand_id, cb.name AS brand_name,
+            COUNT(*) AS reels,
+            MAX(vl."createdAt") AS last_reel_at
+     FROM video_links vl
+     ${customerBrandJoin('vl."brandId"')}
+     WHERE ${inRange(`vl."createdAt"`)}
+     GROUP BY 1, 2
+     ORDER BY reels DESC, brand_name ASC`,
+    params,
+  );
+  return {
+    metric: "reels",
+    rows: rows.map((r) => ({
+      brandId: num(r.brand_id),
+      brandName: r.brand_name,
+      reels: num(r.reels),
+      lastReelAt: r.last_reel_at,
+    })),
+  };
+};
+
+// ─── Renewal breakdown (drill-down) ──────────────────────────────────────────
+// Every pack expiry of the last 12 months with whether a follow-up pack
+// arrived within the renewal window — the raw rows behind the renewal rate,
+// logo churn, and renewals-by-quarter numbers.
+export const getFounderRenewalBreakdownService = async () => {
+  const rows = await q<{
+    brand_id: string;
+    brand_name: string;
+    expiry_date: string;
+    quarter: string;
+    issued: string;
+    renewed_at: string | null;
+  }>(
+    `SELECT ta."brandId" AS brand_id, b.name AS brand_name,
+            ta."expiryDate" AS expiry_date,
+            to_char(date_trunc('quarter', ta."expiryDate"), 'YYYY-"Q"Q') AS quarter,
+            ta."totalAssignedToken" AS issued,
+            (SELECT MIN(nxt."createdAt") FROM token_assigned nxt
+             WHERE nxt."brandId" = ta."brandId"
+               AND nxt."createdAt" > ta."expiryDate" - INTERVAL '15 days'
+               AND nxt."createdAt" < ta."expiryDate" + INTERVAL '45 days'
+               AND nxt.id <> ta.id) AS renewed_at
+     FROM token_assigned ta
+     JOIN brands b ON b.id = ta."brandId" AND ${customerPred("b")}
+     WHERE ta."expiryDate" IS NOT NULL
+       AND ta."expiryDate" < NOW()
+       AND ta."expiryDate" >= NOW() - INTERVAL '12 months'
+     ORDER BY ta."expiryDate" DESC, b.name ASC`,
+  );
+  return {
+    expiries: rows.map((r) => ({
+      brandId: num(r.brand_id),
+      brandName: r.brand_name,
+      expiryDate: r.expiry_date,
+      quarter: r.quarter,
+      tokensIssued: num(r.issued),
+      renewed: r.renewed_at != null,
+      renewedAt: r.renewed_at,
+    })),
+  };
+};
+
 // ─── Customer health scores (drill-down) ─────────────────────────────────────
 // One row per brand with the exact score, tier, and the raw signal values the
 // score is built from, so the FE can explain WHY a brand landed in its tier
