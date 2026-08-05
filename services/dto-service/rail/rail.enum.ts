@@ -37,6 +37,8 @@ export enum PageName {
   REGIONAL_AND_INDIE = "REGIONAL_AND_INDIE",
   HOOPR_ORIGINALS = "HOOPR_ORIGINALS",
   APP_HOME = "APP_HOME",
+  APP_HOME_ORGANIC = "APP_HOME_ORGANIC",
+  APP_HOME_BRAND_COLLAB = "APP_HOME_BRAND_COLLAB",
   HOOPR_PLAYLIST = "HOOPR_PLAYLIST",
   HOOPR_SFX = "HOOPR_SFX",
   APP_PLAYLIST = "APP_PLAYLIST",
@@ -59,6 +61,8 @@ export const PAGE_OWNER_TYPE_MAP: Record<PageName, OwnerType[] | null> = {
   [PageName.REGIONAL_AND_INDIE]: [OwnerType.REGIONAL_AND_INDIE],
   [PageName.HOOPR_ORIGINALS]: [OwnerType.HOOPR_ORIGINALS],
   [PageName.APP_HOME]: null, // null means all owner types allowed
+  [PageName.APP_HOME_ORGANIC]: null, // null means all owner types allowed
+  [PageName.APP_HOME_BRAND_COLLAB]: null, // null means all owner types allowed
   [PageName.HOOPR_PLAYLIST]: null, // null means all owner types allowed
   [PageName.HOOPR_SFX]: null, // null means all owner types allowed
   [PageName.APP_PLAYLIST]: null, // null means all owner types allowed

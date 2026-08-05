@@ -92,6 +92,8 @@ const PAGE_RECOMMENDATION_FILTERS: Record<PageName, BrandRecommendFilter[]> = {
     { type: "assortment", value: ["hooproriginals"] },
   ],
   [PageName.APP_HOME]: [],
+  [PageName.APP_HOME_ORGANIC]: [],
+  [PageName.APP_HOME_BRAND_COLLAB]: [],
   [PageName.HOOPR_PLAYLIST]: [],
   [PageName.HOOPR_SFX]: [],
   [PageName.APP_PLAYLIST]: [],
@@ -301,12 +303,21 @@ const hydrateFilters = async (
   const out = new Map<string, unknown>();
   if (itemCodes.length === 0) return out;
 
+  // `filters.id` is a uuid column, but FILTERS rails store slugs ("happy",
+  // "calm") as item codes. Sending a slug into the `id IN (...)` clause makes
+  // Postgres fail the whole query with 22P02 (invalid input syntax for type
+  // uuid), 500-ing GET /rails. Same guard hydratePlaylists uses.
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const uuidCodes = itemCodes.filter((code) => uuidRegex.test(code));
+
   const rows = await FilterModel.findAll({
     where: {
-      [Op.or]: [
-        { id: { [Op.in]: itemCodes } },
-        { name_slug: { [Op.in]: itemCodes } },
-      ],
+      [Op.or]: uuidCodes.length > 0
+        ? [
+            { id: { [Op.in]: uuidCodes } },
+            { name_slug: { [Op.in]: itemCodes } },
+          ]
+        : [{ name_slug: { [Op.in]: itemCodes } }],
     },
     attributes: ["id", "name", "name_slug", "type"],
   });
