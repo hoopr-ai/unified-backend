@@ -90,7 +90,13 @@ export const refreshToken = catchAsync(async (req: Request, res: Response) => {
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
-    data: { accessToken: result.accessToken, expiresIn: result.expiresIn },
+    // refreshToken is echoed back so localStorage-based clients can keep their
+    // copy in sync. It is currently unchanged by refresh (see refreshTokenService).
+    data: {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresIn: result.expiresIn,
+    },
     message: "Token refreshed successfully",
   });
 });

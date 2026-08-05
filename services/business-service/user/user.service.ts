@@ -321,16 +321,19 @@ export const refreshTokenService = async (
     AccessTokenExpiry,
   );
 
-  const newRefreshToken = createJWTToken(
-    { userId: user.id },
-    RefreshTokenExpiry,
-  );
-
-  await updateSessionToken(session.id!, newAccessToken, newRefreshToken);
+  // Deliberately NOT rotated. The refresh token stays fixed for its full
+  // RefreshTokenExpiry window and only the access token is reissued.
+  // Rotating here silently killed sessions: the client keeps its refresh token
+  // in localStorage and sends it in the request body, so a rotated token only
+  // ever reached the httpOnly cookie — the next refresh replayed the old token
+  // against a session row that no longer held it and 401'd into a forced
+  // logout. It also broke multi-tab: the first tab to refresh invalidated the
+  // refresh token every other tab was holding.
+  await updateSessionToken(session.id!, newAccessToken, incomingRefreshToken);
 
   return {
     accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
+    refreshToken: incomingRefreshToken,
     expiresIn: AccessTokenExpiryInSeconds,
   };
 };
