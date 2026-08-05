@@ -97,8 +97,10 @@ export interface LoginResponse {
   brandName?: string;
 }
 
-export const AccessTokenExpiry = "3h";
-export const AccessTokenExpiryInSeconds = 3 * 60 * 60;
+// TEMPORARY — shortened for refresh-flow testing. REVERT TO "3h" / 3 * 60 * 60
+// BEFORE MERGING OR DEPLOYING TO PRODUCTION.
+export const AccessTokenExpiry = "2m";
+export const AccessTokenExpiryInSeconds = 2 * 60;
 
 export const RefreshTokenExpiry = "30d";
 export const RefreshTokenExpiryInSeconds = 30 * 24 * 60 * 60;
