@@ -14,7 +14,12 @@ import {
 } from "./user/modules.export";
 import { TrackModel, FeaturedTracksModel, ChartTrackModel } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
-import { FilterModel, TrackFilterMappingModel } from "./filter/modules.export";
+import {
+  FilterModel,
+  TrackFilterMappingModel,
+  SubFilterModel,
+  TrackSubFilterMappingModel,
+} from "./filter/modules.export";
 import { ArtistModel, TrackArtistMappingModel } from "./artists/modules.export";
 import {
   PlaylistModel,
@@ -115,6 +120,8 @@ sequelize.addModels([
   AlbumModel,
   FilterModel,
   TrackFilterMappingModel,
+  SubFilterModel,
+  TrackSubFilterMappingModel,
   ArtistModel,
   TrackArtistMappingModel,
   PlaylistModel,
