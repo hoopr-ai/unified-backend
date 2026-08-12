@@ -815,6 +815,11 @@ const buildRailResponse = (
       ? { query: cfg.query as Record<string, unknown> }
       : {}),
     ...(cmsAiQuery ? { aiQuery: cmsAiQuery as Record<string, unknown> } : {}),
+    // Widget content (the `config` column). Echoed whenever present so the CMS
+    // can render and round-trip app-home rails, whose bodies live here rather
+    // than in rail_items. Omitted when null so every other rail's payload is
+    // byte-identical to before.
+    ...(rail.config ? { config: rail.config as Record<string, unknown> } : {}),
   };
 };
 
@@ -1086,6 +1091,11 @@ export interface UpsertRailRequest {
   // You" rail (which lives in tier 2). Persisted as sourceConfig.pinnedTop.
   pinnedTop?: boolean;
   seeMore?: RailSeeMoreDescriptor | null;
+  // WIDGET / BANNERS app-home rails: the widget body (banner slides, category
+  // tiles, taglines, copy). Persisted to the `config` column verbatim.
+  // Omit the key entirely to leave the stored config untouched — an edit that
+  // isn't about widget content must not blank it. Send null to clear it.
+  config?: Record<string, unknown> | null;
   // MANUAL: caller-supplied items (tracks/filters/playlists)
   itemCodes?: string[];
   // QUERY (tracks only): filter spec to snapshot
@@ -1145,7 +1155,10 @@ export interface UpsertRailResult {
   additionalRails?: SingleRailUpsertResult[];
 }
 
-const RAIL_TYPE_TO_ITEM_TYPE: Record<RailType, RailItemType> = {
+// Partial by design: WIDGET rails have no rail_items at all — their body lives
+// in the `config` column — so there is no item type to map them to. Callers must
+// handle the undefined rather than a bogus placeholder being invented for them.
+const RAIL_TYPE_TO_ITEM_TYPE: Partial<Record<RailType, RailItemType>> = {
   [RailType.TRACKS]: RailItemType.TRACK,
   [RailType.GENRES]: RailItemType.GENRE,
   [RailType.LANGUAGES]: RailItemType.LANGUAGE,
@@ -1706,6 +1719,11 @@ const buildItemsForUpsert = async (
 ): Promise<{ itemType: string; itemCode: string; order: number }[]> => {
   const itemType = RAIL_TYPE_TO_ITEM_TYPE[req.type];
 
+  // WIDGET rails carry no rail_items — everything they render comes from
+  // `config`. Return before the MANUAL branch below, which would otherwise
+  // reject them for having no `itemCodes`.
+  if (!itemType) return [];
+
   let codes: string[];
   if (req.sourceType === RailSourceType.MANUAL) {
     if (!Array.isArray(req.itemCodes)) {
@@ -1807,6 +1825,11 @@ export const upsertRailService = async (
         pageName,
         sourceType: req.sourceType,
         sourceConfig: finalSourceConfig,
+        // Only forwarded when the caller actually sent `config`. Spreading a
+        // conditional key (rather than `config: req.config ?? null`) is what
+        // keeps an unrelated edit — a rename, a reorder, a visibility toggle —
+        // from wiping a widget rail's entire body.
+        ...("config" in req ? { config: req.config ?? null } : {}),
         order,
         isVisible: req.isVisible ?? true,
         updatedById: updatedById ?? null,

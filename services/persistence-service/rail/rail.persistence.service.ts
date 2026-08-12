@@ -360,6 +360,11 @@ export interface UpsertRailInput {
   pageName: PageName;
   sourceType: string;
   sourceConfig?: Record<string, unknown> | null;
+  // Widget content for app-home rails. OMIT to leave the stored value alone —
+  // Sequelize's update() only writes the keys present on the input, so an
+  // ordinary CMS edit of a widget rail must not send this key at all rather
+  // than sending null, which would wipe the rail's entire body.
+  config?: Record<string, unknown> | null;
   order: number;
   isVisible: boolean;
   updatedById?: number | null;
