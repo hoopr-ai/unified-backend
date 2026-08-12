@@ -28,6 +28,18 @@ export interface RailSourceConfig {
   [key: string]: unknown;
 }
 
+/**
+ * Widget content for the app-home pages (the `config` column — NOT
+ * `sourceConfig`). Shape varies by `subType`: BANNERS/CATEGORY_GRID carry an
+ * `items` array, the copy widgets carry headline/CTA fields. Deliberately open:
+ * Content-Recommendation owns the per-subType schema, and this service stores
+ * and echoes it verbatim so a new widget type needs no change here.
+ */
+export interface RailWidgetConfig {
+  items?: unknown[];
+  [key: string]: unknown;
+}
+
 export interface RailDetails {
   id?: number;
   key: string;
@@ -43,6 +55,8 @@ export interface RailDetails {
   // Content-Recommendation app endpoint; surfaced here so the CMS can toggle it.
   populateMode?: string | null;
   sourceConfig?: RailSourceConfig | null;
+  // Widget content for app-home rails. See the column comment below.
+  config?: RailWidgetConfig | null;
   order: number;
   isVisible: boolean;
   updatedById?: number | null;
@@ -129,6 +143,19 @@ export class RailModel extends Model<RailModel, RailDetails> {
     allowNull: true,
   })
   sourceConfig?: RailSourceConfig | null;
+
+  // Widget content for the app-home pages: banner slides, category tiles,
+  // taglines, headline/CTA copy. Written by Content-Recommendation's app-home
+  // seeds and read by GET /smash/app/home, which renders WIDGET/BANNERS rails
+  // straight from here instead of from rail_items. Distinct from
+  // `sourceConfig` above, which holds this service's own query/aiQuery source
+  // configuration — do not conflate them. Mapped so the CMS can show and edit
+  // widget rails, whose bodies are otherwise invisible to it.
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+  })
+  config?: RailWidgetConfig | null;
 
   @Default(0)
   @Column({

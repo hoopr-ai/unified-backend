@@ -48,6 +48,11 @@ export interface RailResponse {
   query?: Record<string, unknown>;
   // AI_QUERY rails: sourceConfig.aiQuery with `headers` stripped (secrets).
   aiQuery?: Record<string, unknown>;
+  // WIDGET / BANNERS app-home rails: the `config` column verbatim (banner
+  // slides, category tiles, taglines, copy). This is the ONLY place their
+  // content lives — they have no rail_items — so without it the CMS shows
+  // them as empty. Distinct from sourceConfig/query above.
+  config?: Record<string, unknown> | null;
 }
 
 export interface PaginatedRailsResponse {

@@ -9,6 +9,11 @@ export enum RailType {
   OCCASIONS = "OCCASIONS",
   QUICK_ADDS = "QUICK_ADDS",
   BANNERS = "BANNERS",
+  // App-home content widgets (heading image, promo card, category grid,
+  // tagline rotator, feature card, footer stats). These carry no rail_items —
+  // their content lives in the rail's `config` column and is discriminated by
+  // `subType`. Listed so the CMS can round-trip them without coercing `type`.
+  WIDGET = "WIDGET",
 }
 
 export enum RailSourceType {
