@@ -49,9 +49,6 @@ export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = parseBrandId(req.session?.userId); // Reusing parseBrandId to parse userId from session, will return undefined if invalid
   const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
 
-  // Get the logged-in user's brandId for brand-specific recommendations
-  const user = userId ? await findUserById(userId) : null;
-
   const rails = await getRailsService(brandId, userId, pageName);
 
   sendResponse(res, {
