@@ -15,6 +15,8 @@ import {
   OwnerType,
   isOwnerTypeAllowedForPage,
   getAllowedOwnerTypesForPage,
+  getAllowedOwnerTypesForPages,
+  normalizeOwnerType,
   itemTypeHasOwnerRestriction,
   isManualOnlyPage,
   isRecommendationExcludedPage,
@@ -1118,6 +1120,11 @@ export interface UpsertRailRequest {
       type: 'genre' | 'mood' | 'language' | 'usecase' | 'assortment' | 'vocals';
       value: string[] | string;
     }>;
+    // Catalog slice to restrict results to. Accepts the PageName enum
+    // ("REGIONAL_AND_INDIE") or the DB label ("Regional & Indie"); it is
+    // normalized and sent to the AI service as an `assortment` filter.
+    // Omitted => derived from the rail's target pages.
+    ownerType?: string | string[];
     page?: number;
     // Legacy support: direct url/body/headers
     url?: string;
@@ -1137,12 +1144,24 @@ export interface UpsertRailsResult {
   rails: SingleRailUpsertResult[];
 }
 
+// Items dropped on save because the target page does not allow their owner
+// type. Reported back so the CMS can tell the admin what didn't make it.
+export interface SkippedRailItem {
+  pageName: PageName;
+  itemType: string;
+  itemCode: string;
+  ownerType: string;
+  allowedOwnerTypes: OwnerType[];
+}
+
 // Legacy result type for backwards compatibility
 export interface UpsertRailResult {
   rail: RailDetails;
   items: RailItemDetails[];
   // When multiple pages, additional rails are in this array
   additionalRails?: SingleRailUpsertResult[];
+  // Present only when some items were filtered out (see SkippedRailItem)
+  skippedItems?: SkippedRailItem[];
 }
 
 const RAIL_TYPE_TO_ITEM_TYPE: Record<RailType, RailItemType> = {
@@ -1415,6 +1434,65 @@ export const resolveChartTracks = async (
   return ordered;
 };
 
+// -----------------------------------------------------------------------------
+// Owner-type constraint for AI_QUERY rails
+// -----------------------------------------------------------------------------
+
+// The AI service matches the catalog slice on `owners.type` via an
+// `assortment` filter, so anything we send must be the canonical DB label.
+const AI_ASSORTMENT_FILTER_TYPE = "assortment";
+// /smash/aienterpriseSearch and /smash/brandRecommend both cap limit at 100.
+const AI_SERVICE_MAX_LIMIT = 100;
+// The assortment filter is applied best-effort by the AI service (unknown or
+// unmatched values are silently dropped there), so ask for more than we need
+// and let the page filter below trim back to the requested count.
+const AI_OWNER_TYPE_OVERFETCH = 3;
+
+type AiQueryFilterInput = NonNullable<
+  NonNullable<UpsertRailRequest["aiQuery"]>["filters"]
+>;
+
+const toValueArray = (value: string[] | string | undefined): string[] =>
+  value === undefined ? [] : Array.isArray(value) ? value : [value];
+
+// Owner types this rail's AI results must be limited to. An explicit
+// aiQuery.ownerType / assortment filter wins; otherwise the target pages
+// decide (REGIONAL_AND_INDIE page => "Regional & Indie" catalog).
+const resolveAiQueryOwnerTypes = (req: UpsertRailRequest): string[] => {
+  const explicit: string[] = [
+    ...toValueArray(req.aiQuery?.ownerType as string[] | string | undefined),
+    ...(req.aiQuery?.filters ?? [])
+      .filter((f) => f?.type === AI_ASSORTMENT_FILTER_TYPE)
+      .flatMap((f) => toValueArray(f.value)),
+  ]
+    .map((v) => String(v).trim())
+    .filter((v) => v.length > 0)
+    // Unknown labels pass through untouched — the AI service owns its own
+    // vocabulary and may accept slices we don't model here.
+    .map((v) => normalizeOwnerType(v) ?? v);
+
+  if (explicit.length > 0) return [...new Set(explicit)];
+
+  const pageTypes = getAllowedOwnerTypesForPages(req.pageNames);
+  return pageTypes ? [...pageTypes] : [];
+};
+
+// Rewrite the caller's filters so the catalog slice travels in the one shape
+// the AI service reads: a single `assortment` filter with canonical values.
+const withAssortmentFilter = (
+  filters: AiQueryFilterInput | undefined,
+  ownerTypes: string[],
+): AiQueryFilterInput => {
+  const rest = (filters ?? []).filter(
+    (f) => f?.type !== AI_ASSORTMENT_FILTER_TYPE,
+  );
+  if (ownerTypes.length === 0) return rest;
+  return [
+    ...rest,
+    { type: AI_ASSORTMENT_FILTER_TYPE, value: ownerTypes },
+  ] as AiQueryFilterInput;
+};
+
 // AI_QUERY path: call AI service based on queryType
 const resolveAiQueryTracks = async (
   req: UpsertRailRequest,
@@ -1439,6 +1517,14 @@ const resolveAiQueryTracks = async (
   let body: string | undefined;
   let headers: Record<string, string> = {};
 
+  const ownerTypes = resolveAiQueryOwnerTypes(req);
+  // Ask for extra rows only when a slice is enforced, so a partially-applied
+  // assortment filter still leaves enough compatible tracks after filtering.
+  const withOverfetch = (limit: number): number =>
+    ownerTypes.length > 0
+      ? Math.min(AI_SERVICE_MAX_LIMIT, limit * AI_OWNER_TYPE_OVERFETCH)
+      : limit;
+
   if (aiQuery.queryType === 'FILTERED') {
     // POST /smash/aienterpriseSearch with body
     if (!aiServiceUrl) {
@@ -1453,8 +1539,8 @@ const resolveAiQueryTracks = async (
       brandId: req.brandId ? String(req.brandId) : undefined,
       brandName: aiQuery.brandName ?? "",
       userId: aiQuery.userId ?? "",
-      filters: aiQuery.filters ?? [],
-      limit: aiQuery.limit ?? 200,
+      filters: withAssortmentFilter(aiQuery.filters, ownerTypes),
+      limit: withOverfetch(aiQuery.limit ?? 200),
       page: aiQuery.page ?? 1,
     };
     body = JSON.stringify(requestBody);
@@ -1467,7 +1553,9 @@ const resolveAiQueryTracks = async (
     if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
 
     const requestBody: Record<string, unknown> = {
-      limit: aiQuery.limit ?? 40,
+      // No assortment support on this endpoint — over-fetch so the page filter
+      // still has enough compatible tracks left.
+      limit: withOverfetch(aiQuery.limit ?? 40),
       page: aiQuery.page ?? 1,
     };
     body = JSON.stringify(requestBody);
@@ -1487,12 +1575,13 @@ const resolveAiQueryTracks = async (
 
     const requestBody: Record<string, unknown> = {
       brand_id: String(req.brandId),
-      limit: aiQuery.limit ?? 40,
+      limit: withOverfetch(aiQuery.limit ?? 40),
       page: aiQuery.page ?? 1,
     };
     // Add filters if provided (language, assortment, vocals)
-    if (aiQuery.filters && aiQuery.filters.length > 0) {
-      requestBody.filters = aiQuery.filters;
+    const brandFilters = withAssortmentFilter(aiQuery.filters, ownerTypes);
+    if (brandFilters.length > 0) {
+      requestBody.filters = brandFilters;
     }
     body = JSON.stringify(requestBody);
     url = `${aiServiceUrl}/smash/brandRecommend`;
@@ -1701,9 +1790,47 @@ const formatValidationErrors = (errors: ItemValidationError[]): string => {
   return messages.join("; ");
 };
 
+interface UpsertItem {
+  itemType: string;
+  itemCode: string;
+  order: number;
+}
+
+// Keep only the items the page's owner-type rules allow, instead of rejecting
+// the whole write. The read path already hides incompatible items
+// (filterItemsByPageOwnerType), so storing them only produces short rails and
+// failed saves — and an AI/search source can always return a few tracks from
+// the wrong catalog slice. `cap` trims back to the caller's requested count
+// after any over-fetch.
+const applyPageOwnerTypeFilter = async (
+  items: UpsertItem[],
+  pageName: PageName,
+  cap?: number | null,
+): Promise<{ items: UpsertItem[]; skipped: ItemValidationError[] }> => {
+  const itemsToValidate = items.filter((i) =>
+    itemTypeHasOwnerRestriction(i.itemType),
+  );
+  const skipped = itemsToValidate.length
+    ? await validateItemsForPage(itemsToValidate, pageName)
+    : [];
+
+  let kept = items;
+  if (skipped.length > 0) {
+    const dropped = new Set(skipped.map((e) => `${e.itemType}:${e.itemCode}`));
+    kept = items.filter((i) => !dropped.has(`${i.itemType}:${i.itemCode}`));
+  }
+  if (cap && cap > 0 && kept.length > cap) kept = kept.slice(0, cap);
+
+  // Re-index so `order` stays contiguous after drops.
+  return {
+    items: kept.map((item, idx) => ({ ...item, order: idx })),
+    skipped,
+  };
+};
+
 const buildItemsForUpsert = async (
   req: UpsertRailRequest,
-): Promise<{ itemType: string; itemCode: string; order: number }[]> => {
+): Promise<UpsertItem[]> => {
   const itemType = RAIL_TYPE_TO_ITEM_TYPE[req.type];
 
   let codes: string[];
@@ -1740,22 +1867,16 @@ export const upsertRailService = async (
   const brandId = req.brandId ?? null;
   const pageNames = req.pageNames ?? [PageName.HOME];
 
-  // Build items once (same items for all pages)
+  // Build the candidate items once (the same source feeds every page)
   const items = await buildItemsForUpsert(req);
 
-  // Validate items against all target pages
-  // Only TRACK and LABEL items need validation (other types have no owner restriction)
-  const itemsToValidate = items.filter((i) => itemTypeHasOwnerRestriction(i.itemType));
-  if (itemsToValidate.length > 0) {
-    const allErrors: ItemValidationError[] = [];
-    for (const pageName of pageNames) {
-      const errors = await validateItemsForPage(itemsToValidate, pageName);
-      allErrors.push(...errors);
-    }
-    if (allErrors.length > 0) {
-      throw new Error(`Owner type validation failed: ${formatValidationErrors(allErrors)}`);
-    }
-  }
+  // AI_QUERY over-fetches when a catalog slice is enforced; trim back to the
+  // requested size after the per-page filter below. Other sources already
+  // return exactly what the caller asked for.
+  const cap =
+    req.sourceType === RailSourceType.AI_QUERY
+      ? req.aiQuery?.limit ?? req.limit ?? null
+      : null;
 
   // Build sourceConfig once
   const sourceConfig: Record<string, unknown> = {};
@@ -1771,6 +1892,11 @@ export const upsertRailService = async (
     if (req.aiQuery.brandName) aiQueryConfig.brandName = req.aiQuery.brandName;
     if (req.aiQuery.userId) aiQueryConfig.userId = req.aiQuery.userId;
     if (req.aiQuery.filters) aiQueryConfig.filters = req.aiQuery.filters;
+    // Persisted verbatim (the CMS wizard round-trips its own enum form,
+    // e.g. "REGIONAL_AND_INDIE"); normalization happens at send time in
+    // resolveAiQueryOwnerTypes. Re-runs that don't set it fall back to the
+    // rail's page, which resolves to the same slice.
+    if (req.aiQuery.ownerType) aiQueryConfig.ownerType = req.aiQuery.ownerType;
     if (req.aiQuery.page) aiQueryConfig.page = req.aiQuery.page;
     // Legacy support
     if (req.aiQuery.url) aiQueryConfig.url = req.aiQuery.url;
@@ -1782,8 +1908,31 @@ export const upsertRailService = async (
 
   // Create a separate rail for each page
   const results: SingleRailUpsertResult[] = [];
+  const skippedItems: SkippedRailItem[] = [];
 
   for (const pageName of pageNames) {
+    // Each page keeps only the items its owner-type rules allow — pages in the
+    // same request can have different rules (e.g. HOME + REGIONAL_AND_INDIE).
+    const { items: pageItems, skipped } = await applyPageOwnerTypeFilter(
+      items,
+      pageName,
+      cap,
+    );
+    if (skipped.length > 0) {
+      console.warn(
+        `[Rails] ${req.key}: dropped ${skipped.length} incompatible item(s) — ${formatValidationErrors(skipped)}`,
+      );
+      for (const err of skipped) {
+        skippedItems.push({
+          pageName,
+          itemType: err.itemType,
+          itemCode: err.itemCode,
+          ownerType: err.ownerType,
+          allowedOwnerTypes: err.allowedTypes,
+        });
+      }
+    }
+
     // Determine order for this page
     let order = req.order;
     if (order == null) {
@@ -1811,7 +1960,7 @@ export const upsertRailService = async (
         isVisible: req.isVisible ?? true,
         updatedById: updatedById ?? null,
       },
-      items,
+      pageItems,
     );
     results.push(result);
   }
@@ -1822,6 +1971,7 @@ export const upsertRailService = async (
     rail: first.rail,
     items: first.items,
     additionalRails: rest.length > 0 ? rest : undefined,
+    skippedItems: skippedItems.length > 0 ? skippedItems : undefined,
   };
 };
 
@@ -2049,6 +2199,7 @@ interface RailSourceConfigAiQuery {
   q?: string;
   brandName?: string;
   userId?: string;
+  ownerType?: string | string[];
   filters?: Array<{
     type: string;
     value: string[] | string;
@@ -2369,6 +2520,9 @@ export const getRailSeeAllService = async (
         type: rail.type as RailType,
         sourceType: rail.sourceType as RailSourceType,
         brandId: viewerBrandId ?? rail.brandId ?? null,
+        // Keep the re-run on the rail's own catalog slice, otherwise See All
+        // pulls in tracks this page then hides (filterItemsByPageOwnerType).
+        pageNames: rail.pageName ? [rail.pageName as PageName] : undefined,
         aiQuery: {
           queryType: (aiQuery.queryType ?? 'FILTERED') as
             | 'TRENDING' | 'POPULAR' | 'FILTERED' | 'NEW_AGE_ICONS' | 'BRAND_RECOMMENDED',
@@ -2376,6 +2530,7 @@ export const getRailSeeAllService = async (
           q: aiQuery.q,
           brandName: aiQuery.brandName,
           userId: aiQuery.userId,
+          ownerType: aiQuery.ownerType,
           filters: aiQuery.filters as UpsertRailRequest["aiQuery"] extends infer T
             ? T extends { filters?: infer F } ? F : never
             : never,

@@ -270,10 +270,17 @@ export const upsertRail = catchAsync(
     const updatedById = req.session?.userId ?? null;
     const result = await upsertRailService(parsed, updatedById);
 
+    // Items whose owner type the target page doesn't allow are dropped rather
+    // than failing the save — tell the admin how many, the rail itself is fine.
+    const skipped = result.skippedItems?.length ?? 0;
+    const message = skipped
+      ? `${ResponseMessages.UpsertRailSuccess} (${skipped} item${skipped > 1 ? "s" : ""} skipped — owner type not allowed on the selected page)`
+      : ResponseMessages.UpsertRailSuccess;
+
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: result,
-      message: ResponseMessages.UpsertRailSuccess,
+      message,
     });
   },
 );
