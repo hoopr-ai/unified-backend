@@ -16,6 +16,7 @@ import {
   GetAllPlaylistsQuery,
   GetPlaylistDetailQuery,
   HttpStatusCode,
+  PlaylistCategory,
   PlaylistStatus,
   PlaylistType,
   SetPlaylistTracksRequest,
@@ -29,6 +30,7 @@ const UUID_REGEX =
 
 const VALID_TYPES = new Set<string>(Object.values(PlaylistType));
 const VALID_STATUSES = new Set<string>(Object.values(PlaylistStatus));
+const VALID_CATEGORIES = new Set<string>(Object.values(PlaylistCategory));
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -82,6 +84,9 @@ const validateCreateBody = (body: unknown): CreatePlaylistRequest | string => {
   if (b.type !== undefined && (typeof b.type !== "string" || !VALID_TYPES.has(b.type))) {
     return `type must be one of ${Array.from(VALID_TYPES).join(", ")}`;
   }
+  if (b.category !== undefined && (typeof b.category !== "string" || !VALID_CATEGORIES.has(b.category))) {
+    return `category must be one of ${Array.from(VALID_CATEGORIES).join(", ")}`;
+  }
   if (b.status !== undefined && (typeof b.status !== "string" || !VALID_STATUSES.has(b.status))) {
     return `status must be one of ${Array.from(VALID_STATUSES).join(", ")}`;
   }
@@ -111,6 +116,15 @@ const validateUpdateBody = (body: unknown): UpdatePlaylistRequest | string => {
   }
   if (b.type !== undefined && (typeof b.type !== "string" || !VALID_TYPES.has(b.type))) {
     return `type must be one of ${Array.from(VALID_TYPES).join(", ")}`;
+  }
+  // null / "" is the explicit "clear the assortment" signal.
+  if (
+    b.category !== undefined &&
+    b.category !== null &&
+    b.category !== "" &&
+    (typeof b.category !== "string" || !VALID_CATEGORIES.has(b.category))
+  ) {
+    return `category must be one of ${Array.from(VALID_CATEGORIES).join(", ")}, or null to clear`;
   }
   if (b.status !== undefined && (typeof b.status !== "string" || !VALID_STATUSES.has(b.status))) {
     return `status must be one of ${Array.from(VALID_STATUSES).join(", ")}`;

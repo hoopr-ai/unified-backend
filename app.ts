@@ -29,8 +29,10 @@ import railRoutes from "./routes/rail.route";
 import adminInternalUsersRoutes from "./routes/admin-internal-users.route";
 import adminSkuRoutes from "./routes/admin-sku.route";
 import adminOwnerRoutes from "./routes/admin-owner.route";
+import adminArtistRoutes from "./routes/admin-artist.route";
 import adminPayPerTrackRoutes from "./routes/admin-pay-per-track.route";
 import adminEnterpriseAnalyticsRoutes from "./routes/admin-enterprise-analytics.route";
+import adminNativeAnalyticsRoutes from "./routes/admin-native-analytics.route";
 import internalLoginRoutes from "./routes/internal-login.route";
 import userAddressRoutes from "./routes/user-address.route";
 import geographyRoutes from "./routes/geography.route";
@@ -100,8 +102,12 @@ app.use("/rails", railRoutes);
 app.use("/admin/internal-users", adminInternalUsersRoutes);
 app.use("/admin/skus", adminSkuRoutes);
 app.use("/admin/owners", adminOwnerRoutes);
+app.use("/admin/artists", adminArtistRoutes);
 app.use("/admin/pay-per-track", adminPayPerTrackRoutes);
 app.use("/admin/enterprise-analytics", adminEnterpriseAnalyticsRoutes);
+// Session/event analytics over the data NATIVE-BE records for creator-web and
+// creator-mobile (same shared DB, so no service hop).
+app.use("/admin/native-analytics", adminNativeAnalyticsRoutes);
 app.use("/admin/url-monitor", urlMonitorRoutes);
 app.use("/cart", cartRoutes);
 app.use("/transaction", transactionRoutes);

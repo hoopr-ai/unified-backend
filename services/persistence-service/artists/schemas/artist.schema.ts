@@ -21,6 +21,7 @@ export interface ArtistDetails {
   spotifyLink?: string;
   status?: string;
   pastIds?: string[];
+  nativeArtist?: boolean;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -92,6 +93,26 @@ export class ArtistModel extends Model<ArtistModel, ArtistDetails> {
     allowNull: true,
   })
   pastIds?: string[];
+
+  /**
+   * Does this artist belong to the Creator (native) platform?
+   *
+   * True when they are the PRIMARY credit on at least one ACTIVE, non-SFX track
+   * owned by a 'Hoopr Originals' owner — the exact gate NATIVE-BE's artist
+   * directory applies (ArtistsService.ELIGIBLE_CTE). This column is a cached
+   * mirror of that query, never a second definition of it: it is derived, and
+   * anything that writes it goes through recomputeNativeArtistFlags().
+   *
+   * Not maintained on the track write path. New Originals tracks land through
+   * catalogue imports, so the flag is refreshed by the backfill script or
+   * POST /admin/artists/recompute-native (see admin-artist.service).
+   */
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  nativeArtist!: boolean;
 
   @CreatedAt
   @Column({

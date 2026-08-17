@@ -18,6 +18,7 @@ import { toCdnUrl } from "../../helper-service/cdn.helper";
 import { transformRawTracksToDto } from "../track/track.service";
 import {
   CreatePlaylistRequest,
+  PlaylistCategory,
   GetAllPlaylistsQuery,
   GetPlaylistDetailQuery,
   PaginatedPlaylists,
@@ -131,6 +132,8 @@ export const getPlaylistDetailService = async (
     name_slug: playlist.name_slug || null,
     description: playlist.description || null,
     imageLink: playlist.imageLink || null,
+    type: playlist.type || null,
+    category: playlist.category || null,
     tracks,
   };
 };
@@ -204,6 +207,7 @@ const generateUniquePlaylistCode = async (
 
 const VALID_PLAYLIST_TYPES = new Set<string>(Object.values(PlaylistType));
 const VALID_PLAYLIST_STATUSES = new Set<string>(Object.values(PlaylistStatus));
+const VALID_PLAYLIST_CATEGORIES = new Set<string>(Object.values(PlaylistCategory));
 
 export const createPlaylistService = async (
   input: CreatePlaylistRequest,
@@ -219,11 +223,17 @@ export const createPlaylistService = async (
   const status = VALID_PLAYLIST_STATUSES.has(input.status as string)
     ? (input.status as PlaylistStatus)
     : PlaylistStatus.ACTIVE;
+  // No default — an unset category means "uncategorised", which is a valid
+  // state (unlike type/status, which always need a concrete value).
+  const category = VALID_PLAYLIST_CATEGORIES.has(input.category as string)
+    ? (input.category as PlaylistCategory)
+    : undefined;
 
   const created = await createPlaylist({
     name,
     description: input.description?.trim() || undefined,
     type,
+    category,
     status,
     name_slug: nameSlug || undefined,
     playlistCode,
@@ -237,6 +247,8 @@ export const createPlaylistService = async (
     name_slug: created.name_slug || null,
     description: created.description || null,
     imageLink: created.imageLink || null,
+    type: created.type || null,
+    category: created.category || null,
     tracks: [],
   };
 };
@@ -263,6 +275,13 @@ export const updatePlaylistService = async (
   if (patch.type !== undefined && VALID_PLAYLIST_TYPES.has(patch.type)) {
     update.type = patch.type;
   }
+  // null (or "") clears the assortment; a valid enum value sets it. Anything
+  // else is ignored, matching how type/status are handled above.
+  if (patch.category === null || patch.category === "") {
+    update.category = null;
+  } else if (patch.category !== undefined && VALID_PLAYLIST_CATEGORIES.has(patch.category)) {
+    update.category = patch.category;
+  }
   if (patch.status !== undefined && VALID_PLAYLIST_STATUSES.has(patch.status)) {
     update.status = patch.status;
   }
@@ -276,6 +295,8 @@ export const updatePlaylistService = async (
     name_slug: updated.name_slug || null,
     description: updated.description || null,
     imageLink: updated.imageLink || null,
+    type: updated.type || null,
+    category: updated.category || null,
     tracks: [],
   };
 };
@@ -339,6 +360,8 @@ export const setPlaylistTracksService = async (
       name_slug: playlist.name_slug || null,
       description: playlist.description || null,
       imageLink: playlist.imageLink || null,
+      type: playlist.type || null,
+      category: playlist.category || null,
       tracks: [],
     },
     unknownTrackCodes,
