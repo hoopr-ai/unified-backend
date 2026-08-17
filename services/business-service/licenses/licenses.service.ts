@@ -49,7 +49,7 @@ import type {
   DownloadTrackRequest,
   DownloadTrackResponse,
 } from "../../dto-service/licenses/modules.export";
-import { Platform, isSfxTrackType } from "../../dto-service/modules.export";
+import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
 
 const TOKEN_COST_PER_LICENSE = 1;
 
@@ -59,11 +59,11 @@ export const licenseTrackService = async (
   platform?: Platform,
 ): Promise<LicenseResponse> => {
   const { trackCode, campaignId: requestedCampaignId } = data;
-  const isSoundTrackingApp = platform === Platform.SOUND_TRACKING_APP;
+  const isCreator = isPlatform(platform, Platform.CREATOR);
 
-  // campaignId is only honored for SOUND_TRACKING_APP. Defense-in-depth: even if a
-  // non-SOUND_TRACKING_APP request slips one in via the service layer, we drop it.
-  const campaignIdToApply = isSoundTrackingApp ? requestedCampaignId : undefined;
+  // campaignId is only honored for CREATOR. Defense-in-depth: even if a
+  // non-CREATOR request slips one in via the service layer, we drop it.
+  const campaignIdToApply = isCreator ? requestedCampaignId : undefined;
 
   // Validate + atomically reserve a campaign slot before creating any license record.
   // A single conditional UPDATE handles "exists, ACTIVE, in-window, has slots" race-safely:
@@ -98,7 +98,7 @@ export const licenseTrackService = async (
     }
   }
 
-  // Get user (brand only required for non-SOUND_TRACKING_APP platforms).
+  // Get user (brand only required for non-CREATOR platforms).
   // countryCode + profileRole are needed by the isProfileComplete getter —
   // it's computed from columns, not a column itself.
   const user = await UserModel.findByPk(userId, {
@@ -109,11 +109,11 @@ export const licenseTrackService = async (
     throw new AppError("User not found", 404);
   }
 
-  if (!isSoundTrackingApp && !user.brandId) {
+  if (!isCreator && !user.brandId) {
     throw new AppError("User is not associated with any brand", 400);
   }
 
-  const brandId: number | null = isSoundTrackingApp ? null : user.brandId!;
+  const brandId: number | null = isCreator ? null : user.brandId!;
 
   // Get track details including ownerId
   const track = await TrackModel.findOne({
@@ -141,10 +141,10 @@ export const licenseTrackService = async (
     );
   }
 
-  // Tokens are skipped for SOUND_TRACKING_APP (always free) and for SFX tracks.
-  const skipTokens = isSoundTrackingApp || isSfxTrack;
+  // Tokens are skipped for CREATOR (always free) and for SFX tracks.
+  const skipTokens = isCreator || isSfxTrack;
 
-  // Get owners for the track (used for PDF metadata; token matching is skipped for SOUND_TRACKING_APP)
+  // Get owners for the track (used for PDF metadata; token matching is skipped for CREATOR)
   const ownerIds = track.ownerId || [];
   const owners = ownerIds.length > 0
     ? await OwnerModel.findAll({
@@ -189,7 +189,7 @@ export const licenseTrackService = async (
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
 
-  // Create license record. brandId is null for SOUND_TRACKING_APP (no brand association).
+  // Create license record. brandId is null for CREATOR (no brand association).
   const now = new Date();
   const validThrough = new Date(now);
   validThrough.setFullYear(validThrough.getFullYear() + 1);
@@ -207,7 +207,7 @@ export const licenseTrackService = async (
 
   const createdLicense = await createLicenseRecord(licenseDetails);
 
-  // Token deduction is skipped entirely for SOUND_TRACKING_APP and SFX tracks.
+  // Token deduction is skipped entirely for CREATOR and SFX tracks.
   let remainingTokens = 0;
   let deductionWasUnlimited = false;
   if (!skipTokens) {
@@ -296,7 +296,7 @@ export const licenseTrackService = async (
   const downloadedByFullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "";
 
   if (skipTokens) {
-    // SOUND_TRACKING_APP + free SFX downloads: notify only the licensing user
+    // CREATOR + free SFX downloads: notify only the licensing user
     // (no brand team, no low-credit alerts — no credits were consumed).
     if (user.email) {
       sendTrackDownloadNotificationEmail(user.email, {

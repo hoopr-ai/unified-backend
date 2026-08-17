@@ -1,5 +1,5 @@
 import Joi from "joi";
-import { Platform } from "../services/dto-service/constants/common.enums";
+import { platformField } from "./platform.validation";
 import type {
   CreateFaqRequestData,
   UpdateFaqRequestData,
@@ -7,10 +7,8 @@ import type {
   ReorderFaqsRequestData,
 } from "../services/dto-service/faq/faq.dto";
 
-const platformValues = Object.values(Platform) as string[];
-
 export const getFaqsQuerySchema = Joi.object<GetFaqsQueryData>({
-  platform: Joi.string().valid(...platformValues).required(),
+  platform: platformField.required(),
   sectionId: Joi.number().integer().positive().optional(),
 });
 

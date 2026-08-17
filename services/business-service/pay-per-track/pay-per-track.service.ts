@@ -5,7 +5,8 @@ import { Platform } from "../../dto-service/modules.export";
 // ─── Pay-per-track internal analytics ────────────────────────────────────────
 //
 // Read-only aggregates for the internal-fe "Pay Per Track" dashboard. The
-// buyer population is `users.platform = SOUND_TRACKING_APP`; everything here
+// buyer population is the CREATOR app — `users.platform = SOUND_TRACKING_APP`,
+// which is the value that name is stored under; everything here
 // is scoped to it. All queries are raw SQL (multi-table aggregations) against
 // the shared Postgres — columns are camelCase, so identifiers must be quoted.
 //
@@ -23,8 +24,8 @@ import { Platform } from "../../dto-service/modules.export";
 // Dates arrive as inclusive IST calendar days (YYYY-MM-DD).
 //
 // Platform scoping: the checkout routes accept any platform (the current test
-// purchases are ENTERPRISE users; the consumer app signs up SOUND_TRACKING_APP
-// users), so `platform` is an optional filter on every endpoint. When omitted,
+// purchases are ENTERPRISE users; the consumer app signs up CREATOR users), so
+// `platform` is an optional filter on every endpoint. When omitted,
 // all customer platforms are included and only INTERNAL (staff CMS accounts)
 // is excluded. Implemented as a single reusable predicate around the
 // `:platform` replacement (null = no filter).

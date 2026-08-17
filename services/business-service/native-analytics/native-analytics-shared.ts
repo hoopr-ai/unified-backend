@@ -42,7 +42,12 @@ export interface NativeFilters {
   startDate: string;
   /** Inclusive IST calendar day, YYYY-MM-DD. */
   endDate: string;
-  /** users.platform — CREATOR | ENTERPRISE | SOUND_TRACKING_APP | STUDIO | INTERNAL. */
+  /**
+   * users.platform — CREATOR | ENTERPRISE | STUDIO | INTERNAL, where CREATOR is
+   * stored (and reported by GET /filter-options) under its older name
+   * SOUND_TRACKING_APP. Requests may send either; the validation layer folds
+   * CREATOR onto the stored spelling before it gets here.
+   */
   userPlatform?: string | null;
   /** BROWSER | MOBILE_APP. */
   clientType?: string | null;

@@ -15,7 +15,7 @@ import {
   sendResponse,
   sendError,
 } from "../services/helper-service/modules.export";
-import { HttpStatusCode, Platform } from "../services/dto-service/modules.export";
+import { HttpStatusCode, Platform, isPlatform } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
@@ -30,9 +30,9 @@ export const licenseTrack = catchAsync(async (req: AuthRequest, res: Response) =
   const trackCode = req.params.trackCode as string;
   const platform = req.session?.platform;
 
-  // campaignId is only honored for SOUND_TRACKING_APP; ignored on every other platform.
+  // campaignId is only honored for CREATOR; ignored on every other platform.
   let campaignId: number | undefined;
-  if (platform === Platform.SOUND_TRACKING_APP && req.body?.campaignId !== undefined) {
+  if (isPlatform(platform, Platform.CREATOR) && req.body?.campaignId !== undefined) {
     const parsed = Number(req.body.campaignId);
     if (!Number.isInteger(parsed) || parsed <= 0) {
       return sendError(res, HttpStatusCode.BAD_REQUEST, "campaignId must be a positive integer", {});

@@ -1,5 +1,5 @@
 import Joi from "joi";
-import { Platform } from "../services/dto-service/constants/common.enums";
+import { platformField } from "./platform.validation";
 import type {
   CreateFaqSectionRequestData,
   UpdateFaqSectionRequestData,
@@ -7,14 +7,12 @@ import type {
   ReorderFaqSectionsRequestData,
 } from "../services/dto-service/faq/faq-section.dto";
 
-const platformValues = Object.values(Platform) as string[];
-
 export const getFaqSectionsQuerySchema = Joi.object<GetFaqSectionsQueryData>({
-  platform: Joi.string().valid(...platformValues).required(),
+  platform: platformField.required(),
 });
 
 export const createFaqSectionRequestSchema = Joi.object<CreateFaqSectionRequestData>({
-  platform: Joi.string().valid(...platformValues).required(),
+  platform: platformField.required(),
   name: Joi.string().min(1).max(255).required(),
   slug: Joi.string().min(1).max(255).required(),
   order: Joi.number().integer().min(0).optional(),
@@ -28,7 +26,7 @@ export const updateFaqSectionRequestSchema = Joi.object<UpdateFaqSectionRequestD
 });
 
 export const reorderFaqSectionsRequestSchema = Joi.object<ReorderFaqSectionsRequestData>({
-  platform: Joi.string().valid(...platformValues).required(),
+  platform: platformField.required(),
   sectionOrders: Joi.array()
     .items(
       Joi.object({

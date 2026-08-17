@@ -564,7 +564,7 @@ export const getAllTracksService = async (
 
   // Campaign data should only be fetched if:
   // 1. User is NOT logged in (no token), OR
-  // 2. User IS logged in AND platform is SOUND_TRACKING_APP
+  // 2. User IS logged in AND platform is CREATOR
   const shouldFetchCampaign = query.campaign === true;
 
   // Fetch user's used campaign IDs to filter them out from display

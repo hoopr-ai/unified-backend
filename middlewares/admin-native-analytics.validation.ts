@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { normalizePlatform } from "../services/dto-service/constants/modules.export";
 
 // Every native-analytics endpoint is a read-only GET, so each schema validates a
 // query string. Dates are IST calendar days (YYYY-MM-DD), inclusive on both
@@ -30,9 +31,18 @@ const defaultRange = {
  * `''` is coerced to undefined so the UI can clear a filter by sending an empty
  * string — otherwise "all platforms" would have to be a magic sentinel, and
  * `userPlatform=` would filter for a platform literally named "".
+ *
+ * `userPlatform` is still alias-normalized, though: the dashboard sends CREATOR
+ * once it has shipped the rename, while the rollups NATIVE-BE writes hold
+ * 'SOUND_TRACKING_APP', and an un-normalized CREATOR would silently match
+ * nothing. Any other value is passed through untouched, per the above.
  */
 const filters = {
-  userPlatform: Joi.string().max(32).empty("").optional(),
+  userPlatform: Joi.string()
+    .max(32)
+    .empty("")
+    .custom((value: string) => normalizePlatform(value))
+    .optional(),
   clientType: Joi.string().max(16).empty("").optional(),
   os: Joi.string().max(32).empty("").optional(),
 };

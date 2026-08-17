@@ -177,7 +177,7 @@ export const findAllActiveUsersByBrandId = async (
 };
 
 // Used by the INTERNAL admin CMS only. Fire-and-forget from userLoginService when
-// platform === INTERNAL. Never called for ENTERPRISE / SOUND_TRACKING_APP / STUDIO logins.
+// platform === INTERNAL. Never called for ENTERPRISE / CREATOR / STUDIO logins.
 export const touchUserLastLogin = async (userId: number): Promise<void> => {
   await UserModel.update(
     { lastLoginAt: new Date() },

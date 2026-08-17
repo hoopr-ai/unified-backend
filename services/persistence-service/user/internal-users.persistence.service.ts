@@ -4,7 +4,7 @@ import { UserModel, UserRoleModel, type UserDetails, type UserRoleDetails } from
 
 // Lookup helpers used by the INTERNAL admin CMS only.
 // Filtering on platform='INTERNAL' is enforced at every entry point so these can never
-// accidentally read or mutate ENTERPRISE / SOUND_TRACKING_APP / STUDIO rows.
+// accidentally read or mutate ENTERPRISE / CREATOR / STUDIO rows.
 
 // Case-insensitive lookup for uniqueness check on create.
 // Matches any status (ACTIVE / INVITED / DELETED) — duplicates against any of those

@@ -5,6 +5,7 @@ import {
   FaqSectionModel,
 } from "../services/persistence-service/faq/modules.export";
 import { Platform } from "../services/dto-service/constants/common.enums";
+import { normalizePlatform } from "../services/dto-service/constants/platform";
 
 config();
 
@@ -192,7 +193,9 @@ async function seedFaqs() {
     // Ensure tables exist
     await sequelize.sync({ force: false, alter: false });
 
-    const platform = Platform.SOUND_TRACKING_APP;
+    // normalizePlatform, not the bare enum member: these sections belong to the
+    // CREATOR app, and the rows have to carry the value it is stored under.
+    const platform = normalizePlatform(Platform.CREATOR);
     const sectionMap: Record<string, number> = {};
 
     // Create sections first

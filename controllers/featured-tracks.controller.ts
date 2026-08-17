@@ -8,7 +8,10 @@ import {
   sendResponse,
 } from "../services/helper-service/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
-import { HttpStatusCode } from "../services/dto-service/modules.export";
+import {
+  HttpStatusCode,
+  normalizePlatform,
+} from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
@@ -18,7 +21,10 @@ interface AuthRequest extends Request {
 // GET /featured-tracks/:platform - Get featured tracks for a platform (public API)
 export const getFeaturedTracks = catchAsync(
   async (req: Request, res: Response) => {
-    const platform = req.query.platform as string;
+    // This one is read straight off the query string rather than through a Joi
+    // schema, so it has to normalize the CREATOR/SOUND_TRACKING_APP alias itself
+    // — featured_tracks rows are keyed by the stored spelling.
+    const platform = normalizePlatform(req.query.platform as string);
 
     if (!platform) {
       sendResponse(res, {

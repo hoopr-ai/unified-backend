@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import { AppError } from "../services/helper-service/AppError";
 import { validateAndRefreshSession } from "../services/business-service/user/user.service";
-import { Platform } from "../services/dto-service/modules.export";
+import { Platform, normalizePlatform } from "../services/dto-service/modules.export";
 
 export interface SessionPayload extends JwtPayload {
   userId: number;
@@ -19,6 +19,20 @@ interface AuthRequest extends Request {
   sessionIdFromCookie?: number;
 }
 
+/**
+ * The session as the rest of the app should see it.
+ *
+ * The `platform` claim is alias-normalized. Tokens minted before
+ * SOUND_TRACKING_APP was renamed to CREATOR carry the old spelling, and no
+ * downstream `req.session.platform === Platform.X` check should have to know
+ * that — which is also why a user already logged in on the old build keeps
+ * working instead of getting a 403 off a renamed platform gate.
+ */
+const asSession = (decoded: SessionPayload): SessionPayload => ({
+  ...decoded,
+  platform: normalizePlatform(decoded.platform),
+});
+
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -33,7 +47,7 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
         if (err || !decoded) {
           throw new AppError("The JWT token provided is invalid.", 401);
         }
-        req.session = decoded as SessionPayload;
+        req.session = asSession(decoded as SessionPayload);
         req.sessionToken = token;
         next();
       }
@@ -57,7 +71,7 @@ export const optionalAuthenticate = (req: AuthRequest, res: Response, next: Next
         if (err || !decoded) {
           return next();
         }
-        req.session = decoded as SessionPayload;
+        req.session = asSession(decoded as SessionPayload);
         req.sessionToken = token;
         next();
       }
@@ -121,9 +135,14 @@ const handleAuthentication = (options: AuthOptions = {}) => {
         throw new AppError("The JWT token provided is invalid.", 401);
       }
 
-      // Validate platform if specified
+      const session = asSession(decoded);
+
+      // Validate platform if specified. Both sides are alias-normalized, so a
+      // route gated on Platform.CREATOR admits a token carrying the old
+      // SOUND_TRACKING_APP spelling and vice versa — the two are one platform.
       if (options.platforms && options.platforms.length > 0) {
-        if (!decoded.platform || !options.platforms.includes(decoded.platform)) {
+        const allowed = options.platforms.map((p) => normalizePlatform(p));
+        if (!session.platform || !allowed.includes(session.platform)) {
           throw new AppError(
             `Access denied. This API is not available for platform: ${decoded.platform || 'unknown'}`,
             403
@@ -142,7 +161,8 @@ const handleAuthentication = (options: AuthOptions = {}) => {
       }
 
       // Validate session and check for inactivity
-      const { isValid, session, needsNewSession } = await validateAndRefreshSession(token);
+      const { isValid, session: dbSession, needsNewSession } =
+        await validateAndRefreshSession(token);
 
       if (!isValid) {
         if (needsNewSession) {
@@ -161,8 +181,8 @@ const handleAuthentication = (options: AuthOptions = {}) => {
 
       // Attach session info to request
       req.session = {
-        ...decoded,
-        sessionId: session?.id,
+        ...session,
+        sessionId: dbSession?.id,
       };
       req.sessionToken = token;
       req.sessionIdFromCookie = sessionIdFromCookie;
