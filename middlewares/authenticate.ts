@@ -84,6 +84,16 @@ export const optionalAuthenticate = (req: AuthRequest, res: Response, next: Next
 export interface AuthOptions {
   platforms?: string[];
   roles?: string[];
+  /**
+   * Platforms that skip the `roles` check entirely. A session on one of these
+   * platforms only has to clear the `platforms` gate — its role (or absence of
+   * one) is never inspected.
+   *
+   * Used by the Smash client-credentials surface (orgs / brands / client
+   * users): every INTERNAL CMS user may provision and manage clients whatever
+   * their role, while ENTERPRISE callers on the same routes stay role-gated.
+   */
+  roleExemptPlatforms?: string[];
 }
 
 type AuthMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => Promise<void>;
@@ -150,8 +160,16 @@ const handleAuthentication = (options: AuthOptions = {}) => {
         }
       }
 
-      // Validate role if specified
-      if (options.roles && options.roles.length > 0) {
+      // Validate role if specified. Platforms listed in roleExemptPlatforms
+      // bypass this check (see AuthOptions) — they are authorized by platform
+      // alone.
+      const roleExempt =
+        !!options.roleExemptPlatforms?.length &&
+        options.roleExemptPlatforms
+          .map((p) => normalizePlatform(p))
+          .includes(session.platform);
+
+      if (!roleExempt && options.roles && options.roles.length > 0) {
         if (!decoded.role || !options.roles.includes(decoded.role)) {
           throw new AppError(
             `Access denied. Required role: ${options.roles.join(' or ')}`,
