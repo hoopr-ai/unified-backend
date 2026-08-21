@@ -107,7 +107,7 @@ export const getTracksByCodes = catchAsync(
       limit: req.query.limit as string,
       type: req.body.type as string[] | undefined,
     };
-    const response = await getTracksByCodesService(query, userId, brandId);
+    const response = await getTracksByCodesService(query, userId, brandId, req.session?.platform);
 
     // Strip mp3Link and waveformLink for unauthenticated users
     const data = userId
@@ -137,7 +137,7 @@ export const getTracksByFilter = catchAsync(
       limit: req.query.limit as string,
       type: req.body.type as string[] | undefined,
     };
-    const response = await getTracksByFilterService(query, userId, brandId);
+    const response = await getTracksByFilterService(query, userId, brandId, req.session?.platform);
 
     // Strip mp3Link and waveformLink for unauthenticated users
     const data = userId
@@ -165,6 +165,7 @@ export const getTrackDetailsByCode = catchAsync(
       trackCode,
       userId,
       brandId,
+      req.session?.platform,
     );
 
     if (!response) {
@@ -204,6 +205,7 @@ export const searchTracks = catchAsync(
       query,
       Math.min(limit, 50),
       user?.brandId ?? undefined,
+      req.session?.platform,
     );
 
     sendResponse(res, {

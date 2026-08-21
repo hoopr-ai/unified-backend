@@ -1,4 +1,4 @@
-import { UNAUTHENTICATED_RESTRICTED_OWNER_NAMES } from "../../dto-service/modules.export";
+import { Platform, UNAUTHENTICATED_RESTRICTED_OWNER_NAMES } from "../../dto-service/modules.export";
 import {
   getOwnerIdentitiesByNames,
   getRestrictedOwnersByBrandId,
@@ -41,6 +41,22 @@ const EMPTY_ACCESS_FIELDS = {
 };
 
 /**
+ * Staff surfaces (the internal CMS, studio) curate the whole catalogue — rails,
+ * track pickers, label lists — so none of the brand-facing gating applies to
+ * them. They must keep seeing YRF and Zee whether or not any brand holds tokens,
+ * otherwise a curator cannot put those labels on a rail in the first place.
+ */
+export const isInternalViewerPlatform = (platform?: string | null): boolean =>
+  platform === Platform.INTERNAL || platform === Platform.STUDIO;
+
+const UNRESTRICTED_ACCESS: ViewerOwnerAccess = {
+  excludeOwnerIds: undefined,
+  blockedOwnerIds: new Set<string>(),
+  blockedOwnerCodes: new Set<string>(),
+  ...EMPTY_ACCESS_FIELDS,
+};
+
+/**
  * Mirrors tokenSelectionTier() in the token persistence service: an unlimited
  * allocation, or one with an empty ownerIds list, covers every owner of its
  * type; anything else covers only the owners it names.
@@ -66,7 +82,11 @@ const indexGrants = (grants: ActiveTokenGrant[]) => {
  */
 export const resolveViewerOwnerAccess = async (
   brandId?: number | null,
+  platform?: string | null,
 ): Promise<ViewerOwnerAccess> => {
+  // Internal CMS / studio callers see everything.
+  if (isInternalViewerPlatform(platform)) return UNRESTRICTED_ACCESS;
+
   const restrictedOwners = UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
     ? await getOwnerIdentitiesByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
     : [];

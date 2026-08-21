@@ -83,6 +83,7 @@ export const getPlaylistDetailService = async (
   query: GetPlaylistDetailQuery,
   brandId?: number,
   userId?: number,
+  platform?: string,
 ): Promise<PlaylistDetail | null> => {
   const playlist = await findPlaylistByCode(query.playlistCode);
 
@@ -92,7 +93,7 @@ export const getPlaylistDetailService = async (
 
   // Fetch brand-level controls in parallel with liked tracks
   const [ownerAccess, likedCodes] = await Promise.all([
-    resolveViewerOwnerAccess(brandId),
+    resolveViewerOwnerAccess(brandId, platform),
     userId ? getUserLikedTrackCodes(userId) : Promise.resolve([]),
   ]);
 

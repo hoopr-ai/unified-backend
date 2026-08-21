@@ -635,12 +635,13 @@ const buildHydrationMaps = async (
   rails: RailModel[],
   userId?: number,
   brandId?: number,
+  platform?: string,
 ): Promise<HydrationMaps> => {
   const {
     trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes,
     occasionCodes, quickAddCodes, bannerCodes,
   } = collectItemCodes(rails);
-  const access = await resolveViewerOwnerAccess(brandId);
+  const access = await resolveViewerOwnerAccess(brandId, platform);
   const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
     hydrateTracks(trackCodes, access, userId),
     hydrateFilters(filterCodes),
@@ -995,6 +996,7 @@ export const getRailsService = async (
   brandId?: number,
   userId?: number,
   pageName?: string,
+  platform?: string,
 ): Promise<RailResponse[]> => {
   // Ensure brand recommended rail exists for the logged-in user's brand
   if (brandId) {
@@ -1006,7 +1008,7 @@ export const getRailsService = async (
 
   const raw = await findRailsForBrand(effectiveBrandId, pageName);
   const resolved = resolveBrandOverrides(raw);
-  const maps = await buildHydrationMaps(resolved, userId, brandId);
+  const maps = await buildHydrationMaps(resolved, userId, brandId, platform);
   return resolved.map((rail) => buildRailResponse(rail, maps));
 };
 
@@ -1017,6 +1019,7 @@ export const getRailsPaginatedService = async (
   page: number = 1,
   limit: number = 10,
   railItemLimit?: number,
+  platform?: string,
 ): Promise<PaginatedRailsResponse> => {
   // Ensure brand recommended rail exists for the logged-in user's brand
   // Use the user's brandId from their profile, not from URL query
@@ -1035,7 +1038,7 @@ export const getRailsPaginatedService = async (
     limit,
   );
   const resolved = resolveBrandOverrides(raw);
-  const maps = await buildHydrationMaps(resolved, userId, brandId);
+  const maps = await buildHydrationMaps(resolved, userId, brandId, platform);
   const rails = resolved.map((rail) => buildRailResponse(rail, maps, railItemLimit));
 
   const totalPages = Math.ceil(total / limit);
@@ -1056,13 +1059,14 @@ export const getRailByKeyService = async (
   key: string,
   brandId?: number,
   userId?: number,
+  platform?: string,
 ): Promise<RailResponse | null> => {
   const rows = await findRailByKey(key, brandId);
   if (rows.length === 0) return null;
   const resolved = resolveBrandOverrides(rows);
   if (resolved.length === 0) return null;
   const rail = resolved[0];
-  const maps = await buildHydrationMaps([rail], userId, brandId);
+  const maps = await buildHydrationMaps([rail], userId, brandId, platform);
   return buildRailResponse(rail, maps);
 };
 
@@ -1388,10 +1392,11 @@ export const resolveChartTracks = async (
   limit: number,
   brandId?: number | null,
   offset: number = 0,
+  platform?: string,
 ): Promise<string[]> => {
   if (limit <= 0) return [];
 
-  const excludeOwnerIds = (await resolveViewerOwnerAccess(brandId)).excludeOwnerIds;
+  const excludeOwnerIds = (await resolveViewerOwnerAccess(brandId, platform)).excludeOwnerIds;
 
   // Over-fetch to absorb tracks dropped by brand exclusion
   const fetchSize = Math.min(500, limit * 3 + 50);
@@ -2201,13 +2206,14 @@ const resolveQueryTracksPaginated = async (
   page: number,
   limit: number,
   brandId?: number | null,
+  platform?: string,
 ): Promise<{ codes: string[]; total: number }> => {
   const hasFilterIds = Array.isArray(query.filterIds) && query.filterIds.length > 0;
   const hasTrackFilters = query.popular || query.trending || query.newOnHoopr ||
     query.movie !== undefined || query.campaign || query.type || query.ownerCode ||
     query.releaseYearFrom || query.releaseYearTo;
 
-  let excludeOwnerIds = (await resolveViewerOwnerAccess(brandId)).excludeOwnerIds;
+  let excludeOwnerIds = (await resolveViewerOwnerAccess(brandId, platform)).excludeOwnerIds;
   if (query.excludeOwnerIds && query.excludeOwnerIds.length > 0) {
     excludeOwnerIds = excludeOwnerIds
       ? [...new Set([...excludeOwnerIds, ...query.excludeOwnerIds])]
@@ -2309,6 +2315,7 @@ const buildSeeAllItems = async (
   pageName: PageName | undefined,
   userId?: number,
   viewerBrandId?: number,
+  platform?: string,
 ): Promise<RailItemResponse[]> => {
   const trackCodes: string[] = [];
   const filterCodes: string[] = [];
@@ -2329,7 +2336,7 @@ const buildSeeAllItems = async (
     else filterCodes.push(p.itemCode);
   }
 
-  const access = await resolveViewerOwnerAccess(viewerBrandId);
+  const access = await resolveViewerOwnerAccess(viewerBrandId, platform);
   const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
     hydrateTracks(trackCodes, access, userId),
     hydrateFilters(filterCodes),
@@ -2374,6 +2381,7 @@ export const getRailSeeAllService = async (
   reExecute: boolean,
   userId?: number,
   viewerBrandId?: number,
+  platform?: string,
 ): Promise<RailSeeAllResponse | null> => {
   const rail = await findRailByIdWithoutItems(railId);
   if (!rail) return null;
@@ -2424,6 +2432,7 @@ export const getRailSeeAllService = async (
       pageNameForFilter,
       userId,
       viewerBrandId,
+      platform,
     );
     return envelope(items, count);
   };
@@ -2447,6 +2456,7 @@ export const getRailSeeAllService = async (
       page,
       limit,
       viewerBrandId ?? rail.brandId ?? null,
+      platform,
     );
     const pairs = codes.map((code, idx) => ({
       itemType: RailItemType.TRACK,
@@ -2458,6 +2468,7 @@ export const getRailSeeAllService = async (
       pageNameForFilter,
       userId,
       viewerBrandId,
+      platform,
     );
     return envelope(items, total);
   }
@@ -2476,12 +2487,16 @@ export const getRailSeeAllService = async (
         ChartTrackSource.TRENDING,
         SEE_ALL_AI_QUERY_HARD_CAP,
         viewerBrandId ?? rail.brandId ?? null,
+        0,
+        platform,
       );
     } else if (aiQuery.queryType === 'POPULAR') {
       allCodes = await resolveChartTracks(
         ChartTrackSource.POPULAR,
         SEE_ALL_AI_QUERY_HARD_CAP,
         viewerBrandId ?? rail.brandId ?? null,
+        0,
+        platform,
       );
     } else {
       // For FILTERED / NEW_AGE_ICONS / BRAND_RECOMMENDED / legacy URL,
@@ -2535,6 +2550,7 @@ export const getRailSeeAllService = async (
       pageNameForFilter,
       userId,
       viewerBrandId,
+      platform,
     );
     return envelope(items, total);
   }

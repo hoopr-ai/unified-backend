@@ -215,6 +215,7 @@ export const getTracksByOccasionService = async (
   limit: number,
   userId?: number,
   brandId?: number,
+  platform?: string,
 ): Promise<PaginatedTracksResponseData> => {
   const [curatedMappings, keywordIds] = await Promise.all([
     findOccasionTrackMappings(occasionId),
@@ -225,7 +226,7 @@ export const getTracksByOccasionService = async (
   // default-restricted labels are excluded unless the brand holds a token that
   // covers that specific label. The same access object then drives the
   // token/price display in transformTrackToDto.
-  const ownerAccess = await resolveViewerOwnerAccess(brandId);
+  const ownerAccess = await resolveViewerOwnerAccess(brandId, platform);
   const excludeOwnerIds = ownerAccess.excludeOwnerIds;
   const excludeOwnerSet = new Set(excludeOwnerIds ?? []);
 

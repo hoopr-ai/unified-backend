@@ -536,7 +536,7 @@ export const getAllTracksService = async (
   // Owner visibility (restricted labels gated per label by token) plus the
   // brand's restricted track tiers.
   const [ownerAccess, excludeTiers] = await Promise.all([
-    resolveViewerOwnerAccess(brandId),
+    resolveViewerOwnerAccess(brandId, platform),
     brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
   ]);
   const excludeOwnerIds = ownerAccess.excludeOwnerIds;
@@ -610,6 +610,7 @@ export const getTracksByCodesService = async (
   query: GetTracksByCodesQuery,
   userId?: number,
   brandId?: number,
+  platform?: Platform,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
@@ -630,7 +631,7 @@ export const getTracksByCodesService = async (
   // Owner visibility (restricted labels gated per label by token) plus the
   // brand's restricted track tiers.
   const [ownerAccess, excludeTiers] = await Promise.all([
-    resolveViewerOwnerAccess(brandId),
+    resolveViewerOwnerAccess(brandId, platform),
     brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
   ]);
   const excludeOwnerIds = ownerAccess.excludeOwnerIds;
@@ -739,6 +740,7 @@ export const getTracksByFilterService = async (
   query: GetTracksByFilterQuery,
   userId?: number,
   brandId?: number,
+  platform?: Platform,
 ): Promise<PaginatedTracksResponseData> => {
   const { page, limit } = parsePaginationParams(query.page, query.limit);
 
@@ -751,7 +753,7 @@ export const getTracksByFilterService = async (
   // Owner visibility (restricted labels gated per label by token) plus the
   // brand's restricted track tiers.
   const [ownerAccess, excludeTiers] = await Promise.all([
-    resolveViewerOwnerAccess(brandId),
+    resolveViewerOwnerAccess(brandId, platform),
     brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
   ]);
   const excludeOwnerIds = ownerAccess.excludeOwnerIds;
@@ -890,11 +892,12 @@ export const getTrackDetailsByCodeService = async (
   trackCode: string,
   userId?: number,
   brandId?: number,
+  platform?: Platform,
 ): Promise<TrackDetailsWithSkus | null> => {
   // Owner visibility (restricted labels gated per label by token) plus the
   // brand's restricted track tiers.
   const [ownerAccess, excludeTiers] = await Promise.all([
-    resolveViewerOwnerAccess(brandId),
+    resolveViewerOwnerAccess(brandId, platform),
     brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
   ]);
   const excludeOwnerIds = ownerAccess.excludeOwnerIds;
@@ -947,8 +950,9 @@ export const searchTracksService = async (
   query: string,
   limit: number = 20,
   brandId?: number,
+  platform?: Platform,
 ): Promise<TrackSearchResult[]> => {
-  const { excludeOwnerIds } = await resolveViewerOwnerAccess(brandId);
+  const { excludeOwnerIds } = await resolveViewerOwnerAccess(brandId, platform);
   return searchTracksByName(query, limit, excludeOwnerIds);
 };
 

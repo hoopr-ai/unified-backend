@@ -49,7 +49,7 @@ export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = parseBrandId(req.session?.userId); // Reusing parseBrandId to parse userId from session, will return undefined if invalid
   const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
 
-  const rails = await getRailsService(brandId, userId, pageName);
+  const rails = await getRailsService(brandId, userId, pageName, req.session?.platform);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
@@ -76,7 +76,15 @@ export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) 
   // Fall back to query param brandId so FE can pass it without auth header for token gating
   const user = userId ? await findUserById(userId) : null;
   const userBrandId = user?.brandId ?? parseBrandId(req.query.brandId);
-  const result = await getRailsPaginatedService(userBrandId, userId, pageName, page, limit, railItemLimit);
+  const result = await getRailsPaginatedService(
+    userBrandId,
+    userId,
+    pageName,
+    page,
+    limit,
+    railItemLimit,
+    req.session?.platform,
+  );
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
@@ -92,7 +100,7 @@ export const getRailByKey = catchAsync(
     const brandId = parseBrandId(req.query.brandId);
     const userId = req.session?.userId;
 
-    const rail = await getRailByKeyService(key, brandId, userId);
+    const rail = await getRailByKeyService(key, brandId, userId, req.session?.platform);
 
     if (!rail) {
       sendResponse(res, {
@@ -146,6 +154,7 @@ export const getRailSeeAll = catchAsync(
       reExecute,
       userId,
       viewerBrandId,
+      req.session?.platform,
     );
 
     if (!result) {

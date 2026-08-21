@@ -149,7 +149,14 @@ export const getTracksByOccasion = catchAsync(async (req: AuthRequest, res: Resp
   const page = parseInt((req.query.page as string) || "1", 10);
   const limit = parseInt((req.query.limit as string) || "10", 10);
 
-  const response = await getTracksByOccasionService(occasionId, page, limit, userId, brandId);
+  const response = await getTracksByOccasionService(
+    occasionId,
+    page,
+    limit,
+    userId,
+    brandId,
+    req.session?.platform,
+  );
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,

@@ -53,7 +53,7 @@ export const getPlaylistDetail = catchAsync(async (req: AuthRequest, res: Respon
   const query: GetPlaylistDetailQuery = {
     playlistCode: req.params.playlistCode as string,
   };
-  const response = await getPlaylistDetailService(query, brandId, userId);
+  const response = await getPlaylistDetailService(query, brandId, userId, req.session?.platform);
   if (!response) {
     return sendError(res, HttpStatusCode.NOT_FOUND, ResponseMessages.PlaylistNotFound);
   }
