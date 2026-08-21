@@ -8,6 +8,7 @@ import {
   logoutAllSessionsService,
   refreshTokenService,
   completeProfileService,
+  getCompleteProfileContextService,
   getUserProfileService,
   updateUserProfileService,
   getUsersUnderAdminService,
@@ -158,6 +159,21 @@ export const completeProfile = catchAsync(
       status: HttpStatusCode.OK,
       data: response,
       message: ResponseMessages.ProfileCompletedSuccess,
+    });
+  },
+);
+
+export const getCompleteProfileContext = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const response = await getCompleteProfileContextService(userId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.GetProfileSuccess,
     });
   },
 );

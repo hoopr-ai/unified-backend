@@ -38,11 +38,11 @@ export const completeProfileRequestSchema =
     profileRole: Joi.string()
       .valid(...profileRoleValues)
       .required(),
+    // Brand block: only the person creating the brand sends these, and only
+    // then is instagramLink mandatory — an invited user inherits the brand's.
+    // Joi cannot see the user's brandId, so completeProfileService enforces it.
     brandName: Joi.string().min(2).max(255).optional(),
-    instagramLink: Joi.string().max(500).required().messages({
-      "any.required": "Instagram link is required",
-      "string.empty": "Instagram link is required",
-    }),
+    instagramLink: Joi.string().max(500).optional(),
     youtubeLink: Joi.string().max(500).optional(),
     facebookLink: Joi.string().max(500).optional(),
   });

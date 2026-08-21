@@ -16,6 +16,7 @@ import {
   type SessionMetadata,
   InviteUserAuthRequestData,
   CompleteProfileRequestData,
+  CompleteProfileContextResponse,
   UpdateProfileRequestData,
   UserProfileResponse,
 } from "../../dto-service/modules.export";
@@ -537,6 +538,14 @@ export const completeProfileService = async (
     throw new AppError(ErrorMessages.ProfileAlreadyComplete, 400);
   }
 
+  // An invited user inherits the brand block from the brand they were invited
+  // into — asking them to retype the brand name and the same Instagram handle
+  // only produces divergent copies, so anything they send here is ignored.
+  const isBrandOwner = !user.brandId;
+  if (isBrandOwner && !instagramLink) {
+    throw new AppError("Instagram link is required", 400);
+  }
+
   try {
     await updateUserProfile(
       userId,
@@ -546,7 +555,6 @@ export const completeProfileService = async (
       countryCode,
       profileRole,
     );
-    await upsertUserProfile(userId, { instagramLink, youtubeLink, facebookLink });
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
@@ -565,10 +573,11 @@ export const completeProfileService = async (
   }
 
   // If a brand name is provided by a self-signed-up user (no brand yet),
-  // create an organization + brand and link them. Invited users already
-  // belong to a brand — leave the brand and its organization untouched.
-  if (brandName && !user.brandId) {
-    const normalizedName = brandName.toLowerCase().trim();
+  // create an organization + brand and link them. The social handles are stored
+  // on the brand so every member invited later inherits them. Invited users
+  // already belong to a brand — leave the brand and its organization untouched.
+  if (brandName && isBrandOwner) {
+    const normalizedName = brandName.trim();
     const now = new Date();
     const org = await saveOrganization({
       name: normalizedName,
@@ -583,6 +592,9 @@ export const completeProfileService = async (
       status: BrandStatus.ACTIVE,
       createdBy: userId,
       createdAt: now,
+      instagramLink: instagramLink ?? null,
+      youtubeLink: youtubeLink ?? null,
+      facebookLink: facebookLink ?? null,
     });
     await updateUserBrandId(userId, (brand as any).id);
   }
@@ -652,12 +664,34 @@ export const completeProfileService = async (
   );
 };
 
+// The brand block is editable by whoever created the brand, and by admins.
+// Roles alone are not enough: a user who signs up through email OTP creates the
+// brand at complete-profile time but is only granted UserRoles.USER.
+const canUserEditBrand = (
+  brand: any | null,
+  role: UserRoles | null,
+  userId: number,
+): boolean => {
+  if (!brand) return true; // no brand yet — they are about to create one
+  if (role === UserRoles.ADMIN || role === UserRoles.MASTER) return true;
+  return Number(brand.createdBy) === Number(userId);
+};
+
+// Brand handles are the source of truth; user_profiles is only read as a
+// fallback for brands onboarded before the columns existed.
+const resolveSocialLinks = (brand: any | null, userProfile: any | null) => ({
+  instagramLink: brand?.instagramLink ?? userProfile?.instagramLink ?? null,
+  youtubeLink: brand?.youtubeLink ?? userProfile?.youtubeLink ?? null,
+  facebookLink: brand?.facebookLink ?? userProfile?.facebookLink ?? null,
+});
+
 export const getUserProfileService = async (
   userId: number,
 ): Promise<UserProfileResponse> => {
-  const [user, userProfile] = await Promise.all([
+  const [user, userProfile, role] = await Promise.all([
     findUserById(userId),
     findUserProfile(userId),
+    findUserRole(userId),
   ]);
   if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
@@ -675,10 +709,36 @@ export const getUserProfileService = async (
     countryCode: user.countryCode,
     profileRole: user.profileRole,
     isProfileComplete: user.isProfileComplete ?? false,
-    instagramLink: userProfile?.instagramLink ?? null,
-    youtubeLink: userProfile?.youtubeLink ?? null,
-    facebookLink: userProfile?.facebookLink ?? null,
+    ...resolveSocialLinks(brand, userProfile),
+    brandId: user.brandId,
     brandName: (brand as any)?.name ?? undefined,
+    canEditBrand: canUserEditBrand(brand, role, userId),
+  };
+};
+
+// Drives the complete-profile screen: an invited user gets the brand block
+// prefilled and locked, the first user of a brand gets it as an input.
+export const getCompleteProfileContextService = async (
+  userId: number,
+): Promise<CompleteProfileContextResponse> => {
+  const [user, userProfile, role] = await Promise.all([
+    findUserById(userId),
+    findUserProfile(userId),
+    findUserRole(userId),
+  ]);
+  if (!user) {
+    throw new AppError(ErrorMessages.UserNotFound, 404);
+  }
+
+  const brand = user.brandId ? await findBrandById(user.brandId) : null;
+
+  return {
+    hasBrand: !!brand,
+    brandId: user.brandId,
+    brandName: (brand as any)?.name ?? undefined,
+    ...resolveSocialLinks(brand, userProfile),
+    canEditBrand: canUserEditBrand(brand, role, userId),
+    requiresBrandDetails: !brand,
   };
 };
 
@@ -716,12 +776,33 @@ export const updateUserProfileService = async (
   if (instagramLink !== undefined) socialUpdates.instagramLink = instagramLink;
   if (youtubeLink !== undefined) socialUpdates.youtubeLink = youtubeLink;
   if (facebookLink !== undefined) socialUpdates.facebookLink = facebookLink;
-  if (Object.keys(socialUpdates).length > 0) {
-    await upsertUserProfile(userId, socialUpdates);
+
+  // Brand name and social handles are shared by the whole brand, so only the
+  // brand's creator (or an admin) may change them — before this, any invited
+  // member could silently rename the brand for everyone.
+  const existingBrand = user.brandId ? await findBrandById(user.brandId) : null;
+  const role = await findUserRole(userId);
+  const mayEditBrand = canUserEditBrand(existingBrand, role, userId);
+  const wantsBrandEdit = !!brandName || Object.keys(socialUpdates).length > 0;
+
+  if (existingBrand && wantsBrandEdit && !mayEditBrand) {
+    throw new AppError(
+      "Only a brand admin can change the brand name or its social links.",
+      403,
+    );
   }
 
-  if (brandName && user.brandId) {
-    await updateBrand(user.brandId, { name: brandName.toLowerCase().trim() });
+  if (existingBrand) {
+    const brandUpdates = {
+      ...socialUpdates,
+      ...(brandName ? { name: brandName.trim() } : {}),
+    };
+    if (Object.keys(brandUpdates).length > 0) {
+      await updateBrand(user.brandId!, brandUpdates);
+    }
+  } else if (Object.keys(socialUpdates).length > 0) {
+    // No brand yet — keep the links on the user until one is created.
+    await upsertUserProfile(userId, socialUpdates);
   }
 
   const [updatedUser, userProfile, brand] = await Promise.all([
@@ -742,9 +823,9 @@ export const updateUserProfileService = async (
     mobile: updatedUser.mobile,
     profileRole: updatedUser.profileRole,
     isProfileComplete: updatedUser.isProfileComplete ?? false,
-    instagramLink: userProfile?.instagramLink ?? null,
-    youtubeLink: userProfile?.youtubeLink ?? null,
-    facebookLink: userProfile?.facebookLink ?? null,
+    ...resolveSocialLinks(brand, userProfile),
+    brandId: updatedUser.brandId,
+    canEditBrand: mayEditBrand,
     ...(brand ? { brandName: (brand as any).name } : {}),
   };
 };

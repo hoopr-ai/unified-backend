@@ -18,10 +18,27 @@ export interface CompleteProfileRequestData {
   mobile: string;
   countryCode: string;
   profileRole: ProfileRole;
+  // Brand-level fields. Only honoured when the user has no brand yet (the
+  // person creating it); for an invited user they are ignored and the brand's
+  // own values are inherited instead. See GET /users/complete-profile-context.
   brandName?: string;
-  instagramLink: string;
+  instagramLink?: string;
   youtubeLink?: string;
   facebookLink?: string;
+}
+
+// Everything the FE needs to render the complete-profile form: whether the
+// brand block should be asked for at all, and what to prefill it with.
+export interface CompleteProfileContextResponse {
+  hasBrand: boolean;
+  brandId?: number;
+  brandName?: string;
+  instagramLink?: string | null;
+  youtubeLink?: string | null;
+  facebookLink?: string | null;
+  // false => render the brand block read-only; the API will ignore any edits.
+  canEditBrand: boolean;
+  requiresBrandDetails: boolean;
 }
 
 export interface UpdateProfileRequestData {
@@ -50,7 +67,9 @@ export interface UserProfileResponse {
   instagramLink?: string | null;
   youtubeLink?: string | null;
   facebookLink?: string | null;
+  brandId?: number;
   brandName?: string;
+  canEditBrand?: boolean;
 }
 
 export interface LoginUserRequestData {
