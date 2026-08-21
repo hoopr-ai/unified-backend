@@ -68,7 +68,7 @@ import { WebBannerModel } from "../../persistence-service/web-banner/modules.exp
 import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
 import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
-import { transformRawTracksToDto } from "../track/track.service";
+import { countStemsByTrackIds } from "../../persistence-service/track/stem.persistence.service";
 import { toCdnUrl } from "../../helper-service/cdn.helper";
 
 // -----------------------------------------------------------------------------
@@ -222,6 +222,20 @@ const hydrateTracks = async (
   });
   await Promise.all(albumPromises);
 
+  // Stem counts for the whole rail in one grouped query.
+  //
+  // This hydrator is a parallel implementation of transformTrackToDto rather
+  // than a caller of it, so anything added to the track DTO has to be added
+  // here too or rails silently serve a narrower track than every other
+  // endpoint. Non-fatal for the same reason as the list path: no stems is a
+  // worse answer than no rails.
+  let stemCounts = new Map<string, number>();
+  try {
+    stemCounts = await countStemsByTrackIds(trackIds);
+  } catch (error) {
+    console.error("[Stems] Failed to attach stem counts to rails:", error);
+  }
+
   // Transform to response format (matching getAllTracks API structure)
   const result = new Map<string, unknown>();
   for (const [code, track] of tracksMap) {
@@ -279,6 +293,13 @@ const hydrateTracks = async (
     if (isEnterpriseOnly && !isSfx) trackData.isEnterpriseOnly = true;
     if (sku) trackData.sku = sku;
     if (albumMap.has(track.id)) trackData.album = albumMap.get(track.id);
+    // Same shape as the list endpoints: emitted only when stems exist, so the
+    // client's `hasStems ?? false` check behaves identically everywhere.
+    const stemCount = stemCounts.get(track.id) ?? 0;
+    if (stemCount > 0) {
+      trackData.hasStems = true;
+      trackData.stemCount = stemCount;
+    }
 
     result.set(code, trackData);
   }
