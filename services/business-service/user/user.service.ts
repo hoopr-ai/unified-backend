@@ -734,8 +734,8 @@ export const getCompleteProfileContextService = async (
 
   return {
     hasBrand: !!brand,
-    brandId: user.brandId,
-    brandName: (brand as any)?.name ?? undefined,
+    brandId: user.brandId ?? null,
+    brandName: (brand as any)?.name ?? null,
     ...resolveSocialLinks(brand, userProfile),
     canEditBrand: canUserEditBrand(brand, role, userId),
     requiresBrandDetails: !brand,

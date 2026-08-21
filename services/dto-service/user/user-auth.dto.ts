@@ -31,8 +31,10 @@ export interface CompleteProfileRequestData {
 // brand block should be asked for at all, and what to prefill it with.
 export interface CompleteProfileContextResponse {
   hasBrand: boolean;
-  brandId?: number;
-  brandName?: string;
+  // Always present — null rather than omitted when there is no brand yet, so
+  // the FE can read the key without an existence check.
+  brandId: number | null;
+  brandName: string | null;
   instagramLink?: string | null;
   youtubeLink?: string | null;
   facebookLink?: string | null;
