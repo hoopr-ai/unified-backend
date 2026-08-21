@@ -23,6 +23,11 @@ export interface BrandDetails {
   createdBy?: number;
   restrictedOwners?: string[];
   restrictedTrackTiers?: string[];
+  // Social handles belong to the brand, not to whoever happened to fill the
+  // complete-profile form first — every member of the brand shares these.
+  instagramLink?: string | null;
+  youtubeLink?: string | null;
+  facebookLink?: string | null;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -81,6 +86,15 @@ export class BrandModel extends Model<BrandModel, BrandDetails> {
     allowNull: true,
   })
   restrictedTrackTiers?: string[];
+
+  @Column({ type: DataType.STRING(500), allowNull: true })
+  instagramLink?: string | null;
+
+  @Column({ type: DataType.STRING(500), allowNull: true })
+  youtubeLink?: string | null;
+
+  @Column({ type: DataType.STRING(500), allowNull: true })
+  facebookLink?: string | null;
 
   @CreatedAt
   @Column({

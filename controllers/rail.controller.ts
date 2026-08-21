@@ -197,6 +197,16 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
   const type = b.type as RailType;
   const sourceType = b.sourceType as RailSourceType;
 
+  // Widget body, when the caller sends one. Must be a plain object (or null to
+  // clear it) — an array or scalar here would persist a shape the app cannot
+  // read and would blank the section on the live home. Absent is fine and
+  // means "leave the stored config alone".
+  if (b.config !== undefined && b.config !== null) {
+    if (typeof b.config !== "object" || Array.isArray(b.config)) {
+      return "config must be an object";
+    }
+  }
+
   // Manual-only pages (e.g. APP_HOME) must be hand-curated — reject QUERY/AI_QUERY
   if (sourceType !== RailSourceType.MANUAL && Array.isArray(b.pageNames)) {
     const manualOnly = (b.pageNames as string[]).filter(isManualOnlyPage);
@@ -206,7 +216,12 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
   }
 
   if (sourceType === RailSourceType.MANUAL) {
-    if (!Array.isArray(b.itemCodes)) return "itemCodes array is required for MANUAL";
+    // WIDGET rails are exempt: they have no rail_items at all — their body is
+    // the `config` object — so demanding an itemCodes array would make every
+    // app-home widget rail unsaveable from the CMS.
+    if (type !== RailType.WIDGET && !Array.isArray(b.itemCodes)) {
+      return "itemCodes array is required for MANUAL";
+    }
   } else if (sourceType === RailSourceType.QUERY) {
     if (type !== RailType.TRACKS) return "QUERY sourceType is only valid for TRACKS";
     const q = b.query as {

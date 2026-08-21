@@ -94,7 +94,14 @@ export const updateBrandById = async (
   updates: Partial<
     Pick<
       BrandDetails,
-      "name" | "description" | "status" | "restrictedOwners" | "restrictedTrackTiers"
+      | "name"
+      | "description"
+      | "status"
+      | "restrictedOwners"
+      | "restrictedTrackTiers"
+      | "instagramLink"
+      | "youtubeLink"
+      | "facebookLink"
     >
   >
 ): Promise<void> => {

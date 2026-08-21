@@ -397,6 +397,26 @@ export async function connectDatabase() {
       `);
       console.log("📦 rails.populateMode ensured.");
 
+      // 3e. Idempotently add the brand-level social handles. They live on the
+      // brand (not on each member's user_profiles row) so everyone invited into
+      // a brand inherits the same links instead of retyping them. Required
+      // because brand reads SELECT every mapped column — without these, login
+      // itself would error on a DB that doesn't have them yet.
+      await sequelize.query(`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'brands' AND column_name = 'instagramLink'
+          ) THEN
+            ALTER TABLE brands
+              ADD COLUMN "instagramLink" VARCHAR(500) NULL,
+              ADD COLUMN "youtubeLink"   VARCHAR(500) NULL,
+              ADD COLUMN "facebookLink"  VARCHAR(500) NULL;
+          END IF;
+        END $$;
+      `);
+      console.log("📦 brands social links ensured.");
+
       // 4. Ensure triggers + functions exist (idempotent — CREATE OR REPLACE / IF NOT EXISTS)
       await sequelize.query(ENSURE_TRIGGERS_SQL);
       console.log("🔁 Triggers ensured.");

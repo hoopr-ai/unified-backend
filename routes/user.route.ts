@@ -8,6 +8,7 @@ import {
   create,
   inviteUser,
   completeProfile,
+  getCompleteProfileContext,
   getUserActivities,
   getUserSessions,
   getProfile,
@@ -80,6 +81,14 @@ router.post(
   }),
   validateRequest(inviteUserAuthRequestSchema),
   inviteUser,
+);
+
+// What to render on the complete-profile screen: the brand block is prefilled
+// and locked for invited users, and asked for only from the brand's first user.
+router.get(
+  "/complete-profile-context",
+  authenticateWithSession({ platforms: [Platform.ENTERPRISE] }),
+  getCompleteProfileContext,
 );
 
 router.post(
