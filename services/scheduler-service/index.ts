@@ -27,6 +27,11 @@ import { brandRecommendWorker } from "./workers/brand-recommend.worker";
 import { emailCampaignWorker } from "./workers/email-campaign.worker";
 import { urlMonitorWorker } from "./workers/url-monitor.worker";
 import { nativeArtistWorker } from "./workers/native-artist.worker";
+import {
+  closeStemBundleQueue,
+  getStemBundleQueue,
+} from "./queues/stem-bundle.queue";
+import { stemBundleWorker } from "./workers/stem-bundle.worker";
 import { logger } from "../helper-service/logger";
 
 export async function initializeScheduler(): Promise<void> {
@@ -62,11 +67,13 @@ export async function initializeScheduler(): Promise<void> {
       await emailCampaignWorker.close();
       await urlMonitorWorker.close();
       await nativeArtistWorker.close();
+      await stemBundleWorker.close();
       await railRefreshQueue.close();
       await brandRecommendQueue.close();
       await emailCampaignQueue.close();
       await urlMonitorQueue.close();
       await nativeArtistQueue.close();
+      await closeStemBundleQueue();
       logger.info("[Scheduler] Shutdown complete");
     };
 
@@ -83,5 +90,8 @@ export { emailCampaignQueue, emailCampaignWorker, triggerEmailCampaignTick };
 export { brandRecommendQueue, brandRecommendWorker, triggerBrandRecommend };
 export { urlMonitorQueue, urlMonitorWorker, triggerUrlCheck };
 export { nativeArtistQueue, nativeArtistWorker, triggerNativeArtistRecompute };
+// No schedule() call: stem bundles are queued on demand by the download
+// endpoint, not on a timer. Importing the worker here is what starts it.
+export { getStemBundleQueue, stemBundleWorker };
 export { executeRailRefresh } from "./jobs/rail-refresh.job";
 export { executeBrandRecommend } from "./jobs/brand-recommend.job";

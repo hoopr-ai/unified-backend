@@ -12,7 +12,12 @@ import {
   UserEntityDetailsModel,
   AccessRequestModel,
 } from "./user/modules.export";
-import { TrackModel, FeaturedTracksModel, ChartTrackModel } from "./track/modules.export";
+import {
+  TrackModel,
+  FeaturedTracksModel,
+  ChartTrackModel,
+  CreatorStemModel,
+} from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import {
   FilterModel,
@@ -182,6 +187,7 @@ sequelize.addModels([
   EmailEventModel,
   MonitoredUrlModel,
   MonitorCheckModel,
+  CreatorStemModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything

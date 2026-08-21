@@ -10,6 +10,8 @@ export const enum ResponseMessages {
   GetTracksSuccess = "Tracks fetched successfully",
   GetTrackDetailSuccess = "Track details fetched successfully",
   TrackNotFound = "Track not found",
+  GetTrackStemsSuccess = "Stems fetched successfully",
+  StemBundlePreparing = "Preparing your download",
   GetPlaylistsSuccess = "Playlists fetched successfully",
   GetPlaylistDetailSuccess = "Playlist details fetched successfully",
   PlaylistNotFound = "Playlist not found",

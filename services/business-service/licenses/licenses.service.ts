@@ -41,6 +41,16 @@ import {
   sendLowCreditsAlertEmail,
 } from "../../helper-service/modules.export";
 import { logger } from "../../helper-service/logger";
+import {
+  buildStemBundle,
+  readCachedStemBundle,
+  type StemBundleInput,
+} from "../../helper-service/stem-bundle.helper";
+import {
+  getStemBundleQueue,
+  stemBundleJobId,
+} from "../../scheduler-service/queues/stem-bundle.queue";
+import { getStemsForTrackId, toBundleStems } from "../track/stem.service";
 import type {
   LicenseTrackRequest,
   LicenseResponse,
@@ -48,6 +58,7 @@ import type {
   BrandLicenseHistoryItem,
   DownloadTrackRequest,
   DownloadTrackResponse,
+  DownloadTrackResult,
 } from "../../dto-service/licenses/modules.export";
 import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
 
@@ -596,8 +607,8 @@ export const getBrandLicenseHistoryService = async (
 export const downloadTrackService = async (
   userId: number,
   data: DownloadTrackRequest,
-): Promise<DownloadTrackResponse> => {
-  const { licenseId } = data;
+): Promise<DownloadTrackResult> => {
+  const { licenseId, includeStems } = data;
 
   // Get license details
   const license = await LicenseModel.findByPk(licenseId, {
@@ -628,14 +639,121 @@ export const downloadTrackService = async (
     throw new AppError("Track audio file is not available for download", 400);
   }
 
+  // Stems ride the licence the brand has already paid for — no extra token is
+  // deducted here, and no separate licence row is written. This endpoint is
+  // reached only after licenseTrackService has charged for the track.
+  if (includeStems) {
+    return requestStemBundle(track.id, track.name || "", isSfxTrack);
+  }
+
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
 
   return {
+    status: "ready",
     downloadLink: gcsResult.downloadLink,
     trackId: track.id,
     trackName: track.name || "",
   };
+};
+
+/** How long the client is told to wait before polling the bundle again. */
+const BUNDLE_RETRY_AFTER_MS = 1500;
+
+/**
+ * Answer for the "mix + stems" zip: the cached bundle if it exists, otherwise a
+ * "preparing" that the client polls on.
+ *
+ * A track with no stem rows still produces a zip (holding just the mix) rather
+ * than a bare mp3. The client has already committed to saving the response as
+ * `.zip` by the time it calls, so handing back an mp3 would save a file that no
+ * archiver can open. In practice this only happens if a stem is soft-deleted
+ * between the list response and the download.
+ */
+const requestStemBundle = async (
+  trackId: string,
+  trackName: string,
+  isSfx: boolean,
+): Promise<DownloadTrackResult> => {
+  const stems = await getStemsForTrackId(trackId);
+  const input: StemBundleInput = {
+    trackId,
+    trackName,
+    isSfx,
+    stems: toBundleStems(stems),
+  };
+
+  const cached = await readCachedStemBundle(input);
+  if (cached) {
+    return {
+      status: "ready",
+      downloadLink: cached.downloadLink,
+      trackId,
+      trackName,
+      fileCount: cached.fileCount,
+      sizeBytes: cached.sizeBytes,
+    };
+  }
+
+  const jobId = stemBundleJobId(trackId);
+
+  try {
+    const bundleQueue = getStemBundleQueue();
+    const existing = await bundleQueue.getJob(jobId);
+
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "failed") {
+        // Without this the client polls "preparing" until its own timeout, and
+        // the dead job blocks every future attempt because the id is taken.
+        const reason = existing.failedReason;
+        await existing.remove();
+        logger.error(
+          `[StemBundle] Build for track ${trackId} failed: ${reason}`,
+        );
+        throw new AppError(
+          "This track's stems could not be packaged for download.",
+          400,
+        );
+      }
+      // Queued or running — someone else is already building it.
+      return { status: "preparing", retryAfterMs: BUNDLE_RETRY_AFTER_MS };
+    }
+
+    await bundleQueue.add("build-bundle", input, { jobId });
+    return { status: "preparing", retryAfterMs: BUNDLE_RETRY_AFTER_MS };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+
+    // No Redis (SKIP_SCHEDULER=true locally, or the queue is unreachable).
+    // Falling back to an in-request build keeps downloads working instead of
+    // leaving the client polling a job nothing will ever pick up.
+    logger.warn(
+      `[StemBundle] Queue unavailable for track ${trackId}, building inline: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    try {
+      const built = await buildStemBundle(input);
+      return {
+        status: "ready",
+        downloadLink: built.downloadLink,
+        trackId,
+        trackName,
+        fileCount: built.fileCount,
+        sizeBytes: built.sizeBytes,
+      };
+    } catch (buildError) {
+      logger.error(
+        `[StemBundle] Inline build for track ${trackId} failed:`,
+        buildError,
+      );
+      throw new AppError(
+        "This track's stems could not be packaged for download.",
+        400,
+      );
+    }
+  }
 };
 
 export interface DownloadLicensePdfResponse {
