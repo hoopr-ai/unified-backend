@@ -9,6 +9,7 @@ import {
   searchArtistsController,
   getRandomTrackPreview,
   streamTrackPreview,
+  getTrackStems,
 } from "../controllers/track.controller";
 import { validateRequest } from "../middlewares/validateRequest";
 import { getTracksByCodesRequestSchema } from "../middlewares/track.validation";
@@ -26,6 +27,10 @@ router.get("/random-preview", getRandomTrackPreview);
 router.get("/preview-stream/:trackCode", streamTrackPreview);
 router.post("/", optionalAuthenticate, getAllTracks);
 router.post("/by-codes", optionalAuthenticate, validateRequest(getTracksByCodesRequestSchema), getTracksByCodes);
+// MUST stay above "/:trackCode" — Express matches in declaration order, and
+// while "/:trackCode" cannot swallow a two-segment path today, any future
+// wildcard here would. Keeping the literal segment first makes that safe.
+router.get("/:trackCode/stems", optionalAuthenticate, getTrackStems);
 router.get("/:trackCode", optionalAuthenticate, getTrackDetailsByCode);
 router.post("/filter/:filterName", optionalAuthenticate, getTracksByFilter);
 

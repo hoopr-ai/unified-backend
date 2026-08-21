@@ -27,6 +27,7 @@ import {
   type TrackSearchResult,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
+import { countStemsByTrackIds } from "../../persistence-service/track/stem.persistence.service";
 import { toCdnUrl } from "../../helper-service/cdn.helper";
 import {
   resolveViewerOwnerAccess,
@@ -184,6 +185,32 @@ const fetchAlbumsForTracks = async (
   return albumMap;
 };
 
+/**
+ * Stamp `stemCount` onto raw track rows before they are transformed.
+ *
+ * Mutates the rows rather than threading another map through the six-argument
+ * transform chain — the same approach `album` already takes a few lines above.
+ * Unlike album lookup this is ONE grouped query for the whole page, because it
+ * runs on every list response including rails and search.
+ *
+ * Deliberately non-fatal: stems are an enhancement, and a failure here would
+ * otherwise take down browsing the catalogue. On error every track simply
+ * reports no stems.
+ */
+const attachStemCounts = async (
+  tracks: RawTrackWithMappings[],
+): Promise<void> => {
+  if (tracks.length === 0) return;
+  try {
+    const counts = await countStemsByTrackIds(tracks.map((t) => t.id));
+    for (const track of tracks) {
+      track.stemCount = counts.get(track.id) ?? 0;
+    }
+  } catch (error) {
+    console.error("[Stems] Failed to attach stem counts:", error);
+  }
+};
+
 // Transform raw track data to TrackWithArtists DTO
 const transformTrackToDto = (
   track: RawTrackWithMappings,
@@ -265,6 +292,14 @@ const transformTrackToDto = (
     ...(isSfx && { isSfx: true, freeDownload: true }),
     ...(sku && { sku }),
     ...(track.album && { album: track.album }),
+    // Only sent when there ARE stems: the client treats a missing `hasStems`
+    // as "no stems", so emitting `false` on every one of the ~99% of tracks
+    // without them would only inflate list payloads.
+    ...(track.stemCount != null &&
+      track.stemCount > 0 && {
+        hasStems: true,
+        stemCount: track.stemCount,
+      }),
     hookTimings: normalizeHookTimings(track.hookTimings),
     // Only include campaign if it exists and hasn't been used by the user
     ...(track.campaign &&
@@ -426,6 +461,7 @@ export const transformRawTracksToDto = async (
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
     await fetchOwnerMaps(tracks);
   const albumMap = await fetchAlbumsForTracks(tracks);
+  await attachStemCounts(tracks);
   return tracks.map((track) => {
     if (albumMap.has(track.id)) {
       track.album = albumMap.get(track.id);
@@ -451,6 +487,7 @@ export const buildTracksResponseFromRawData = async (
     rawData.rows,
   );
   const albumMap = await fetchAlbumsForTracks(rawData.rows);
+  await attachStemCounts(rawData.rows);
   return buildPaginatedResponse(
     rawData,
     likedTrackCodes,
@@ -573,6 +610,7 @@ export const getAllTracksService = async (
     rawData.rows,
   );
   const albumMap = await fetchAlbumsForTracks(rawData.rows);
+  await attachStemCounts(rawData.rows);
   const response = buildPaginatedResponse(
     rawData,
     likedTrackCodes,
@@ -661,6 +699,7 @@ export const getTracksByCodesService = async (
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
     await fetchOwnerMaps(orderedTracks);
   const albumMap = await fetchAlbumsForTracks(orderedTracks);
+  await attachStemCounts(orderedTracks);
   return buildPaginatedResponse(
     {
       ...rawData,
@@ -778,6 +817,7 @@ export const getTracksByFilterService = async (
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
     await fetchOwnerMaps(filterTracks);
   const albumMap = await fetchAlbumsForTracks(filterTracks);
+  await attachStemCounts(filterTracks);
   return buildFilterPaginatedResponse(
     rawData,
     likedTrackCodes,
@@ -922,6 +962,10 @@ export const getTrackDetailsByCodeService = async (
   // Fetch album for the track
   const album = await findAlbumByTrackId(track.id);
   const albumName = album?.title;
+
+  // The track page is where the stem picker and the "include stems" download
+  // option actually render, so detail needs this as much as the lists do.
+  await attachStemCounts([track]);
 
   const {
     ownerTypeMap,

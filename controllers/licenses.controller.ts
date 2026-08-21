@@ -16,6 +16,8 @@ import {
   sendError,
 } from "../services/helper-service/modules.export";
 import { HttpStatusCode, Platform, isPlatform } from "../services/dto-service/modules.export";
+import { isDownloadPending } from "../services/dto-service/licenses/modules.export";
+import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import type { SessionPayload } from "../middlewares/authenticate";
 
 interface AuthRequest extends Request {
@@ -134,7 +136,7 @@ export const downloadTrack = catchAsync(async (req: AuthRequest, res: Response) 
     return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
   }
 
-  const { licenseId } = req.body;
+  const { licenseId, includeStems } = req.body;
 
   if (!licenseId) {
     return sendError(res, HttpStatusCode.BAD_REQUEST, "License ID is required", {});
@@ -142,7 +144,20 @@ export const downloadTrack = catchAsync(async (req: AuthRequest, res: Response) 
 
   const response = await downloadTrackService(userId, {
     licenseId,
+    includeStems: includeStems === true || includeStems === "true",
   });
+
+  // 202 while the zip is still being built. The body still carries error.code 0
+  // — this is a successful "not yet", not a failure — and the client polls
+  // until a 200 with the link arrives.
+  if (isDownloadPending(response)) {
+    sendResponse(res, {
+      status: HttpStatusCode.ACCEPTED,
+      data: response,
+      message: ResponseMessages.StemBundlePreparing,
+    });
+    return;
+  }
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
