@@ -3,8 +3,6 @@ import {
   findPlaylistByCode,
   findPlaylistById,
   findTracksByPlaylistId,
-  getRestrictedOwnersByBrandId,
-  getActiveBrandTokenTypes,
   searchPlaylistsByName,
   createPlaylist,
   updatePlaylistById,
@@ -12,6 +10,7 @@ import {
   findTrackIdsByTrackCodes,
   setPlaylistTracks,
 } from "../../persistence-service/exports";
+import { resolveViewerOwnerAccess } from "../access/owner-access.service";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { uploadPublicImageToGCS } from "../../helper-service/gcs.helper";
 import { toCdnUrl } from "../../helper-service/cdn.helper";
@@ -92,13 +91,12 @@ export const getPlaylistDetailService = async (
   }
 
   // Fetch brand-level controls in parallel with liked tracks
-  const [excludeOwnerIds, activeTokenTypes, likedCodes] = await Promise.all([
-    brandId ? getRestrictedOwnersByBrandId(brandId) : Promise.resolve([]),
-    brandId ? getActiveBrandTokenTypes(brandId) : Promise.resolve(new Set<string>()),
+  const [ownerAccess, likedCodes] = await Promise.all([
+    resolveViewerOwnerAccess(brandId),
     userId ? getUserLikedTrackCodes(userId) : Promise.resolve([]),
   ]);
 
-  const excludeOwnerSet = new Set(excludeOwnerIds);
+  const excludeOwnerSet = new Set(ownerAccess.excludeOwnerIds ?? []);
   const likedTrackCodes = new Set(likedCodes);
 
   const mappings = await findTracksByPlaylistId(playlist.id);
@@ -123,7 +121,7 @@ export const getPlaylistDetailService = async (
     (mapping) => mapping.track!.toJSON() as unknown as RawTrackWithMappings,
   );
 
-  const tracks = await transformRawTracksToDto(rawTracks, likedTrackCodes, activeTokenTypes);
+  const tracks = await transformRawTracksToDto(rawTracks, likedTrackCodes, ownerAccess);
 
   return {
     id: playlist.id,

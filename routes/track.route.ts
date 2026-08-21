@@ -16,7 +16,7 @@ import { optionalAuthenticate } from "../middlewares/authenticate";
 
 const router = Router();
 
-router.get("/search", searchTracks);
+router.get("/search", optionalAuthenticate, searchTracks);
 router.get("/brands/search", searchBrandsController);
 router.get("/artists/search", searchArtistsController);
 // Public API - Random track preview with short-lived signed URL (10-30 seconds)

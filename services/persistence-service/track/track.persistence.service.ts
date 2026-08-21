@@ -781,6 +781,7 @@ export interface TrackSearchResult {
 export const searchTracksByName = async (
   searchQuery: string,
   limit: number = 20,
+  excludeOwnerIds?: string[],
 ): Promise<TrackSearchResult[]> => {
   if (!searchQuery || searchQuery.trim().length === 0) {
     return [];
@@ -790,6 +791,8 @@ export const searchTracksByName = async (
   // Escape special characters for LIKE pattern
   const escapedTerm = searchTerm.replace(/[%_\\]/g, '\\$&');
 
+  const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
+
   const tracks = await TrackModel.findAll({
     where: {
       status: "ACTIVE",
@@ -797,6 +800,10 @@ export const searchTracksByName = async (
         { name: { [Op.iLike]: `%${escapedTerm}%` } },
         { trackCode: { [Op.iLike]: `%${escapedTerm}%` } },
       ],
+      // Restricted labels must not surface in autocomplete either
+      ...(excludeOwners.length > 0
+        ? { [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } }
+        : {}),
     },
     attributes: ["trackCode", "name", "ownerId", "artworkLink"],
     include: [

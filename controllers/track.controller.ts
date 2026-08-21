@@ -194,11 +194,17 @@ export const getTrackDetailsByCode = catchAsync(
 );
 
 export const searchTracks = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     const query = (req.query.q as string) || "";
     const limit = parseInt(req.query.limit as string, 10) || 20;
 
-    const results = await searchTracksService(query, Math.min(limit, 50));
+    const userId = req.session?.userId;
+    const user = userId ? await findUserById(userId) : null;
+    const results = await searchTracksService(
+      query,
+      Math.min(limit, 50),
+      user?.brandId ?? undefined,
+    );
 
     sendResponse(res, {
       status: HttpStatusCode.OK,

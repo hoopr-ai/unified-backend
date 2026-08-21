@@ -8,7 +8,6 @@ import {
   RailSeeMoreDescriptor,
   PaginatedRailsResponse,
   RailSeeAllResponse,
-  UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
   TOKEN_GATED_TRACK_CODES,
   isSfxTrackType,
   PageName,
@@ -51,13 +50,16 @@ import {
   ChartTrackSource,
   FilterModel,
   PlaylistModel,
-  getRestrictedOwnersByBrandId,
-  getOwnerIdsByNames,
   findAlbumByTrackId,
   copyRailToPages,
   CopyRailResult,
-  getActiveBrandTokenTypes,
 } from "../../persistence-service/exports";
+import {
+  resolveViewerOwnerAccess,
+  viewerHasTokenForOwner,
+  isOwnerBlockedForViewer,
+  type ViewerOwnerAccess,
+} from "../access/owner-access.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { ArtistModel } from "../../persistence-service/artists/modules.export";
 import { OccasionModel } from "../../persistence-service/occasion/modules.export";
@@ -152,30 +154,12 @@ interface HydrationMaps {
 
 const hydrateTracks = async (
   trackCodes: string[],
+  access: ViewerOwnerAccess,
   userId?: number,
-  brandId?: number,
 ): Promise<Map<string, unknown>> => {
   if (trackCodes.length === 0) return new Map();
 
-  // Get excluded owners and token types together before the main fetch
-  let excludeOwnerIds: string[] | undefined;
-  let activeTokenTypes = new Set<string>();
-  if (brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    activeTokenTypes = tokenTypes;
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  const excludeOwnerIds = access.excludeOwnerIds;
 
   // Get liked tracks and SKUs in parallel with track fetch
   const [tracksMap, likedCodes, skuRows] = await Promise.all([
@@ -255,8 +239,10 @@ const hydrateTracks = async (
     }
 
     const isSfx = isSfxTrackType(track.type);
-    const isEnterpriseOnly = ownerType === "Chartbusters" && !activeTokenTypes.has("Chartbusters");
-    const hasTokenForTrack = ownerType ? activeTokenTypes.has(ownerType) : false;
+    // Token cover is per owner, not per type: an allocation scoped to one label
+    // must not mark another label's tracks as covered.
+    const hasTokenForTrack = viewerHasTokenForOwner(access, track.ownerId, ownerType);
+    const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack;
     const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
     // SFX tracks are always free — never show a price for them
     const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
@@ -368,6 +354,7 @@ const hydratePlaylists = async (
 
 const hydrateLabels = async (
   itemCodes: string[],
+  access: ViewerOwnerAccess,
 ): Promise<Map<string, unknown>> => {
   const out = new Map<string, unknown>();
   if (itemCodes.length === 0) return out;
@@ -382,6 +369,11 @@ const hydrateLabels = async (
   for (const row of rows) {
     const json = row.toJSON() as unknown as Record<string, unknown>;
     const code = json.ownerCode as string | undefined;
+    // A label the viewer holds no token for is left out of the map entirely, so
+    // the rail item resolves to null and buildRailResponse drops the card.
+    if (isOwnerBlockedForViewer(access, { id: json.id as string | undefined, ownerCode: code })) {
+      continue;
+    }
     // Map username to name for consistency
     if (json.username) {
       json.name = json.username;
@@ -648,11 +640,12 @@ const buildHydrationMaps = async (
     trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes,
     occasionCodes, quickAddCodes, bannerCodes,
   } = collectItemCodes(rails);
+  const access = await resolveViewerOwnerAccess(brandId);
   const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
-    hydrateTracks(trackCodes, userId, brandId),
+    hydrateTracks(trackCodes, access, userId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
-    hydrateLabels(labelCodes),
+    hydrateLabels(labelCodes, access),
     hydrateArtists(artistCodes),
     hydrateOccasions(occasionCodes),
     hydrateQuickAdds(quickAddCodes),
@@ -1281,22 +1274,7 @@ const resolveQueryTracks = async (
     query.releaseYearFrom || query.releaseYearTo;
 
   // Get excluded owners from brand or from login restrictions
-  let excludeOwnerIds: string[] | undefined;
-  if (req.brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(req.brandId),
-      getActiveBrandTokenTypes(req.brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  let excludeOwnerIds = (await resolveViewerOwnerAccess(req.brandId)).excludeOwnerIds;
   // Merge with query.excludeOwnerIds if provided
   if (query.excludeOwnerIds && query.excludeOwnerIds.length > 0) {
     excludeOwnerIds = excludeOwnerIds
@@ -1413,22 +1391,7 @@ export const resolveChartTracks = async (
 ): Promise<string[]> => {
   if (limit <= 0) return [];
 
-  let excludeOwnerIds: string[] | undefined;
-  if (brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  const excludeOwnerIds = (await resolveViewerOwnerAccess(brandId)).excludeOwnerIds;
 
   // Over-fetch to absorb tracks dropped by brand exclusion
   const fetchSize = Math.min(500, limit * 3 + 50);
@@ -2244,22 +2207,7 @@ const resolveQueryTracksPaginated = async (
     query.movie !== undefined || query.campaign || query.type || query.ownerCode ||
     query.releaseYearFrom || query.releaseYearTo;
 
-  let excludeOwnerIds: string[] | undefined;
-  if (brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  let excludeOwnerIds = (await resolveViewerOwnerAccess(brandId)).excludeOwnerIds;
   if (query.excludeOwnerIds && query.excludeOwnerIds.length > 0) {
     excludeOwnerIds = excludeOwnerIds
       ? [...new Set([...excludeOwnerIds, ...query.excludeOwnerIds])]
@@ -2381,11 +2329,12 @@ const buildSeeAllItems = async (
     else filterCodes.push(p.itemCode);
   }
 
+  const access = await resolveViewerOwnerAccess(viewerBrandId);
   const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
-    hydrateTracks(trackCodes, userId, viewerBrandId),
+    hydrateTracks(trackCodes, access, userId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
-    hydrateLabels(labelCodes),
+    hydrateLabels(labelCodes, access),
     hydrateArtists(artistCodes),
     hydrateOccasions(occasionCodes),
     hydrateQuickAdds(quickAddCodes),

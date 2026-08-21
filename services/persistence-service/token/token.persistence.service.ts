@@ -354,8 +354,21 @@ export const brandHasActiveTokens = async (brandId: number): Promise<boolean> =>
   return types.size > 0;
 };
 
-// Returns the set of token types that this brand has active balance for
-export const getActiveBrandTokenTypes = async (brandId: number): Promise<Set<string>> => {
+// A single active token allocation, reduced to what access checks need: the
+// token type and the owners it is scoped to (empty = blanket token for the type).
+export interface ActiveTokenGrant {
+  type: string;
+  ownerIds: string[];
+  isUnlimited: boolean;
+}
+
+// Returns every active (positive balance or unlimited) token allocation for the
+// brand, with the owners each allocation is scoped to. Access checks need the
+// owner scope, not just the type: a brand holding a Chartbusters token for YRF
+// must not thereby unlock Zee Music Company.
+export const getActiveBrandTokenGrants = async (
+  brandId: number,
+): Promise<ActiveTokenGrant[]> => {
   const tokens = await TokenAssignedModel.findAll({
     where: {
       brandId,
@@ -364,13 +377,28 @@ export const getActiveBrandTokenTypes = async (brandId: number): Promise<Set<str
         { isUnlimited: true },
       ],
     },
-    attributes: ["type"],
+    attributes: ["type", "ownerIds", "isUnlimited"],
     raw: true,
   });
-  const types = new Set<string>();
+  const grants: ActiveTokenGrant[] = [];
   for (const t of tokens) {
-    if ((t as any).type) types.add((t as any).type);
+    const type = (t as any).type;
+    if (!type) continue;
+    const ownerIds = (t as any).ownerIds;
+    grants.push({
+      type,
+      ownerIds: Array.isArray(ownerIds) ? ownerIds : [],
+      isUnlimited: (t as any).isUnlimited === true,
+    });
   }
+  return grants;
+};
+
+// Returns the set of token types that this brand has active balance for
+export const getActiveBrandTokenTypes = async (brandId: number): Promise<Set<string>> => {
+  const grants = await getActiveBrandTokenGrants(brandId);
+  const types = new Set<string>();
+  for (const grant of grants) types.add(grant.type);
   return types;
 };
 

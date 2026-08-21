@@ -10,7 +10,6 @@ import {
   GetTracksByCodesQuery,
   FilterInfo,
   Platform,
-  UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
   TOKEN_GATED_TRACK_CODES,
   isSfxTrackType,
 } from "../../dto-service/modules.export";
@@ -21,17 +20,19 @@ import {
   findTrackByTrackCode,
   findAlbumByTrackId,
   findTrackIdsByAlbumType,
-  getRestrictedOwnersByBrandId,
   getRestrictedTrackTiersByBrandId,
   getUserUsedCampaignIds,
-  getOwnerIdsByNames,
   searchTracksByName,
-  getActiveBrandTokenTypes,
   type PaginatedRawFilterTracks,
   type TrackSearchResult,
 } from "../../persistence-service/exports";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { toCdnUrl } from "../../helper-service/cdn.helper";
+import {
+  resolveViewerOwnerAccess,
+  viewerHasTokenForOwner,
+  type ViewerOwnerAccess,
+} from "../access/owner-access.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { Op, fn, col, where } from "sequelize";
 
@@ -191,7 +192,7 @@ const transformTrackToDto = (
   ownerSubTypeMap?: Map<string, string>,
   ownerCodeMap?: Map<string, string>,
   usedCampaignIds?: Set<string>,
-  activeTokenTypes?: Set<string>,
+  ownerAccess?: ViewerOwnerAccess,
 ): TrackWithArtists => {
   // Debug: Log hookTimings data to trace the issue
   console.log(`[DEBUG hookTimings] trackCode=${track.trackCode}, raw hookTimings:`, JSON.stringify(track.hookTimings), `type:`, typeof track.hookTimings, `isArray:`, Array.isArray(track.hookTimings));
@@ -226,8 +227,10 @@ const transformTrackToDto = (
   }
 
   const isSfx = isSfxTrackType(track.type);
-  const isEnterpriseOnly = ownerType === "Chartbusters" && !(activeTokenTypes?.has("Chartbusters") ?? false);
-  const hasTokenForTrack = ownerType ? (activeTokenTypes?.has(ownerType) ?? false) : false;
+  // Token cover is per owner, not per type: an allocation scoped to one label
+  // must not mark another label's tracks as covered.
+  const hasTokenForTrack = viewerHasTokenForOwner(ownerAccess, track.ownerId, ownerType);
+  const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack;
   const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
   // SFX tracks are always free — never show a price for them
   const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
@@ -293,7 +296,7 @@ const buildPaginatedResponse = (
   ownerCodeMap?: Map<string, string>,
   albumMap?: Map<string, { id: string; title?: string; type?: string }>,
   usedCampaignIds?: Set<string>,
-  activeTokenTypes?: Set<string>,
+  ownerAccess?: ViewerOwnerAccess,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
@@ -311,7 +314,7 @@ const buildPaginatedResponse = (
         ownerSubTypeMap,
         ownerCodeMap,
         usedCampaignIds,
-        activeTokenTypes,
+        ownerAccess,
       );
     }),
     pagination: {
@@ -417,7 +420,7 @@ const emptyPaginatedResponse = (
 export const transformRawTracksToDto = async (
   tracks: RawTrackWithMappings[],
   likedTrackCodes?: Set<string>,
-  activeTokenTypes?: Set<string>,
+  ownerAccess?: ViewerOwnerAccess,
 ): Promise<TrackWithArtists[]> => {
   if (tracks.length === 0) return [];
   const { ownerTypeMap, ownerSubTypeMap, ownerCodeMap } =
@@ -434,7 +437,7 @@ export const transformRawTracksToDto = async (
       ownerSubTypeMap,
       ownerCodeMap,
       undefined,
-      activeTokenTypes,
+      ownerAccess,
     );
   });
 };
@@ -530,30 +533,13 @@ export const getAllTracksService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
-  let excludeOwnerIds: string[] | undefined;
-  let excludeTiers: string[] | undefined;
-  let activeTokenTypes = new Set<string>();
-  if (brandId) {
-    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getRestrictedTrackTiersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    activeTokenTypes = tokenTypes;
-    excludeTiers = brandExcludeTiers;
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
-    );
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  // Owner visibility (restricted labels gated per label by token) plus the
+  // brand's restricted track tiers.
+  const [ownerAccess, excludeTiers] = await Promise.all([
+    resolveViewerOwnerAccess(brandId),
+    brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
+  ]);
+  const excludeOwnerIds = ownerAccess.excludeOwnerIds;
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -595,7 +581,7 @@ export const getAllTracksService = async (
     ownerCodeMap,
     albumMap,
     usedCampaignIds,
-    activeTokenTypes,
+    ownerAccess,
   );
 
   return response;
@@ -641,30 +627,13 @@ export const getTracksByCodesService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
-  let excludeOwnerIds: string[] | undefined;
-  let excludeTiers: string[] | undefined;
-  let activeTokenTypes = new Set<string>();
-  if (brandId) {
-    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getRestrictedTrackTiersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    activeTokenTypes = tokenTypes;
-    excludeTiers = brandExcludeTiers;
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
-    );
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  // Owner visibility (restricted labels gated per label by token) plus the
+  // brand's restricted track tiers.
+  const [ownerAccess, excludeTiers] = await Promise.all([
+    resolveViewerOwnerAccess(brandId),
+    brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
+  ]);
+  const excludeOwnerIds = ownerAccess.excludeOwnerIds;
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -702,7 +671,7 @@ export const getTracksByCodesService = async (
     ownerCodeMap,
     albumMap,
     undefined,
-    activeTokenTypes,
+    ownerAccess,
   );
 };
 
@@ -722,7 +691,7 @@ const buildFilterPaginatedResponse = (
   ownerSubTypeMap?: Map<string, string>,
   ownerCodeMap?: Map<string, string>,
   albumMap?: Map<string, { id: string; title?: string; type?: string }>,
-  activeTokenTypes?: Set<string>,
+  ownerAccess?: ViewerOwnerAccess,
 ): PaginatedTracksResponseData => {
   const { rows, count, page, limit } = rawData;
   const totalPages = Math.ceil(count / limit);
@@ -749,7 +718,7 @@ const buildFilterPaginatedResponse = (
         ownerSubTypeMap,
         ownerCodeMap,
         undefined,
-        activeTokenTypes,
+        ownerAccess,
       );
     });
 
@@ -779,30 +748,13 @@ export const getTracksByFilterService = async (
     return emptyPaginatedResponse(page, limit);
   }
 
-  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
-  let excludeOwnerIds: string[] | undefined;
-  let excludeTiers: string[] | undefined;
-  let activeTokenTypes = new Set<string>();
-  if (brandId) {
-    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getRestrictedTrackTiersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    activeTokenTypes = tokenTypes;
-    excludeTiers = brandExcludeTiers;
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
-    );
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  // Owner visibility (restricted labels gated per label by token) plus the
+  // brand's restricted track tiers.
+  const [ownerAccess, excludeTiers] = await Promise.all([
+    resolveViewerOwnerAccess(brandId),
+    brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
+  ]);
+  const excludeOwnerIds = ownerAccess.excludeOwnerIds;
 
   // Fetch user's liked track codes if authenticated
   let likedTrackCodes: Set<string> | undefined;
@@ -831,7 +783,7 @@ export const getTracksByFilterService = async (
     ownerSubTypeMap,
     ownerCodeMap,
     albumMap,
-    activeTokenTypes,
+    ownerAccess,
   );
 };
 
@@ -846,7 +798,7 @@ const transformTrackToDetailsDto = (
   ownerCodeMap?: Map<string, string>,
   ownerUsernameMap?: Map<string, string>,
   albumName?: string,
-  activeTokenTypes?: Set<string>,
+  ownerAccess?: ViewerOwnerAccess,
 ): TrackDetailsWithSkus => {
   const baseDto = transformTrackToDto(
     track,
@@ -855,7 +807,7 @@ const transformTrackToDetailsDto = (
     ownerSubTypeMap,
     undefined,
     undefined,
-    activeTokenTypes,
+    ownerAccess,
   );
 
   // Pick usageInfo, restrictedCategories, ownerCode and ownerName from the first owner that has them
@@ -900,7 +852,7 @@ const transformTrackToDetailsDto = (
     const skuData = track.skus[0];
     const isSfx = isSfxTrackType(track.type);
     const isEnterpriseOnly = baseDto.isEnterpriseOnly === true;
-    const hasTokenForTrack = baseDto.ownerType ? (activeTokenTypes?.has(baseDto.ownerType) ?? false) : false;
+    const hasTokenForTrack = viewerHasTokenForOwner(ownerAccess, track.ownerId, baseDto.ownerType);
     const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
     const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
     sku = {
@@ -939,30 +891,13 @@ export const getTrackDetailsByCodeService = async (
   userId?: number,
   brandId?: number,
 ): Promise<TrackDetailsWithSkus | null> => {
-  // Get restricted owners and tiers for the brand, or use default blacklist for unauthenticated users
-  let excludeOwnerIds: string[] | undefined;
-  let excludeTiers: string[] | undefined;
-  let activeTokenTypes = new Set<string>();
-  if (brandId) {
-    const [brandExcludeOwnerIds, brandExcludeTiers, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getRestrictedTrackTiersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    activeTokenTypes = tokenTypes;
-    excludeTiers = brandExcludeTiers;
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
-    );
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  // Owner visibility (restricted labels gated per label by token) plus the
+  // brand's restricted track tiers.
+  const [ownerAccess, excludeTiers] = await Promise.all([
+    resolveViewerOwnerAccess(brandId),
+    brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
+  ]);
+  const excludeOwnerIds = ownerAccess.excludeOwnerIds;
 
   const track = await findTrackByTrackCode(
     trackCode,
@@ -1003,7 +938,7 @@ export const getTrackDetailsByCodeService = async (
     ownerCodeMap,
     ownerUsernameMap,
     albumName,
-    activeTokenTypes,
+    ownerAccess,
   );
 };
 
@@ -1011,8 +946,10 @@ export const getTrackDetailsByCodeService = async (
 export const searchTracksService = async (
   query: string,
   limit: number = 20,
+  brandId?: number,
 ): Promise<TrackSearchResult[]> => {
-  return searchTracksByName(query, limit);
+  const { excludeOwnerIds } = await resolveViewerOwnerAccess(brandId);
+  return searchTracksByName(query, limit, excludeOwnerIds);
 };
 
 // Random track preview response interface
