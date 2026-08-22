@@ -40,6 +40,7 @@ import cartRoutes from "./routes/cart.route";
 import transactionRoutes from "./routes/transaction.route";
 import journeyRoutes from "./routes/journey.route";
 import urlMonitorRoutes from "./routes/url-monitor.route";
+import adminWhitelistingRoutes from "./routes/admin-whitelisting.route";
 import {
   emailCampaignRouter,
   emailTemplateRouter,
@@ -109,6 +110,12 @@ app.use("/admin/enterprise-analytics", adminEnterpriseAnalyticsRoutes);
 // creator-mobile (same shared DB, so no service hop).
 app.use("/admin/native-analytics", adminNativeAnalyticsRoutes);
 app.use("/admin/url-monitor", urlMonitorRoutes);
+// YouTube Whitelisting — the ops CMS over creators' submitted channels and
+// their claim-clearance requests. Reads soundtracking_user_profiles (written by
+// content-recommendation + NATIVE-BE) and claims (owned by NATIVE-BE) on the
+// same shared DB, so no service hop; this service already owns the internal
+// sessions and functionality grants the routes are gated by.
+app.use("/admin/whitelisting", adminWhitelistingRoutes);
 app.use("/cart", cartRoutes);
 app.use("/transaction", transactionRoutes);
 app.use("/journey", journeyRoutes);
