@@ -19,22 +19,22 @@ import {
 
 const router = Router();
 
-// YouTube Whitelisting — the ops CMS behind internal-fe's top-level
-// /youtube-whitelisting section. Two surfaces:
+// Channel Whitelisting — the ops CMS behind internal-fe's top-level
+// /channel-whitelisting section. Two surfaces:
 //
 //   /channels   creators' submitted channels (YouTube, Instagram, Facebook),
 //               newest first, with the subscription that entitles them and the
 //               clearance status ops can move
 //   /claims     creators' "please release the claim on this video" requests
 //
-// Requires an INTERNAL-platform session plus the `youtube-whitelisting` grant
+// Requires an INTERNAL-platform session plus the `channel-whitelisting` grant
 // (admins pass by role) — the same gating shape as /admin/native-analytics. The
 // grant id must also exist in internal-fe's src/services/functionalities.ts,
 // which is the catalogue the grant UI reads; the server deliberately does not
 // validate ids, so an id missing there can never be assigned to anyone.
 const requireDashboard = [
   authenticateWithSession({ platforms: [Platform.INTERNAL] }),
-  requireFunctionality("youtube-whitelisting"),
+  requireFunctionality("channel-whitelisting"),
 ];
 
 // ── Channel Whitelisting ────────────────────────────────────────────────────

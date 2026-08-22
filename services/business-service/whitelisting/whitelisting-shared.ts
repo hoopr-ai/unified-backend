@@ -1,12 +1,12 @@
-// ─── YouTube Whitelisting — shared vocabulary, origin derivation, helpers ────
+// ─── Channel Whitelisting — shared vocabulary, origin derivation, helpers ────
 //
-// Backs the internal-fe "YouTube Whitelisting" CMS, which has two surfaces:
+// Backs the internal-fe "Channel Whitelisting" CMS, which has two surfaces:
 //
-//   Channel Whitelisting  triage soundtracking_user_profiles rows a subscriber
-//                         submitted for clearance (not_sent → sent → whitelisted
-//                         | rejected)
-//   Claim Clearance       triage `claims` rows — a creator pasted a video URL
-//                         asking for a copyright claim to be released
+//   Channels          triage soundtracking_user_profiles rows a subscriber
+//                     submitted for clearance (not_sent → sent → whitelisted |
+//                     rejected)
+//   Claim Clearance   triage `claims` rows — a creator pasted a video URL
+//                     asking for a copyright claim to be released
 //
 // WHY THIS LIVES IN unified-backend AND NOT IN NATIVE-BE: same reasoning as
 // native-analytics — NATIVE-BE and content-recommendation point at this exact
@@ -47,10 +47,9 @@ export const WHITELIST_STATUS_LABELS: Record<WhitelistStatus, string> = {
   rejected: "Rejected",
 };
 
-// The manager's ask names the section "YouTube Whitelisting", but creators
-// submit Instagram and Facebook channels through the same flow and they land in
-// the same queue. All three are first-class here; the section name is kept as
-// the vocabulary ops already uses.
+// All three are first-class. Creators submit Instagram and Facebook accounts
+// through the same flow as YouTube and they land in the same queue — which is
+// why the CMS section is named for the CHANNEL rather than for YouTube.
 export const CHANNEL_SOURCES = ["youtube", "instagram", "facebook"] as const;
 export type ChannelSource = (typeof CHANNEL_SOURCES)[number];
 
