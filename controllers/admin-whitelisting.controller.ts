@@ -37,7 +37,7 @@ import {
   type UpdateClaimInput,
 } from "../services/business-service/whitelisting/modules.export";
 
-// Endpoints backing internal-fe's "YouTube Whitelisting" CMS — two surfaces,
+// Endpoints backing internal-fe's "Channel Whitelisting" CMS — two surfaces,
 // Channel Whitelisting and Claim Clearance, over the shared Postgres.
 //
 // Reads are GETs validated against req.query; the two writes are PATCHes

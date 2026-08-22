@@ -11,7 +11,7 @@ import {
   WHITELIST_STATUSES,
 } from "../services/business-service/whitelisting/whitelisting-shared";
 
-// Validation for the YouTube Whitelisting CMS.
+// Validation for the Channel Whitelisting CMS.
 //
 // Unlike admin-native-analytics.validation, the enum fields here ARE closed
 // (`Joi.valid(...)`). The difference is that those values are observed data —
