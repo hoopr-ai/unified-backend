@@ -1,7 +1,7 @@
--- ─── YouTube Whitelisting — ops tables ───────────────────────────────────────
+-- ─── Channel Whitelisting — ops tables ───────────────────────────────────────
 --
--- Backs the internal-fe "YouTube Whitelisting" CMS (Channel Whitelisting +
--- Claim Clearance). Both surfaces triage rows that already exist in tables
+-- Backs the internal-fe "Channel Whitelisting" CMS (Channels + Claim
+-- Clearance). Both surfaces triage rows that already exist in tables
 -- OWNED BY OTHER SERVICES:
 --
 --   soundtracking_user_profiles  written by content-recommendation (Python) and

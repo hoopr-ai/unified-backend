@@ -110,7 +110,7 @@ app.use("/admin/enterprise-analytics", adminEnterpriseAnalyticsRoutes);
 // creator-mobile (same shared DB, so no service hop).
 app.use("/admin/native-analytics", adminNativeAnalyticsRoutes);
 app.use("/admin/url-monitor", urlMonitorRoutes);
-// YouTube Whitelisting — the ops CMS over creators' submitted channels and
+// Channel Whitelisting — the ops CMS over creators' submitted channels and
 // their claim-clearance requests. Reads soundtracking_user_profiles (written by
 // content-recommendation + NATIVE-BE) and claims (owned by NATIVE-BE) on the
 // same shared DB, so no service hop; this service already owns the internal
