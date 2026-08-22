@@ -13,7 +13,7 @@ const router = Router();
 
 // Public — no auth required (this IS the auth flow).
 // Both endpoints validate that the email belongs to an active INTERNAL user, so
-// these can't be used to issue OTPs to ENTERPRISE / SOUND_TRACKING_APP / STUDIO emails.
+// these can't be used to issue OTPs to ENTERPRISE / CREATOR / STUDIO emails.
 router.post(
   "/send-otp",
   validateRequest(sendInternalLoginOtpSchema),

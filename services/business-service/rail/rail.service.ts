@@ -8,13 +8,14 @@ import {
   RailSeeMoreDescriptor,
   PaginatedRailsResponse,
   RailSeeAllResponse,
-  UNAUTHENTICATED_RESTRICTED_OWNER_NAMES,
   TOKEN_GATED_TRACK_CODES,
   isSfxTrackType,
   PageName,
   OwnerType,
   isOwnerTypeAllowedForPage,
   getAllowedOwnerTypesForPage,
+  getAllowedOwnerTypesForPages,
+  normalizeOwnerType,
   itemTypeHasOwnerRestriction,
   isManualOnlyPage,
   isRecommendationExcludedPage,
@@ -49,13 +50,16 @@ import {
   ChartTrackSource,
   FilterModel,
   PlaylistModel,
-  getRestrictedOwnersByBrandId,
-  getOwnerIdsByNames,
   findAlbumByTrackId,
   copyRailToPages,
   CopyRailResult,
-  getActiveBrandTokenTypes,
 } from "../../persistence-service/exports";
+import {
+  resolveViewerOwnerAccess,
+  viewerHasTokenForOwner,
+  isOwnerBlockedForViewer,
+  type ViewerOwnerAccess,
+} from "../access/owner-access.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { ArtistModel } from "../../persistence-service/artists/modules.export";
 import { OccasionModel } from "../../persistence-service/occasion/modules.export";
@@ -64,7 +68,7 @@ import { WebBannerModel } from "../../persistence-service/web-banner/modules.exp
 import { SkuModel } from "../../persistence-service/sku/schemas/sku.schema";
 import { fn, col, where } from "sequelize";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
-import { transformRawTracksToDto } from "../track/track.service";
+import { countStemsByTrackIds } from "../../persistence-service/track/stem.persistence.service";
 import { toCdnUrl } from "../../helper-service/cdn.helper";
 
 // -----------------------------------------------------------------------------
@@ -150,30 +154,12 @@ interface HydrationMaps {
 
 const hydrateTracks = async (
   trackCodes: string[],
+  access: ViewerOwnerAccess,
   userId?: number,
-  brandId?: number,
 ): Promise<Map<string, unknown>> => {
   if (trackCodes.length === 0) return new Map();
 
-  // Get excluded owners and token types together before the main fetch
-  let excludeOwnerIds: string[] | undefined;
-  let activeTokenTypes = new Set<string>();
-  if (brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    activeTokenTypes = tokenTypes;
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  const excludeOwnerIds = access.excludeOwnerIds;
 
   // Get liked tracks and SKUs in parallel with track fetch
   const [tracksMap, likedCodes, skuRows] = await Promise.all([
@@ -236,6 +222,20 @@ const hydrateTracks = async (
   });
   await Promise.all(albumPromises);
 
+  // Stem counts for the whole rail in one grouped query.
+  //
+  // This hydrator is a parallel implementation of transformTrackToDto rather
+  // than a caller of it, so anything added to the track DTO has to be added
+  // here too or rails silently serve a narrower track than every other
+  // endpoint. Non-fatal for the same reason as the list path: no stems is a
+  // worse answer than no rails.
+  let stemCounts = new Map<string, number>();
+  try {
+    stemCounts = await countStemsByTrackIds(trackIds);
+  } catch (error) {
+    console.error("[Stems] Failed to attach stem counts to rails:", error);
+  }
+
   // Transform to response format (matching getAllTracks API structure)
   const result = new Map<string, unknown>();
   for (const [code, track] of tracksMap) {
@@ -253,8 +253,10 @@ const hydrateTracks = async (
     }
 
     const isSfx = isSfxTrackType(track.type);
-    const isEnterpriseOnly = ownerType === "Chartbusters" && !activeTokenTypes.has("Chartbusters");
-    const hasTokenForTrack = ownerType ? activeTokenTypes.has(ownerType) : false;
+    // Token cover is per owner, not per type: an allocation scoped to one label
+    // must not mark another label's tracks as covered.
+    const hasTokenForTrack = viewerHasTokenForOwner(access, track.ownerId, ownerType);
+    const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack;
     const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
     // SFX tracks are always free — never show a price for them
     const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
@@ -291,6 +293,13 @@ const hydrateTracks = async (
     if (isEnterpriseOnly && !isSfx) trackData.isEnterpriseOnly = true;
     if (sku) trackData.sku = sku;
     if (albumMap.has(track.id)) trackData.album = albumMap.get(track.id);
+    // Same shape as the list endpoints: emitted only when stems exist, so the
+    // client's `hasStems ?? false` check behaves identically everywhere.
+    const stemCount = stemCounts.get(track.id) ?? 0;
+    if (stemCount > 0) {
+      trackData.hasStems = true;
+      trackData.stemCount = stemCount;
+    }
 
     result.set(code, trackData);
   }
@@ -366,6 +375,7 @@ const hydratePlaylists = async (
 
 const hydrateLabels = async (
   itemCodes: string[],
+  access: ViewerOwnerAccess,
 ): Promise<Map<string, unknown>> => {
   const out = new Map<string, unknown>();
   if (itemCodes.length === 0) return out;
@@ -380,6 +390,11 @@ const hydrateLabels = async (
   for (const row of rows) {
     const json = row.toJSON() as unknown as Record<string, unknown>;
     const code = json.ownerCode as string | undefined;
+    // A label the viewer holds no token for is left out of the map entirely, so
+    // the rail item resolves to null and buildRailResponse drops the card.
+    if (isOwnerBlockedForViewer(access, { id: json.id as string | undefined, ownerCode: code })) {
+      continue;
+    }
     // Map username to name for consistency
     if (json.username) {
       json.name = json.username;
@@ -641,16 +656,18 @@ const buildHydrationMaps = async (
   rails: RailModel[],
   userId?: number,
   brandId?: number,
+  platform?: string,
 ): Promise<HydrationMaps> => {
   const {
     trackCodes, filterCodes, playlistCodes, labelCodes, artistCodes,
     occasionCodes, quickAddCodes, bannerCodes,
   } = collectItemCodes(rails);
+  const access = await resolveViewerOwnerAccess(brandId, platform);
   const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
-    hydrateTracks(trackCodes, userId, brandId),
+    hydrateTracks(trackCodes, access, userId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
-    hydrateLabels(labelCodes),
+    hydrateLabels(labelCodes, access),
     hydrateArtists(artistCodes),
     hydrateOccasions(occasionCodes),
     hydrateQuickAdds(quickAddCodes),
@@ -1000,6 +1017,7 @@ export const getRailsService = async (
   brandId?: number,
   userId?: number,
   pageName?: string,
+  platform?: string,
 ): Promise<RailResponse[]> => {
   // Ensure brand recommended rail exists for the logged-in user's brand
   if (brandId) {
@@ -1011,7 +1029,7 @@ export const getRailsService = async (
 
   const raw = await findRailsForBrand(effectiveBrandId, pageName);
   const resolved = resolveBrandOverrides(raw);
-  const maps = await buildHydrationMaps(resolved, userId, brandId);
+  const maps = await buildHydrationMaps(resolved, userId, brandId, platform);
   return resolved.map((rail) => buildRailResponse(rail, maps));
 };
 
@@ -1022,6 +1040,7 @@ export const getRailsPaginatedService = async (
   page: number = 1,
   limit: number = 10,
   railItemLimit?: number,
+  platform?: string,
 ): Promise<PaginatedRailsResponse> => {
   // Ensure brand recommended rail exists for the logged-in user's brand
   // Use the user's brandId from their profile, not from URL query
@@ -1040,7 +1059,7 @@ export const getRailsPaginatedService = async (
     limit,
   );
   const resolved = resolveBrandOverrides(raw);
-  const maps = await buildHydrationMaps(resolved, userId, brandId);
+  const maps = await buildHydrationMaps(resolved, userId, brandId, platform);
   const rails = resolved.map((rail) => buildRailResponse(rail, maps, railItemLimit));
 
   const totalPages = Math.ceil(total / limit);
@@ -1061,13 +1080,14 @@ export const getRailByKeyService = async (
   key: string,
   brandId?: number,
   userId?: number,
+  platform?: string,
 ): Promise<RailResponse | null> => {
   const rows = await findRailByKey(key, brandId);
   if (rows.length === 0) return null;
   const resolved = resolveBrandOverrides(rows);
   if (resolved.length === 0) return null;
   const rail = resolved[0];
-  const maps = await buildHydrationMaps([rail], userId, brandId);
+  const maps = await buildHydrationMaps([rail], userId, brandId, platform);
   return buildRailResponse(rail, maps);
 };
 
@@ -1128,6 +1148,11 @@ export interface UpsertRailRequest {
       type: 'genre' | 'mood' | 'language' | 'usecase' | 'assortment' | 'vocals';
       value: string[] | string;
     }>;
+    // Catalog slice to restrict results to. Accepts the PageName enum
+    // ("REGIONAL_AND_INDIE") or the DB label ("Regional & Indie"); it is
+    // normalized and sent to the AI service as an `assortment` filter.
+    // Omitted => derived from the rail's target pages.
+    ownerType?: string | string[];
     page?: number;
     // Legacy support: direct url/body/headers
     url?: string;
@@ -1147,12 +1172,24 @@ export interface UpsertRailsResult {
   rails: SingleRailUpsertResult[];
 }
 
+// Items dropped on save because the target page does not allow their owner
+// type. Reported back so the CMS can tell the admin what didn't make it.
+export interface SkippedRailItem {
+  pageName: PageName;
+  itemType: string;
+  itemCode: string;
+  ownerType: string;
+  allowedOwnerTypes: OwnerType[];
+}
+
 // Legacy result type for backwards compatibility
 export interface UpsertRailResult {
   rail: RailDetails;
   items: RailItemDetails[];
   // When multiple pages, additional rails are in this array
   additionalRails?: SingleRailUpsertResult[];
+  // Present only when some items were filtered out (see SkippedRailItem)
+  skippedItems?: SkippedRailItem[];
 }
 
 // Partial by design: WIDGET rails have no rail_items at all — their body lives
@@ -1262,22 +1299,7 @@ const resolveQueryTracks = async (
     query.releaseYearFrom || query.releaseYearTo;
 
   // Get excluded owners from brand or from login restrictions
-  let excludeOwnerIds: string[] | undefined;
-  if (req.brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(req.brandId),
-      getActiveBrandTokenTypes(req.brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  let excludeOwnerIds = (await resolveViewerOwnerAccess(req.brandId)).excludeOwnerIds;
   // Merge with query.excludeOwnerIds if provided
   if (query.excludeOwnerIds && query.excludeOwnerIds.length > 0) {
     excludeOwnerIds = excludeOwnerIds
@@ -1391,25 +1413,11 @@ export const resolveChartTracks = async (
   limit: number,
   brandId?: number | null,
   offset: number = 0,
+  platform?: string,
 ): Promise<string[]> => {
   if (limit <= 0) return [];
 
-  let excludeOwnerIds: string[] | undefined;
-  if (brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  const excludeOwnerIds = (await resolveViewerOwnerAccess(brandId, platform)).excludeOwnerIds;
 
   // Over-fetch to absorb tracks dropped by brand exclusion
   const fetchSize = Math.min(500, limit * 3 + 50);
@@ -1426,6 +1434,65 @@ export const resolveChartTracks = async (
     }
   }
   return ordered;
+};
+
+// -----------------------------------------------------------------------------
+// Owner-type constraint for AI_QUERY rails
+// -----------------------------------------------------------------------------
+
+// The AI service matches the catalog slice on `owners.type` via an
+// `assortment` filter, so anything we send must be the canonical DB label.
+const AI_ASSORTMENT_FILTER_TYPE = "assortment";
+// /smash/aienterpriseSearch and /smash/brandRecommend both cap limit at 100.
+const AI_SERVICE_MAX_LIMIT = 100;
+// The assortment filter is applied best-effort by the AI service (unknown or
+// unmatched values are silently dropped there), so ask for more than we need
+// and let the page filter below trim back to the requested count.
+const AI_OWNER_TYPE_OVERFETCH = 3;
+
+type AiQueryFilterInput = NonNullable<
+  NonNullable<UpsertRailRequest["aiQuery"]>["filters"]
+>;
+
+const toValueArray = (value: string[] | string | undefined): string[] =>
+  value === undefined ? [] : Array.isArray(value) ? value : [value];
+
+// Owner types this rail's AI results must be limited to. An explicit
+// aiQuery.ownerType / assortment filter wins; otherwise the target pages
+// decide (REGIONAL_AND_INDIE page => "Regional & Indie" catalog).
+const resolveAiQueryOwnerTypes = (req: UpsertRailRequest): string[] => {
+  const explicit: string[] = [
+    ...toValueArray(req.aiQuery?.ownerType as string[] | string | undefined),
+    ...(req.aiQuery?.filters ?? [])
+      .filter((f) => f?.type === AI_ASSORTMENT_FILTER_TYPE)
+      .flatMap((f) => toValueArray(f.value)),
+  ]
+    .map((v) => String(v).trim())
+    .filter((v) => v.length > 0)
+    // Unknown labels pass through untouched — the AI service owns its own
+    // vocabulary and may accept slices we don't model here.
+    .map((v) => normalizeOwnerType(v) ?? v);
+
+  if (explicit.length > 0) return [...new Set(explicit)];
+
+  const pageTypes = getAllowedOwnerTypesForPages(req.pageNames);
+  return pageTypes ? [...pageTypes] : [];
+};
+
+// Rewrite the caller's filters so the catalog slice travels in the one shape
+// the AI service reads: a single `assortment` filter with canonical values.
+const withAssortmentFilter = (
+  filters: AiQueryFilterInput | undefined,
+  ownerTypes: string[],
+): AiQueryFilterInput => {
+  const rest = (filters ?? []).filter(
+    (f) => f?.type !== AI_ASSORTMENT_FILTER_TYPE,
+  );
+  if (ownerTypes.length === 0) return rest;
+  return [
+    ...rest,
+    { type: AI_ASSORTMENT_FILTER_TYPE, value: ownerTypes },
+  ] as AiQueryFilterInput;
 };
 
 // AI_QUERY path: call AI service based on queryType
@@ -1452,6 +1519,14 @@ const resolveAiQueryTracks = async (
   let body: string | undefined;
   let headers: Record<string, string> = {};
 
+  const ownerTypes = resolveAiQueryOwnerTypes(req);
+  // Ask for extra rows only when a slice is enforced, so a partially-applied
+  // assortment filter still leaves enough compatible tracks after filtering.
+  const withOverfetch = (limit: number): number =>
+    ownerTypes.length > 0
+      ? Math.min(AI_SERVICE_MAX_LIMIT, limit * AI_OWNER_TYPE_OVERFETCH)
+      : limit;
+
   if (aiQuery.queryType === 'FILTERED') {
     // POST /smash/aienterpriseSearch with body
     if (!aiServiceUrl) {
@@ -1466,8 +1541,8 @@ const resolveAiQueryTracks = async (
       brandId: req.brandId ? String(req.brandId) : undefined,
       brandName: aiQuery.brandName ?? "",
       userId: aiQuery.userId ?? "",
-      filters: aiQuery.filters ?? [],
-      limit: aiQuery.limit ?? 200,
+      filters: withAssortmentFilter(aiQuery.filters, ownerTypes),
+      limit: withOverfetch(aiQuery.limit ?? 200),
       page: aiQuery.page ?? 1,
     };
     body = JSON.stringify(requestBody);
@@ -1480,7 +1555,9 @@ const resolveAiQueryTracks = async (
     if (aiQuery.headers) headers = { ...headers, ...aiQuery.headers };
 
     const requestBody: Record<string, unknown> = {
-      limit: aiQuery.limit ?? 40,
+      // No assortment support on this endpoint — over-fetch so the page filter
+      // still has enough compatible tracks left.
+      limit: withOverfetch(aiQuery.limit ?? 40),
       page: aiQuery.page ?? 1,
     };
     body = JSON.stringify(requestBody);
@@ -1500,12 +1577,13 @@ const resolveAiQueryTracks = async (
 
     const requestBody: Record<string, unknown> = {
       brand_id: String(req.brandId),
-      limit: aiQuery.limit ?? 40,
+      limit: withOverfetch(aiQuery.limit ?? 40),
       page: aiQuery.page ?? 1,
     };
     // Add filters if provided (language, assortment, vocals)
-    if (aiQuery.filters && aiQuery.filters.length > 0) {
-      requestBody.filters = aiQuery.filters;
+    const brandFilters = withAssortmentFilter(aiQuery.filters, ownerTypes);
+    if (brandFilters.length > 0) {
+      requestBody.filters = brandFilters;
     }
     body = JSON.stringify(requestBody);
     url = `${aiServiceUrl}/smash/brandRecommend`;
@@ -1714,9 +1792,47 @@ const formatValidationErrors = (errors: ItemValidationError[]): string => {
   return messages.join("; ");
 };
 
+interface UpsertItem {
+  itemType: string;
+  itemCode: string;
+  order: number;
+}
+
+// Keep only the items the page's owner-type rules allow, instead of rejecting
+// the whole write. The read path already hides incompatible items
+// (filterItemsByPageOwnerType), so storing them only produces short rails and
+// failed saves — and an AI/search source can always return a few tracks from
+// the wrong catalog slice. `cap` trims back to the caller's requested count
+// after any over-fetch.
+const applyPageOwnerTypeFilter = async (
+  items: UpsertItem[],
+  pageName: PageName,
+  cap?: number | null,
+): Promise<{ items: UpsertItem[]; skipped: ItemValidationError[] }> => {
+  const itemsToValidate = items.filter((i) =>
+    itemTypeHasOwnerRestriction(i.itemType),
+  );
+  const skipped = itemsToValidate.length
+    ? await validateItemsForPage(itemsToValidate, pageName)
+    : [];
+
+  let kept = items;
+  if (skipped.length > 0) {
+    const dropped = new Set(skipped.map((e) => `${e.itemType}:${e.itemCode}`));
+    kept = items.filter((i) => !dropped.has(`${i.itemType}:${i.itemCode}`));
+  }
+  if (cap && cap > 0 && kept.length > cap) kept = kept.slice(0, cap);
+
+  // Re-index so `order` stays contiguous after drops.
+  return {
+    items: kept.map((item, idx) => ({ ...item, order: idx })),
+    skipped,
+  };
+};
+
 const buildItemsForUpsert = async (
   req: UpsertRailRequest,
-): Promise<{ itemType: string; itemCode: string; order: number }[]> => {
+): Promise<UpsertItem[]> => {
   const itemType = RAIL_TYPE_TO_ITEM_TYPE[req.type];
 
   // WIDGET rails carry no rail_items — everything they render comes from
@@ -1758,22 +1874,16 @@ export const upsertRailService = async (
   const brandId = req.brandId ?? null;
   const pageNames = req.pageNames ?? [PageName.HOME];
 
-  // Build items once (same items for all pages)
+  // Build the candidate items once (the same source feeds every page)
   const items = await buildItemsForUpsert(req);
 
-  // Validate items against all target pages
-  // Only TRACK and LABEL items need validation (other types have no owner restriction)
-  const itemsToValidate = items.filter((i) => itemTypeHasOwnerRestriction(i.itemType));
-  if (itemsToValidate.length > 0) {
-    const allErrors: ItemValidationError[] = [];
-    for (const pageName of pageNames) {
-      const errors = await validateItemsForPage(itemsToValidate, pageName);
-      allErrors.push(...errors);
-    }
-    if (allErrors.length > 0) {
-      throw new Error(`Owner type validation failed: ${formatValidationErrors(allErrors)}`);
-    }
-  }
+  // AI_QUERY over-fetches when a catalog slice is enforced; trim back to the
+  // requested size after the per-page filter below. Other sources already
+  // return exactly what the caller asked for.
+  const cap =
+    req.sourceType === RailSourceType.AI_QUERY
+      ? req.aiQuery?.limit ?? req.limit ?? null
+      : null;
 
   // Build sourceConfig once
   const sourceConfig: Record<string, unknown> = {};
@@ -1789,6 +1899,11 @@ export const upsertRailService = async (
     if (req.aiQuery.brandName) aiQueryConfig.brandName = req.aiQuery.brandName;
     if (req.aiQuery.userId) aiQueryConfig.userId = req.aiQuery.userId;
     if (req.aiQuery.filters) aiQueryConfig.filters = req.aiQuery.filters;
+    // Persisted verbatim (the CMS wizard round-trips its own enum form,
+    // e.g. "REGIONAL_AND_INDIE"); normalization happens at send time in
+    // resolveAiQueryOwnerTypes. Re-runs that don't set it fall back to the
+    // rail's page, which resolves to the same slice.
+    if (req.aiQuery.ownerType) aiQueryConfig.ownerType = req.aiQuery.ownerType;
     if (req.aiQuery.page) aiQueryConfig.page = req.aiQuery.page;
     // Legacy support
     if (req.aiQuery.url) aiQueryConfig.url = req.aiQuery.url;
@@ -1800,8 +1915,31 @@ export const upsertRailService = async (
 
   // Create a separate rail for each page
   const results: SingleRailUpsertResult[] = [];
+  const skippedItems: SkippedRailItem[] = [];
 
   for (const pageName of pageNames) {
+    // Each page keeps only the items its owner-type rules allow — pages in the
+    // same request can have different rules (e.g. HOME + REGIONAL_AND_INDIE).
+    const { items: pageItems, skipped } = await applyPageOwnerTypeFilter(
+      items,
+      pageName,
+      cap,
+    );
+    if (skipped.length > 0) {
+      console.warn(
+        `[Rails] ${req.key}: dropped ${skipped.length} incompatible item(s) — ${formatValidationErrors(skipped)}`,
+      );
+      for (const err of skipped) {
+        skippedItems.push({
+          pageName,
+          itemType: err.itemType,
+          itemCode: err.itemCode,
+          ownerType: err.ownerType,
+          allowedOwnerTypes: err.allowedTypes,
+        });
+      }
+    }
+
     // Determine order for this page
     let order = req.order;
     if (order == null) {
@@ -1834,7 +1972,7 @@ export const upsertRailService = async (
         isVisible: req.isVisible ?? true,
         updatedById: updatedById ?? null,
       },
-      items,
+      pageItems,
     );
     results.push(result);
   }
@@ -1845,6 +1983,7 @@ export const upsertRailService = async (
     rail: first.rail,
     items: first.items,
     additionalRails: rest.length > 0 ? rest : undefined,
+    skippedItems: skippedItems.length > 0 ? skippedItems : undefined,
   };
 };
 
@@ -2072,6 +2211,7 @@ interface RailSourceConfigAiQuery {
   q?: string;
   brandName?: string;
   userId?: string;
+  ownerType?: string | string[];
   filters?: Array<{
     type: string;
     value: string[] | string;
@@ -2087,28 +2227,14 @@ const resolveQueryTracksPaginated = async (
   page: number,
   limit: number,
   brandId?: number | null,
+  platform?: string,
 ): Promise<{ codes: string[]; total: number }> => {
   const hasFilterIds = Array.isArray(query.filterIds) && query.filterIds.length > 0;
   const hasTrackFilters = query.popular || query.trending || query.newOnHoopr ||
     query.movie !== undefined || query.campaign || query.type || query.ownerCode ||
     query.releaseYearFrom || query.releaseYearTo;
 
-  let excludeOwnerIds: string[] | undefined;
-  if (brandId) {
-    const [brandExcludeOwnerIds, tokenTypes, defaultRestrictedIds] = await Promise.all([
-      getRestrictedOwnersByBrandId(brandId),
-      getActiveBrandTokenTypes(brandId),
-      UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0
-        ? getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES)
-        : Promise.resolve([]),
-    ]);
-    const defaultRestricted = tokenTypes.has("Chartbusters") ? [] : defaultRestrictedIds;
-    const combined = [...(brandExcludeOwnerIds || []), ...defaultRestricted];
-    excludeOwnerIds = combined.length > 0 ? combined : undefined;
-  } else if (UNAUTHENTICATED_RESTRICTED_OWNER_NAMES.length > 0) {
-    const resolvedIds = await getOwnerIdsByNames(UNAUTHENTICATED_RESTRICTED_OWNER_NAMES);
-    excludeOwnerIds = resolvedIds.length > 0 ? resolvedIds : undefined;
-  }
+  let excludeOwnerIds = (await resolveViewerOwnerAccess(brandId, platform)).excludeOwnerIds;
   if (query.excludeOwnerIds && query.excludeOwnerIds.length > 0) {
     excludeOwnerIds = excludeOwnerIds
       ? [...new Set([...excludeOwnerIds, ...query.excludeOwnerIds])]
@@ -2210,6 +2336,7 @@ const buildSeeAllItems = async (
   pageName: PageName | undefined,
   userId?: number,
   viewerBrandId?: number,
+  platform?: string,
 ): Promise<RailItemResponse[]> => {
   const trackCodes: string[] = [];
   const filterCodes: string[] = [];
@@ -2230,11 +2357,12 @@ const buildSeeAllItems = async (
     else filterCodes.push(p.itemCode);
   }
 
+  const access = await resolveViewerOwnerAccess(viewerBrandId, platform);
   const [tracks, filters, playlists, labels, artists, occasions, quickAdds, banners] = await Promise.all([
-    hydrateTracks(trackCodes, userId, viewerBrandId),
+    hydrateTracks(trackCodes, access, userId),
     hydrateFilters(filterCodes),
     hydratePlaylists(playlistCodes),
-    hydrateLabels(labelCodes),
+    hydrateLabels(labelCodes, access),
     hydrateArtists(artistCodes),
     hydrateOccasions(occasionCodes),
     hydrateQuickAdds(quickAddCodes),
@@ -2274,6 +2402,7 @@ export const getRailSeeAllService = async (
   reExecute: boolean,
   userId?: number,
   viewerBrandId?: number,
+  platform?: string,
 ): Promise<RailSeeAllResponse | null> => {
   const rail = await findRailByIdWithoutItems(railId);
   if (!rail) return null;
@@ -2324,6 +2453,7 @@ export const getRailSeeAllService = async (
       pageNameForFilter,
       userId,
       viewerBrandId,
+      platform,
     );
     return envelope(items, count);
   };
@@ -2347,6 +2477,7 @@ export const getRailSeeAllService = async (
       page,
       limit,
       viewerBrandId ?? rail.brandId ?? null,
+      platform,
     );
     const pairs = codes.map((code, idx) => ({
       itemType: RailItemType.TRACK,
@@ -2358,6 +2489,7 @@ export const getRailSeeAllService = async (
       pageNameForFilter,
       userId,
       viewerBrandId,
+      platform,
     );
     return envelope(items, total);
   }
@@ -2376,12 +2508,16 @@ export const getRailSeeAllService = async (
         ChartTrackSource.TRENDING,
         SEE_ALL_AI_QUERY_HARD_CAP,
         viewerBrandId ?? rail.brandId ?? null,
+        0,
+        platform,
       );
     } else if (aiQuery.queryType === 'POPULAR') {
       allCodes = await resolveChartTracks(
         ChartTrackSource.POPULAR,
         SEE_ALL_AI_QUERY_HARD_CAP,
         viewerBrandId ?? rail.brandId ?? null,
+        0,
+        platform,
       );
     } else {
       // For FILTERED / NEW_AGE_ICONS / BRAND_RECOMMENDED / legacy URL,
@@ -2392,6 +2528,9 @@ export const getRailSeeAllService = async (
         type: rail.type as RailType,
         sourceType: rail.sourceType as RailSourceType,
         brandId: viewerBrandId ?? rail.brandId ?? null,
+        // Keep the re-run on the rail's own catalog slice, otherwise See All
+        // pulls in tracks this page then hides (filterItemsByPageOwnerType).
+        pageNames: rail.pageName ? [rail.pageName as PageName] : undefined,
         aiQuery: {
           queryType: (aiQuery.queryType ?? 'FILTERED') as
             | 'TRENDING' | 'POPULAR' | 'FILTERED' | 'NEW_AGE_ICONS' | 'BRAND_RECOMMENDED',
@@ -2399,6 +2538,7 @@ export const getRailSeeAllService = async (
           q: aiQuery.q,
           brandName: aiQuery.brandName,
           userId: aiQuery.userId,
+          ownerType: aiQuery.ownerType,
           filters: aiQuery.filters as UpsertRailRequest["aiQuery"] extends infer T
             ? T extends { filters?: infer F } ? F : never
             : never,
@@ -2431,6 +2571,7 @@ export const getRailSeeAllService = async (
       pageNameForFilter,
       userId,
       viewerBrandId,
+      platform,
     );
     return envelope(items, total);
   }

@@ -13,7 +13,7 @@
     },
     {
       "key": "platform",
-      "value": "SOUND_TRACKING_APP",
+      "value": "CREATOR",
       "type": "string"
     }
   ],
@@ -35,7 +35,7 @@
                 {
                   "key": "platform",
                   "value": "{{platform}}",
-                  "description": "Platform filter (ENTERPRISE | SOUND_TRACKING_APP)"
+                  "description": "Platform filter (ENTERPRISE | CREATOR)"
                 }
               ]
             },
@@ -159,7 +159,7 @@
                 {
                   "key": "platform",
                   "value": "{{platform}}",
-                  "description": "Platform filter (ENTERPRISE | SOUND_TRACKING_APP)"
+                  "description": "Platform filter (ENTERPRISE | CREATOR)"
                 },
                 {
                   "key": "sectionId",

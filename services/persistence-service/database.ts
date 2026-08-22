@@ -12,7 +12,12 @@ import {
   UserEntityDetailsModel,
   AccessRequestModel,
 } from "./user/modules.export";
-import { TrackModel, FeaturedTracksModel, ChartTrackModel } from "./track/modules.export";
+import {
+  TrackModel,
+  FeaturedTracksModel,
+  ChartTrackModel,
+  CreatorStemModel,
+} from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import {
   FilterModel,
@@ -94,7 +99,26 @@ export const sequelize = new Sequelize({
       require: true,
       rejectUnauthorized: false,
     },
+    // Never let a single slow query hold a pooled connection forever — Postgres
+    // kills it server-side and the connection returns to the pool.
+    statement_timeout: 15000,
+    idle_in_transaction_session_timeout: 15000,
   },
+
+  // Sequelize defaults to max:5 / acquire:60000. Five connections cannot serve a
+  // page that fans out to a dozen concurrent rail/token calls: requests queue,
+  // block for the full 60s acquire window, then 500 — and nginx's 60s
+  // proxy_read_timeout returns its own 504 with no CORS headers, which the
+  // browser reports as a CORS failure. Raise the pool and fail fast instead.
+  pool: {
+    max: Number(process.env.DB_POOL_MAX) || 25,
+    min: Number(process.env.DB_POOL_MIN) || 2,
+    acquire: Number(process.env.DB_POOL_ACQUIRE) || 15000,
+    idle: 10000,
+    evict: 10000,
+  },
+
+  retry: { max: 2 },
 
   define: {
     freezeTableName: true,
@@ -163,6 +187,7 @@ sequelize.addModels([
   EmailEventModel,
   MonitoredUrlModel,
   MonitorCheckModel,
+  CreatorStemModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything

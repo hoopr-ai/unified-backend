@@ -17,10 +17,21 @@ import {
   scheduleUrlMonitor,
   triggerUrlCheck,
 } from "./queues/url-monitor.queue";
+import {
+  nativeArtistQueue,
+  scheduleNativeArtistRecompute,
+  triggerNativeArtistRecompute,
+} from "./queues/native-artist.queue";
 import { railRefreshWorker } from "./workers/rail-refresh.worker";
 import { brandRecommendWorker } from "./workers/brand-recommend.worker";
 import { emailCampaignWorker } from "./workers/email-campaign.worker";
 import { urlMonitorWorker } from "./workers/url-monitor.worker";
+import { nativeArtistWorker } from "./workers/native-artist.worker";
+import {
+  closeStemBundleQueue,
+  getStemBundleQueue,
+} from "./queues/stem-bundle.queue";
+import { stemBundleWorker } from "./workers/stem-bundle.worker";
 import { logger } from "../helper-service/logger";
 
 export async function initializeScheduler(): Promise<void> {
@@ -41,6 +52,11 @@ export async function initializeScheduler(): Promise<void> {
     await scheduleUrlMonitor();
     logger.info("[Scheduler] URL monitor job scheduled (every 5 minutes)");
 
+    await scheduleNativeArtistRecompute();
+    logger.info(
+      "[Scheduler] Native artist flag recompute scheduled (daily 03:00 IST, promote-only)",
+    );
+
     const repeatableJobs = await railRefreshQueue.getRepeatableJobs();
     logger.info(`[Scheduler] Active repeatable jobs: ${repeatableJobs.length}`);
 
@@ -50,10 +66,14 @@ export async function initializeScheduler(): Promise<void> {
       await brandRecommendWorker.close();
       await emailCampaignWorker.close();
       await urlMonitorWorker.close();
+      await nativeArtistWorker.close();
+      await stemBundleWorker.close();
       await railRefreshQueue.close();
       await brandRecommendQueue.close();
       await emailCampaignQueue.close();
       await urlMonitorQueue.close();
+      await nativeArtistQueue.close();
+      await closeStemBundleQueue();
       logger.info("[Scheduler] Shutdown complete");
     };
 
@@ -69,5 +89,9 @@ export { railRefreshQueue, railRefreshWorker, triggerManualRefresh };
 export { emailCampaignQueue, emailCampaignWorker, triggerEmailCampaignTick };
 export { brandRecommendQueue, brandRecommendWorker, triggerBrandRecommend };
 export { urlMonitorQueue, urlMonitorWorker, triggerUrlCheck };
+export { nativeArtistQueue, nativeArtistWorker, triggerNativeArtistRecompute };
+// No schedule() call: stem bundles are queued on demand by the download
+// endpoint, not on a timer. Importing the worker here is what starts it.
+export { getStemBundleQueue, stemBundleWorker };
 export { executeRailRefresh } from "./jobs/rail-refresh.job";
 export { executeBrandRecommend } from "./jobs/brand-recommend.job";

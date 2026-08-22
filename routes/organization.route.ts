@@ -23,10 +23,16 @@ import { Platform } from "../services/dto-service/constants/common.enums";
 
 const router = Router();
 
-// Roles allowed to manage client credentials (orgs / brands / users)
+// Who may manage client credentials (orgs / brands / users).
+//
+// INTERNAL is authorized by platform alone: every Hoopr employee signed into
+// the internal CMS can create and manage Smash clients whatever their role
+// (which page they see is decided by the CMS functionality grant, not here).
+// ENTERPRISE callers stay role-gated to MASTER / ADMIN / SALES.
 const manageAuth = authenticateWithSession({
   roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES],
   platforms: [Platform.ENTERPRISE, Platform.INTERNAL],
+  roleExemptPlatforms: [Platform.INTERNAL],
 });
 
 // ─── Static routes (must precede param routes) ────────────────────────────────

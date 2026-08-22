@@ -190,7 +190,7 @@ export const userLoginService = async (
 
   // INTERNAL admin CMS needs a "last login" column to surface onboarded-but-never-logged-in
   // users. Fire-and-forget so a write hiccup never regresses login latency. Strictly gated
-  // on INTERNAL — ENTERPRISE / SOUND_TRACKING_APP / STUDIO logins do not touch this column.
+  // on INTERNAL — ENTERPRISE / CREATOR / STUDIO logins do not touch this column.
   if (data.platform === Platform.INTERNAL) {
     touchUserLastLogin(user.id!).catch((err) => {
       logger.error("Failed to update lastLoginAt for INTERNAL user", {

@@ -39,11 +39,15 @@ import { Platform, UserRoles } from "../services/dto-service/modules.export";
 
 const router = Router();
 
+// Client-user provisioning for the Smash client-credentials console. INTERNAL
+// callers are authorized by platform alone — any CMS user, whatever their role
+// — while ENTERPRISE callers stay role-gated.
 router.post(
   "/create",
   authenticateWithSession({
     roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES],
     platforms: [Platform.ENTERPRISE, Platform.INTERNAL],
+    roleExemptPlatforms: [Platform.INTERNAL],
   }),
   validateRequest(createAuthRequestSchema),
   create,
@@ -132,12 +136,15 @@ router.get(
   getUsers,
 );
 
-// Admin edit of a user's basic profile fields (client-credentials console)
+// Edit of a user's basic profile fields (client-credentials console). Same
+// rule as /user/create: INTERNAL passes on platform alone, ENTERPRISE stays
+// role-gated.
 router.put(
   "/:userId",
   authenticateWithSession({
     roles: [UserRoles.MASTER, UserRoles.ADMIN, UserRoles.SALES],
     platforms: [Platform.ENTERPRISE, Platform.INTERNAL],
+    roleExemptPlatforms: [Platform.INTERNAL],
   }),
   validateRequest(updateProfileRequestSchema),
   updateUserById,

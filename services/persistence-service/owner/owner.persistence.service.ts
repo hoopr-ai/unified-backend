@@ -76,20 +76,45 @@ export const updateOwnerUsageInfo = async (
   return owner;
 };
 
+export interface OwnerIdentity {
+  id: string;
+  ownerCode: string | null;
+  name: string;
+  type: string | null;
+}
+
+/**
+ * Get owner identities (id, ownerCode, username, type) by owner names
+ * (case-insensitive match on username field). Access checks need the ownerCode
+ * to match rail LABEL items and the type to match blanket token allocations,
+ * so they resolve the full identity rather than ids alone.
+ */
+export const getOwnerIdentitiesByNames = async (
+  ownerNames: string[],
+): Promise<OwnerIdentity[]> => {
+  if (!ownerNames || ownerNames.length === 0) return [];
+
+  const lowerNames = ownerNames.map((name) => name.toLowerCase().trim());
+  const owners = await OwnerModel.findAll({
+    where: where(fn("LOWER", col("username")), { [Op.in]: lowerNames }) as any,
+    attributes: ["id", "ownerCode", "username", "type"],
+  });
+
+  return owners.map((owner) => ({
+    id: owner.id,
+    ownerCode: owner.ownerCode ?? null,
+    name: owner.username || "",
+    type: owner.type || null,
+  }));
+};
+
 /**
  * Get owner IDs by owner names (case-insensitive match on username field)
  */
 export const getOwnerIdsByNames = async (
   ownerNames: string[],
 ): Promise<string[]> => {
-  if (!ownerNames || ownerNames.length === 0) return [];
-
-  const lowerNames = ownerNames.map((name) => name.toLowerCase().trim());
-  const owners = await OwnerModel.findAll({
-    where: where(fn("LOWER", col("username")), { [Op.in]: lowerNames }) as any,
-    attributes: ["id"],
-  });
-
+  const owners = await getOwnerIdentitiesByNames(ownerNames);
   return owners.map((owner) => owner.id);
 };
 

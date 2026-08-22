@@ -69,6 +69,8 @@ export interface TrackWithArtists {
   sku?: SkuInfo; // SKU pricing info (prices omitted for enterprise-only tracks)
   album?: AlbumInfo; // Album details for the track
   campaign?: CampaignInfo; // Campaign details (amount and type) if active
+  hasStems?: boolean; // True when the track has multitrack stems — drives the stem picker and the "include stems" download option
+  stemCount?: number; // Number of stems, EXCLUDING the mix: `stemCount: 4` means a 5-file bundle
   hookTimings: unknown; // Hook timing segments (e.g., chorus markers) — always present; `[]` when none
 }
 
@@ -151,6 +153,9 @@ export interface RawTrackWithMappings {
   skus?: RawSkuData[];
   trackFilterMappings?: RawFilterMappingData[];
   album?: { id: string; title?: string; type?: string };
+  // Attached by attachStemCounts before the DTO transform, the same way
+  // `album` is — not a column on `tracks`.
+  stemCount?: number;
   campaign?: { amount: number; amountType: string; currentUsage: number; totalUsage: number; validFrom: Date; validTill: Date };
   hookTimings?: unknown;
 }

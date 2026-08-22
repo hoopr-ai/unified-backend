@@ -41,6 +41,16 @@ import {
   sendLowCreditsAlertEmail,
 } from "../../helper-service/modules.export";
 import { logger } from "../../helper-service/logger";
+import {
+  buildStemBundle,
+  readCachedStemBundle,
+  type StemBundleInput,
+} from "../../helper-service/stem-bundle.helper";
+import {
+  getStemBundleQueue,
+  stemBundleJobId,
+} from "../../scheduler-service/queues/stem-bundle.queue";
+import { getStemsForTrackId, toBundleStems } from "../track/stem.service";
 import type {
   LicenseTrackRequest,
   LicenseResponse,
@@ -48,8 +58,9 @@ import type {
   BrandLicenseHistoryItem,
   DownloadTrackRequest,
   DownloadTrackResponse,
+  DownloadTrackResult,
 } from "../../dto-service/licenses/modules.export";
-import { Platform, isSfxTrackType } from "../../dto-service/modules.export";
+import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
 
 const TOKEN_COST_PER_LICENSE = 1;
 
@@ -59,11 +70,11 @@ export const licenseTrackService = async (
   platform?: Platform,
 ): Promise<LicenseResponse> => {
   const { trackCode, campaignId: requestedCampaignId } = data;
-  const isSoundTrackingApp = platform === Platform.SOUND_TRACKING_APP;
+  const isCreator = isPlatform(platform, Platform.CREATOR);
 
-  // campaignId is only honored for SOUND_TRACKING_APP. Defense-in-depth: even if a
-  // non-SOUND_TRACKING_APP request slips one in via the service layer, we drop it.
-  const campaignIdToApply = isSoundTrackingApp ? requestedCampaignId : undefined;
+  // campaignId is only honored for CREATOR. Defense-in-depth: even if a
+  // non-CREATOR request slips one in via the service layer, we drop it.
+  const campaignIdToApply = isCreator ? requestedCampaignId : undefined;
 
   // Validate + atomically reserve a campaign slot before creating any license record.
   // A single conditional UPDATE handles "exists, ACTIVE, in-window, has slots" race-safely:
@@ -98,7 +109,7 @@ export const licenseTrackService = async (
     }
   }
 
-  // Get user (brand only required for non-SOUND_TRACKING_APP platforms).
+  // Get user (brand only required for non-CREATOR platforms).
   // countryCode + profileRole are needed by the isProfileComplete getter —
   // it's computed from columns, not a column itself.
   const user = await UserModel.findByPk(userId, {
@@ -109,11 +120,11 @@ export const licenseTrackService = async (
     throw new AppError("User not found", 404);
   }
 
-  if (!isSoundTrackingApp && !user.brandId) {
+  if (!isCreator && !user.brandId) {
     throw new AppError("User is not associated with any brand", 400);
   }
 
-  const brandId: number | null = isSoundTrackingApp ? null : user.brandId!;
+  const brandId: number | null = isCreator ? null : user.brandId!;
 
   // Get track details including ownerId
   const track = await TrackModel.findOne({
@@ -141,10 +152,10 @@ export const licenseTrackService = async (
     );
   }
 
-  // Tokens are skipped for SOUND_TRACKING_APP (always free) and for SFX tracks.
-  const skipTokens = isSoundTrackingApp || isSfxTrack;
+  // Tokens are skipped for CREATOR (always free) and for SFX tracks.
+  const skipTokens = isCreator || isSfxTrack;
 
-  // Get owners for the track (used for PDF metadata; token matching is skipped for SOUND_TRACKING_APP)
+  // Get owners for the track (used for PDF metadata; token matching is skipped for CREATOR)
   const ownerIds = track.ownerId || [];
   const owners = ownerIds.length > 0
     ? await OwnerModel.findAll({
@@ -189,7 +200,7 @@ export const licenseTrackService = async (
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
 
-  // Create license record. brandId is null for SOUND_TRACKING_APP (no brand association).
+  // Create license record. brandId is null for CREATOR (no brand association).
   const now = new Date();
   const validThrough = new Date(now);
   validThrough.setFullYear(validThrough.getFullYear() + 1);
@@ -207,7 +218,7 @@ export const licenseTrackService = async (
 
   const createdLicense = await createLicenseRecord(licenseDetails);
 
-  // Token deduction is skipped entirely for SOUND_TRACKING_APP and SFX tracks.
+  // Token deduction is skipped entirely for CREATOR and SFX tracks.
   let remainingTokens = 0;
   let deductionWasUnlimited = false;
   if (!skipTokens) {
@@ -296,7 +307,7 @@ export const licenseTrackService = async (
   const downloadedByFullName = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "";
 
   if (skipTokens) {
-    // SOUND_TRACKING_APP + free SFX downloads: notify only the licensing user
+    // CREATOR + free SFX downloads: notify only the licensing user
     // (no brand team, no low-credit alerts — no credits were consumed).
     if (user.email) {
       sendTrackDownloadNotificationEmail(user.email, {
@@ -596,8 +607,8 @@ export const getBrandLicenseHistoryService = async (
 export const downloadTrackService = async (
   userId: number,
   data: DownloadTrackRequest,
-): Promise<DownloadTrackResponse> => {
-  const { licenseId } = data;
+): Promise<DownloadTrackResult> => {
+  const { licenseId, includeStems } = data;
 
   // Get license details
   const license = await LicenseModel.findByPk(licenseId, {
@@ -628,14 +639,121 @@ export const downloadTrackService = async (
     throw new AppError("Track audio file is not available for download", 400);
   }
 
+  // Stems ride the licence the brand has already paid for — no extra token is
+  // deducted here, and no separate licence row is written. This endpoint is
+  // reached only after licenseTrackService has charged for the track.
+  if (includeStems) {
+    return requestStemBundle(track.id, track.name || "", isSfxTrack);
+  }
+
   // Generate GCS signed URL for the track
   const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
 
   return {
+    status: "ready",
     downloadLink: gcsResult.downloadLink,
     trackId: track.id,
     trackName: track.name || "",
   };
+};
+
+/** How long the client is told to wait before polling the bundle again. */
+const BUNDLE_RETRY_AFTER_MS = 1500;
+
+/**
+ * Answer for the "mix + stems" zip: the cached bundle if it exists, otherwise a
+ * "preparing" that the client polls on.
+ *
+ * A track with no stem rows still produces a zip (holding just the mix) rather
+ * than a bare mp3. The client has already committed to saving the response as
+ * `.zip` by the time it calls, so handing back an mp3 would save a file that no
+ * archiver can open. In practice this only happens if a stem is soft-deleted
+ * between the list response and the download.
+ */
+const requestStemBundle = async (
+  trackId: string,
+  trackName: string,
+  isSfx: boolean,
+): Promise<DownloadTrackResult> => {
+  const stems = await getStemsForTrackId(trackId);
+  const input: StemBundleInput = {
+    trackId,
+    trackName,
+    isSfx,
+    stems: toBundleStems(stems),
+  };
+
+  const cached = await readCachedStemBundle(input);
+  if (cached) {
+    return {
+      status: "ready",
+      downloadLink: cached.downloadLink,
+      trackId,
+      trackName,
+      fileCount: cached.fileCount,
+      sizeBytes: cached.sizeBytes,
+    };
+  }
+
+  const jobId = stemBundleJobId(trackId);
+
+  try {
+    const bundleQueue = getStemBundleQueue();
+    const existing = await bundleQueue.getJob(jobId);
+
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "failed") {
+        // Without this the client polls "preparing" until its own timeout, and
+        // the dead job blocks every future attempt because the id is taken.
+        const reason = existing.failedReason;
+        await existing.remove();
+        logger.error(
+          `[StemBundle] Build for track ${trackId} failed: ${reason}`,
+        );
+        throw new AppError(
+          "This track's stems could not be packaged for download.",
+          400,
+        );
+      }
+      // Queued or running — someone else is already building it.
+      return { status: "preparing", retryAfterMs: BUNDLE_RETRY_AFTER_MS };
+    }
+
+    await bundleQueue.add("build-bundle", input, { jobId });
+    return { status: "preparing", retryAfterMs: BUNDLE_RETRY_AFTER_MS };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+
+    // No Redis (SKIP_SCHEDULER=true locally, or the queue is unreachable).
+    // Falling back to an in-request build keeps downloads working instead of
+    // leaving the client polling a job nothing will ever pick up.
+    logger.warn(
+      `[StemBundle] Queue unavailable for track ${trackId}, building inline: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    try {
+      const built = await buildStemBundle(input);
+      return {
+        status: "ready",
+        downloadLink: built.downloadLink,
+        trackId,
+        trackName,
+        fileCount: built.fileCount,
+        sizeBytes: built.sizeBytes,
+      };
+    } catch (buildError) {
+      logger.error(
+        `[StemBundle] Inline build for track ${trackId} failed:`,
+        buildError,
+      );
+      throw new AppError(
+        "This track's stems could not be packaged for download.",
+        400,
+      );
+    }
+  }
 };
 
 export interface DownloadLicensePdfResponse {

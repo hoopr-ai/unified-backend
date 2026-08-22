@@ -289,3 +289,149 @@ export const createPreviewStream = async (
 
   return { stream, contentLength };
 };
+
+// ── Stem audio ──────────────────────────────────────────────────────────────
+//
+// Stems sit one level below the master, keyed by the stem's TYPE rather than by
+// any id:
+//
+//   musics/<assetTrackId>/stems/<stemType>-mp3.mp3                 — audio
+//   musics/<assetTrackId>/stems/metaData/<stemType>-waveform.json  — waveform
+//
+// Two traps, both of which serve 404s if got wrong (see NATIVE-BE's
+// gcs.helper, which serves the same objects for creator-web):
+//
+//  1. `assetTrackId` is the LEGACY hoopr track uuid (creator_stems.legacy_track_id),
+//     NOT the sage `tracks.id` the row is bridged to. The migration re-keyed the
+//     catalogue but the bucket was never re-laid-out, so every migrated stem
+//     object still lives under the old uuid. Only rows ingested natively after
+//     the migration have the two agree, and there `legacy_track_id` is null.
+//  2. `stemType` is used verbatim, original case and spaces included
+//     ("Supporting Elements", "Acoustic Guitar"). It is neither slugified nor
+//     lowercased — `name_slug` is a display field and does NOT name the object.
+//
+// NOTE the deliberate difference from generateGCSSignedUrl above: that routes
+// SFX to SFX_BUCKET, whereas stem objects for both types live in SELECT_BUCKET
+// (only the prefix changes). Stems are a music feature in practice, so this
+// branch is near-dead code either way, but it matches where the objects are.
+
+/** The bucket/CDN path segment for a stem's audio, given its asset track id. */
+export const stemObjectPath = (
+  assetTrackId: string,
+  stemType: string,
+  isSfx = false,
+): string =>
+  `${isSfx ? "sfxs" : "musics"}/${assetTrackId}/stems/${stemType}-mp3.mp3`;
+
+/** The path segment for a stem's waveform json. */
+export const stemWaveformPath = (
+  assetTrackId: string,
+  stemType: string,
+  isSfx = false,
+): string =>
+  `${isSfx ? "sfxs" : "musics"}/${assetTrackId}/stems/metaData/${stemType}-waveform.json`;
+
+/**
+ * Read an object into memory.
+ *
+ * Returns null when the object isn't there, so a bundle can skip one missing
+ * stem instead of failing the whole download. `bucket` defaults to
+ * SELECT_BUCKET; pass SFX_BUCKET explicitly for SFX masters.
+ */
+export const downloadGCSObject = async (options: {
+  gcsPath: string;
+  bucketName?: string;
+}): Promise<Buffer | null> => {
+  const bucketName = options.bucketName ?? process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const file = getStorageInstance().bucket(bucketName).file(options.gcsPath);
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    return null;
+  }
+
+  const [buffer] = await file.download();
+  return buffer;
+};
+
+/**
+ * Signed read URL for an object that already exists, with the size and any
+ * custom metadata the writer stored alongside it.
+ *
+ * Used for the stem bundle cache: one call answers "is it built?", "how big?"
+ * and "how many files?" without a second round trip.
+ */
+export const getGCSObjectWithMetadata = async (options: {
+  gcsPath: string;
+  contentType?: string;
+  expiresInMinutes?: number;
+  downloadName?: string;
+}): Promise<{
+  downloadLink: string;
+  sizeBytes: number;
+  metadata: Record<string, string>;
+} | null> => {
+  const {
+    gcsPath,
+    contentType = "application/zip",
+    expiresInMinutes = 30,
+    downloadName,
+  } = options;
+
+  const bucketName = process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const file = getStorageInstance().bucket(bucketName).file(gcsPath);
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    return null;
+  }
+
+  const [meta] = await file.getMetadata();
+
+  const [downloadLink] = await file.getSignedUrl({
+    action: "read",
+    expires: Date.now() + expiresInMinutes * 60 * 1000,
+    responseType: contentType,
+    ...(downloadName && {
+      responseDisposition: `attachment; filename="${downloadName}"`,
+    }),
+  });
+
+  return {
+    downloadLink,
+    sizeBytes: Number(meta.size ?? 0),
+    metadata: (meta.metadata ?? {}) as Record<string, string>,
+  };
+};
+
+/**
+ * Write an object with custom metadata attached. Mirrors uploadBufferToGCS but
+ * returns nothing — the caller signs a URL separately via
+ * getGCSObjectWithMetadata so the read path is identical whether the object was
+ * just built or was already cached.
+ */
+export const uploadBufferWithMetadata = async (options: {
+  buffer: Buffer;
+  gcsPath: string;
+  contentType: string;
+  metadata?: Record<string, string>;
+}): Promise<void> => {
+  const bucketName = process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const file = getStorageInstance().bucket(bucketName).file(options.gcsPath);
+  await file.save(options.buffer, {
+    contentType: options.contentType,
+    ...(options.metadata && { metadata: { metadata: options.metadata } }),
+  });
+};

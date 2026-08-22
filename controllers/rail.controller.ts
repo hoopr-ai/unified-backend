@@ -49,10 +49,7 @@ export const getRails = catchAsync(async (req: AuthRequest, res: Response) => {
   const userId = parseBrandId(req.session?.userId); // Reusing parseBrandId to parse userId from session, will return undefined if invalid
   const pageName = typeof req.query.pageName === "string" ? req.query.pageName : "HOME";
 
-  // Get the logged-in user's brandId for brand-specific recommendations
-  const user = userId ? await findUserById(userId) : null;
-
-  const rails = await getRailsService(brandId, userId, pageName);
+  const rails = await getRailsService(brandId, userId, pageName, req.session?.platform);
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
@@ -79,7 +76,15 @@ export const getRailsBatch = catchAsync(async (req: AuthRequest, res: Response) 
   // Fall back to query param brandId so FE can pass it without auth header for token gating
   const user = userId ? await findUserById(userId) : null;
   const userBrandId = user?.brandId ?? parseBrandId(req.query.brandId);
-  const result = await getRailsPaginatedService(userBrandId, userId, pageName, page, limit, railItemLimit);
+  const result = await getRailsPaginatedService(
+    userBrandId,
+    userId,
+    pageName,
+    page,
+    limit,
+    railItemLimit,
+    req.session?.platform,
+  );
 
   sendResponse(res, {
     status: HttpStatusCode.OK,
@@ -95,7 +100,7 @@ export const getRailByKey = catchAsync(
     const brandId = parseBrandId(req.query.brandId);
     const userId = req.session?.userId;
 
-    const rail = await getRailByKeyService(key, brandId, userId);
+    const rail = await getRailByKeyService(key, brandId, userId, req.session?.platform);
 
     if (!rail) {
       sendResponse(res, {
@@ -149,6 +154,7 @@ export const getRailSeeAll = catchAsync(
       reExecute,
       userId,
       viewerBrandId,
+      req.session?.platform,
     );
 
     if (!result) {
@@ -288,10 +294,17 @@ export const upsertRail = catchAsync(
     const updatedById = req.session?.userId ?? null;
     const result = await upsertRailService(parsed, updatedById);
 
+    // Items whose owner type the target page doesn't allow are dropped rather
+    // than failing the save — tell the admin how many, the rail itself is fine.
+    const skipped = result.skippedItems?.length ?? 0;
+    const message = skipped
+      ? `${ResponseMessages.UpsertRailSuccess} (${skipped} item${skipped > 1 ? "s" : ""} skipped — owner type not allowed on the selected page)`
+      : ResponseMessages.UpsertRailSuccess;
+
     sendResponse(res, {
       status: HttpStatusCode.OK,
       data: result,
-      message: ResponseMessages.UpsertRailSuccess,
+      message,
     });
   },
 );

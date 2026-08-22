@@ -1,6 +1,25 @@
 
 export enum Platform {
     ENTERPRISE = 'ENTERPRISE',
+    /**
+     * The consumer creator app. CREATOR is the current name and the one clients
+     * should send.
+     *
+     * It is an ALIAS, not a new platform: `normalizePlatform` folds it onto
+     * SOUND_TRACKING_APP before anything touches the database, because that is
+     * the value every existing row holds (`users.platform`,
+     * `faq_sections.platform`, `featured_tracks.platform`,
+     * `user_stream_history.platform`, the native-analytics rollups) and the value
+     * every access token issued so far carries. See ./platform.ts.
+     */
+    CREATOR = 'CREATOR',
+    /**
+     * The stored spelling of CREATOR. Still accepted on input and still what is
+     * written, so no data migration and no already-issued token is invalidated.
+     * Prefer Platform.CREATOR in new code.
+     *
+     * @deprecated Use Platform.CREATOR.
+     */
     SOUND_TRACKING_APP = 'SOUND_TRACKING_APP',
     INTERNAL = 'INTERNAL',
     STUDIO = 'STUDIO',

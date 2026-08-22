@@ -7,6 +7,7 @@ import {
   searchTracksService,
   GetTracksByFilterQuery,
   getRandomTrackPreviewService,
+  getTrackStemsService,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -107,7 +108,7 @@ export const getTracksByCodes = catchAsync(
       limit: req.query.limit as string,
       type: req.body.type as string[] | undefined,
     };
-    const response = await getTracksByCodesService(query, userId, brandId);
+    const response = await getTracksByCodesService(query, userId, brandId, req.session?.platform);
 
     // Strip mp3Link and waveformLink for unauthenticated users
     const data = userId
@@ -137,7 +138,7 @@ export const getTracksByFilter = catchAsync(
       limit: req.query.limit as string,
       type: req.body.type as string[] | undefined,
     };
-    const response = await getTracksByFilterService(query, userId, brandId);
+    const response = await getTracksByFilterService(query, userId, brandId, req.session?.platform);
 
     // Strip mp3Link and waveformLink for unauthenticated users
     const data = userId
@@ -165,6 +166,7 @@ export const getTrackDetailsByCode = catchAsync(
       trackCode,
       userId,
       brandId,
+      req.session?.platform,
     );
 
     if (!response) {
@@ -193,12 +195,71 @@ export const getTrackDetailsByCode = catchAsync(
   },
 );
 
+/**
+ * GET /tracks/:trackCode/stems — every multitrack stem of one track.
+ *
+ * Visibility is decided by the same owner/tier/status gate as the track detail
+ * endpoint, so a track this brand cannot see reports no stems rather than
+ * leaking that it exists. A visible track with no stems is a 200 with an empty
+ * list, which is what lets the client cache "none" instead of re-asking.
+ */
+export const getTrackStems = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    const user = userId ? await findUserById(userId) : null;
+    const trackCode = req.params.trackCode as string;
+
+    const response = await getTrackStemsService(
+      trackCode,
+      user?.brandId,
+      req.session?.platform,
+    );
+
+    if (!response) {
+      sendResponse(res, {
+        status: HttpStatusCode.NOT_FOUND,
+        data: null,
+        message: ResponseMessages.TrackNotFound,
+      });
+      return;
+    }
+
+    // Audio is withheld from anonymous callers, exactly as getTrackDetailsByCode
+    // nulls mp3Link/waveformLink. Stems are catalogue audio like any other, and
+    // this endpoint would otherwise be a way around that gate. The stem LIST is
+    // still returned so the UI can say what exists.
+    const data = userId
+      ? response
+      : {
+          ...response,
+          stems: response.stems.map((stem) => ({
+            ...stem,
+            streamLink: null,
+            waveformLink: null,
+          })),
+        };
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data,
+      message: ResponseMessages.GetTrackStemsSuccess,
+    });
+  },
+);
+
 export const searchTracks = catchAsync(
-  async (req: Request, res: Response) => {
+  async (req: AuthRequest, res: Response) => {
     const query = (req.query.q as string) || "";
     const limit = parseInt(req.query.limit as string, 10) || 20;
 
-    const results = await searchTracksService(query, Math.min(limit, 50));
+    const userId = req.session?.userId;
+    const user = userId ? await findUserById(userId) : null;
+    const results = await searchTracksService(
+      query,
+      Math.min(limit, 50),
+      user?.brandId ?? undefined,
+      req.session?.platform,
+    );
 
     sendResponse(res, {
       status: HttpStatusCode.OK,

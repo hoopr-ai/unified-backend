@@ -74,6 +74,56 @@ export const PAGE_OWNER_TYPE_MAP: Record<PageName, OwnerType[] | null> = {
   [PageName.APP_SFX]: null, // null means all owner types allowed
 };
 
+// Canonical owner-type strings, keyed by every spelling a caller may send us:
+// the PageName enum ("REGIONAL_AND_INDIE"), the DB/AI-service label
+// ("Regional & Indie"), and the ampersand-collapsed variants the AI service
+// itself accepts ("regional&indie"). Keys are the alphanumeric-only lowercase
+// form of the value (see `normalizeOwnerType`).
+const OWNER_TYPE_ALIASES: Record<string, OwnerType> = {
+  regionalindie: OwnerType.REGIONAL_AND_INDIE,
+  regionalandindie: OwnerType.REGIONAL_AND_INDIE,
+  indieregional: OwnerType.REGIONAL_AND_INDIE,
+  indieandregional: OwnerType.REGIONAL_AND_INDIE,
+  chartbusters: OwnerType.CHARTBUSTERS,
+  chartbuster: OwnerType.CHARTBUSTERS,
+  international: OwnerType.INTERNATIONAL,
+  hooproriginals: OwnerType.HOOPR_ORIGINALS,
+  hooproriginal: OwnerType.HOOPR_ORIGINALS,
+  originals: OwnerType.HOOPR_ORIGINALS,
+};
+
+// Map any accepted spelling of an owner type onto the canonical DB value
+// ("Regional & Indie"). Returns null when the value is not a known owner type.
+// The AI/search service matches assortment values against the DB `owners.type`
+// string, so the enum form ("REGIONAL_AND_INDIE") silently matches nothing —
+// everything that leaves this service must go through here first.
+export function normalizeOwnerType(
+  value: string | null | undefined
+): OwnerType | null {
+  if (!value || typeof value !== "string") return null;
+  const key = value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (!key) return null;
+  return OWNER_TYPE_ALIASES[key] ?? null;
+}
+
+// Owner types a rail targeting these pages may contain. Returns null when the
+// set is unconstrained — either no pages were given or at least one of them
+// (e.g. HOME) accepts every owner type.
+export function getAllowedOwnerTypesForPages(
+  pageNames: PageName[] | null | undefined
+): OwnerType[] | null {
+  if (!pageNames || pageNames.length === 0) return null;
+  const allowed = new Set<OwnerType>();
+  for (const pageName of pageNames) {
+    const types = PAGE_OWNER_TYPE_MAP[pageName];
+    // An unconstrained page in the set makes the whole set unconstrained;
+    // per-page filtering on write still keeps each rail clean.
+    if (types === null || types === undefined) return null;
+    for (const type of types) allowed.add(type);
+  }
+  return allowed.size > 0 ? Array.from(allowed) : null;
+}
+
 // Helper to check if an owner type is allowed for a page
 export function isOwnerTypeAllowedForPage(
   ownerType: string | null | undefined,

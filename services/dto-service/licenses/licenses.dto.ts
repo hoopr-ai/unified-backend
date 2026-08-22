@@ -137,13 +137,47 @@ export interface LicenseTypeResponse {
 
 export interface DownloadTrackRequest {
   licenseId: number;
+  /** Deliver the mix plus every stem as one zip instead of the bare mp3. */
+  includeStems?: boolean;
 }
 
 export interface DownloadTrackResponse {
   downloadLink: string;
   trackId: string;
   trackName: string;
+  /**
+   * Marks a completed download. Present on every response so a client can
+   * branch on one field; the bare-mp3 path has always been immediate and stays
+   * that way.
+   */
+  status?: "ready";
+  /** Files inside the zip — mix included. Absent for a plain mp3 download. */
+  fileCount?: number;
+  /**
+   * Bundle size. The client fetches the signed URL itself to show progress, and
+   * cross-origin `Content-Length` is not always readable, so the size is sent
+   * here rather than left to the browser to discover.
+   */
+  sizeBytes?: number;
 }
+
+/**
+ * A stem bundle is zipped on the first request for a track and cached after
+ * that, so only the first downloader waits. Until it exists the endpoint
+ * answers 202 with this and the client polls.
+ */
+export interface DownloadTrackPending {
+  status: "preparing";
+  retryAfterMs: number;
+}
+
+export type DownloadTrackResult =
+  | DownloadTrackResponse
+  | DownloadTrackPending;
+
+export const isDownloadPending = (
+  result: DownloadTrackResult,
+): result is DownloadTrackPending => result.status === "preparing";
 
 // Video Links DTOs
 export interface AddVideoLinksRequest {

@@ -10,17 +10,14 @@ import type {
   SendEmailOtpRequestData,
   VerifyEmailOtpRequestData,
 } from "../services/dto-service/modules.export";
-import { Platform } from "../services/dto-service/constants/modules.export";
 import { ProfileRole } from "../services/dto-service/modules.export";
-const platformValues = Object.values(Platform) as string[];
+import { platformField } from "./platform.validation";
 const profileRoleValues = Object.values(ProfileRole) as string[];
 
 export const createAuthRequestSchema = Joi.object<CreateAuthRequestData>({
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
-  platform: Joi.string()
-    .valid(...platformValues)
-    .required(),
+  platform: platformField.required(),
   brandId: Joi.number().integer().positive().optional(),
 });
 
@@ -50,9 +47,7 @@ export const completeProfileRequestSchema =
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
-  platform: Joi.string()
-    .valid(...platformValues)
-    .required(),
+  platform: platformField.required(),
 });
 
 export const resetPasswordRequestSchema = Joi.object<ResetPasswordRequestData>({
@@ -68,9 +63,7 @@ export const resetPasswordRequestSchema = Joi.object<ResetPasswordRequestData>({
     .messages({
       "any.only": "Passwords do not match",
     }),
-  platform: Joi.string()
-    .valid(...platformValues)
-    .required(),
+  platform: platformField.required(),
 });
 
 export const updateProfileRequestSchema = Joi.object({
@@ -108,16 +101,12 @@ export const verifyOtpRequestSchema = Joi.object<VerifyOtpRequestData>({
 
 export const sendEmailOtpRequestSchema = Joi.object<SendEmailOtpRequestData>({
   email: Joi.string().email().required(),
-  platform: Joi.string()
-    .valid(...platformValues)
-    .required(),
+  platform: platformField.required(),
 }).unknown(false);
 
 export const verifyEmailOtpRequestSchema =
   Joi.object<VerifyEmailOtpRequestData>({
     email: Joi.string().email().required(),
     otp: Joi.string().length(6).pattern(/^\d+$/).required(),
-    platform: Joi.string()
-      .valid(...platformValues)
-      .required(),
+    platform: platformField.required(),
   }).unknown(false);

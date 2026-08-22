@@ -29,8 +29,10 @@ import railRoutes from "./routes/rail.route";
 import adminInternalUsersRoutes from "./routes/admin-internal-users.route";
 import adminSkuRoutes from "./routes/admin-sku.route";
 import adminOwnerRoutes from "./routes/admin-owner.route";
+import adminArtistRoutes from "./routes/admin-artist.route";
 import adminPayPerTrackRoutes from "./routes/admin-pay-per-track.route";
 import adminEnterpriseAnalyticsRoutes from "./routes/admin-enterprise-analytics.route";
+import adminNativeAnalyticsRoutes from "./routes/admin-native-analytics.route";
 import internalLoginRoutes from "./routes/internal-login.route";
 import userAddressRoutes from "./routes/user-address.route";
 import geographyRoutes from "./routes/geography.route";
@@ -38,6 +40,7 @@ import cartRoutes from "./routes/cart.route";
 import transactionRoutes from "./routes/transaction.route";
 import journeyRoutes from "./routes/journey.route";
 import urlMonitorRoutes from "./routes/url-monitor.route";
+import adminWhitelistingRoutes from "./routes/admin-whitelisting.route";
 import {
   emailCampaignRouter,
   emailTemplateRouter,
@@ -100,9 +103,19 @@ app.use("/rails", railRoutes);
 app.use("/admin/internal-users", adminInternalUsersRoutes);
 app.use("/admin/skus", adminSkuRoutes);
 app.use("/admin/owners", adminOwnerRoutes);
+app.use("/admin/artists", adminArtistRoutes);
 app.use("/admin/pay-per-track", adminPayPerTrackRoutes);
 app.use("/admin/enterprise-analytics", adminEnterpriseAnalyticsRoutes);
+// Session/event analytics over the data NATIVE-BE records for creator-web and
+// creator-mobile (same shared DB, so no service hop).
+app.use("/admin/native-analytics", adminNativeAnalyticsRoutes);
 app.use("/admin/url-monitor", urlMonitorRoutes);
+// YouTube Whitelisting — the ops CMS over creators' submitted channels and
+// their claim-clearance requests. Reads soundtracking_user_profiles (written by
+// content-recommendation + NATIVE-BE) and claims (owned by NATIVE-BE) on the
+// same shared DB, so no service hop; this service already owns the internal
+// sessions and functionality grants the routes are gated by.
+app.use("/admin/whitelisting", adminWhitelistingRoutes);
 app.use("/cart", cartRoutes);
 app.use("/transaction", transactionRoutes);
 app.use("/journey", journeyRoutes);

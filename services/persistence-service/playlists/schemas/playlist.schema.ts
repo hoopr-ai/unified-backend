@@ -9,7 +9,7 @@ import {
   Unique,
   HasMany,
 } from "sequelize-typescript";
-import { PlaylistType } from "../../../dto-service/modules.export";
+import { PlaylistCategory, PlaylistType } from "../../../dto-service/modules.export";
 import { TrackPlaylistMappingModel } from "./track-playlist-mapping.schema";
 
 export interface PlaylistDetails {
@@ -18,6 +18,9 @@ export interface PlaylistDetails {
   name?: string;
   description?: string;
   type?: PlaylistType;
+  category?: PlaylistCategory;
+  // Legacy column carried over by the native/hoopr migrations. Not read by any
+  // app code — kept only so the model still matches the table.
   playlistType?: string;
   name_slug?: string;
   partnerId?: string;
@@ -64,6 +67,14 @@ export class PlaylistModel extends Model<PlaylistModel, PlaylistDetails> {
     allowNull: true,
   })
   type?: PlaylistType;
+
+  // Editorial assortment (HOOPR_ORIGINALS / CHARTBUSTERS / …). Nullable —
+  // pre-existing playlists are uncategorised until an admin sets one.
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  category?: PlaylistCategory;
 
   @Column({
     type: DataType.STRING(255),

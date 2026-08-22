@@ -1,4 +1,4 @@
-import { PlaylistStatus } from "./modules.export";
+import { PlaylistCategory, PlaylistStatus, PlaylistType } from "./modules.export";
 import { TrackWithArtists } from "../tracks/tracks.dto";
 
 export interface GetAllPlaylistsQuery {
@@ -44,6 +44,11 @@ export interface PlaylistDetail {
   name_slug: string | null;
   description: string | null;
   imageLink: string | null;
+  // type/category are echoed back so the CMS editor can seed its form from the
+  // stored values. Without them the edit round-trip silently resets both fields
+  // to their defaults on every save.
+  type: PlaylistType | null;
+  category: PlaylistCategory | null;
   tracks: TrackWithArtists[];
 }
 
@@ -52,14 +57,18 @@ export interface PlaylistDetail {
 export interface CreatePlaylistRequest {
   name: string;
   description?: string | null;
-  type?: string;   // PlaylistType — validated in the controller
-  status?: string; // PlaylistStatus — validated in the controller
+  type?: string;     // PlaylistType — validated in the controller
+  category?: string; // PlaylistCategory — validated in the controller
+  status?: string;   // PlaylistStatus — validated in the controller
 }
 
+// `category: null` explicitly clears the assortment; omitting it leaves the
+// stored value untouched.
 export interface UpdatePlaylistRequest {
   name?: string;
   description?: string | null;
   type?: string;
+  category?: string | null;
   status?: string;
 }
 

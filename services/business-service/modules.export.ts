@@ -2,6 +2,7 @@ export * from "./user/modules.export";
 export * from "./filter/filter.service";
 export * from "./track/track.service";
 export * from "./track/featured-tracks.service";
+export * from "./track/stem.service";
 export * from "./playlist/playlist.service";
 export * from "./organization/organization.service";
 export * from "./licenses/licenses.service";

@@ -1,4 +1,6 @@
 import Joi from "joi";
+import { Platform } from "../services/dto-service/constants/modules.export";
+import { platformFieldOf } from "./platform.validation";
 
 // All pay-per-track analytics endpoints are read-only GETs; every schema here
 // validates a query string. Dates arrive as IST calendar days (YYYY-MM-DD) and
@@ -10,9 +12,15 @@ const dateField = Joi.string()
 
 // Optional platform scope. Omitted = all customer platforms (INTERNAL staff
 // accounts are always excluded server-side).
-const platformField = Joi.string()
-  .valid("SOUND_TRACKING_APP", "ENTERPRISE", "STUDIO")
-  .optional();
+//
+// CREATOR and SOUND_TRACKING_APP are the same platform under two names; both are
+// accepted and normalized to the value `users.platform` actually holds, so the
+// `platform = :platform` binds downstream match either spelling.
+const platformField = platformFieldOf(
+  Platform.CREATOR,
+  Platform.ENTERPRISE,
+  Platform.STUDIO,
+).optional();
 
 const dateRange = {
   startDate: dateField.required(),
