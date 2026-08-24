@@ -76,6 +76,12 @@ export interface ChannelFilters {
   search?: string | null;
   /** Only rows waiting this many days or more. Drives the SLA view. */
   minAgeDays?: number | null;
+  /**
+   * Submission-date window, inclusive, as **IST calendar days** (YYYY-MM-DD).
+   * Either end may stand alone. See the WHERE below for the boundary maths.
+   */
+  startDate?: string | null;
+  endDate?: string | null;
   page?: number;
   pageSize?: number;
   sortBy?: "submittedAt" | "connectedAt" | "audience" | "subscribedAt";
@@ -166,6 +172,16 @@ const WHERE = `
          OR (:subscription = 'inactive' AND s.id IS NULL))
     AND (CAST(:minAgeDays AS int) IS NULL
          OR p."whitelistUpdatedAt" <= now() - (:minAgeDays * INTERVAL '1 day'))
+    -- Submission window, in IST. The dates arrive as Asia/Kolkata calendar days
+    -- and are widened to instants here: start-of-day on :startDate, and the
+    -- start of the day AFTER :endDate as an exclusive upper bound. Half-open
+    -- rather than a plain "<= endDate": "whitelistUpdatedAt" is a timestamptz,
+    -- and a <= against midnight would drop every row submitted during
+    -- the operator's last chosen day, which is the day they most care about.
+    AND (CAST(:startDate AS text) IS NULL
+         OR p."whitelistUpdatedAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+    AND (CAST(:endDate AS text) IS NULL
+         OR p."whitelistUpdatedAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
     AND (CAST(:search AS text) IS NULL
          OR u.email ILIKE :searchLike
          OR u.mobile ILIKE :searchLike
@@ -216,6 +232,8 @@ const binds = (f: ChannelFilters) => ({
   subscription: f.subscription ?? null,
   allowlistState: f.allowlistState ?? null,
   minAgeDays: f.minAgeDays ?? null,
+  startDate: f.startDate || null,
+  endDate: f.endDate || null,
   search: f.search?.trim() || null,
   searchLike: f.search?.trim() ? `%${f.search.trim()}%` : null,
 });

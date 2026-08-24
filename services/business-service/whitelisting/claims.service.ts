@@ -45,6 +45,14 @@ export interface ClaimFilters {
   /** Free text over email, mobile, video URL and creator name. */
   search?: string | null;
   minAgeDays?: number | null;
+  /**
+   * Filed-date window, inclusive, as **IST calendar days** (YYYY-MM-DD). Always
+   * against c."createdAt" — the "Submitted" column — even when sorting by
+   * "updatedAt": "claims filed in August" must not change meaning because
+   * somebody re-sorted the table.
+   */
+  startDate?: string | null;
+  endDate?: string | null;
   page?: number;
   pageSize?: number;
   sortBy?: "createdAt" | "updatedAt";
@@ -134,6 +142,13 @@ const WHERE = `
          OR (:subscription = 'inactive' AND s."planCode" IS NULL))
     AND (CAST(:minAgeDays AS int) IS NULL
          OR c."createdAt" <= now() - (:minAgeDays * INTERVAL '1 day'))
+    -- IST calendar days in, instants out — half-open at the top end so the
+    -- operator's last chosen day is included in full. Same shape as the channel
+    -- queue's window on purpose; see channels.service.ts for the reasoning.
+    AND (CAST(:startDate AS text) IS NULL
+         OR c."createdAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+    AND (CAST(:endDate AS text) IS NULL
+         OR c."createdAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
     AND (CAST(:search AS text) IS NULL
          OR c.email ILIKE :searchLike
          OR c.mobile ILIKE :searchLike
@@ -147,6 +162,8 @@ const binds = (f: ClaimFilters) => ({
   origin: f.origin ?? null,
   subscription: f.subscription ?? null,
   minAgeDays: f.minAgeDays ?? null,
+  startDate: f.startDate || null,
+  endDate: f.endDate || null,
   search: f.search?.trim() || null,
   searchLike: f.search?.trim() ? `%${f.search.trim()}%` : null,
 });
