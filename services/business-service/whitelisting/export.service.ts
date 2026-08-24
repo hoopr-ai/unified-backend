@@ -30,7 +30,21 @@ const row = (values: unknown[]): string => values.map(cell).join(",");
 
 const yesNo = (v: boolean | null | undefined): string => (v ? "Yes" : "No");
 
-const date = (v: string | null): string => (v ? v.replace("T", " ").slice(0, 19) : "");
+// Timestamps are rendered as **IST wall-clock**, not the raw UTC the services
+// hand back. The filters above this export are IST calendar days, so a CSV that
+// stamps "2026-08-23 19:10" on a channel the operator found under "24 Aug" is
+// how an argument about the numbers starts. India is a fixed UTC+05:30 year
+// round, so the shift is arithmetic and needs no timezone database.
+const IST_OFFSET_MS = (5 * 60 + 30) * 60_000;
+
+const date = (v: string | null): string => {
+  if (!v) return "";
+  const ms = Date.parse(v);
+  // Anything unparseable goes out verbatim rather than as an empty cell — a
+  // value ops can question beats one that silently vanished.
+  if (Number.isNaN(ms)) return v;
+  return new Date(ms + IST_OFFSET_MS).toISOString().replace("T", " ").slice(0, 19);
+};
 
 // Exports are capped rather than streamed: the whole cohort is a few hundred
 // rows today (52 channels at last count), and an unbounded SELECT behind an
@@ -45,11 +59,11 @@ export const exportChannelsCsvService = async (
   const header = [
     "Profile ID", "User ID", "Name", "Email", "Mobile", "City", "Country",
     "Origin", "Channel platform", "Channel handle", "Channel link", "Channel ID",
-    "Audience", "Verified", "Whitelist status", "Submitted at", "Days waiting",
-    "Platform allowlist", "Allowlist provider", "Allowlist reference", "Allowlisted at",
-    "Creator notified at", "Last action by", "Last action at",
+    "Audience", "Verified", "Whitelist status", "Submitted at (IST)", "Days waiting",
+    "Platform allowlist", "Allowlist provider", "Allowlist reference", "Allowlisted at (IST)",
+    "Creator notified at (IST)", "Last action by", "Last action at (IST)",
     "Plan code", "Plan name", "Subscription status", "Subscription live now",
-    "Channels allowed per platform", "Period end", "Subscribed at",
+    "Channels allowed per platform", "Period end (IST)", "Subscribed at (IST)",
   ];
 
   return [
@@ -74,8 +88,8 @@ export const exportClaimsCsvService = async (f: ClaimFilters): Promise<string> =
 
   const header = [
     "Claim ID", "User ID", "Name", "Reply email", "Account email", "Mobile",
-    "Origin", "Video platform", "Video URL", "Status", "Submitted at", "Days waiting",
-    "Creator notified at", "Last action by", "Last action at", "Last note",
+    "Origin", "Video platform", "Video URL", "Status", "Submitted at (IST)", "Days waiting",
+    "Creator notified at (IST)", "Last action by", "Last action at (IST)", "Last note",
     "Plan code", "Plan name", "Subscription status", "Subscription live now",
   ];
 
