@@ -29,6 +29,30 @@ const subscription = Joi.string().valid("active", "inactive").empty("").optional
 const origin = Joi.string().valid(...ORIGINS).empty("").optional();
 const minAgeDays = Joi.number().integer().min(0).max(3650).empty("").optional();
 
+// Submission-date window, as **inclusive IST calendar days** (YYYY-MM-DD) — the
+// same convention as admin-native-analytics.validation and
+// admin-enterprise-analytics.validation, so an operator moving between the
+// dashboards never has to ask which timezone a date box means. The IST → UTC
+// boundary arithmetic lives in SQL (see the WHERE in channels.service.ts), not
+// here: the day is what the operator picked, and the instant is the database's
+// business.
+//
+// Both ends are independent and optional. "Everything since 1 Aug" is a real
+// question, and so is "everything up to the migration" — neither should require
+// inventing the other end. Ordering is deliberately NOT cross-validated: an
+// inverted range matches nothing and reads as an empty queue, which is what the
+// UI already shows for any filter combination with no rows.
+const dateField = Joi.string()
+  .pattern(/^\d{4}-\d{2}-\d{2}$/)
+  .empty("")
+  .optional()
+  .message("dates must be YYYY-MM-DD (IST calendar day)");
+
+const dateRange = {
+  startDate: dateField,
+  endDate: dateField,
+};
+
 const paging = {
   page: Joi.number().integer().min(1).default(1),
   pageSize: Joi.number().integer().min(1).max(200).default(50),
@@ -43,6 +67,7 @@ export const channelListQuerySchema = Joi.object({
   subscription,
   search,
   minAgeDays,
+  ...dateRange,
   sortBy: Joi.string()
     .valid("submittedAt", "connectedAt", "audience", "subscribedAt")
     .default("submittedAt"),
@@ -65,6 +90,7 @@ export const claimListQuerySchema = Joi.object({
   subscription,
   search,
   minAgeDays,
+  ...dateRange,
   sortBy: Joi.string().valid("createdAt", "updatedAt").default("createdAt"),
   ...paging,
 });
