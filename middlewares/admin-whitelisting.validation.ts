@@ -46,7 +46,9 @@ const dateField = Joi.string()
   .pattern(/^\d{4}-\d{2}-\d{2}$/)
   .empty("")
   .optional()
-  .message("dates must be YYYY-MM-DD (IST calendar day)");
+  .messages({
+    "string.pattern.base": "dates must be YYYY-MM-DD (IST calendar day)",
+  });
 
 const dateRange = {
   startDate: dateField,
