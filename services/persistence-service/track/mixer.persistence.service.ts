@@ -1,4 +1,3 @@
-import { TokenAssignedModel } from "../token/schemas/modules.export";
 import { CreatorMixerDownloadModel } from "./schemas/creator-mixer-download.schema";
 
 /**
@@ -11,12 +10,6 @@ import { CreatorMixerDownloadModel } from "./schemas/creator-mixer-download.sche
  * relying on a fact this table does not state. See
  * scripts/migration-add-mixer-platform.sql.
  */
-
-/**
- * The token pack `type`, normalised, that entitles a brand to the mixer.
- * Compared case/space-insensitively because the stored spelling varies.
- */
-export const ORIGINALS_TOKEN_TYPE = "hoopr originals";
 
 /**
  * The platform value every row written from this service carries.
@@ -158,36 +151,6 @@ export const isUniqueViolation = (cause: unknown): boolean => {
     err.original?.code === "23505" ||
     err.parent?.code === "23505"
   );
-};
-
-/**
- * The brand's UNLIMITED "Hoopr Originals" token allocation, if it has one.
- *
- * This is the mixer's entitlement gate: rendering a mix is only open to brands
- * holding an unlimited Originals allocation, not to brands buying Originals
- * licences a pack at a time. A finite allocation deliberately does NOT qualify,
- * however large its balance.
- *
- * Matched case/space-insensitively, the same way the analytics rollups match
- * this pack type (`analytics-shared.ts`), and the row's EXACT stored `type` is
- * returned because `deductTokenAssignedByType` matches it literally.
- *
- * `expiryDate` is not filtered on, deliberately: no other deduction path in
- * this service enforces it, and a gate stricter than the charge it guards would
- * refuse brands that `licenseTrackService` would happily charge.
- */
-export const findUnlimitedOriginalsAllocation = async (
-  brandId: number,
-): Promise<{ id: number; type: string } | null> => {
-  const rows = await TokenAssignedModel.findAll({
-    where: { brandId, isUnlimited: true },
-    attributes: ["id", "type"],
-    order: [["createdAt", "ASC"]],
-  });
-  const match = rows.find(
-    (r) => (r.type ?? "").trim().toLowerCase() === ORIGINALS_TOKEN_TYPE,
-  );
-  return match ? { id: match.id, type: match.type as string } : null;
 };
 
 /**

@@ -25,7 +25,6 @@ import {
   demoteMissingMix,
   findMixById,
   findReadyMixByRecipe,
-  findUnlimitedOriginalsAllocation,
   isUniqueViolation,
   listMixesForUser,
   markMixFailed,
@@ -54,21 +53,23 @@ import { isSfxTrackType } from "../../dto-service/modules.export";
  *
  * WHAT IS DIFFERENT HERE, and why:
  *
- *  1. ENTITLEMENT. NATIVE-BE gates on an active paid CREATOR subscription. No
- *     enterprise brand holds one of those, so porting that check verbatim would
- *     refuse every caller. The enterprise gate is an UNLIMITED "Hoopr Originals"
- *     token allocation: the mixer is a feature of that deal, not something a
- *     brand buys a pack at a time.
+ *  1. NO ENTITLEMENT GATE. NATIVE-BE gates on an active paid CREATOR
+ *     subscription; no enterprise brand holds one, so porting that check
+ *     verbatim would refuse every caller. Nothing replaces it: any brand user
+ *     may render, and the token charge below is what makes a mix cost
+ *     something — the same shape as a track download, which is also open to
+ *     any brand user and priced by its deduction.
  *
  *  2. TOKENS. A render charges one token, through the same
- *     `deductTokenAssignedByType` a track licence charges. Because the gate
- *     already requires an unlimited allocation the balance never actually
- *     moves — but the deduction still writes its audit row, so a mix is
- *     traceable to a licence exactly like a download is.
+ *     `deductTokenAssignedByType` a track licence charges, against the pack
+ *     matching the track's owner type. An unlimited pack moves no balance but
+ *     still writes its audit row; a finite one decrements. A brand with no
+ *     matching pack is NOT refused — see the deduction-failure branch, which
+ *     documents where that check would go if it is ever wanted.
  *
- *  3. CATALOGUE SCOPE. Only Hoopr Originals tracks can be mixed. That follows
- *     from the token type rather than being a second rule: an Originals
- *     allocation cannot pay for a Chartbusters master.
+ *  3. CATALOGUE SCOPE. Only Hoopr Originals masters can be remixed. This is a
+ *     RIGHTS rule and stands on its own — it did not come from the token gate
+ *     and did not go away with it.
  */
 
 const CONTENT_TYPE: Record<string, string> = {
@@ -76,7 +77,15 @@ const CONTENT_TYPE: Record<string, string> = {
   mp3: "audio/mpeg",
 };
 
-/** One render, one token — the same unit price a track licence pays. */
+/**
+ * One render, one token — the same unit price a track licence pays.
+ *
+ * Charged AFTER the render succeeds: charging first would bill for a failed
+ * ffmpeg run, and charging on a deduplicated reuse would bill twice for one
+ * artifact. The consequence is that a brand with no credit still gets the mix
+ * (logged, uncharged); moving the check before the render is the deliberate
+ * change to make if that is ever unacceptable.
+ */
 const TOKEN_COST_PER_MIX = 1;
 
 /** Owner `type` whose catalogue the Originals allocation covers. */
@@ -133,7 +142,11 @@ export interface MixResult {
   /** false when an identical render already existed and was reused. */
   rendered: boolean;
   expiresAt: Date;
-  /** Tokens left on the allocation; 0 for the unlimited grants this gate requires. */
+  /**
+   * Tokens left on the pack that was charged. Meaningful for a finite pack;
+   * always 0 alongside `unlimitedTokens: true` for an unlimited one, and 0 when
+   * nothing could be charged at all.
+   */
   remainingTokens: number;
   unlimitedTokens?: true;
 }
@@ -232,13 +245,10 @@ export const createMixService = async (
   }
   const brandId = user.brandId;
 
-  const allocation = await findUnlimitedOriginalsAllocation(brandId);
-  if (!allocation) {
-    throw new AppError(
-      "The mixer is available on unlimited Hoopr Originals plans. Please contact your administrator.",
-      403,
-    );
-  }
+  // No entitlement gate. Any brand user may render; the charge below is what
+  // makes a mix cost something, exactly as it is for a track download. There is
+  // deliberately no "unlimited plan only" check here — see the note on
+  // TOKEN_COST_PER_MIX.
 
   // ── What are they mixing ─────────────────────────────────────────────────
   const format = input.format ?? defaultFormat();
@@ -249,10 +259,17 @@ export const createMixService = async (
     throw new AppError("SFX tracks have no stems to mix.", 400);
   }
 
-  // The allocation pays for Originals, so it cannot pay for anything else. This
-  // is the same money rule licenseTrackService applies when it matches a token
-  // type to a track's owners, stated directly because the mixer has only one
-  // eligible type.
+  // The track's owner type is BOTH the rights rule and the billing key.
+  //
+  // Rights: only Hoopr Originals masters may be remixed. That restriction long
+  // predates the token gate that used to sit above and does not fall with it —
+  // the other stem-bearing catalogue (International, Chartbusters, Regional &
+  // Indie) is licensed to us for distribution, not for re-cutting.
+  //
+  // Billing: the owner type IS the token pack type, which is how
+  // licenseTrackService picks what to charge. Taking it from the track rather
+  // than from a pre-selected allocation means the deduction below charges the
+  // pack that actually covers this master.
   const ownerIds: string[] = (track.ownerId as string[] | null) ?? [];
   const owners = ownerIds.length
     ? await OwnerModel.findAll({
@@ -393,18 +410,22 @@ export const createMixService = async (
   // failed ffmpeg run; charging on reuse would bill twice for one artifact.
   const deduction = await deductTokenAssignedByType(
     brandId,
-    allocation.type,
+    originalsOwner.type as string,
     TOKEN_COST_PER_MIX,
     originalsOwner.id,
     TokenDeductionReason.LICENSE_PURCHASE,
     licenseId ?? undefined,
   );
   if (!deduction.success) {
-    // Not fatal. The gate already established an unlimited allocation, so this
-    // can only be a write that failed, and withholding a rendered mix over a
-    // missing audit row helps nobody. Logged loudly instead.
+    // Reachable now that nothing is checked up front: the brand may hold no
+    // Hoopr Originals pack, or a finite one that has run dry. The mix is
+    // already rendered and paid for in CPU, and withholding it here would
+    // charge the user an error for our own ordering choice — so it is served
+    // and the miss is logged for reconciliation. If mixes should instead be
+    // refused without credit, the check belongs BEFORE the render, not here.
     logger.error(
-      `[Mixer] Token deduction failed for brand ${brandId} on mix ${row.id} — mix served anyway`,
+      `[Mixer] Token deduction failed for brand ${brandId} on mix ${row.id} ` +
+        `(type "${originalsOwner.type}") — mix served anyway, not charged`,
     );
   } else if (deduction.tokenAssignedId && licenseId) {
     // Same write-back licenseTrackService does: the licence records WHICH
