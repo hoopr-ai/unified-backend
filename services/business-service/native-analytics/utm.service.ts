@@ -36,17 +36,14 @@
 // visitor id (the httpOnly `hoopr_vid` cookie) is the only thing that spans
 // both, so:
 //
-//   1. `first_touch` — visitors whose FIRST EVER session falls in the window,
-//      and the UTMs that session carried.
+//   1. `first_touch`  — each visitor's earliest session ever, and its UTMs.
 //   2. `visitor_user`  — the first account each visitor ever became.
 //   3. the account inherits the campaign that first brought the browser here.
 //
-// "First ever" is not the same as "first in the window", and the difference is
-// where first-touch attribution usually goes quietly wrong: a returning visitor
-// whose earliest session predates the window must NOT count as a fresh first
-// touch. That is enforced by the `NOT EXISTS` prior-session check rather than by
-// scanning all history — see `attributionCtes` for why that formulation is the
-// one the indexes can actually answer.
+// The CTEs are unbounded on purpose; the date window is applied AFTERWARDS, to
+// the first-touch row. Clipping them to the window would make a returning
+// visitor look like a fresh first touch — and, measured, is also 87× slower on
+// short ranges. See `attributionCtes`.
 //
 // ── POPULATION ──────────────────────────────────────────────────────────────
 //
@@ -270,27 +267,34 @@ const creatorScope = (alias = "s"): string => `
 /**
  * The attribution CTEs, shared by every outcome query in this file.
  *
- * ── WHY first_touch IS WINDOWED RATHER THAN GLOBAL ──────────────────────────
+ * ── first_touch IS GLOBAL, AND MUST STAY GLOBAL ─────────────────────────────
  *
- * The obvious way to write "each visitor's first ever session" is a global
- * `DISTINCT ON (visitorId) ... ORDER BY visitorId, startedAt`. That was the
- * first version of this, and it was too slow to use.
+ * One `DISTINCT ON (visitorId) ... ORDER BY visitorId, startedAt` over the whole
+ * table, with the date window applied AFTERWARDS to the resulting row.
  *
- * The reason is in the DDL: `native_sessions_visitor_idx` is
- * `("visitorId", "startedAt" DESC)`. A DESC index cannot serve an ASC ordering
- * — scanning it backwards yields (visitorId DESC, startedAt ASC), which is not
- * what DISTINCT ON needs — so Postgres had to sort all ~900k rows, on every
- * request, four times over on the Overview alone.
+ * This looks wasteful and is not. It was rewritten once into what seemed like
+ * the obviously better form — scan only the window, then use `NOT EXISTS` to
+ * rule out visitors with an earlier session — and that version was catastrophic
+ * for exactly the ranges people use most:
  *
- * The rewrite states the same thing in a form the indexes can answer: a
- * visitor's first touch is in the window IFF they have a session in the window
- * AND no session before it. So scan only the window (`native_sessions_started_idx`,
- * a few tens of thousands of rows), then probe the visitor index once per
- * candidate to rule out an earlier session. The sort that remains is over the
- * window, not over the table.
+ *     window     global      windowed + NOT EXISTS
+ *     30 days    2,471 ms    2,518 ms
+ *      2 days    2,007 ms  175,056 ms      ← 87× worse
  *
- * `NOT EXISTS` rather than a LEFT JOIN ... IS NULL: it short-circuits on the
- * first prior session found, which for a returning visitor is immediate.
+ * The narrower the window, the worse it got, because the `NOT EXISTS` probe has
+ * to run once per candidate session and the planner would not drive it from
+ * `("visitorId", "startedAt")` — it read a huge `startedAt <` index range per
+ * row instead. A short range is the "Today" and "Last 7 days" chips, i.e. the
+ * default way this dashboard gets used.
+ *
+ * The global form, by contrast, is FLAT in the window size: ~2s whether you ask
+ * for two days or thirty, because the work is one ordered pass either way.
+ * Predictable and mediocre beats fast-sometimes and unusable-otherwise.
+ *
+ * If you want this genuinely faster, the answer is not a cleverer predicate —
+ * it is materialising first-touch per visitor into its own table and
+ * maintaining it on write. Do not try to out-clever the planner here again
+ * without benchmarking BOTH a wide and a narrow window.
  *
  * ── visitor_user IS A CTE, NOT A LATERAL ────────────────────────────────────
  *
@@ -322,16 +326,7 @@ const attributionCtes = (f: UtmFilters): string => `
            ${CHANNEL_SQL} AS channel
       FROM native_sessions s
      WHERE NOT s."isBot"
-       AND s."startedAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
-       AND s."startedAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'
        ${creatorScope("s")}
-       AND NOT EXISTS (
-         SELECT 1
-           FROM native_sessions prior
-          WHERE prior."visitorId" = s."visitorId"
-            AND NOT prior."isBot"
-            AND prior."startedAt" < ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
-       )
      ORDER BY s."visitorId", s."startedAt"
   ),
   visitor_user AS (
@@ -372,19 +367,26 @@ const VISITOR_USER_JOIN = `
   LEFT JOIN live_subs ls    ON ls.uid = vu."userId"`;
 
 /**
- * The filter predicate applied to a first-touch row.
+ * The window + filter predicate applied to a first-touch row.
  *
- * The DATE WINDOW is no longer here — it moved inside the CTE, which is what
- * makes the query fast. What remains is the dimension narrowing, which cannot
- * move: it has to apply after the first touch has been picked, or filtering by
- * campaign would change WHICH session counts as the first touch.
+ * The DATE WINDOW BELONGS HERE, after the CTE has picked each visitor's
+ * earliest session — not inside it. Pushing it down looks like an optimisation
+ * and is both a correctness trap (a returning visitor's first in-window session
+ * is not their first touch) and, measured, an 87× slowdown on short ranges. See
+ * the note on `attributionCtes`.
+ *
+ * The dimension narrowing has to be here for the correctness half of that same
+ * reason: filtering by campaign before the first touch is chosen would change
+ * WHICH session counts as the first touch.
  *
  * `isBot` is not repeated — the CTE excluded bots when it picked the first
  * touch, and re-testing it here would be a no-op that reads like a second,
  * different rule.
  */
 const firstTouchWhere = (f: UtmFilters): string => `
-  (CAST(:userPlatform AS text) IS NULL OR COALESCE(ft."userPlatform", 'UNKNOWN') = :userPlatform)
+  ft."startedAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
+  AND ft."startedAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'
+  AND (CAST(:userPlatform AS text) IS NULL OR COALESCE(ft."userPlatform", 'UNKNOWN') = :userPlatform)
   AND (CAST(:clientType AS text) IS NULL OR COALESCE(ft."clientType", 'UNKNOWN') = :clientType)
   AND (CAST(:os AS text) IS NULL OR COALESCE(ft.os, 'UNKNOWN') = :os)
   ${utmWhere(f, "ft")}`;
