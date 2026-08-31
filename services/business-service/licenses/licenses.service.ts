@@ -34,6 +34,7 @@ import { Op, literal } from "sequelize";
 import {
   AppError,
   generateGCSSignedUrl,
+  getGCSObjectWithMetadata,
   uploadBufferToGCS,
   getGCSSignedUrl,
   generateLicensePdf,
@@ -41,6 +42,7 @@ import {
   sendLowCreditsAlertEmail,
 } from "../../helper-service/modules.export";
 import { logger } from "../../helper-service/logger";
+import { findMixByLicenseId } from "../../persistence-service/track/mixer.persistence.service";
 import {
   buildStemBundle,
   readCachedStemBundle,
@@ -631,6 +633,40 @@ export const downloadTrackService = async (
   const track = license.track;
   if (!track) {
     throw new AppError("Track associated with license not found", 404);
+  }
+
+  // A MIX licence resolves to the rendered mix, not to the track master.
+  //
+  // Checked before the mp3Link guard below on purpose: a mix is an object this
+  // service wrote into SELECT_BUCKET, so whether the CATALOGUE row has an
+  // mp3Link says nothing about whether the mix is downloadable — and the guard
+  // would reject a perfectly good mix of a track whose master link is missing.
+  //
+  // The mix is signed with its own stored filename so the browser saves
+  // "<Track>_<stems>.wav" rather than the track's name, and `includeStems` is
+  // ignored: a mix IS a combination of stems, and the stem bundle is a
+  // different deliverable the brand can ask for against a track licence.
+  if ((license.type ?? "").toLowerCase() === "mix") {
+    const mix = await findMixByLicenseId(license.id);
+    if (!mix?.gcsPath) {
+      throw new AppError("Mix file is no longer available.", 404);
+    }
+    const format = mix.format ?? "wav";
+    const signed = await getGCSObjectWithMetadata({
+      gcsPath: mix.gcsPath,
+      contentType: format === "mp3" ? "audio/mpeg" : "audio/wav",
+      downloadName: mix.fileName ?? `mix.${format}`,
+    });
+    if (!signed) {
+      throw new AppError("Mix file is no longer available.", 404);
+    }
+    return {
+      status: "ready",
+      downloadLink: signed.downloadLink,
+      trackId: track.id,
+      trackName: track.name || "",
+      sizeBytes: signed.sizeBytes,
+    };
   }
 
   // SFX audio lives in the stream-source bucket and has no mp3Link on the track row

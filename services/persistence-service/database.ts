@@ -17,6 +17,7 @@ import {
   FeaturedTracksModel,
   ChartTrackModel,
   CreatorStemModel,
+  CreatorMixerDownloadModel,
 } from "./track/modules.export";
 import { AlbumModel } from "./albums/modules.export";
 import {
@@ -188,6 +189,7 @@ sequelize.addModels([
   MonitoredUrlModel,
   MonitorCheckModel,
   CreatorStemModel,
+  CreatorMixerDownloadModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
