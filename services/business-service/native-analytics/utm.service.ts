@@ -36,19 +36,24 @@
 // visitor id (the httpOnly `hoopr_vid` cookie) is the only thing that spans
 // both, so:
 //
-//   1. `first_touch`  — each visitor's earliest session ever, and its UTMs.
-//   2. `visitor_user` — the first account that visitor ever became.
-//   3. join, and the account inherits the campaign that first brought the
-//      browser here.
+//   1. `first_touch` — visitors whose FIRST EVER session falls in the window,
+//      and the UTMs that session carried.
+//   2. `visitor_user`  — the first account each visitor ever became.
+//   3. the account inherits the campaign that first brought the browser here.
 //
-// Both CTEs are unbounded on purpose: clipping them to the window would make a
-// visitor whose first session predates the window look like a fresh first
-// touch, which is how first-touch attribution most often gets silently wrong.
-// The window is applied AFTER, to the first-touch row itself.
+// "First ever" is not the same as "first in the window", and the difference is
+// where first-touch attribution usually goes quietly wrong: a returning visitor
+// whose earliest session predates the window must NOT count as a fresh first
+// touch. That is enforced by the `NOT EXISTS` prior-session check rather than by
+// scanning all history — see `attributionCtes` for why that formulation is the
+// one the indexes can actually answer.
 //
-// Cost: one index-only pass of `native_sessions_visitor_idx` per query. At
-// ~900k sessions that is well inside what an internal dashboard can pay, and it
-// is why these endpoints are not on the hot path for anything.
+// ── POPULATION ──────────────────────────────────────────────────────────────
+//
+// CREATOR surface only, via `creatorScope`. Note that this KEEPS anonymous
+// sessions (`userPlatform IS NULL`) — filtering on `= 'CREATOR'` would throw
+// away 96.6% of campaign traffic, because a UTM arrives before the visitor is
+// anyone. The docstring on `creatorScope` has the numbers.
 //
 // ── MONEY ───────────────────────────────────────────────────────────────────
 //
@@ -238,18 +243,76 @@ const utmBinds = (f: UtmFilters): Record<string, unknown> => ({
 });
 
 /**
+ * Restricts the population to the CREATOR surface.
+ *
+ * `native_sessions` is written only by creator-web and creator-mobile, so it is
+ * already almost entirely creator traffic — but not quite: 7 sessions on prod
+ * carry `userPlatform = 'ENTERPRISE'` (an enterprise user who happened to open
+ * a creator page). This excludes them, so the dashboard means what its title
+ * says rather than being creator-only by accident.
+ *
+ * NULL IS KEPT, and that is the whole point of writing it this way rather than
+ * as `= 'CREATOR'`. `userPlatform` is copied from the user record when the
+ * session is stitched to an account, so it is NULL for every ANONYMOUS session
+ * — and a UTM by definition lands on an anonymous first visit, before the
+ * visitor is anyone at all. On prod, 1,776 of the 1,839 sessions carrying a
+ * utm_source have `userPlatform IS NULL`. A plain `= 'CREATOR'` filter would
+ * therefore discard 96.6% of all campaign traffic and leave this dashboard
+ * reporting on 63 sessions.
+ *
+ * Both spellings are accepted because the raw table stores 'CREATOR' while the
+ * rollups (and `normalizePlatform`) use the older 'SOUND_TRACKING_APP'.
+ */
+const creatorScope = (alias = "s"): string => `
+  AND (${alias}."userPlatform" IS NULL
+       OR ${alias}."userPlatform" IN ('CREATOR', 'SOUND_TRACKING_APP'))`;
+
+/**
  * The attribution CTEs, shared by every outcome query in this file.
  *
- * `DISTINCT ON` rather than a window function: Postgres can satisfy both of
- * these straight off `native_sessions_visitor_idx (visitorId, startedAt)`
- * without a sort, which is the difference between this dashboard loading and
- * this dashboard timing out.
+ * ── WHY first_touch IS WINDOWED RATHER THAN GLOBAL ──────────────────────────
  *
- * `paid_tx` and `live_subs` are aggregated ONCE here and joined by user, not
- * computed per row: the alternative is a correlated subquery that re-scans
+ * The obvious way to write "each visitor's first ever session" is a global
+ * `DISTINCT ON (visitorId) ... ORDER BY visitorId, startedAt`. That was the
+ * first version of this, and it was too slow to use.
+ *
+ * The reason is in the DDL: `native_sessions_visitor_idx` is
+ * `("visitorId", "startedAt" DESC)`. A DESC index cannot serve an ASC ordering
+ * — scanning it backwards yields (visitorId DESC, startedAt ASC), which is not
+ * what DISTINCT ON needs — so Postgres had to sort all ~900k rows, on every
+ * request, four times over on the Overview alone.
+ *
+ * The rewrite states the same thing in a form the indexes can answer: a
+ * visitor's first touch is in the window IFF they have a session in the window
+ * AND no session before it. So scan only the window (`native_sessions_started_idx`,
+ * a few tens of thousands of rows), then probe the visitor index once per
+ * candidate to rule out an earlier session. The sort that remains is over the
+ * window, not over the table.
+ *
+ * `NOT EXISTS` rather than a LEFT JOIN ... IS NULL: it short-circuits on the
+ * first prior session found, which for a returning visitor is immediate.
+ *
+ * ── visitor_user IS A CTE, NOT A LATERAL ────────────────────────────────────
+ *
+ * This one was written as a LATERAL first, on the reasoning that one index seek
+ * per first-touch row beats materialising every identified visitor in the
+ * table. Measured on prod, that reasoning was wrong and the difference is not
+ * small: LATERAL 10.4s, CTE + hash join 4.1s, identical results.
+ *
+ * The reason is the row counts. `first_touch` over a full window is ~722k rows,
+ * so the LATERAL pays 722k index probes; the CTE materialises only the ~117k
+ * IDENTIFIED sessions (13% of the table) and the hash join then costs one pass.
+ * The seek-per-row shape only wins when the driving side is small, and here it
+ * is the largest thing in the query.
+ *
+ * If you are tempted to switch this back, benchmark it first — the intuition
+ * genuinely points the wrong way.
+ *
+ * `paid_tx` and `live_subs` are aggregate CTEs for a related reason: they are
+ * small tables, and the alternative is a correlated subquery re-scanning
  * `transactions` for every campaign in the table.
  */
-const ATTRIBUTION_CTES = `
+const attributionCtes = (f: UtmFilters): string => `
   first_touch AS (
     SELECT DISTINCT ON (s."visitorId")
            s."visitorId", s."startedAt", s."userPlatform", s."clientType", s.os,
@@ -259,6 +322,16 @@ const ATTRIBUTION_CTES = `
            ${CHANNEL_SQL} AS channel
       FROM native_sessions s
      WHERE NOT s."isBot"
+       AND s."startedAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
+       AND s."startedAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'
+       ${creatorScope("s")}
+       AND NOT EXISTS (
+         SELECT 1
+           FROM native_sessions prior
+          WHERE prior."visitorId" = s."visitorId"
+            AND NOT prior."isBot"
+            AND prior."startedAt" < ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
+       )
      ORDER BY s."visitorId", s."startedAt"
   ),
   visitor_user AS (
@@ -287,17 +360,31 @@ const ATTRIBUTION_CTES = `
   )`;
 
 /**
- * The window + filter predicate applied to a first-touch row.
+ * The join that resolves a first-touch visitor to the account they became.
  *
- * Mirrors `sessionWhere` but against the `first_touch` CTE, whose columns are
- * already un-aliased. `isBot` is not repeated — the CTE excluded bots when it
- * picked the first touch, and re-testing it here would be a no-op that reads
- * like a second, different rule.
+ * Written once here because it appears in every outcome query and must stay
+ * identical in all of them — a second copy that drifted would give two
+ * different signup counts on two pages of the same dashboard.
+ */
+const VISITOR_USER_JOIN = `
+  LEFT JOIN visitor_user vu ON vu."visitorId" = ft."visitorId"
+  LEFT JOIN paid_tx px      ON px.uid = vu."userId"
+  LEFT JOIN live_subs ls    ON ls.uid = vu."userId"`;
+
+/**
+ * The filter predicate applied to a first-touch row.
+ *
+ * The DATE WINDOW is no longer here — it moved inside the CTE, which is what
+ * makes the query fast. What remains is the dimension narrowing, which cannot
+ * move: it has to apply after the first touch has been picked, or filtering by
+ * campaign would change WHICH session counts as the first touch.
+ *
+ * `isBot` is not repeated — the CTE excluded bots when it picked the first
+ * touch, and re-testing it here would be a no-op that reads like a second,
+ * different rule.
  */
 const firstTouchWhere = (f: UtmFilters): string => `
-  ft."startedAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
-  AND ft."startedAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'
-  AND (CAST(:userPlatform AS text) IS NULL OR COALESCE(ft."userPlatform", 'UNKNOWN') = :userPlatform)
+  (CAST(:userPlatform AS text) IS NULL OR COALESCE(ft."userPlatform", 'UNKNOWN') = :userPlatform)
   AND (CAST(:clientType AS text) IS NULL OR COALESCE(ft."clientType", 'UNKNOWN') = :clientType)
   AND (CAST(:os AS text) IS NULL OR COALESCE(ft.os, 'UNKNOWN') = :os)
   ${utmWhere(f, "ft")}`;
@@ -332,20 +419,18 @@ export const getUtmOverviewService = async (f: UtmFilters) => {
            count(*) FILTER (WHERE s."endedAt" IS NOT NULL)           AS closed,
            COALESCE(avg(s."durationSeconds"), 0)                     AS avg_duration
       FROM native_sessions s
-     WHERE ${sessionWhere("s")} ${utmWhere(f)}`;
+     WHERE ${sessionWhere("s")} ${creatorScope("s")} ${utmWhere(f)}`;
 
   // Outcomes for the visitors first touched in this window, tagged or not.
   const outcomeSql = `
-    WITH ${ATTRIBUTION_CTES}
+    WITH ${attributionCtes(f)}
     SELECT count(*)                                                  AS first_touches,
            count(vu."userId")                                        AS signups,
            count(*) FILTER (WHERE ls.live > 0)                       AS subscribers,
            COALESCE(sum(px.collected), 0)                            AS revenue,
            COALESCE(sum(ls.mrr), 0)                                  AS mrr
       FROM first_touch ft
-      LEFT JOIN visitor_user vu ON vu."visitorId" = ft."visitorId"
-      LEFT JOIN paid_tx px      ON px.uid = vu."userId"
-      LEFT JOIN live_subs ls    ON ls.uid = vu."userId"
+      ${VISITOR_USER_JOIN}
      WHERE ${firstTouchWhere(f)}`;
 
   const channelSql = `
@@ -354,7 +439,7 @@ export const getUtmOverviewService = async (f: UtmFilters) => {
            count(DISTINCT s."visitorId")      AS visitors,
            count(*) FILTER (WHERE s."userId" IS NOT NULL) AS identified
       FROM native_sessions s
-     WHERE ${sessionWhere("s")} ${utmWhere(f)}
+     WHERE ${sessionWhere("s")} ${creatorScope("s")} ${utmWhere(f)}
      GROUP BY 1
      ORDER BY sessions DESC`;
 
@@ -451,7 +536,7 @@ export const getUtmBreakdownService = async (f: UtmFilters) => {
     key === "channel" ? "ft.channel" : dim.sql.replace(/\bs\./g, "ft.");
 
   const rows = await q<Record<string, unknown>>(
-    `WITH ${ATTRIBUTION_CTES},
+    `WITH ${attributionCtes(f)},
      traffic AS (
        SELECT ${dim.sql}                                       AS value,
               count(*)                                         AS sessions,
@@ -463,7 +548,7 @@ export const getUtmBreakdownService = async (f: UtmFilters) => {
               COALESCE(avg(s."pageViewCount"), 0)              AS avg_pages,
               max(s."startedAt")                               AS last_seen
          FROM native_sessions s
-        WHERE ${sessionWhere("s")} ${utmWhere(f)}
+        WHERE ${sessionWhere("s")} ${creatorScope("s")} ${utmWhere(f)}
         GROUP BY 1
      ),
      outcomes AS (
@@ -475,9 +560,7 @@ export const getUtmBreakdownService = async (f: UtmFilters) => {
               COALESCE(sum(px.collected), 0)                   AS revenue,
               COALESCE(sum(ls.mrr), 0)                         AS mrr
          FROM first_touch ft
-         LEFT JOIN visitor_user vu ON vu."visitorId" = ft."visitorId"
-         LEFT JOIN paid_tx px      ON px.uid = vu."userId"
-         LEFT JOIN live_subs ls    ON ls.uid = vu."userId"
+         ${VISITOR_USER_JOIN}
         WHERE ${firstTouchWhere(f)}
         GROUP BY 1
      )
@@ -578,7 +661,7 @@ export const getUtmTimeseriesService = async (f: UtmFilters) => {
   const top = await q<Record<string, unknown>>(
     `SELECT ${dim.sql} AS value, count(*) AS sessions
        FROM native_sessions s
-      WHERE ${sessionWhere("s")} ${utmWhere(f)}
+      WHERE ${sessionWhere("s")} ${creatorScope("s")} ${utmWhere(f)}
       GROUP BY 1
       ORDER BY sessions DESC
       LIMIT ${topN}`,
@@ -600,7 +683,7 @@ export const getUtmTimeseriesService = async (f: UtmFilters) => {
             count(DISTINCT s."visitorId") AS visitors,
             count(*) FILTER (WHERE s."userId" IS NOT NULL) AS identified
        FROM native_sessions s
-      WHERE ${sessionWhere("s")} ${utmWhere(f)}
+      WHERE ${sessionWhere("s")} ${creatorScope("s")} ${utmWhere(f)}
       GROUP BY 1, 2
       ORDER BY 1`,
     { ...binds, topKeys: keys },
@@ -640,7 +723,7 @@ export const getUtmTimeseriesService = async (f: UtmFilters) => {
  */
 export const getUtmDetailService = async (f: UtmFilters) => {
   const binds = utmBinds(f);
-  const where = `${sessionWhere("s")} ${utmWhere(f)}`;
+  const where = `${sessionWhere("s")} ${creatorScope("s")} ${utmWhere(f)}`;
 
   const group = async (expression: string, limit = 25) =>
     q<Record<string, unknown>>(
@@ -750,7 +833,7 @@ export const getUtmDetailService = async (f: UtmFilters) => {
  */
 export const getUtmHygieneService = async (f: UtmFilters) => {
   const binds = utmBinds(f);
-  const where = `${sessionWhere("s")} ${utmWhere(f)}`;
+  const where = `${sessionWhere("s")} ${creatorScope("s")} ${utmWhere(f)}`;
 
   const [issues, caseVariants, mediumValues] = await Promise.all([
     q<Record<string, unknown>>(
@@ -940,7 +1023,8 @@ export const getUtmValuesService = async (f: UtmFilters) => {
     q<Record<string, unknown>>(
       `SELECT s."${column}" AS value, count(*) AS sessions
          FROM native_sessions s
-        WHERE ${sessionWhere("s")} AND s."${column}" IS NOT NULL
+        WHERE ${sessionWhere("s")} ${creatorScope("s")}
+          AND s."${column}" IS NOT NULL
         GROUP BY 1
         ORDER BY sessions DESC
         LIMIT 200`,
