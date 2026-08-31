@@ -12,6 +12,8 @@ import {
   nativeSessionIdSchema,
   nativeVisitorIdSchema,
   nativeEmptyQuerySchema,
+  nativeUtmQuerySchema,
+  nativeUtmBreakdownQuerySchema,
 } from "../middlewares/admin-native-analytics.validation";
 import {
   getOverviewService,
@@ -28,8 +30,15 @@ import {
   getSessionDetailService,
   getVisitorSessionsService,
   getFilterOptionsService,
+  getUtmOverviewService,
+  getUtmBreakdownService,
+  getUtmTimeseriesService,
+  getUtmDetailService,
+  getUtmHygieneService,
+  getUtmValuesService,
   type NativeFilters,
   type SessionListFilters,
+  type UtmFilters,
 } from "../services/business-service/native-analytics/modules.export";
 
 // Read-only endpoints backing the internal-fe "Native Analytics" dashboard.
@@ -161,5 +170,65 @@ export const getNativeFilterOptions = catchAsync(
     validate(nativeEmptyQuerySchema, req.query);
     const data = await getFilterOptionsService();
     return ok(res, data, "Filter options fetched successfully.");
+  },
+);
+
+// ─── UTM & campaign analytics ───────────────────────────────────────────────
+//
+// Same envelope and the same validate-then-delegate shape as everything above.
+// The only difference is the schema: these take the UTM narrowing (source /
+// medium / campaign / taggedOnly) and, on two of them, a `dimension`.
+
+/** The range + three filters + UTM narrowing, on every /utm/* endpoint. */
+const utmFiltersOf = (req: Request): UtmFilters =>
+  validate<UtmFilters>(nativeUtmQuerySchema, req.query);
+
+export const getNativeUtmOverview = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await getUtmOverviewService(utmFiltersOf(req));
+    return ok(res, data, "UTM overview fetched successfully.");
+  },
+);
+
+export const getNativeUtmBreakdown = catchAsync(
+  async (req: Request, res: Response) => {
+    const filters = validate<UtmFilters>(
+      nativeUtmBreakdownQuerySchema,
+      req.query,
+    );
+    const data = await getUtmBreakdownService(filters);
+    return ok(res, data, "UTM breakdown fetched successfully.");
+  },
+);
+
+export const getNativeUtmTimeseries = catchAsync(
+  async (req: Request, res: Response) => {
+    const filters = validate<UtmFilters>(
+      nativeUtmBreakdownQuerySchema,
+      req.query,
+    );
+    const data = await getUtmTimeseriesService(filters);
+    return ok(res, data, "UTM timeseries fetched successfully.");
+  },
+);
+
+export const getNativeUtmDetail = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await getUtmDetailService(utmFiltersOf(req));
+    return ok(res, data, "Campaign detail fetched successfully.");
+  },
+);
+
+export const getNativeUtmHygiene = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await getUtmHygieneService(utmFiltersOf(req));
+    return ok(res, data, "UTM hygiene report fetched successfully.");
+  },
+);
+
+export const getNativeUtmValues = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await getUtmValuesService(utmFiltersOf(req));
+    return ok(res, data, "UTM values fetched successfully.");
   },
 );

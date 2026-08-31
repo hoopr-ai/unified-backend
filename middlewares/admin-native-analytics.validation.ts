@@ -1,5 +1,6 @@
 import Joi from "joi";
 import { normalizePlatform } from "../services/dto-service/constants/modules.export";
+import { UTM_DIMENSIONS } from "../services/business-service/native-analytics/utm.service";
 
 // Every native-analytics endpoint is a read-only GET, so each schema validates a
 // query string. Dates are IST calendar days (YYYY-MM-DD), inclusive on both
@@ -51,6 +52,50 @@ const filters = {
 export const nativeRangeQuerySchema = Joi.object({
   ...defaultRange,
   ...filters,
+}).unknown(false);
+
+// ─── UTM & campaign analytics ───────────────────────────────────────────────
+
+/**
+ * The UTM narrowing every /utm/* endpoint accepts, on top of the range and the
+ * three shared filters.
+ *
+ * `dimension` is the ONE request value in this module that reaches SQL as
+ * structure rather than as a bind, so it is validated against the exact key set
+ * the service exports. The service looks it up in a fixed map and falls back to
+ * a default on a miss, so this is the outer of two locks — but it is the lock
+ * that returns a 400 instead of quietly grouping by something else.
+ *
+ * The utm* values are matched case-insensitively downstream, so `Google` and
+ * `google` both open the same drill-down.
+ */
+const utmFilters = {
+  utmSource: Joi.string().max(128).empty("").optional(),
+  utmMedium: Joi.string().max(128).empty("").optional(),
+  utmCampaign: Joi.string().max(128).empty("").optional(),
+  // Drops the untagged bulk — 99%+ of sessions on current data — so a campaign
+  // table isn't one enormous "(not set)" row and 20 real ones.
+  taggedOnly: Joi.boolean().default(false),
+};
+
+/** GET /admin/native-analytics/utm/overview and /utm/hygiene */
+export const nativeUtmQuerySchema = Joi.object({
+  ...defaultRange,
+  ...filters,
+  ...utmFilters,
+}).unknown(false);
+
+/** GET /admin/native-analytics/utm/breakdown and /utm/timeseries */
+export const nativeUtmBreakdownQuerySchema = Joi.object({
+  ...defaultRange,
+  ...filters,
+  ...utmFilters,
+  dimension: Joi.string()
+    .valid(...UTM_DIMENSIONS)
+    .default("sourceMedium"),
+  // 500 rows is already more than anyone reads; the response tells the UI when
+  // the tail was clipped so it can say so rather than imply completeness.
+  limit: Joi.number().integer().min(1).max(500).optional(),
 }).unknown(false);
 
 /** GET /admin/native-analytics/sessions */

@@ -3,3 +3,4 @@ export * from "./overview.service";
 export * from "./audience.service";
 export * from "./engagement.service";
 export * from "./sessions.service";
+export * from "./utm.service";
