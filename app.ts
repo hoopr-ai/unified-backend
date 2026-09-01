@@ -31,6 +31,7 @@ import adminSkuRoutes from "./routes/admin-sku.route";
 import adminOwnerRoutes from "./routes/admin-owner.route";
 import adminArtistRoutes from "./routes/admin-artist.route";
 import adminPayPerTrackRoutes from "./routes/admin-pay-per-track.route";
+import adminIprsRoutes from "./routes/admin-iprs.route";
 import adminEnterpriseAnalyticsRoutes from "./routes/admin-enterprise-analytics.route";
 import adminNativeAnalyticsRoutes from "./routes/admin-native-analytics.route";
 import internalLoginRoutes from "./routes/internal-login.route";
@@ -105,6 +106,7 @@ app.use("/admin/skus", adminSkuRoutes);
 app.use("/admin/owners", adminOwnerRoutes);
 app.use("/admin/artists", adminArtistRoutes);
 app.use("/admin/pay-per-track", adminPayPerTrackRoutes);
+app.use("/admin/iprs", adminIprsRoutes);
 app.use("/admin/enterprise-analytics", adminEnterpriseAnalyticsRoutes);
 // Session/event analytics over the data NATIVE-BE records for creator-web and
 // creator-mobile (same shared DB, so no service hop).
