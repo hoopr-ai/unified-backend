@@ -100,4 +100,7 @@ export const enum ResponseMessages {
   DeleteRailSuccess = "Rail deleted successfully",
   EditRailItemsSuccess = "Rail items updated successfully",
   ReorderRailsSuccess = "Rails reordered successfully",
+  CreateMixSuccess = "Mix rendered successfully",
+  GetMixesSuccess = "Mixes fetched successfully",
+  GetMixDownloadSuccess = "Mix download link generated successfully",
 }

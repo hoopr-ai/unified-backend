@@ -435,3 +435,97 @@ export const uploadBufferWithMetadata = async (options: {
     ...(options.metadata && { metadata: { metadata: options.metadata } }),
   });
 };
+
+// ── Mixer ────────────────────────────────────────────────────────────────────
+//
+// The multitrack mixer moves whole audio files rather than the small buffers
+// everything above deals in: a stem is tens of megabytes and a wav render can
+// be a hundred, and a mix holds several of them at once. These stream to and
+// from disk instead of through a Buffer, so N concurrent renders cost temp-file
+// space rather than heap.
+
+/**
+ * Where a rendered mix is stored, inside SELECT_BUCKET (private).
+ *
+ * Namespaced by user so one sweep can clear one account, and keyed by the row
+ * id so two renders never collide — including two renders of the SAME recipe,
+ * which the dedup index permits transiently.
+ *
+ * NOT the legacy convention. hoopr wrote `blended_stems/<trackname>_<stems>.wav`
+ * to a PUBLIC bucket: the path was derived entirely from the track and the stem
+ * names, so two users mixing the same track overwrote each other, and the url
+ * was guessable — an unauthenticated way to pull a master out of the catalogue.
+ */
+export const mixObjectPath = (
+  userId: string | number,
+  mixId: string | number,
+  format: string,
+): string => `mixes/${userId}/${mixId}.${format}`;
+
+/**
+ * Stream one object to a local file.
+ *
+ * Returns false when the object isn't there, so the caller can say which stem
+ * is missing rather than surfacing a generic storage error.
+ */
+export const downloadGCSObjectToFile = async (options: {
+  gcsPath: string;
+  destination: string;
+  bucketName?: string;
+}): Promise<boolean> => {
+  const bucketName = options.bucketName ?? process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const file = getStorageInstance().bucket(bucketName).file(options.gcsPath);
+
+  const [exists] = await file.exists();
+  if (!exists) {
+    return false;
+  }
+
+  await file.download({ destination: options.destination });
+  return true;
+};
+
+/** Upload a local file and report the size that actually landed. */
+export const uploadFileToGCS = async (options: {
+  localPath: string;
+  gcsPath: string;
+  contentType: string;
+  bucketName?: string;
+}): Promise<{ sizeBytes: number }> => {
+  const bucketName = options.bucketName ?? process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+
+  const bucket = getStorageInstance().bucket(bucketName);
+  await bucket.upload(options.localPath, {
+    destination: options.gcsPath,
+    contentType: options.contentType,
+    resumable: false,
+  });
+
+  const [meta] = await bucket.file(options.gcsPath).getMetadata();
+  return { sizeBytes: Number(meta.size ?? 0) };
+};
+
+/**
+ * Remove an object. Never throws for a missing one — this is called on the
+ * cleanup path of a failed render, where the object may never have been written.
+ */
+export const deleteGCSObject = async (options: {
+  gcsPath: string;
+  bucketName?: string;
+}): Promise<void> => {
+  const bucketName = options.bucketName ?? process.env.SELECT_BUCKET;
+  if (!bucketName) {
+    throw new Error("Missing SELECT_BUCKET environment variable");
+  }
+  await getStorageInstance()
+    .bucket(bucketName)
+    .file(options.gcsPath)
+    .delete({ ignoreNotFound: true });
+};

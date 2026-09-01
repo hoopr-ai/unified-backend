@@ -6,3 +6,4 @@ package-lock.json
 newrelic_agent.log
 .claude
 .env.migration.example
+.env.sage
