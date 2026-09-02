@@ -23,6 +23,10 @@ export interface VideoLinkDetails {
     licenseId: number;
     userId?: number;
     brandId?: number;
+    /** When the reel/video was published on the platform. Written by the Python
+     *  Create&Earn flow (sage_db.record_campaign_claim); NULL for links a brand
+     *  submits through POST /licenses/video-links until it is backfilled. */
+    reelPostedAt?: Date | null;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -79,6 +83,13 @@ export class VideoLinkModel extends Model<VideoLinkModel, VideoLinkDetails> {
         allowNull: true,
     })
     brandId?: number;
+
+    // Column is owned by the Python service — this backend only reads it.
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+    reelPostedAt?: Date | null;
 
     @CreatedAt
     @Column({

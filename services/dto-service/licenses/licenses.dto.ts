@@ -82,10 +82,20 @@ export interface BrandLicenseVideoLink {
   status: string;
   trackCode?: string;
   createdAt: Date;
+  /** When the video went live on the platform. NULL until the platform date is
+   *  known — a brand submitting a link does not tell us when it was posted. */
+  publishedDate: Date | null;
+  /** One year after publishedDate. Derived on read, never stored, so the term
+   *  can be changed in one place without a backfill. NULL when publishedDate is. */
+  publishedExpiryDate: Date | null;
 }
 
 export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   userId: number;
+  /** Earliest publishedDate across this license's video links, and its
+   *  +1 year expiry. NULL while no link has a known publish date. */
+  publishedDate: Date | null;
+  publishedExpiryDate: Date | null;
   userEmail?: string;
   videoLinks?: BrandLicenseVideoLink[];
   ownerType?: string;
@@ -193,6 +203,8 @@ export interface VideoLinkResponse {
   trackCode?: string;
   licenseId: number;
   isEditable: boolean;
+  publishedDate: Date | null;
+  publishedExpiryDate: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

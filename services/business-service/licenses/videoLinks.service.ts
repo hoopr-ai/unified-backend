@@ -8,6 +8,7 @@ import {
 } from "../../persistence-service/licenses/modules.export";
 import { UserModel } from "../../persistence-service/user/modules.export";
 import { AppError } from "../../helper-service/modules.export";
+import { publishedExpiry } from "./publishedTerm";
 import type {
     AddVideoLinksRequest,
     AddVideoLinksResponse,
@@ -73,6 +74,8 @@ export const addVideoLinkService = async (
             trackCode: created.trackCode,
             licenseId: created.licenseId,
             isEditable: false, // will be recalculated below
+            publishedDate: created.reelPostedAt ?? null,
+            publishedExpiryDate: publishedExpiry(created.reelPostedAt),
             createdAt: created.createdAt,
             updatedAt: created.updatedAt,
         });
@@ -117,6 +120,8 @@ export const getVideoLinksService = async (
         trackCode: vl.trackCode,
         licenseId: vl.licenseId,
         isEditable,
+        publishedDate: vl.reelPostedAt ?? null,
+        publishedExpiryDate: publishedExpiry(vl.reelPostedAt),
         createdAt: vl.createdAt,
         updatedAt: vl.updatedAt,
     }));

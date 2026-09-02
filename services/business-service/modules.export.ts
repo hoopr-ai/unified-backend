@@ -9,6 +9,7 @@ export * from "./organization/organization.service";
 export * from "./licenses/licenses.service";
 export * from "./licenses/licenseType.service";
 export * from "./licenses/videoLinks.service";
+export * from "./licenses/publishedTerm";
 export * from "./occasion/modules.export";
 export * from "./quick-add/modules.export";
 export * from "./web-banner/modules.export";

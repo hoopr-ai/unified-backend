@@ -27,6 +27,7 @@ import {
   TokenDeductionReason,
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
+import { earliestPublishedDate, publishedExpiry } from "./publishedTerm";
 import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
 import { OwnerModel, getOwnersByIds } from "../../persistence-service/owner/modules.export";
 import { CampaignModel, CampaignStatus } from "../../persistence-service/campaign/modules.export";
@@ -546,6 +547,7 @@ export const getBrandLicenseHistoryService = async (
     const track = license.track as TrackModel | undefined;
     const licenseUser = license.user as UserModel | undefined;
     const videoLinks = license.videoLinks as VideoLinkModel[] | undefined;
+    const licensePublishedAt = earliestPublishedDate(videoLinks);
 
     // Get owner types and sub types for this track
     const ownerTypes: string[] = [];
@@ -578,12 +580,16 @@ export const getBrandLicenseHistoryService = async (
       purchasedDate: license.createdAt,
       userId: license.userId,
       userEmail: licenseUser?.email,
+      publishedDate: licensePublishedAt,
+      publishedExpiryDate: publishedExpiry(licensePublishedAt),
       videoLinks: videoLinks?.map((vl) => ({
         id: vl.id,
         url: vl.url,
         status: vl.status,
         trackCode: vl.trackCode,
         createdAt: vl.createdAt,
+        publishedDate: vl.reelPostedAt ?? null,
+        publishedExpiryDate: publishedExpiry(vl.reelPostedAt),
       })),
       ownerType: ownerTypes.length > 0 ? ownerTypes[0] : undefined,
       ownerSubType: ownerSubTypes.length > 0 ? ownerSubTypes[0] : undefined,
