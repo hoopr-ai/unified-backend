@@ -63,7 +63,7 @@ export const getLicensesByBrandId = async (
       },
       {
         model: VideoLinkModel,
-        attributes: ["id", "url", "status", "trackCode", "createdAt"],
+        attributes: ["id", "url", "status", "trackCode", "createdAt", "reelPostedAt"],
       },
     ],
     order: [["licensedAt", "DESC"]],

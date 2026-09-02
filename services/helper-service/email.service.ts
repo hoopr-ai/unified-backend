@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { logger } from "./logger";
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -23,16 +24,138 @@ interface SendEmailOptions {
   attachments?: EmailAttachment[];
 }
 
+interface SendCleanConfig {
+  ownerId: string;
+  token: string;
+  domain: string;
+  smtpUser: string;
+  fromEmail: string;
+  fromName: string;
+  timeoutMs: number;
+}
+
+// SendClean per-recipient result. `status` is the only field we act on; the
+// rest of the payload is logged verbatim when it isn't a success.
+const SENDCLEAN_OK = new Set(["queued", "sent", "success"]);
+
+// Primary transactional channel, shared with hoopr-backend and native-be (same
+// owner id / token / sending domain). Gmail SMTP is the FALLBACK only: a
+// Workspace user caps at ~2k recipients/day and the OTP route was hitting
+// `550-5.4.5 Daily user sending limit exceeded`. SendClean has its own history
+// of flakiness (504s, a dead smtp_user upstream), so neither channel is trusted
+// alone — every send tries SendClean first and drops to SMTP when it fails or
+// is unconfigured.
+const sendcleanConfig = (): SendCleanConfig => ({
+  ownerId: process.env.SENDCLEAN_OWNER_ID ?? "",
+  token: process.env.SENDCLEAN_TOKEN ?? "",
+  domain: process.env.SENDCLEAN_DOMAIN ?? "us1-mta1.sendclean.net",
+  // smtp17499679 is dead upstream (SendClean 504s on every send via it) --
+  // do not revert to it. See hoopr-backend/helpers/sendCleanHelper.js.
+  smtpUser: process.env.SENDCLEAN_SMTP_USER ?? "smtp89866139",
+  fromEmail: process.env.SENDCLEAN_FROM_EMAIL ?? "hello@hoopr.in",
+  fromName: process.env.SENDCLEAN_FROM_NAME ?? "Hoopr",
+  // Kept short so a hung/504ing SendClean falls through to SMTP inside the
+  // request rather than timing the caller out.
+  timeoutMs: Number(process.env.SENDCLEAN_TIMEOUT_MS ?? 8000),
+});
+
+// POST https://api.<domain>/v1.0/messages/sendMail — the same call the
+// hoopr-backend SendClean client makes, but awaited and result-checked.
+// Credentials travel in the body, not a header; that is what the API wants.
+const sendViaSendClean = async (
+  sc: SendCleanConfig,
+  to: string[],
+  subject: string,
+  html: string
+): Promise<void> => {
+  const res = await fetch(`https://api.${sc.domain}/v1.0/messages/sendMail`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(sc.timeoutMs),
+    body: JSON.stringify({
+      owner_id: sc.ownerId,
+      token: sc.token,
+      smtp_user_name: sc.smtpUser,
+      message: {
+        subject,
+        from_email: sc.fromEmail,
+        from_name: sc.fromName,
+        to: to.map((email) => ({ email })),
+        html,
+      },
+    }),
+  });
+
+  // SendClean answers 200 with an error body — and sometimes an HTML 504 page
+  // — so the status code alone proves nothing. Read as text first.
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${raw.slice(0, 200)}`);
+  }
+
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    throw new Error(`non-JSON response: ${raw.slice(0, 200)}`);
+  }
+
+  // A successful send returns one entry per recipient; failures come back as a
+  // bare object carrying an error/status field.
+  const entries = Array.isArray(body) ? body : [body];
+  const accepted = entries.filter((e) =>
+    SENDCLEAN_OK.has(String((e as { status?: unknown })?.status ?? "").toLowerCase())
+  );
+
+  if (accepted.length !== entries.length || !entries.length) {
+    throw new Error(`rejected: ${raw.slice(0, 300)}`);
+  }
+};
+
+// Throws only when BOTH channels fail, so callers still see a hard failure as a
+// hard failure.
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
+  // Callers pass a single address, but a few join several with commas — the
+  // SMTP header takes that string as-is, SendClean wants one entry each.
+  const recipients = options.to
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  if (!recipients.length) return;
+
+  const sc = sendcleanConfig();
+  // SendClean's sendMail body has no attachment field, so anything carrying
+  // files (the invoice mail) goes straight to SMTP.
+  if (sc.ownerId && sc.token && !options.attachments?.length) {
+    try {
+      await sendViaSendClean(sc, recipients, options.subject, options.html);
+      logger.info("Mail sent via SendClean", {
+        to: recipients,
+        subject: options.subject,
+      });
+      return;
+    } catch (error) {
+      logger.warn("SendClean send failed, falling back to SMTP", {
+        to: recipients,
+        subject: options.subject,
+        error: (error as Error).message,
+      });
+    }
+  }
+
   const mailOptions = {
     from: `"Hoopr" <${process.env.SMTP_FROM || process.env.SMTP_USER || "infra@gsharp.media"}>`,
-    to: options.to,
+    to: recipients.join(","),
     subject: options.subject,
     html: options.html,
     attachments: options.attachments,
   };
 
   await transporter.sendMail(mailOptions);
+  logger.info("Mail sent via SMTP", {
+    to: recipients,
+    subject: options.subject,
+  });
 };
 
 export const sendInviteEmail = async (
