@@ -20,6 +20,7 @@ import { TrackModel } from "../services/persistence-service/track/modules.export
 import { OwnerModel } from "../services/persistence-service/owner/modules.export";
 import {
   generateLicensePdf,
+  buildLicensePdfGcsPath,
   uploadBufferToGCS,
 } from "../services/helper-service/modules.export";
 
@@ -136,9 +137,11 @@ if (!Number.isInteger(brandId) || brandId <= 0 || !trackCode) {
       trackName: track.name || "",
       ownerName,
       licenseId: created.id,
+      brandId,
+      brandName: brand.name || "",
     });
 
-    const gcsPath = `licenses-pdf/${created.id}/license-agreement.pdf`;
+    const gcsPath = buildLicensePdfGcsPath(created.id, brandId);
     await uploadBufferToGCS({ buffer: pdfBuffer, gcsPath, contentType: "application/pdf" });
     await LicenseModel.update({ licensePdfPath: gcsPath }, { where: { id: created.id } });
 

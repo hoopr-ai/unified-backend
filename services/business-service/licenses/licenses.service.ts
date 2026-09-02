@@ -39,6 +39,7 @@ import {
   uploadBufferToGCS,
   getGCSSignedUrl,
   generateLicensePdf,
+  buildLicensePdfGcsPath,
   sendTrackDownloadNotificationEmail,
   sendLowCreditsAlertEmail,
 } from "../../helper-service/modules.export";
@@ -270,6 +271,13 @@ export const licenseTrackService = async (
       const licensedDate = new Date();
       const formattedDate = `${String(licensedDate.getDate()).padStart(2, "0")}/${String(licensedDate.getMonth() + 1).padStart(2, "0")}/${licensedDate.getFullYear()}`;
 
+      // Brands on a custom license template are addressed by brand name.
+      let brandName = "";
+      if (brandId) {
+        const brand = await findBrandById(brandId);
+        brandName = brand?.name || "";
+      }
+
       // Generate PDF
       const pdfBuffer = await generateLicensePdf({
         name: [user.firstName, user.lastName].filter(Boolean).join(" "),
@@ -279,10 +287,12 @@ export const licenseTrackService = async (
         trackName: track.name || "",
         ownerName,
         licenseId: createdLicense.id!,
+        brandId,
+        brandName,
       });
 
       // Upload to GCS
-      const gcsPath = `licenses-pdf/${createdLicense.id}/license-agreement.pdf`;
+      const gcsPath = buildLicensePdfGcsPath(createdLicense.id!, brandId);
       await uploadBufferToGCS({
         buffer: pdfBuffer,
         gcsPath,
@@ -829,8 +839,15 @@ export const downloadLicensePdfService = async (
     throw new AppError("Track associated with license not found", 404);
   }
 
-  // Use stored PDF path from database, or fallback to computed path for legacy licenses
-  const gcsPath = license.licensePdfPath || `licenses-pdf/${licenseId}/license-agreement.pdf`;
+  // Path the PDF *should* live at for this license's brand. For brands on a
+  // custom template this differs from the generic path, so any PDF stored
+  // before the brand was onboarded is bypassed and re-rendered below.
+  const expectedGcsPath = buildLicensePdfGcsPath(licenseId, license.brandId);
+  const genericGcsPath = `licenses-pdf/${licenseId}/license-agreement.pdf`;
+  const gcsPath =
+    expectedGcsPath === genericGcsPath
+      ? license.licensePdfPath || genericGcsPath
+      : expectedGcsPath;
 
   // Try to get existing PDF from bucket first
   const existingPdfUrl = await getGCSSignedUrl({
@@ -849,6 +866,13 @@ export const downloadLicensePdfService = async (
   });
   if (!user) {
     throw new AppError("License user not found", 404);
+  }
+
+  // Brands on a custom license template are addressed by brand name.
+  let brandName = "";
+  if (license.brandId) {
+    const brand = await findBrandById(Number(license.brandId));
+    brandName = brand?.name || "";
   }
 
   // Fetch owner username
@@ -874,6 +898,8 @@ export const downloadLicensePdfService = async (
     trackName: track.name || "",
     ownerName,
     licenseId,
+    brandId: license.brandId,
+    brandName,
   });
 
   // Upload to GCS
