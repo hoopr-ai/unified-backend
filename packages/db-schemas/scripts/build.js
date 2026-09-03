@@ -38,6 +38,7 @@ const enumFiles = [
 // DTO files to copy
 const dtoFiles = [
   'dto-service/licenses/licenses.dto.ts',
+  'dto-service/catalogue-rights/catalogue-rights.dto.ts',
   'dto-service/tracks/tracks.dto.ts',
   'dto-service/tracks/track-stream.dto.ts',
   'dto-service/brand/brand.dto.ts',
@@ -144,16 +145,18 @@ function transformDtoImports(content) {
     'from "../enums/common.enums"'
   );
 
-  // Transform ../tracks/tracks.dto to ./tracks.dto
+  // Transform sibling-module DTO imports to flat ./ imports, since every DTO
+  // is copied into src/dto - e.g. '../tracks/tracks.dto' -> './tracks.dto',
+  // '../catalogue-rights/catalogue-rights.dto' -> './catalogue-rights.dto'
   result = result.replace(
-    /from ["']\.\.\/tracks\/tracks\.dto["']/g,
-    'from "./tracks.dto"'
+    /from ["']\.\.\/[^"'/]+\/([^"'/]+)\.dto(?:\.js)?["']/g,
+    'from "./$1.dto"'
   );
 
-  // Transform dynamic import types: import("../tracks/tracks.dto") -> import("./tracks.dto")
+  // Same for dynamic import types: import("../tracks/tracks.dto") -> import("./tracks.dto")
   result = result.replace(
-    /import\(["']\.\.\/tracks\/tracks\.dto["']\)/g,
-    'import("./tracks.dto")'
+    /import\(["']\.\.\/[^"'/]+\/([^"'/]+)\.dto(?:\.js)?["']\)/g,
+    'import("./$1.dto")'
   );
 
   // Transform ./tracks.dto to ./tracks.dto (same directory)
