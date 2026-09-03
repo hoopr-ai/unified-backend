@@ -41,6 +41,7 @@ import {
 import { SkuModel } from "./sku/modules.export";
 import { OwnerModel } from "./owner/modules.export";
 import { TokenModel, TokenHistoryModel, TokenAssignedModel, TokenDeductionModel } from "./token/modules.export";
+import { CatalogueRightsModel, BrandCatalogueRightsModel } from "./catalogue-rights/modules.export";
 import { OccasionModel, TrackOccasionMappingModel } from "./occasion/modules.export";
 import { QuickAddModel } from "./quick-add/modules.export";
 import { WebBannerModel } from "./web-banner/modules.export";
@@ -160,6 +161,11 @@ sequelize.addModels([
   TokenHistoryModel,
   TokenAssignedModel,
   TokenDeductionModel,
+  // Catalogue rights sit beside the token models on purpose: token_assigned
+  // says HOW MANY tokens a brand holds per catalogue, these say what those
+  // tokens permit. The subscription screen renders the two together.
+  CatalogueRightsModel,
+  BrandCatalogueRightsModel,
   OccasionModel,
   TrackOccasionMappingModel,
   QuickAddModel,
