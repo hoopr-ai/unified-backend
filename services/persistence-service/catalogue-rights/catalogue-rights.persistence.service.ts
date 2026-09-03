@@ -179,6 +179,10 @@ export const findTokenPositionForBrand = async (
       "title",
       "subTitle",
       "createdAt",
+      // The sub-category axis: an allocation scoped to specific labels inside a
+      // catalogue. Empty/absent means blanket — usable on every owner of the
+      // type. Chartbusters is where this actually happens today.
+      "ownerIds",
     ],
   });
 
@@ -209,3 +213,50 @@ export const mergeRights = (
 };
 
 export { emptyCatalogueRights };
+
+/**
+ * Effective rights for every catalogue, for one brand — defaults merged with
+ * that brand's overrides, keyed by catalogue name.
+ *
+ * Two queries regardless of how many catalogues exist, because the track detail
+ * endpoint is hot and must not gain a per-owner round trip. Returns an empty
+ * map for an anonymous viewer, which callers read as "fall back".
+ */
+export const findEffectiveRightsForBrand = async (
+  brandId?: number,
+): Promise<Map<string, CatalogueRights>> => {
+  const out = new Map<string, CatalogueRights>();
+  if (!brandId) return out;
+
+  const [defaults, overrides] = await Promise.all([
+    findAllCatalogueRights(),
+    findOverridesForBrand(brandId),
+  ]);
+  const overrideByName = new Map(overrides.map((o) => [o.catalogue, o.rights]));
+
+  for (const row of defaults) {
+    out.set(row.catalogue, mergeRights(row.rights, overrideByName.get(row.catalogue)).rights);
+  }
+  return out;
+};
+
+/**
+ * Display names for the owners an allocation is scoped to.
+ *
+ * One query for the whole page rather than one per allocation — a brand with
+ * several scoped packs would otherwise fan out.
+ */
+export const findOwnerNames = async (
+  ids: string[],
+): Promise<Map<string, { ownerCode: string; name: string | null }>> => {
+  const out = new Map<string, { ownerCode: string; name: string | null }>();
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return out;
+
+  const rows = await OwnerModel.findAll({
+    attributes: ["id", "ownerCode", "username"],
+    where: { id: unique } as unknown as WhereOptions<OwnerModel>,
+  });
+  for (const o of rows) out.set(o.id, { ownerCode: o.ownerCode, name: o.username ?? null });
+  return out;
+};

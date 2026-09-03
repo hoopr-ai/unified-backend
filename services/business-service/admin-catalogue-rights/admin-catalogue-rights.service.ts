@@ -10,6 +10,7 @@ import {
   upsertBrandOverride,
   deleteBrandOverride,
   findTokenPositionForBrand,
+  findOwnerNames,
   mergeRights,
 } from "../../persistence-service/catalogue-rights/modules.export";
 import type {
@@ -19,6 +20,7 @@ import type {
   AdminCatalogueRightsListItem,
   BrandEntitlementsResponseData,
   CatalogueEntitlement,
+  CatalogueSubEntitlement,
   CatalogueRights,
   EffectiveRight,
   PartialCatalogueRights,
@@ -258,6 +260,12 @@ export const getBrandEntitlementsService = async (
     findOverridesForBrand(brandId),
   ]);
 
+  // Resolve every scoped label in one query, so a brand with several
+  // owner-scoped packs does not fan out into a lookup per allocation.
+  const ownerNames = await findOwnerNames(
+    positions.flatMap((p) => ((p.ownerIds ?? []) as string[])),
+  );
+
   const defaultsByName = new Map(defaults.map((d) => [d.catalogue, d.rights]));
   const overrideByName = new Map(overrides.map((o) => [o.catalogue, o.rights]));
 
@@ -271,6 +279,10 @@ export const getBrandEntitlementsService = async (
       unlimited: boolean;
       expiry: Date | null;
       start: Date | null;
+      subs: Map<
+        string,
+        { ids: string[]; assigned: number; balance: number; unlimited: boolean; expiry: Date | null }
+      >;
     }
   >();
 
@@ -282,8 +294,32 @@ export const getBrandEntitlementsService = async (
       unlimited: false,
       expiry: null,
       start: null,
+      subs: new Map<
+        string,
+        { ids: string[]; assigned: number; balance: number; unlimited: boolean; expiry: Date | null }
+      >(),
     };
     acc.assigned += Number(row.totalAssignedToken ?? 0);
+    // Sub-bucket: blanket rows share one key; a scoped row keys on its SORTED
+    // owner set, so two packs naming the same label merge and two naming
+    // different labels stay apart.
+    const ids = [...(((row.ownerIds ?? []) as string[]))].filter(Boolean).sort();
+    const subKey = ids.length ? ids.join(",") : "*";
+    const sub = acc.subs.get(subKey) ?? {
+      ids,
+      assigned: 0,
+      balance: 0,
+      unlimited: false,
+      expiry: null as Date | null,
+    };
+    sub.assigned += Number(row.totalAssignedToken ?? 0);
+    sub.balance += Number(row.tokenBalance ?? 0);
+    sub.unlimited = sub.unlimited || Boolean(row.isUnlimited);
+    if (row.expiryDate) {
+      const e = new Date(row.expiryDate);
+      if (!sub.expiry || e < sub.expiry) sub.expiry = e;
+    }
+    acc.subs.set(subKey, sub);
     acc.balance += Number(row.tokenBalance ?? 0);
     acc.unlimited = acc.unlimited || Boolean(row.isUnlimited);
     // Soonest expiry wins — it is the date the entitlement first shrinks, and
@@ -317,6 +353,33 @@ export const getBrandEntitlementsService = async (
         startDate: acc.start,
         rights: toEffectiveRights(rights, overriddenKeys),
         hasOverride: overriddenKeys.length > 0,
+        subCategories: [...acc.subs.values()]
+          .map((sub): CatalogueSubEntitlement => {
+            const owners = sub.ids.map((id) => ({
+              id,
+              ownerCode: ownerNames.get(id)?.ownerCode ?? id,
+              name: ownerNames.get(id)?.name ?? null,
+            }));
+            return {
+              scope: owners.length ? "owner" : "catalogue",
+              // A scoped bucket is named by its labels; the blanket one says so
+              // explicitly rather than repeating the catalogue name, so the two
+              // read differently at a glance.
+              label: owners.length
+                ? owners.map((o) => o.name ?? o.ownerCode).join(", ")
+                : `All ${catalogue}`,
+              owners,
+              tokensAssigned: sub.assigned,
+              tokenBalance: sub.balance,
+              isUnlimited: sub.unlimited,
+              expiryDate: sub.expiry,
+            };
+          })
+          // Blanket first, then scoped packs alphabetically — the widest
+          // entitlement reads first, which is how the card should render.
+          .sort((a, b) =>
+            a.scope === b.scope ? a.label.localeCompare(b.label) : a.scope === "catalogue" ? -1 : 1,
+          ),
       };
     });
 

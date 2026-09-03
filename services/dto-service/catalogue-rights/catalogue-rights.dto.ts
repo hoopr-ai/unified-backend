@@ -85,6 +85,30 @@ export interface EffectiveRight {
   source: RightSource;
 }
 
+/**
+ * One token bucket inside a catalogue.
+ *
+ * A catalogue is not always a single pool: an allocation can be SCOPED to
+ * specific labels inside it (token_assigned.ownerIds), so a brand may hold
+ * "110 Chartbusters anywhere, 100 only on Universal, 50 only on Zee". Summing
+ * those to 260 is true but misleading — it implies 260 spendable on any
+ * Chartbusters track.
+ *
+ * Rights stay at the CATALOGUE level; only the tokens split.
+ */
+export interface CatalogueSubEntitlement {
+  /** 'catalogue' = spendable anywhere in it; 'owner' = restricted to `owners`. */
+  scope: "catalogue" | "owner";
+  /** "All Chartbusters", or the label names an owner-scoped pack is limited to. */
+  label: string;
+  /** Empty for a blanket bucket. */
+  owners: { id: string; ownerCode: string; name: string | null }[];
+  tokensAssigned: number;
+  tokenBalance: number;
+  isUnlimited: boolean;
+  expiryDate: Date | null;
+}
+
 /** One card on the My Subscription screen. */
 export interface CatalogueEntitlement {
   catalogue: string;
@@ -100,6 +124,12 @@ export interface CatalogueEntitlement {
   rights: EffectiveRight[];
   /** true when any right came from a brand override. */
   hasOverride: boolean;
+  /**
+   * The catalogue's tokens broken down by scope. Always present and always
+   * sums to `tokensAssigned`, so a client that ignores it stays correct — the
+   * existing fields are unchanged. A single blanket bucket is the common case.
+   */
+  subCategories: CatalogueSubEntitlement[];
 }
 
 /**
@@ -164,3 +194,29 @@ export interface AdminCatalogueRightsDetail {
   /** The vocabulary, so the CMS renders the checkbox list from the server. */
   definitions: { key: CatalogueRightKey; label: string }[];
 }
+
+// ── Track detail bridge ────────────────────────────────────────────────────
+
+/**
+ * Render catalogue rights into the SHAPE `owners.restrictedCategories` already
+ * uses — `[{ title, description }]` — so GET /tracks/:trackCode keeps its exact
+ * existing contract and no client has to change.
+ *
+ * Only the rights that are FALSE become entries. `restrictedCategories` answers
+ * "what can I not do with this track", so an allowed right has nothing to say
+ * there; listing all six would turn a restriction list into a feature list and
+ * every consumer rendering it as warnings would start showing green items as
+ * prohibitions.
+ *
+ * Returns [] when nothing is restricted — the caller treats that as "no
+ * restrictions to report" and falls back to the owner blob rather than
+ * replacing a populated list with an empty one.
+ */
+export const rightsToRestrictedCategories = (
+  rights: CatalogueRights,
+  catalogue: string,
+): { title: string; description: string }[] =>
+  CATALOGUE_RIGHT_DEFS.filter((d) => rights[d.key] === false).map((d) => ({
+    title: d.label,
+    description: `Not included with your ${catalogue} tokens.`,
+  }));

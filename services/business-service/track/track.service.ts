@@ -36,6 +36,14 @@ import {
 } from "../access/owner-access.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { Op, fn, col, where } from "sequelize";
+// Catalogue rights — what the viewer's tokens actually permit for this track's
+// catalogue. Rendered into the SAME shape owners.restrictedCategories uses, so
+// GET /tracks/:trackCode keeps its existing contract.
+import { findEffectiveRightsForBrand } from "../../persistence-service/catalogue-rights/modules.export";
+import {
+  rightsToRestrictedCategories,
+  type CatalogueRights,
+} from "../../dto-service/catalogue-rights/catalogue-rights.dto";
 
 // Parse and validate pagination params
 const parsePaginationParams = (
@@ -841,6 +849,8 @@ const transformTrackToDetailsDto = (
   ownerUsernameMap?: Map<string, string>,
   albumName?: string,
   ownerAccess?: ViewerOwnerAccess,
+  /** Effective catalogue rights for the viewer's brand, keyed by catalogue. */
+  brandCatalogueRights?: Map<string, CatalogueRights>,
 ): TrackDetailsWithSkus => {
   const baseDto = transformTrackToDto(
     track,
@@ -869,6 +879,33 @@ const transformTrackToDetailsDto = (
         ownerName = ownerUsernameMap.get(oid);
       if (usageInfo && restrictedCategories && ownerCode && ownerName) break;
     }
+  }
+
+  // ── restrictedCategories: catalogue rights first, owner blob second ──────
+  //
+  // When the viewer's brand actually holds tokens of this track's catalogue,
+  // what THEIR tokens permit is more specific — and more truthful — than the
+  // label's blanket list, so it wins. Everyone else (anonymous visitors, brands
+  // with no tokens of this type, catalogues with no rights row) keeps the owner
+  // blob exactly as before.
+  //
+  // Same key, same [{title, description}] shape either way: no client can tell
+  // which source answered, which is the point.
+  const catalogue = baseDto.ownerType;
+  if (
+    catalogue &&
+    ownerAccess?.activeTokenTypes?.has(catalogue) &&
+    brandCatalogueRights?.has(catalogue)
+  ) {
+    const derived = rightsToRestrictedCategories(
+      brandCatalogueRights.get(catalogue)!,
+      catalogue,
+    );
+    // An empty list means nothing is restricted for this catalogue. Falling
+    // through to the owner blob there would contradict the rights we just read,
+    // so the empty list stands — but only when the owner had nothing either, we
+    // still omit the key entirely rather than emit [].
+    if (derived.length > 0) restrictedCategories = derived;
   }
 
   // Build songCredits string
@@ -936,9 +973,13 @@ export const getTrackDetailsByCodeService = async (
 ): Promise<TrackDetailsWithSkus | null> => {
   // Owner visibility (restricted labels gated per label by token) plus the
   // brand's restricted track tiers.
-  const [ownerAccess, excludeTiers] = await Promise.all([
+  const [ownerAccess, excludeTiers, brandCatalogueRights] = await Promise.all([
     resolveViewerOwnerAccess(brandId, platform),
     brandId ? getRestrictedTrackTiersByBrandId(brandId) : Promise.resolve(undefined),
+    // In the same Promise.all rather than after it — this endpoint is hot, and
+    // the lookup is independent of the other two. Resolves to an empty map for
+    // an anonymous viewer, which the transform reads as "use the owner blob".
+    findEffectiveRightsForBrand(brandId),
   ]);
   const excludeOwnerIds = ownerAccess.excludeOwnerIds;
 
@@ -986,6 +1027,7 @@ export const getTrackDetailsByCodeService = async (
     ownerUsernameMap,
     albumName,
     ownerAccess,
+    brandCatalogueRights,
   );
 };
 
