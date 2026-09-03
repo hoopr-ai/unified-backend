@@ -13,6 +13,7 @@ import {
   mergeRights,
 } from "../../persistence-service/catalogue-rights/modules.export";
 import type {
+  DealHeader,
   AdminBrandOverride,
   AdminCatalogueRightsDetail,
   AdminCatalogueRightsListItem,
@@ -184,6 +185,61 @@ export const deleteBrandOverrideService = async (
   return getCatalogueRightsService(catalogue);
 };
 
+/**
+ * Resolve ONE plan header from a brand's allocations.
+ *
+ * These fields are copied onto every token_assigned row, so four catalogues
+ * mean four copies that are free to disagree — nothing in the schema prevents
+ * it. Picking "whichever row came back first" would make the customer's header
+ * depend on row order, so the rule is explicit and stable:
+ *
+ *   1. Only rows that actually carry a title or a startDate are candidates —
+ *      pre-deal-fields allocations can never win.
+ *   2. Newest startDate wins; createdAt breaks a tie. The most recently agreed
+ *      deal is the current one.
+ *   3. Dates come from the SAME row as the title, never mixed. A start from one
+ *      deal beside an expiry from another describes a window that never existed.
+ *
+ * `isConsistent` reports whether the candidates agreed, so a drift is visible
+ * instead of silently resolved. If drift turns out to be common, the fix is a
+ * brand_deals table these rows point at — the columns were added additively to
+ * keep that move cheap.
+ */
+const pickDealHeader = (
+  rows: {
+    startDate?: Date | null;
+    title?: string | null;
+    subTitle?: string | null;
+    expiryDate?: Date | null;
+    createdAt?: Date;
+  }[],
+): DealHeader | null => {
+  const candidates = rows.filter((r) => r.title || r.startDate);
+  if (!candidates.length) return null;
+
+  const time = (d: Date | null | undefined) => (d ? new Date(d).getTime() : 0);
+  const sorted = [...candidates].sort(
+    (a, b) =>
+      time(b.startDate) - time(a.startDate) || time(b.createdAt) - time(a.createdAt),
+  );
+  const winner = sorted[0];
+
+  const key = (r: (typeof candidates)[number]) =>
+    `${r.title ?? ""}|${r.subTitle ?? ""}|${time(r.startDate)}`;
+  const isConsistent = new Set(candidates.map(key)).size === 1;
+
+  const expiry = winner.expiryDate ? new Date(winner.expiryDate) : null;
+
+  return {
+    title: winner.title ?? null,
+    subTitle: winner.subTitle ?? null,
+    startDate: winner.startDate ? new Date(winner.startDate) : null,
+    expiryDate: expiry,
+    status: expiry ? (expiry.getTime() > Date.now() ? "ACTIVE" : "EXPIRED") : null,
+    isConsistent,
+  };
+};
+
 // ── Brand-facing read ──────────────────────────────────────────────────────
 
 /**
@@ -209,7 +265,13 @@ export const getBrandEntitlementsService = async (
   // times has three rows for the same catalogue. Fold them into one card.
   const grouped = new Map<
     string,
-    { assigned: number; balance: number; unlimited: boolean; expiry: Date | null }
+    {
+      assigned: number;
+      balance: number;
+      unlimited: boolean;
+      expiry: Date | null;
+      start: Date | null;
+    }
   >();
 
   for (const row of positions) {
@@ -219,6 +281,7 @@ export const getBrandEntitlementsService = async (
       balance: 0,
       unlimited: false,
       expiry: null,
+      start: null,
     };
     acc.assigned += Number(row.totalAssignedToken ?? 0);
     acc.balance += Number(row.tokenBalance ?? 0);
@@ -228,6 +291,12 @@ export const getBrandEntitlementsService = async (
     if (row.expiryDate) {
       const d = new Date(row.expiryDate);
       if (!acc.expiry || d < acc.expiry) acc.expiry = d;
+    }
+    // Latest start, mirroring the header rule: the most recent top-up is when
+    // the catalogue's current entitlement actually began.
+    if (row.startDate) {
+      const d = new Date(row.startDate);
+      if (!acc.start || d > acc.start) acc.start = d;
     }
     grouped.set(key, acc);
   }
@@ -245,6 +314,7 @@ export const getBrandEntitlementsService = async (
         tokenBalance: acc.balance,
         isUnlimited: acc.unlimited,
         expiryDate: acc.expiry,
+        startDate: acc.start,
         rights: toEffectiveRights(rights, overriddenKeys),
         hasOverride: overriddenKeys.length > 0,
       };
@@ -257,5 +327,5 @@ export const getBrandEntitlementsService = async (
     ? null
     : catalogues.reduce((sum, c) => sum + c.tokensAssigned, 0);
 
-  return { brandId, totalTokens, catalogues };
+  return { brandId, deal: pickDealHeader(positions), totalTokens, catalogues };
 };

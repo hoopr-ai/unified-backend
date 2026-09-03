@@ -26,6 +26,10 @@ export interface AssignTokensRequest {
   hooprShare?: number | null;
   keyName?: string | null;
   isUnlimited?: boolean;
+  // Deal header, shown above the catalogue cards on My Subscription.
+  startDate?: Date | null;
+  title?: string | null;
+  subTitle?: string | null;
 }
 
 export interface LicenseResponse {
@@ -63,6 +67,11 @@ export interface AssignTokensResponse {
   hooprShare?: number | null;
   keyName?: string | null;
   isUnlimited: boolean;
+  // Deal header echoed back so the CMS can render the saved allocation without
+  // a re-fetch.
+  startDate?: Date | null;
+  title?: string | null;
+  subTitle?: string | null;
 }
 
 export interface LicenseHistoryItem {

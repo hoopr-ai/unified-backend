@@ -31,6 +31,9 @@ export interface TokenAssignedDetails {
   hooprShare?: number | null;
   keyName?: string | null;
   isUnlimited?: boolean;
+  startDate?: Date | null;
+  title?: string | null;
+  subTitle?: string | null;
   updatedById?: number | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -142,6 +145,34 @@ export class TokenAssignedModel extends Model<TokenAssignedModel, TokenAssignedD
     defaultValue: false,
   })
   isUnlimited!: boolean;
+
+  // ── Deal header ──────────────────────────────────────────────────────────
+  // Shown above the catalogue cards on My Subscription. Copied onto EACH
+  // allocation, so a brand's rows can disagree; the read side resolves that in
+  // one documented place (pickDealHeader). Deliberately NOT suppressed for
+  // unlimited rows the way expiryDate is — the screenshot shows an unlimited
+  // Hoopr Originals catalogue under a plan that still has a start and an end.
+
+  /** PLAN ACTIVE FROM. Not createdAt: deals are recorded before they go live. */
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  startDate?: Date | null;
+
+  /** "Organic — One Channel (Annual)" */
+  @Column({
+    type: DataType.STRING(255),
+    allowNull: true,
+  })
+  title?: string | null;
+
+  /** "1 channel cleared · Valid for 12 months from activation" */
+  @Column({
+    type: DataType.STRING(500),
+    allowNull: true,
+  })
+  subTitle?: string | null;
 
   @Index({ name: "idx_token_assigned_updated_by_id" })
   @ForeignKey(() => UserModel)

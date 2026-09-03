@@ -175,6 +175,10 @@ export const findTokenPositionForBrand = async (
       "tokenBalance",
       "isUnlimited",
       "expiryDate",
+      "startDate",
+      "title",
+      "subTitle",
+      "createdAt",
     ],
   });
 

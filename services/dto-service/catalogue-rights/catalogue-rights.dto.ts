@@ -95,13 +95,39 @@ export interface CatalogueEntitlement {
   isUnlimited: boolean;
   /** Soonest expiry across the rows, or null when none is set. */
   expiryDate: Date | null;
+  /** Latest start across the rows — this catalogue's own window, not the deal's. */
+  startDate: Date | null;
   rights: EffectiveRight[];
   /** true when any right came from a brand override. */
   hasOverride: boolean;
 }
 
+/**
+ * The plan block above the catalogue cards.
+ *
+ * Assembled from the brand's token allocations, which each carry their own copy
+ * of these fields — see pickDealHeader for how one is chosen when they differ,
+ * and `isConsistent` for how the client is told that they did.
+ */
+export interface DealHeader {
+  title: string | null;
+  subTitle: string | null;
+  startDate: Date | null;
+  expiryDate: Date | null;
+  /** ACTIVE until expiryDate passes; EXPIRED after; null when no date is set. */
+  status: "ACTIVE" | "EXPIRED" | null;
+  /**
+   * false when the brand's allocations disagree about title/subTitle/startDate.
+   * The header is still resolved deterministically, but ops should reconcile —
+   * the CMS surfaces this so a drifted deal is visible rather than silent.
+   */
+  isConsistent: boolean;
+}
+
 export interface BrandEntitlementsResponseData {
   brandId: number;
+  /** null when no allocation carries deal fields yet. */
+  deal: DealHeader | null;
   /** Total across catalogues; null when any catalogue is unlimited. */
   totalTokens: number | null;
   catalogues: CatalogueEntitlement[];

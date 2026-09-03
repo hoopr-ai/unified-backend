@@ -414,7 +414,11 @@ export const addTokensAssignedByType = async (
   iprsShare?: number | null,
   hooprShare?: number | null,
   keyName?: string | null,
-  isUnlimited: boolean = false
+  isUnlimited: boolean = false,
+  // Passed as an object rather than three more positional args — this signature
+  // is already twelve deep and a fourth nullable date would be impossible to
+  // read at the call site.
+  deal?: { startDate?: Date | null; title?: string | null; subTitle?: string | null }
 ): Promise<TokenAssignedModel> => {
   // For unlimited rows we still set totalAssignedToken/tokenBalance to 0 — the
   // balance column is never read for unlimited rows (deduction logic short-circuits
@@ -433,6 +437,11 @@ export const addTokensAssignedByType = async (
     hooprShare: isUnlimited ? null : (hooprShare ?? null),
     keyName: keyName ?? null,
     isUnlimited,
+    // NOT gated on isUnlimited, unlike expiryDate above: an unlimited catalogue
+    // still sits under a plan with a start and an end date.
+    startDate: deal?.startDate ?? null,
+    title: deal?.title ?? null,
+    subTitle: deal?.subTitle ?? null,
   });
 };
 
