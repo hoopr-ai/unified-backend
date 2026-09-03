@@ -42,7 +42,9 @@ import { Op, fn, col, where } from "sequelize";
 import { findEffectiveRightsForBrand } from "../../persistence-service/catalogue-rights/modules.export";
 import {
   rightsToRestrictedCategories,
+  rightsToTrackCatalogueRights,
   type CatalogueRights,
+  type TrackCatalogueRights,
 } from "../../dto-service/catalogue-rights/catalogue-rights.dto";
 
 // Parse and validate pagination params
@@ -892,20 +894,29 @@ const transformTrackToDetailsDto = (
   // Same key, same [{title, description}] shape either way: no client can tell
   // which source answered, which is the point.
   const catalogue = baseDto.ownerType;
+  let catalogueRights: TrackCatalogueRights | undefined;
   if (
     catalogue &&
     ownerAccess?.activeTokenTypes?.has(catalogue) &&
     brandCatalogueRights?.has(catalogue)
   ) {
-    const derived = rightsToRestrictedCategories(
-      brandCatalogueRights.get(catalogue)!,
-      catalogue,
-    );
+    const effective = brandCatalogueRights.get(catalogue)!;
+    const derived = rightsToRestrictedCategories(effective, catalogue);
     // An empty list means nothing is restricted for this catalogue. Falling
     // through to the owner blob there would contradict the rights we just read,
     // so the empty list stands — but only when the owner had nothing either, we
     // still omit the key entirely rather than emit [].
     if (derived.length > 0) restrictedCategories = derived;
+
+    // The full picture, ticks included. Set unconditionally inside this branch,
+    // even when nothing is restricted: "everything is permitted" is a real
+    // answer the card has to be able to render, and omitting the key there
+    // would be indistinguishable from holding no token at all.
+    //
+    // To expose this to every viewer rather than only token-holders, lift this
+    // line out of the `if` — the rights themselves are not brand-specific once
+    // no override applies.
+    catalogueRights = rightsToTrackCatalogueRights(effective, catalogue);
   }
 
   // Build songCredits string
@@ -960,6 +971,7 @@ const transformTrackToDetailsDto = (
     description: track.description ?? null,
     ...(usageInfo && { usageInfo }),
     ...(restrictedCategories && { restrictedCategories }),
+    ...(catalogueRights && { catalogueRights }),
     ...(ownerCode && { ownerCode }),
     ...(songCredits && { songCredits }),
   };

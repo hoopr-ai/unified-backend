@@ -220,3 +220,41 @@ export const rightsToRestrictedCategories = (
     title: d.label,
     description: `Not included with your ${catalogue} tokens.`,
   }));
+
+/**
+ * The COMPLETE rights picture for one catalogue, for the track page.
+ *
+ * `rightsToRestrictedCategories` above deliberately emits only the FALSE flags,
+ * because `restrictedCategories` answers "what can I not do". That leaves the
+ * allowed rights with nowhere to go, so a client cannot render the six-flag
+ * card the My Subscription screen shows — it receives crosses and no ticks.
+ *
+ * Shaped as `{ allowed, notAllowed }` string arrays to MATCH `owners.usageInfo`,
+ * which the track page already renders. Same vocabulary of two lists, so the
+ * existing component works on this with no change.
+ *
+ * It stays a SEPARATE field rather than being folded into usageInfo, because
+ * the two describe different things at different levels: usageInfo is the
+ * owner's own usage terms ("Influencer collab", "TV, OTT & broadcast"), this is
+ * what the viewer's tokens permit across the whole catalogue. Merging them
+ * would silently overwrite one label's negotiated terms with a catalogue-wide
+ * default, and nothing downstream could tell which had answered.
+ *
+ * Labels only, no keys — usageInfo carries none either, and matching it exactly
+ * is the point.
+ */
+export interface TrackCatalogueRights {
+  catalogue: string;
+  allowed: string[];
+  notAllowed: string[];
+}
+
+/** Split all six flags into the two lists, in CATALOGUE_RIGHT_DEFS order. */
+export const rightsToTrackCatalogueRights = (
+  rights: CatalogueRights,
+  catalogue: string,
+): TrackCatalogueRights => ({
+  catalogue,
+  allowed: CATALOGUE_RIGHT_DEFS.filter((d) => rights[d.key] === true).map((d) => d.label),
+  notAllowed: CATALOGUE_RIGHT_DEFS.filter((d) => rights[d.key] !== true).map((d) => d.label),
+});
