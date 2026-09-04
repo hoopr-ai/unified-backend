@@ -1,3 +1,5 @@
+import type { LicenseExpiryStatus } from "../../business-service/licenses/publishedTerm";
+import type { LicenseSort } from "../../persistence-service/licenses/licenses.persistence.service";
 export enum DealType {
   BULK = "bulk",
   PRICE_PER_TRACK = "pricePerTrack",
@@ -105,6 +107,29 @@ export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
    *  +1 year expiry. NULL while no link has a known publish date. */
   publishedDate: Date | null;
   publishedExpiryDate: Date | null;
+  /**
+   * Which expiry bucket this row is COUNTED under — the same value the chips
+   * group by, computed once in SQL so a row can never disagree with the count
+   * above it. See publishedTerm.expiryStatusOf for the rule.
+   *
+   * NULL for SFX: they are free and carry no usage-link obligation, so no
+   * bucket applies. They still appear in the list and still count towards
+   * `counts.all`, under `counts.notApplicable`.
+   */
+  expiryStatus: LicenseExpiryStatus | null;
+  /**
+   * Whole days until the term lapses; negative once it has, null when the
+   * licence is unpublished. Sent from the server so every client shows the
+   * same number regardless of its clock or timezone.
+   *
+   * Independent of `expiryStatus`: a row bucketed as `link-not-added` still
+   * carries a real countdown here, which is the fact the table displays.
+   */
+  daysLeft: number | null;
+  /** How many links this licence must carry to be complete. Read it rather
+   *  than hardcoding 3, so a per-plan requirement later needs no client change.
+   *  0 for SFX, which have no usage-link requirement at all. */
+  requiredVideoLinks: number;
   userEmail?: string;
   videoLinks?: BrandLicenseVideoLink[];
   ownerType?: string;
@@ -116,14 +141,46 @@ export interface BrandLicenseHistoryItem extends LicenseHistoryItem {
   freeDownload?: boolean; // True for SFX — downloaded without tokens/payment
 }
 
+/**
+ * Chip counts for the Downloads table.
+ *
+ * Always describes the WHOLE brand for the current category and IGNORES the
+ * active status filter — the chips must keep showing every bucket's size while
+ * one is selected, or picking "Expired" collapses the row to a single number.
+ * `all` is the sum of the other five: the buckets are mutually exclusive.
+ */
+export interface DownloadsStatusCountsResponse {
+  /** Every licence in the list for this category, INCLUDING SFX — so it always
+   *  matches what the user sees. all = the five buckets + notApplicable. */
+  all: number;
+  expired: number;
+  notPublished: number;
+  linkNotAdded: number;
+  expiringSoon: number;
+  active: number;
+  /** SFX, which have no expiry status. Non-zero only when the category
+   *  includes them; filtering by any status never returns these rows. */
+  notApplicable: number;
+}
+
 export interface BrandLicenseHistoryResponse {
   brandId: number;
   licenses: BrandLicenseHistoryItem[];
   pagination: {
     page: number;
     limit: number;
+    /** Size of the FILTERED set — this drives the pager. Unlike `counts`,
+     *  it DOES narrow when `status` is set. */
     totalItems: number;
     totalPages: number;
+  };
+  counts: DownloadsStatusCountsResponse;
+  /** Echoes the filter and sort actually applied, so a client can tell when a
+   *  omitted or rejected param fell back to the default. */
+  applied: {
+    category: "tracks" | "sfx" | null;
+    status: LicenseExpiryStatus | null;
+    sort: LicenseSort;
   };
 }
 

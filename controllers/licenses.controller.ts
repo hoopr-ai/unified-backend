@@ -19,6 +19,16 @@ import { HttpStatusCode, Platform, isPlatform } from "../services/dto-service/mo
 import { isDownloadPending } from "../services/dto-service/licenses/modules.export";
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import type { SessionPayload } from "../middlewares/authenticate";
+import {
+  isLicenseExpiryStatus,
+  LICENSE_EXPIRY_STATUSES,
+  type LicenseExpiryStatus,
+} from "../services/business-service/licenses/publishedTerm";
+import {
+  isLicenseSort,
+  LICENSE_SORTS,
+  type LicenseSort,
+} from "../services/persistence-service/licenses/modules.export";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -122,7 +132,47 @@ export const getBrandLicenseHistory = catchAsync(async (req: AuthRequest, res: R
     category = normalized;
   }
 
-  const response = await getBrandLicenseHistoryService(userId, page, limit, category);
+  // Optional expiry-status filter. Rejected loudly rather than ignored: a
+  // silently dropped filter returns a full, plausible-looking list, and the
+  // caller cannot tell that from a bucket that genuinely holds everything.
+  const rawStatus = req.query.status as string | undefined;
+  let status: LicenseExpiryStatus | undefined;
+  if (rawStatus !== undefined && rawStatus !== "") {
+    if (!isLicenseExpiryStatus(rawStatus)) {
+      return sendError(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        `Invalid status. Allowed values: ${LICENSE_EXPIRY_STATUSES.join(", ")}`,
+        {},
+      );
+    }
+    status = rawStatus;
+  }
+
+  // Sort defaults to expiring-first — the screen exists to answer "what lapses
+  // next", so that is the useful order before the user picks anything.
+  const rawSort = req.query.sort as string | undefined;
+  let sort: LicenseSort = "expiring-first";
+  if (rawSort !== undefined && rawSort !== "") {
+    if (!isLicenseSort(rawSort)) {
+      return sendError(
+        res,
+        HttpStatusCode.BAD_REQUEST,
+        `Invalid sort. Allowed values: ${LICENSE_SORTS.join(", ")}`,
+        {},
+      );
+    }
+    sort = rawSort;
+  }
+
+  const response = await getBrandLicenseHistoryService(
+    userId,
+    page,
+    limit,
+    category,
+    status,
+    sort,
+  );
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,

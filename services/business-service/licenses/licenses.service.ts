@@ -1,6 +1,8 @@
 import {
   createLicenseRecord,
-  getLicensesByBrandId,
+  getBrandDownloadsPage,
+  getLicensesByIds,
+  type LicenseSort,
   LicenseModel,
   VideoLinkModel,
   type LicenseDetails,
@@ -27,7 +29,18 @@ import {
   TokenDeductionReason,
 } from "../../persistence-service/token/modules.export";
 import { TrackModel } from "../../persistence-service/track/modules.export";
-import { earliestPublishedDate, publishedExpiry } from "./publishedTerm";
+import {
+  earliestPublishedDate,
+  publishedExpiry,
+  expiryStatusOf,
+  daysLeftUntil,
+  isLicenseExpiryStatus,
+  STATUS_NOT_APPLICABLE,
+  REQUIRED_VIDEO_LINKS,
+  EXPIRING_SOON_DAYS,
+  PUBLISHED_TERM_YEARS,
+  type LicenseExpiryStatus,
+} from "./publishedTerm";
 import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
 import { OwnerModel, getOwnersByIds } from "../../persistence-service/owner/modules.export";
 import { CampaignModel, CampaignStatus } from "../../persistence-service/campaign/modules.export";
@@ -504,6 +517,8 @@ export const getBrandLicenseHistoryService = async (
   page: number = 1,
   limit: number = 50,
   category?: LicenseHistoryCategory,
+  status?: LicenseExpiryStatus,
+  sort: LicenseSort = "expiring-first",
 ): Promise<BrandLicenseHistoryResponse> => {
   // Get user's brand
   const user = await UserModel.findByPk(userId, {
@@ -520,7 +535,21 @@ export const getBrandLicenseHistoryService = async (
 
   const brandId = user.brandId;
 
-  const { rows, count } = await getLicensesByBrandId(brandId, page, limit, category);
+  // Which licences, in what order, and how big every bucket is — all decided in
+  // SQL, because none of it can be worked out from a single page of rows. The
+  // ids come back already ordered; getLicensesByIds only hydrates them.
+  const { ids, totalItems, counts, derived } = await getBrandDownloadsPage(brandId, {
+    page,
+    limit,
+    category,
+    status,
+    sort,
+    termYears: PUBLISHED_TERM_YEARS,
+    requiredLinks: REQUIRED_VIDEO_LINKS,
+    soonDays: EXPIRING_SOON_DAYS,
+  });
+  const rows = await getLicensesByIds(ids);
+  const count = totalItems;
 
   // Collect all unique owner IDs from tracks
   const allOwnerIds: string[] = [];
@@ -592,6 +621,29 @@ export const getBrandLicenseHistoryService = async (
       userEmail: licenseUser?.email,
       publishedDate: licensePublishedAt,
       publishedExpiryDate: publishedExpiry(licensePublishedAt),
+      // Taken from the SQL pass that produced the counts, so a row can never
+      // contradict the chip it was counted under. expiryStatusOf is the same
+      // rule and only stands in if a row somehow arrived without one.
+      //
+      // SFX surface as null, not as the internal STATUS_NOT_APPLICABLE marker:
+      // the absence of a status is the fact, and inventing a sixth value would
+      // make every client switch on a bucket that has no chip.
+      expiryStatus: (() => {
+        const d = derived.get(Number(license.id));
+        if (d) {
+          return d.status === STATUS_NOT_APPLICABLE
+            ? null
+            : (d.status as LicenseExpiryStatus);
+        }
+        return expiryStatusOf(
+          licensePublishedAt,
+          videoLinks?.length ?? 0,
+          new Date(),
+          isSfxTrackType(track?.type),
+        );
+      })(),
+      daysLeft: daysLeftUntil(licensePublishedAt),
+      requiredVideoLinks: isSfxTrackType(track?.type) ? 0 : REQUIRED_VIDEO_LINKS,
       videoLinks: videoLinks?.map((vl) => ({
         id: vl.id,
         url: vl.url,
@@ -619,6 +671,8 @@ export const getBrandLicenseHistoryService = async (
       totalItems: count,
       totalPages: Math.ceil(count / limit),
     },
+    counts,
+    applied: { category: category ?? null, status: status ?? null, sort },
   };
 };
 
