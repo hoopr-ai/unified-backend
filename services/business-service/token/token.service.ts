@@ -78,6 +78,9 @@ export const getTokensListService = async (
       iprsShare: token.iprsShare ?? null,
       hooprShare: token.hooprShare ?? null,
       keyName: token.keyName ?? null,
+      startDate: token.startDate ?? null,
+      title: token.title ?? null,
+      subTitle: token.subTitle ?? null,
       isUnlimited: token.isUnlimited === true,
       createdAt: token.createdAt,
     })),
@@ -151,6 +154,9 @@ export const getTokenDetailsByBrandService = async (
       iprsShare: token.iprsShare ?? null,
       hooprShare: token.hooprShare ?? null,
       keyName: token.keyName ?? null,
+      startDate: token.startDate ?? null,
+      title: token.title ?? null,
+      subTitle: token.subTitle ?? null,
       isUnlimited,
       createdAt: token.createdAt,
     };
@@ -188,7 +194,7 @@ export const assignTokensAdminService = async (
   data: AssignTokensRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName, isUnlimited } = data;
+  const { brandId, tokens, type, expiryDate, ownerIds, dealType, pricePerPack, iprsShare, hooprShare, keyName, isUnlimited, startDate, title, subTitle } = data;
   const unlimited = isUnlimited === true;
 
   // Validate type
@@ -230,7 +236,8 @@ export const assignTokensAdminService = async (
     effectiveDealType === "bulk" ? (iprsShare ?? null) : null,
     effectiveDealType === "bulk" ? (hooprShare ?? null) : null,
     keyName ?? null,
-    unlimited
+    unlimited,
+    { startDate: startDate ?? null, title: title ?? null, subTitle: subTitle ?? null }
   );
 
   // Fetch owner details if ownerIds exist
@@ -255,6 +262,9 @@ export const assignTokensAdminService = async (
     hooprShare: tokenAssigned.hooprShare ?? null,
     keyName: tokenAssigned.keyName ?? null,
     isUnlimited: tokenAssigned.isUnlimited,
+    startDate: tokenAssigned.startDate ?? null,
+    title: tokenAssigned.title ?? null,
+    subTitle: tokenAssigned.subTitle ?? null,
   };
 };
 
@@ -329,6 +339,9 @@ export const setTokenAssignedPriceService = async (
     iprsShare: token.iprsShare ?? null,
     hooprShare: token.hooprShare ?? null,
     keyName: token.keyName ?? null,
+    startDate: token.startDate ?? null,
+    title: token.title ?? null,
+    subTitle: token.subTitle ?? null,
     isUnlimited: token.isUnlimited === true,
   };
 };

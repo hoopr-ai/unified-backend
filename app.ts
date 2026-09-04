@@ -30,6 +30,8 @@ import railRoutes from "./routes/rail.route";
 import adminInternalUsersRoutes from "./routes/admin-internal-users.route";
 import adminSkuRoutes from "./routes/admin-sku.route";
 import adminOwnerRoutes from "./routes/admin-owner.route";
+import adminCatalogueRightsRoutes from "./routes/admin-catalogue-rights.route";
+import catalogueRightsRoutes from "./routes/catalogue-rights.route";
 import adminArtistRoutes from "./routes/admin-artist.route";
 import adminPayPerTrackRoutes from "./routes/admin-pay-per-track.route";
 import adminIprsRoutes from "./routes/admin-iprs.route";
@@ -106,6 +108,12 @@ app.use("/rails", railRoutes);
 app.use("/admin/internal-users", adminInternalUsersRoutes);
 app.use("/admin/skus", adminSkuRoutes);
 app.use("/admin/owners", adminOwnerRoutes);
+// Catalogue rights: the CMS surface, and the brand-facing read behind the
+// My Subscription cards. Separate mounts because they have different gates —
+// the admin side is INTERNAL-only + granted, /catalogue-rights/me is any
+// signed-in brand user reading their own terms.
+app.use("/admin/catalogue-rights", adminCatalogueRightsRoutes);
+app.use("/catalogue-rights", catalogueRightsRoutes);
 app.use("/admin/artists", adminArtistRoutes);
 app.use("/admin/pay-per-track", adminPayPerTrackRoutes);
 app.use("/admin/iprs", adminIprsRoutes);

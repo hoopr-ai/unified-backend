@@ -29,6 +29,20 @@ export const assignTokensRequestSchema = Joi.object<AssignTokensRequest>({
     "date.base": "expiryDate must be a valid date",
   }),
   ownerIds: Joi.array().items(Joi.string()).optional(),
+
+  // ── Deal header ──────────────────────────────────────────────────────────
+  // Shown above the catalogue cards on My Subscription. All optional: existing
+  // allocations predate these fields and must keep assigning without them.
+  //
+  // startDate is NOT defaulted to now(). A deal is routinely recorded before it
+  // goes live, and silently stamping today would put a wrong "PLAN ACTIVE FROM"
+  // in front of the customer — an absent date the UI can hide is better than a
+  // confident wrong one.
+  startDate: Joi.date().optional().allow(null).messages({
+    "date.base": "startDate must be a valid date",
+  }),
+  title: Joi.string().trim().max(255).optional().allow(null, ""),
+  subTitle: Joi.string().trim().max(500).optional().allow(null, ""),
   // Unlimited allocations are always bulk-only (Pack + IPRS + Hoopr); the
   // per-track shape doesn't fit because there's no token count to multiply by.
   dealType: Joi.when("isUnlimited", {

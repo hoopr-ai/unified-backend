@@ -34,6 +34,9 @@ export interface TokenListItem {
   hooprShare?: number | null;
   keyName?: string | null;
   isUnlimited: boolean;
+  startDate?: Date | null;
+  title?: string | null;
+  subTitle?: string | null;
   createdAt: Date;
 }
 

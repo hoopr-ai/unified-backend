@@ -1,4 +1,5 @@
 import { ArtistType } from "../modules.export";
+import type { TrackCatalogueRights } from "../catalogue-rights/catalogue-rights.dto";
 
 export interface ArtistInfoTrack {
   id: string;
@@ -84,6 +85,16 @@ export interface TrackDetailsWithSkus extends TrackWithArtists {
   description?: string | null;
   usageInfo?: object;
   restrictedCategories?: object;
+  /**
+   * Every catalogue right for this track's catalogue, allowed and not, for the
+   * viewer's brand. Present only when the viewer holds a token of this
+   * catalogue — same gate as the restrictedCategories override, so what a
+   * catalogue permits is not advertised to brands that do not hold it.
+   *
+   * Separate from restrictedCategories on purpose: that field is a list of
+   * prohibitions and must stay one, while this is the full six-flag picture.
+   */
+  catalogueRights?: TrackCatalogueRights;
   ownerCode?: string;
   songCredits?: string;
 }

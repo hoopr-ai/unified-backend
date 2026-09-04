@@ -1,0 +1,260 @@
+// ── Catalogue rights vocabulary ───────────────────────────────────────────
+//
+// THE single source of truth for which rights exist and what they are called.
+// The Joi schema, the persistence merge, the CMS and the subscription screen
+// all derive from this list — adding a seventh right is one entry here plus a
+// backfill, with no migration (the flags live in a jsonb blob for exactly that
+// reason).
+//
+// Order is the screen's reading order (left column, right column, row by row),
+// so a client can render the two-column grid straight from the array without
+// carrying its own ordering.
+
+export const CATALOGUE_RIGHT_DEFS = [
+  { key: "unlimitedDownloads", label: "Unlimited downloads" },
+  { key: "worldwidePerpetuity", label: "Worldwide perpetuity" },
+  { key: "channelClearance", label: "Channel clearance" },
+  { key: "brandedContent", label: "Branded content & Collaborations" },
+  { key: "socialOrganic", label: "Social media & organic content" },
+  { key: "audiobooksPodcasts", label: "Audiobooks & podcasts" },
+] as const;
+
+export type CatalogueRightKey = (typeof CATALOGUE_RIGHT_DEFS)[number]["key"];
+
+export const CATALOGUE_RIGHT_KEYS: CatalogueRightKey[] = CATALOGUE_RIGHT_DEFS.map(
+  (d) => d.key,
+) as CatalogueRightKey[];
+
+export const CATALOGUE_RIGHT_LABELS: Record<CatalogueRightKey, string> =
+  Object.fromEntries(CATALOGUE_RIGHT_DEFS.map((d) => [d.key, d.label])) as Record<
+    CatalogueRightKey,
+    string
+  >;
+
+/** Every right present and decided. What a catalogue DEFAULT always is. */
+export type CatalogueRights = Record<CatalogueRightKey, boolean>;
+
+/**
+ * A brand override. PARTIAL on purpose — only the keys this brand negotiated.
+ * A full copy would freeze all six at write time, so a later change to the
+ * catalogue default would silently skip every brand carrying an override.
+ */
+export type PartialCatalogueRights = Partial<CatalogueRights>;
+
+/** Every right false. The floor a missing/empty row falls back to. */
+export const emptyCatalogueRights = (): CatalogueRights =>
+  Object.fromEntries(CATALOGUE_RIGHT_KEYS.map((k) => [k, false])) as CatalogueRights;
+
+/**
+ * Coerce a stored jsonb blob into a complete, typed rights object.
+ * Unknown keys are dropped and missing keys default to false, so a legacy or
+ * hand-edited row can never crash a render or leak a stray flag to a client.
+ */
+export const normalizeCatalogueRights = (raw: unknown): CatalogueRights => {
+  const out = emptyCatalogueRights();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  const r = raw as Record<string, unknown>;
+  for (const key of CATALOGUE_RIGHT_KEYS) {
+    if (typeof r[key] === "boolean") out[key] = r[key] as boolean;
+  }
+  return out;
+};
+
+/** Same, but keeps absence as absence — the shape an override is stored in. */
+export const normalizePartialCatalogueRights = (
+  raw: unknown,
+): PartialCatalogueRights => {
+  const out: PartialCatalogueRights = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  const r = raw as Record<string, unknown>;
+  for (const key of CATALOGUE_RIGHT_KEYS) {
+    if (typeof r[key] === "boolean") out[key] = r[key] as boolean;
+  }
+  return out;
+};
+
+// ── Read shapes ───────────────────────────────────────────────────────────
+
+/** Which layer decided one flag. Lets the CMS badge exactly what was negotiated. */
+export type RightSource = "catalogue" | "brand";
+
+export interface EffectiveRight {
+  key: CatalogueRightKey;
+  label: string;
+  allowed: boolean;
+  source: RightSource;
+}
+
+/**
+ * One token bucket inside a catalogue.
+ *
+ * A catalogue is not always a single pool: an allocation can be SCOPED to
+ * specific labels inside it (token_assigned.ownerIds), so a brand may hold
+ * "110 Chartbusters anywhere, 100 only on Universal, 50 only on Zee". Summing
+ * those to 260 is true but misleading — it implies 260 spendable on any
+ * Chartbusters track.
+ *
+ * Rights stay at the CATALOGUE level; only the tokens split.
+ */
+export interface CatalogueSubEntitlement {
+  /** 'catalogue' = spendable anywhere in it; 'owner' = restricted to `owners`. */
+  scope: "catalogue" | "owner";
+  /** "All Chartbusters", or the label names an owner-scoped pack is limited to. */
+  label: string;
+  /** Empty for a blanket bucket. */
+  owners: { id: string; ownerCode: string; name: string | null }[];
+  tokensAssigned: number;
+  tokenBalance: number;
+  isUnlimited: boolean;
+  expiryDate: Date | null;
+}
+
+/** One card on the My Subscription screen. */
+export interface CatalogueEntitlement {
+  catalogue: string;
+  /** Sum of totalAssignedToken across this brand's live rows for the catalogue. */
+  tokensAssigned: number;
+  tokenBalance: number;
+  /** true when any row is unlimited — the screen renders ∞ instead of a number. */
+  isUnlimited: boolean;
+  /** Soonest expiry across the rows, or null when none is set. */
+  expiryDate: Date | null;
+  /** Latest start across the rows — this catalogue's own window, not the deal's. */
+  startDate: Date | null;
+  rights: EffectiveRight[];
+  /** true when any right came from a brand override. */
+  hasOverride: boolean;
+  /**
+   * The catalogue's tokens broken down by scope. Always present and always
+   * sums to `tokensAssigned`, so a client that ignores it stays correct — the
+   * existing fields are unchanged. A single blanket bucket is the common case.
+   */
+  subCategories: CatalogueSubEntitlement[];
+}
+
+/**
+ * The plan block above the catalogue cards.
+ *
+ * Assembled from the brand's token allocations, which each carry their own copy
+ * of these fields — see pickDealHeader for how one is chosen when they differ,
+ * and `isConsistent` for how the client is told that they did.
+ */
+export interface DealHeader {
+  title: string | null;
+  subTitle: string | null;
+  startDate: Date | null;
+  expiryDate: Date | null;
+  /** ACTIVE until expiryDate passes; EXPIRED after; null when no date is set. */
+  status: "ACTIVE" | "EXPIRED" | null;
+  /**
+   * false when the brand's allocations disagree about title/subTitle/startDate.
+   * The header is still resolved deterministically, but ops should reconcile —
+   * the CMS surfaces this so a drifted deal is visible rather than silent.
+   */
+  isConsistent: boolean;
+}
+
+export interface BrandEntitlementsResponseData {
+  brandId: number;
+  /** null when no allocation carries deal fields yet. */
+  deal: DealHeader | null;
+  /** Total across catalogues; null when any catalogue is unlimited. */
+  totalTokens: number | null;
+  catalogues: CatalogueEntitlement[];
+}
+
+// ── Admin (internal-fe) shapes ────────────────────────────────────────────
+
+export interface AdminCatalogueRightsListItem {
+  catalogue: string;
+  rights: CatalogueRights;
+  /** How many brands deviate from this catalogue's defaults. */
+  overrideCount: number;
+  /** Catalogues seen on owners.type that have no defaults row yet. */
+  isConfigured: boolean;
+  updatedAt: Date | null;
+}
+
+export interface AdminBrandOverride {
+  brandId: number;
+  brandName: string | null;
+  /** Only the negotiated keys. */
+  rights: PartialCatalogueRights;
+  /** Defaults merged with the override — what this brand actually sees. */
+  effective: CatalogueRights;
+  note: string | null;
+  updatedAt: Date | null;
+}
+
+export interface AdminCatalogueRightsDetail {
+  catalogue: string;
+  rights: CatalogueRights;
+  updatedAt: Date | null;
+  overrides: AdminBrandOverride[];
+  /** The vocabulary, so the CMS renders the checkbox list from the server. */
+  definitions: { key: CatalogueRightKey; label: string }[];
+}
+
+// ── Track detail bridge ────────────────────────────────────────────────────
+
+/**
+ * Render catalogue rights into the SHAPE `owners.restrictedCategories` already
+ * uses — `[{ title, description }]` — so GET /tracks/:trackCode keeps its exact
+ * existing contract and no client has to change.
+ *
+ * Only the rights that are FALSE become entries. `restrictedCategories` answers
+ * "what can I not do with this track", so an allowed right has nothing to say
+ * there; listing all six would turn a restriction list into a feature list and
+ * every consumer rendering it as warnings would start showing green items as
+ * prohibitions.
+ *
+ * Returns [] when nothing is restricted — the caller treats that as "no
+ * restrictions to report" and falls back to the owner blob rather than
+ * replacing a populated list with an empty one.
+ */
+export const rightsToRestrictedCategories = (
+  rights: CatalogueRights,
+  catalogue: string,
+): { title: string; description: string }[] =>
+  CATALOGUE_RIGHT_DEFS.filter((d) => rights[d.key] === false).map((d) => ({
+    title: d.label,
+    description: `Not included with your ${catalogue} tokens.`,
+  }));
+
+/**
+ * The COMPLETE rights picture for one catalogue, for the track page.
+ *
+ * `rightsToRestrictedCategories` above deliberately emits only the FALSE flags,
+ * because `restrictedCategories` answers "what can I not do". That leaves the
+ * allowed rights with nowhere to go, so a client cannot render the six-flag
+ * card the My Subscription screen shows — it receives crosses and no ticks.
+ *
+ * Shaped as `{ allowed, notAllowed }` string arrays to MATCH `owners.usageInfo`,
+ * which the track page already renders. Same vocabulary of two lists, so the
+ * existing component works on this with no change.
+ *
+ * It stays a SEPARATE field rather than being folded into usageInfo, because
+ * the two describe different things at different levels: usageInfo is the
+ * owner's own usage terms ("Influencer collab", "TV, OTT & broadcast"), this is
+ * what the viewer's tokens permit across the whole catalogue. Merging them
+ * would silently overwrite one label's negotiated terms with a catalogue-wide
+ * default, and nothing downstream could tell which had answered.
+ *
+ * Labels only, no keys — usageInfo carries none either, and matching it exactly
+ * is the point.
+ */
+export interface TrackCatalogueRights {
+  catalogue: string;
+  allowed: string[];
+  notAllowed: string[];
+}
+
+/** Split all six flags into the two lists, in CATALOGUE_RIGHT_DEFS order. */
+export const rightsToTrackCatalogueRights = (
+  rights: CatalogueRights,
+  catalogue: string,
+): TrackCatalogueRights => ({
+  catalogue,
+  allowed: CATALOGUE_RIGHT_DEFS.filter((d) => rights[d.key] === true).map((d) => d.label),
+  notAllowed: CATALOGUE_RIGHT_DEFS.filter((d) => rights[d.key] !== true).map((d) => d.label),
+});
