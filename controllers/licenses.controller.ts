@@ -22,13 +22,11 @@ import type { SessionPayload } from "../middlewares/authenticate";
 import {
   isLicenseExpiryStatus,
   LICENSE_EXPIRY_STATUSES,
-  type LicenseExpiryStatus,
-} from "../services/business-service/licenses/publishedTerm";
-import {
   isLicenseSort,
   LICENSE_SORTS,
+  type LicenseExpiryStatus,
   type LicenseSort,
-} from "../services/persistence-service/licenses/modules.export";
+} from "../services/dto-service/licenses/licenses.dto";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;

@@ -1,5 +1,46 @@
-import type { LicenseExpiryStatus } from "../../business-service/licenses/publishedTerm";
-import type { LicenseSort } from "../../persistence-service/licenses/licenses.persistence.service";
+// ── Downloads vocabulary ──────────────────────────────────────────────────
+//
+// The status and sort vocabularies live HERE, in the DTO, rather than beside
+// the logic that applies them. This file is copied verbatim into
+// @hoopr-ai/db-schemas (packages/db-schemas/scripts/build.js), so anything it
+// imports has to exist inside that package — reaching up into business- or
+// persistence-service breaks the package build even though it typechecks in
+// the app. The dependency also points the right way round: the DTO is the
+// contract, and the layers that implement it depend on the contract.
+
+/** The five expiry buckets, in the order their rules are evaluated. */
+export const LICENSE_EXPIRY_STATUSES = [
+  "expired",
+  "not-published",
+  "link-not-added",
+  "expiring-soon",
+  "active",
+] as const;
+
+export type LicenseExpiryStatus = (typeof LICENSE_EXPIRY_STATUSES)[number];
+
+export const isLicenseExpiryStatus = (v: unknown): v is LicenseExpiryStatus =>
+  typeof v === "string" && (LICENSE_EXPIRY_STATUSES as readonly string[]).includes(v);
+
+/**
+ * Internal marker for a licence no bucket describes — SFX, which are free and
+ * carry no usage-link obligation. Never leaves the server: the API expresses
+ * the same thing as `expiryStatus: null`.
+ */
+export const STATUS_NOT_APPLICABLE = "not-applicable";
+
+/** Orders the Downloads list can be returned in. */
+export const LICENSE_SORTS = [
+  "expiring-first",
+  "recently-downloaded",
+  "recently-published",
+] as const;
+
+export type LicenseSort = (typeof LICENSE_SORTS)[number];
+
+export const isLicenseSort = (v: unknown): v is LicenseSort =>
+  typeof v === "string" && (LICENSE_SORTS as readonly string[]).includes(v);
+
 export enum DealType {
   BULK = "bulk",
   PRICE_PER_TRACK = "pricePerTrack",

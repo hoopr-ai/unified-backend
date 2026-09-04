@@ -2,7 +2,6 @@ import {
   createLicenseRecord,
   getBrandDownloadsPage,
   getLicensesByIds,
-  type LicenseSort,
   LicenseModel,
   VideoLinkModel,
   type LicenseDetails,
@@ -34,13 +33,15 @@ import {
   publishedExpiry,
   expiryStatusOf,
   daysLeftUntil,
-  isLicenseExpiryStatus,
-  STATUS_NOT_APPLICABLE,
   REQUIRED_VIDEO_LINKS,
   EXPIRING_SOON_DAYS,
   PUBLISHED_TERM_YEARS,
-  type LicenseExpiryStatus,
 } from "./publishedTerm";
+import {
+  STATUS_NOT_APPLICABLE,
+  type LicenseExpiryStatus,
+  type LicenseSort,
+} from "../../dto-service/licenses/licenses.dto";
 import { UserModel, findAllActiveUsersByBrandId } from "../../persistence-service/user/modules.export";
 import { OwnerModel, getOwnersByIds } from "../../persistence-service/owner/modules.export";
 import { CampaignModel, CampaignStatus } from "../../persistence-service/campaign/modules.export";

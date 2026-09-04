@@ -1,5 +1,9 @@
 import { Op, QueryTypes } from "sequelize";
 import { sequelize } from "../database";
+import {
+  STATUS_NOT_APPLICABLE,
+  type LicenseSort,
+} from "../../dto-service/licenses/licenses.dto";
 import { LicenseModel, type LicenseDetails, VideoLinkModel } from "./schemas/modules.export";
 import { TrackModel } from "../track/schemas/modules.export";
 import { UserModel } from "../user/schemas/modules.export";
@@ -95,16 +99,6 @@ export const getLicensesByBrandId = async (
 // business-service/licenses/publishedTerm.ts. Keeping the two in step is a
 // standing obligation — see the note there.
 
-export const LICENSE_SORTS = [
-  "expiring-first",
-  "recently-downloaded",
-  "recently-published",
-] as const;
-export type LicenseSort = (typeof LICENSE_SORTS)[number];
-
-export const isLicenseSort = (v: unknown): v is LicenseSort =>
-  typeof v === "string" && (LICENSE_SORTS as readonly string[]).includes(v);
-
 export interface DownloadsStatusCounts {
   /** Every licence in the list for this category — INCLUDING SFX, so it always
    *  matches what the user can actually see. Equals the five buckets plus
@@ -173,7 +167,7 @@ const SCORED_CTE = (category?: LicenseHistoryCategory) => {
              CASE
                -- SFX first, ahead of every other rule: they are free and carry
                -- no link obligation, so no bucket describes them.
-               WHEN is_sfx THEN 'not-applicable'
+               WHEN is_sfx THEN '${STATUS_NOT_APPLICABLE}'
                WHEN published_at IS NOT NULL
                     AND published_at + (:termYears * INTERVAL '1 year') < NOW()
                  THEN 'expired'
@@ -239,7 +233,7 @@ export const getBrandDownloadsPage = async (
     "link-not-added": "linkNotAdded",
     "expiring-soon": "expiringSoon",
     active: "active",
-    "not-applicable": "notApplicable",
+    [STATUS_NOT_APPLICABLE]: "notApplicable",
   };
   for (const row of countRows) {
     const n = Number(row.n);

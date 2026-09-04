@@ -1,3 +1,5 @@
+import type { LicenseExpiryStatus } from "../../dto-service/licenses/licenses.dto";
+
 /**
  * Usage term attached to a published video.
  *
@@ -68,33 +70,16 @@ export const REQUIRED_VIDEO_LINKS = 3;
 /** A licence inside this many days of expiry is "expiring soon". */
 export const EXPIRING_SOON_DAYS = 30;
 
-export const LICENSE_EXPIRY_STATUSES = [
-    "expired",
-    "not-published",
-    "link-not-added",
-    "expiring-soon",
-    "active",
-] as const;
-
-export type LicenseExpiryStatus = (typeof LICENSE_EXPIRY_STATUSES)[number];
-
-export const isLicenseExpiryStatus = (v: unknown): v is LicenseExpiryStatus =>
-    typeof v === "string" && (LICENSE_EXPIRY_STATUSES as readonly string[]).includes(v);
-
 /**
- * SFX carry NO expiry status.
+ * SFX carry NO expiry status: they are free and have no usage-link obligation,
+ * so every bucket is either meaningless or actively wrong for them — an SFX
+ * with no links is not "missing" links, it never needed any. They appear in the
+ * Downloads list with `expiryStatus: null`, counted under `all` and
+ * `notApplicable` rather than under any bucket.
  *
- * They are free, and they carry no usage-link obligation, so every one of the
- * five buckets is either meaningless or actively wrong for them — an SFX with
- * no links is not a licence "missing" links, it is a licence that never needed
- * any. They appear in the Downloads list like anything else, but with
- * `expiryStatus: null`, and they are counted under `all` and `notApplicable`
- * rather than under any bucket.
- *
- * This is the internal marker the SQL groups by; it never reaches a client,
- * where the same thing is expressed as `null`.
+ * The vocabulary itself (LICENSE_EXPIRY_STATUSES, STATUS_NOT_APPLICABLE) lives
+ * in licenses.dto.ts — see the note there for why.
  */
-export const STATUS_NOT_APPLICABLE = "not-applicable";
 
 /**
  * Which bucket one licence falls in. FIRST MATCHING RULE WINS — the order is
