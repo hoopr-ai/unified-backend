@@ -383,12 +383,27 @@ export const getBrandEntitlementsService = async (
       };
     });
 
-  // null, not a number, when anything is unlimited: summing a finite total
-  // beside an ∞ card would understate what the brand actually holds.
-  const anyUnlimited = catalogues.some((c) => c.isUnlimited);
-  const totalTokens = anyUnlimited
-    ? null
-    : catalogues.reduce((sum, c) => sum + c.tokensAssigned, 0);
+  // Sum only the catalogues that HAVE a finite count, and name the rest.
+  //
+  // This used to return null the moment any catalogue was unlimited, on the
+  // grounds that a finite total beside an ∞ card understates the entitlement.
+  // True, but null understates it far worse: most brands hold at least one
+  // unlimited row, so the field was null for nearly everyone and the finite
+  // tokens they really had went unreported. Excluding the unlimited catalogues
+  // from the sum keeps the number honest — an unlimited row's tokensAssigned
+  // is a recorded figure that means nothing — and `hasUnlimited` tells the
+  // client the total is partial so it can render "2,282 + Unlimited".
+  const unlimitedCatalogues = catalogues.filter((c) => c.isUnlimited).map((c) => c.catalogue);
+  const totalTokens = catalogues
+    .filter((c) => !c.isUnlimited)
+    .reduce((sum, c) => sum + c.tokensAssigned, 0);
 
-  return { brandId, deal: pickDealHeader(positions), totalTokens, catalogues };
+  return {
+    brandId,
+    deal: pickDealHeader(positions),
+    totalTokens,
+    hasUnlimited: unlimitedCatalogues.length > 0,
+    unlimitedCatalogues,
+    catalogues,
+  };
 };

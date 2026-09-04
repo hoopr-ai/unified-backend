@@ -158,8 +158,22 @@ export interface BrandEntitlementsResponseData {
   brandId: number;
   /** null when no allocation carries deal fields yet. */
   deal: DealHeader | null;
-  /** Total across catalogues; null when any catalogue is unlimited. */
-  totalTokens: number | null;
+  /**
+   * Tokens summed across the catalogues that have a FINITE count. Always a
+   * number, never null.
+   *
+   * Unlimited catalogues are excluded from the sum rather than nulling it:
+   * their `tokensAssigned` is a figure that stops meaning anything once the row
+   * is unlimited, so counting it inflates the headline — but returning null hid
+   * the finite tokens the brand genuinely holds, which is most brands (18 of
+   * the 23 with a live position carry at least one unlimited row). Read this
+   * WITH `hasUnlimited`: "2,282 tokens + Unlimited", not "2,282 tokens".
+   */
+  totalTokens: number;
+  /** true when at least one catalogue is unlimited, so `totalTokens` is partial. */
+  hasUnlimited: boolean;
+  /** Which catalogues are unlimited, in the same order as `catalogues`. */
+  unlimitedCatalogues: string[];
   catalogues: CatalogueEntitlement[];
 }
 
