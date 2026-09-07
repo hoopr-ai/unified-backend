@@ -38,6 +38,7 @@ import adminPayPerTrackRoutes from "./routes/admin-pay-per-track.route";
 import adminIprsRoutes from "./routes/admin-iprs.route";
 import adminEnterpriseAnalyticsRoutes from "./routes/admin-enterprise-analytics.route";
 import adminNativeAnalyticsRoutes from "./routes/admin-native-analytics.route";
+import adminCreatorAnalyticsRoutes from "./routes/admin-creator-analytics.route";
 import internalLoginRoutes from "./routes/internal-login.route";
 import userAddressRoutes from "./routes/user-address.route";
 import geographyRoutes from "./routes/geography.route";
@@ -123,6 +124,10 @@ app.use("/admin/enterprise-analytics", adminEnterpriseAnalyticsRoutes);
 // Session/event analytics over the data NATIVE-BE records for creator-web and
 // creator-mobile (same shared DB, so no service hop).
 app.use("/admin/native-analytics", adminNativeAnalyticsRoutes);
+// Creator platform analytics — the acquisition funnel and the activity behind
+// it, aggregated over the same population the Creator Users CMS lists per
+// person. Gated on that CMS's own `native-users` grant.
+app.use("/admin/creator-analytics", adminCreatorAnalyticsRoutes);
 app.use("/admin/url-monitor", urlMonitorRoutes);
 // Channel Whitelisting — the ops CMS over creators' submitted channels and
 // their claim-clearance requests. Reads soundtracking_user_profiles (written by
