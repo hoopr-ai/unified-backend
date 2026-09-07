@@ -11,6 +11,7 @@ import {
   creatorBreakdownQuerySchema,
   creatorDetailQuerySchema,
   creatorEmptyQuerySchema,
+  creatorOptionalRangeQuerySchema,
 } from "../middlewares/admin-creator-analytics.validation";
 import {
   getFunnelService,
@@ -76,13 +77,20 @@ export const getCreatorBreakdown = catchAsync(async (req: Request, res: Response
 });
 
 /**
- * Point-in-time platform totals. Takes NO date range — see overview.service.ts
- * for why that is the design and not an omission — so the empty-query schema
- * rejects one rather than silently ignoring it.
+ * Platform totals, all-time by default.
+ *
+ * The range is OPTIONAL here and has no default, unlike every other endpoint in
+ * this module: absent dates mean all-time, which is what this view is for. With
+ * dates, each fact reports the window AND keeps its all-time total, so the two
+ * readings of "Tracks" — catalogue size, and tracks added — never wear one
+ * number.
  */
 export const getCreatorOverview = catchAsync(async (req: Request, res: Response) => {
-  validate(creatorEmptyQuerySchema, req.query);
-  const data = await getOverviewService();
+  const range = validate<{ startDate?: string; endDate?: string }>(
+    creatorOptionalRangeQuerySchema,
+    req.query,
+  );
+  const data = await getOverviewService(range);
   return ok(res, data, "Platform overview fetched successfully.");
 });
 
