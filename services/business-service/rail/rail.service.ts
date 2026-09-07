@@ -11,6 +11,7 @@ import {
   TOKEN_GATED_TRACK_CODES,
   isSfxTrackType,
   PageName,
+  type PageKey,
   OwnerType,
   isOwnerTypeAllowedForPage,
   getAllowedOwnerTypesForPage,
@@ -737,7 +738,7 @@ const getOwnerTypeFromItemData = (itemType: string, data: unknown): string | nul
 // Filter items based on page owner type restrictions
 const filterItemsByPageOwnerType = (
   items: RailItemResponse[],
-  pageName: PageName,
+  pageName: PageKey,
 ): RailItemResponse[] => {
   const allowedTypes = getAllowedOwnerTypesForPage(pageName);
 
@@ -1103,7 +1104,9 @@ export interface UpsertRailRequest {
   subType?: string | null;
   sourceType: RailSourceType;
   brandId?: number | null;
-  pageNames?: PageName[];  // Multiple pages = multiple rails created (one per page)
+  // Multiple pages = multiple rails created (one per page). PageKey, not
+  // PageName: a label page is addressed by its LABEL_<ownerCode> key.
+  pageNames?: PageKey[];
   order?: number;
   isVisible?: boolean;
   limit?: number;
@@ -1175,7 +1178,7 @@ export interface UpsertRailsResult {
 // Items dropped on save because the target page does not allow their owner
 // type. Reported back so the CMS can tell the admin what didn't make it.
 export interface SkippedRailItem {
-  pageName: PageName;
+  pageName: PageKey;
   itemType: string;
   itemCode: string;
   ownerType: string;
@@ -1707,13 +1710,13 @@ interface ItemValidationError {
   itemCode: string;
   itemType: string;
   ownerType: string;
-  pageName: PageName;
+  pageName: PageKey;
   allowedTypes: OwnerType[];
 }
 
 const validateItemsForPage = async (
   items: { itemType: string; itemCode: string }[],
-  pageName: PageName,
+  pageName: PageKey,
 ): Promise<ItemValidationError[]> => {
   const allowedTypes = getAllowedOwnerTypesForPage(pageName);
 
@@ -1771,7 +1774,7 @@ const validateItemsForPage = async (
 const formatValidationErrors = (errors: ItemValidationError[]): string => {
   if (errors.length === 0) return "";
 
-  const grouped = new Map<PageName, ItemValidationError[]>();
+  const grouped = new Map<PageKey, ItemValidationError[]>();
   for (const err of errors) {
     const list = grouped.get(err.pageName) || [];
     list.push(err);
@@ -1806,7 +1809,7 @@ interface UpsertItem {
 // after any over-fetch.
 const applyPageOwnerTypeFilter = async (
   items: UpsertItem[],
-  pageName: PageName,
+  pageName: PageKey,
   cap?: number | null,
 ): Promise<{ items: UpsertItem[]; skipped: ItemValidationError[] }> => {
   const itemsToValidate = items.filter((i) =>
@@ -2074,7 +2077,7 @@ export const editRailItemsService = async (
 // -----------------------------------------------------------------------------
 
 export interface ReorderRailsRequest {
-  pageName: PageName;  // Required: which page to reorder rails for
+  pageName: PageKey;  // Required: which page to reorder rails for
   railOrders: Array<{
     id: number;
     order: number;
@@ -2084,7 +2087,7 @@ export interface ReorderRailsRequest {
 export const reorderRailsService = async (
   req: ReorderRailsRequest,
   updatedById?: number | null,
-): Promise<{ updated: number; pageName: PageName }> => {
+): Promise<{ updated: number; pageName: PageKey }> => {
   if (!req.railOrders || req.railOrders.length === 0) {
     return { updated: 0, pageName: req.pageName };
   }
@@ -2114,7 +2117,7 @@ export const reorderRailsService = async (
 
 export interface CopyRailRequest {
   railId: number;
-  targetPageNames: PageName[];
+  targetPageNames: PageKey[];
   brandId?: number | null;
 }
 
@@ -2333,7 +2336,7 @@ const resolveQueryTracksPaginated = async (
 // Used by the see-all service after it has paginated raw codes.
 const buildSeeAllItems = async (
   itemPairs: Array<{ itemType: RailItemType; itemCode: string; order: number }>,
-  pageName: PageName | undefined,
+  pageName: PageKey | undefined,
   userId?: number,
   viewerBrandId?: number,
   platform?: string,

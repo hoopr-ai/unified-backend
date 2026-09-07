@@ -12,7 +12,7 @@ import {
   HasMany,
   ForeignKey,
 } from "sequelize-typescript";
-import { RailType, RailSourceType, PageName } from "../../../dto-service/modules.export";
+import { RailType, RailSourceType, type PageKey } from "../../../dto-service/modules.export";
 import { RailItemModel } from "./rail-item.schema";
 import { UserModel } from "../../user/schemas/user.schema";
 
@@ -48,7 +48,7 @@ export interface RailDetails {
   type: RailType;
   subType?: string | null;
   brandId?: number | null;
-  pageName?: PageName;
+  pageName?: PageKey;
   sourceType: RailSourceType;
   // "MANUAL" (app serves only curated rail_items) or "AUTO" (app auto-fills
   // from the catalogue; rail_items become PIN/HIDE overrides). Read by the
@@ -120,7 +120,7 @@ export class RailModel extends Model<RailModel, RailDetails> {
     type: DataType.STRING(50),
     allowNull: false,
   })
-  pageName!: PageName;
+  pageName!: PageKey;
 
   @Default(RailSourceType.MANUAL)
   @Column({

@@ -110,12 +110,12 @@ export function normalizeOwnerType(
 // set is unconstrained — either no pages were given or at least one of them
 // (e.g. HOME) accepts every owner type.
 export function getAllowedOwnerTypesForPages(
-  pageNames: PageName[] | null | undefined
+  pageNames: PageKey[] | null | undefined
 ): OwnerType[] | null {
   if (!pageNames || pageNames.length === 0) return null;
   const allowed = new Set<OwnerType>();
   for (const pageName of pageNames) {
-    const types = PAGE_OWNER_TYPE_MAP[pageName];
+    const types = PAGE_OWNER_TYPE_MAP[pageName as PageName];
     // An unconstrained page in the set makes the whole set unconstrained;
     // per-page filtering on write still keeps each rail clean.
     if (types === null || types === undefined) return null;
@@ -127,19 +127,24 @@ export function getAllowedOwnerTypesForPages(
 // Helper to check if an owner type is allowed for a page
 export function isOwnerTypeAllowedForPage(
   ownerType: string | null | undefined,
-  pageName: PageName
+  pageName: PageKey
 ): boolean {
-  const allowedTypes = PAGE_OWNER_TYPE_MAP[pageName];
-  // HOME allows all types
-  if (allowedTypes === null) return true;
+  const allowedTypes = PAGE_OWNER_TYPE_MAP[pageName as PageName];
+  // HOME allows all types — and so does any page not in the map at all, which
+  // is every label page (see labelPageKey below). `== null` rather than
+  // `=== null` on purpose: an unmapped key yields undefined, and letting that
+  // fall through to `.includes` below would throw on every read of the page.
+  if (allowedTypes == null) return true;
   // If owner type is not set, allow it (backwards compatibility)
   if (!ownerType) return true;
   return allowedTypes.includes(ownerType as OwnerType);
 }
 
-// Get allowed owner types for a page (returns null for HOME meaning all allowed)
-export function getAllowedOwnerTypesForPage(pageName: PageName): OwnerType[] | null {
-  return PAGE_OWNER_TYPE_MAP[pageName];
+// Get allowed owner types for a page (returns null for HOME meaning all allowed).
+// Normalises undefined to null so an unmapped key — a label page — reads as
+// unconstrained rather than as a missing entry callers have to guard.
+export function getAllowedOwnerTypesForPage(pageName: PageKey): OwnerType[] | null {
+  return PAGE_OWNER_TYPE_MAP[pageName as PageName] ?? null;
 }
 
 // Item types that have owner type restrictions (TRACK and LABEL)
@@ -169,9 +174,62 @@ export const RECOMMENDATION_EXCLUDED_PAGES: PageName[] = [
   PageName.APP_SFX,
 ];
 
-// Check if a page is excluded from the "Recommended For You" rail
+// Check if a page is excluded from the "Recommended For You" rail.
+// Label pages are excluded wholesale: a label page shows one label's catalogue,
+// and PAGE_RECOMMENDATION_FILTERS has no entry to narrow the recommendation to
+// that label, so the rail would arrive full of other labels' tracks.
 export function isRecommendationExcludedPage(
   pageName: string | null | undefined
 ): boolean {
+  if (isLabelPageKey(pageName)) return true;
   return RECOMMENDATION_EXCLUDED_PAGES.includes(pageName as PageName);
+}
+
+// ─── Label pages ─────────────────────────────────────────────────────────────
+//
+// A label page is a storefront page for one record label. Unlike the pages in
+// the PageName enum above there is an open-ended number of them — one per row
+// in `label_pages` — so they cannot be enum members. Instead each one owns a
+// page key built from the label's ownerCode, and rails target it through the
+// ordinary `pageName` column, which is a VARCHAR and never was an enum in the
+// database.
+//
+// Everything that consumes a page key therefore has to accept two shapes: a
+// PageName member, or a LABEL_ key. `isValidPageName` in the rail controller is
+// the one place that decides, and it checks a LABEL_ key against the live
+// `label_pages` table so a typo can't invent a page.
+export const LABEL_PAGE_KEY_PREFIX = "LABEL_";
+
+/**
+ * What the `rails.pageName` column actually holds: a PageName member, or a
+ * label page's LABEL_<ownerCode>. The column is a VARCHAR and always was —
+ * PageName only ever described the fixed half of the range.
+ */
+export type PageKey = PageName | (string & {});
+
+// `rails.pageName` is VARCHAR(50), so the prefix leaves 44 characters for the
+// ownerCode. Enforced when a label page is created — a longer code could not
+// address its own rails.
+export const MAX_LABEL_PAGE_OWNER_CODE_LENGTH = 50 - LABEL_PAGE_KEY_PREFIX.length;
+
+/** The pageName every rail on the given label's page carries. */
+export function labelPageKey(ownerCode: string): string {
+  return `${LABEL_PAGE_KEY_PREFIX}${ownerCode}`;
+}
+
+/** True for a label page key — NOT proof the page exists, only that it is one. */
+export function isLabelPageKey(pageName: string | null | undefined): boolean {
+  return (
+    typeof pageName === "string" &&
+    pageName.startsWith(LABEL_PAGE_KEY_PREFIX) &&
+    pageName.length > LABEL_PAGE_KEY_PREFIX.length
+  );
+}
+
+/** The ownerCode inside a label page key, or null when it isn't one. */
+export function ownerCodeFromLabelPageKey(
+  pageName: string | null | undefined
+): string | null {
+  if (!isLabelPageKey(pageName)) return null;
+  return (pageName as string).slice(LABEL_PAGE_KEY_PREFIX.length);
 }

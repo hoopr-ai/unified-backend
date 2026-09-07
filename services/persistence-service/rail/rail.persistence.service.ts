@@ -1,8 +1,8 @@
-import { Op, literal, type Order } from "sequelize";
+import { Op, col, fn, literal, type Order } from "sequelize";
 import { sequelize } from "../database";
 import { RailModel, RailDetails } from "./schemas/rail.schema";
 import { RailItemModel, RailItemDetails } from "./schemas/rail-item.schema";
-import { PageName } from "../../dto-service/modules.export";
+import { type PageKey } from "../../dto-service/modules.export";
 import { redisClient } from "../../helper-service/redis.client";
 
 // Rails render in tiers that outrank the plain `order` an admin gave them:
@@ -311,16 +311,39 @@ export const findRailByKeyAndBrand = async (
 export const findRailByKeyBrandAndPage = async (
   key: string,
   brandId: number | null,
-  pageName: PageName,
+  pageName: PageKey,
 ): Promise<RailModel | null> => {
   return RailModel.findOne({
     where: { key, brandId: brandId ?? (null as number | null), pageName },
   });
 };
 
+/**
+ * How many rails sit on each of the given pages. Backs the Label Pages CMS
+ * list, which shows a page's rail count without loading the rails themselves.
+ * Returns a map keyed by page key; a page with no rails is simply absent.
+ */
+export const countRailsByPageKeys = async (
+  pageKeys: PageKey[],
+): Promise<Record<string, number>> => {
+  if (pageKeys.length === 0) return {};
+  const rows = (await RailModel.findAll({
+    where: { pageName: { [Op.in]: pageKeys } },
+    attributes: ["pageName", [fn("COUNT", col("id")), "count"]],
+    group: ["pageName"],
+    raw: true,
+  })) as unknown as Array<{ pageName: string; count: string | number }>;
+
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    counts[row.pageName] = Number(row.count) || 0;
+  }
+  return counts;
+};
+
 export const getMaxRailOrder = async (
   brandId: number | null,
-  pageName?: PageName,
+  pageName?: PageKey,
 ): Promise<number> => {
   const whereClause: Record<string, unknown> = { brandId: brandId ?? (null as number | null) };
   if (pageName) {
@@ -336,7 +359,7 @@ export const getMaxRailOrder = async (
 
 export const getMinRailOrder = async (
   brandId: number | null,
-  pageName?: PageName,
+  pageName?: PageKey,
 ): Promise<number> => {
   const whereClause: Record<string, unknown> = { brandId: brandId ?? (null as number | null) };
   if (pageName) {
@@ -357,7 +380,7 @@ export interface UpsertRailInput {
   type: string;
   subType?: string | null;
   brandId: number | null;
-  pageName: PageName;
+  pageName: PageKey;
   sourceType: string;
   sourceConfig?: Record<string, unknown> | null;
   // Widget content for app-home rails. OMIT to leave the stored value alone —
@@ -568,7 +591,7 @@ export const updateRailItems = async (
 // Bulk update rail orders
 export const bulkUpdateRailOrders = async (
   railOrders: { id: number; order: number }[],
-  pageName?: PageName,
+  pageName?: PageKey,
   brandId?: number | null,
   updatedById?: number | null,
 ): Promise<void> => {
@@ -682,19 +705,19 @@ export const upsertRailWithItems = async (
 export interface CopyRailResult {
   sourceRailId: number;
   copiedTo: Array<{
-    pageName: PageName;
+    pageName: PageKey;
     railId: number;
     itemsCopied: number;
   }>;
   skipped: Array<{
-    pageName: PageName;
+    pageName: PageKey;
     reason: string;
   }>;
 }
 
 export const copyRailToPages = async (
   railId: number,
-  targetPageNames: PageName[],
+  targetPageKeys: PageKey[],
   brandId?: number | null,
   updatedById?: number | null,
 ): Promise<CopyRailResult> => {
@@ -712,11 +735,11 @@ export const copyRailToPages = async (
 
   const sourceItems = sourceRail.items || [];
 
-  for (const targetPageName of targetPageNames) {
+  for (const targetPageKey of targetPageKeys) {
     // Skip if target page is the same as source
-    if (targetPageName === sourceRail.pageName) {
+    if (targetPageKey === sourceRail.pageName) {
       result.skipped.push({
-        pageName: targetPageName,
+        pageName: targetPageKey,
         reason: "Same as source page",
       });
       continue;
@@ -726,19 +749,19 @@ export const copyRailToPages = async (
     const existingRail = await findRailByKeyBrandAndPage(
       sourceRail.key,
       brandId ?? sourceRail.brandId ?? null,
-      targetPageName,
+      targetPageKey,
     );
 
     if (existingRail) {
       result.skipped.push({
-        pageName: targetPageName,
+        pageName: targetPageKey,
         reason: `Rail with key "${sourceRail.key}" already exists on this page`,
       });
       continue;
     }
 
     // Get the max order for the target page to add at the end
-    const maxOrder = await getMaxRailOrder(brandId ?? sourceRail.brandId ?? null, targetPageName);
+    const maxOrder = await getMaxRailOrder(brandId ?? sourceRail.brandId ?? null, targetPageKey);
     const newOrder = maxOrder + 1;
 
     // Create the new rail
@@ -752,7 +775,7 @@ export const copyRailToPages = async (
           type: sourceRail.type,
           subType: sourceRail.subType,
           brandId: brandId ?? sourceRail.brandId,
-          pageName: targetPageName,
+          pageName: targetPageKey,
           sourceType: sourceRail.sourceType,
           sourceConfig: sourceRail.sourceConfig,
           order: newOrder,
@@ -779,17 +802,17 @@ export const copyRailToPages = async (
       await transaction.commit();
 
       // Invalidate cache for the target page
-      await invalidateRailsCache(brandId ?? sourceRail.brandId, targetPageName);
+      await invalidateRailsCache(brandId ?? sourceRail.brandId, targetPageKey);
 
       result.copiedTo.push({
-        pageName: targetPageName,
+        pageName: targetPageKey,
         railId: Number(newRail.id),
         itemsCopied: sourceItems.length,
       });
     } catch (err) {
       await transaction.rollback();
       result.skipped.push({
-        pageName: targetPageName,
+        pageName: targetPageKey,
         reason: `Error: ${(err as Error).message}`,
       });
     }

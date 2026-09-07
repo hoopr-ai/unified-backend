@@ -28,7 +28,12 @@ import {
   RailSourceType,
   PageName,
   isManualOnlyPage,
+  type PageKey,
+  isLabelPageKey,
+  ownerCodeFromLabelPageKey,
+  LABEL_PAGE_KEY_PREFIX,
 } from "../services/dto-service/modules.export";
+import { isKnownLabelPageOwnerCode } from "../services/business-service/label-page/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 import { findUserById } from "../services/persistence-service/exports";
 
@@ -178,6 +183,46 @@ const VALID_RAIL_TYPES = new Set<string>(Object.values(RailType));
 const VALID_SOURCE_TYPES = new Set<string>(Object.values(RailSourceType));
 const VALID_PAGE_NAMES = new Set<string>(Object.values(PageName));
 
+// A page key is either a PageName member or a label page key (LABEL_<ownerCode>,
+// one per row in `label_pages`). Label pages are open-ended — there is one per
+// label an admin publishes — so they cannot live in the enum, and validating
+// them is two separate questions:
+//
+//   · is it WELL-FORMED?  — synchronous, answered here, so the existing pure
+//                            body validators stay pure.
+//   · does it EXIST?      — a database lookup, answered by assertPagesExist
+//                            below and awaited in the three write handlers.
+//
+// Splitting them matters: a syntactically fine `LABEL_typo` that resolves to no
+// row would otherwise persist rails onto a page no surface can ever render.
+const isValidPageKey = (value: unknown): value is string =>
+  typeof value === "string" &&
+  (VALID_PAGE_NAMES.has(value) || isLabelPageKey(value));
+
+const pageKeyError = (field: string): string =>
+  `${field} must contain a page name (${Array.from(VALID_PAGE_NAMES).join(", ")}) or a label page key (${LABEL_PAGE_KEY_PREFIX}<ownerCode>)`;
+
+/**
+ * Resolve every label page key in the list against `label_pages`. Returns an
+ * error message naming the keys that don't resolve to an ACTIVE page, or null
+ * when they all do (and when there were none to check, the common case — no
+ * query is issued for a body that only mentions enum pages).
+ */
+const assertPagesExist = async (pageKeys: string[]): Promise<string | null> => {
+  const labelKeys = Array.from(new Set(pageKeys.filter(isLabelPageKey)));
+  if (labelKeys.length === 0) return null;
+
+  const unknown: string[] = [];
+  for (const key of labelKeys) {
+    const ownerCode = ownerCodeFromLabelPageKey(key);
+    if (!ownerCode || !(await isKnownLabelPageOwnerCode(ownerCode))) {
+      unknown.push(key);
+    }
+  }
+  if (unknown.length === 0) return null;
+  return `No active label page for: ${unknown.join(", ")}`;
+};
+
 const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
   if (!body || typeof body !== "object") return "Request body is required";
   const b = body as Record<string, unknown>;
@@ -197,8 +242,8 @@ const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {
       return "pageNames must be an array";
     }
     for (const pn of b.pageNames) {
-      if (typeof pn !== "string" || !VALID_PAGE_NAMES.has(pn)) {
-        return `pageNames must contain valid values: ${Array.from(VALID_PAGE_NAMES).join(", ")}`;
+      if (!isValidPageKey(pn)) {
+        return pageKeyError("pageNames");
       }
     }
   }
@@ -287,6 +332,16 @@ export const upsertRail = catchAsync(
         status: HttpStatusCode.BAD_REQUEST,
         data: null,
         message: parsed,
+      });
+      return;
+    }
+
+    const unknownPage = await assertPagesExist(parsed.pageNames ?? []);
+    if (unknownPage) {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: unknownPage,
       });
       return;
     }
@@ -419,8 +474,8 @@ const validateReorderRailsBody = (body: unknown): ReorderRailsRequest | string =
   const b = body as Record<string, unknown>;
 
   // Validate pageName (required for page-wise reordering)
-  if (typeof b.pageName !== "string" || !VALID_PAGE_NAMES.has(b.pageName)) {
-    return `pageName is required and must be one of: ${Array.from(VALID_PAGE_NAMES).join(", ")}`;
+  if (!isValidPageKey(b.pageName)) {
+    return `pageName is required — ${pageKeyError("pageName")}`;
   }
 
   if (!Array.isArray(b.railOrders)) return "railOrders array is required";
@@ -454,6 +509,16 @@ export const reorderRails = catchAsync(
       return;
     }
 
+    const unknownPage = await assertPagesExist([parsed.pageName]);
+    if (unknownPage) {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: unknownPage,
+      });
+      return;
+    }
+
     const updatedById = req.session?.userId ?? null;
     const result = await reorderRailsService(parsed, updatedById);
 
@@ -466,7 +531,7 @@ export const reorderRails = catchAsync(
 );
 
 // Validate copy rail request body
-const validateCopyRailBody = (body: unknown): { railId: number; targetPageNames: PageName[]; brandId?: number } | string => {
+const validateCopyRailBody = (body: unknown): { railId: number; targetPageNames: PageKey[]; brandId?: number } | string => {
   if (!body || typeof body !== "object") return "Request body is required";
   const b = body as Record<string, unknown>;
 
@@ -479,8 +544,8 @@ const validateCopyRailBody = (body: unknown): { railId: number; targetPageNames:
   }
 
   for (const pn of b.targetPageNames) {
-    if (typeof pn !== "string" || !VALID_PAGE_NAMES.has(pn)) {
-      return `targetPageNames must contain valid values: ${Array.from(VALID_PAGE_NAMES).join(", ")}`;
+    if (!isValidPageKey(pn)) {
+      return pageKeyError("targetPageNames");
     }
   }
 
@@ -491,7 +556,7 @@ const validateCopyRailBody = (body: unknown): { railId: number; targetPageNames:
 
   return {
     railId: b.railId as number,
-    targetPageNames: b.targetPageNames as PageName[],
+    targetPageNames: b.targetPageNames as PageKey[],
     brandId,
   };
 };
@@ -505,6 +570,16 @@ export const copyRail = catchAsync(
         status: HttpStatusCode.BAD_REQUEST,
         data: null,
         message: parsed,
+      });
+      return;
+    }
+
+    const unknownPage = await assertPagesExist(parsed.targetPageNames);
+    if (unknownPage) {
+      sendResponse(res, {
+        status: HttpStatusCode.BAD_REQUEST,
+        data: null,
+        message: unknownPage,
       });
       return;
     }

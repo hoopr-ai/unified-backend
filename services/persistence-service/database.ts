@@ -45,6 +45,7 @@ import { CatalogueRightsModel, BrandCatalogueRightsModel } from "./catalogue-rig
 import { OccasionModel, TrackOccasionMappingModel } from "./occasion/modules.export";
 import { QuickAddModel } from "./quick-add/modules.export";
 import { WebBannerModel } from "./web-banner/modules.export";
+import { LabelPageModel } from "./label-page/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import { FaqModel, FaqSectionModel } from "./faq/modules.export";
 import {
@@ -170,6 +171,7 @@ sequelize.addModels([
   TrackOccasionMappingModel,
   QuickAddModel,
   WebBannerModel,
+  LabelPageModel,
   FeaturedTracksModel,
   ChartTrackModel,
   KeywordModel,
