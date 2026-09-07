@@ -29,11 +29,11 @@ import {
   inRange,
   rangeBinds,
   originWhere,
-  creatorUsersCte,
+  cteFor,
   tablesExist,
   type CreatorFilters,
 } from "./creator-analytics-shared";
-import { METRICS, type MetricDef } from "./metrics.registry";
+import { METRICS, isUserScoped, type MetricDef } from "./metrics.registry";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -63,14 +63,29 @@ export interface DetailQuery extends CreatorFilters {
   value?: string;
 }
 
-/** Search over the person, which is the column every metric shares. */
-const SEARCH_SQL = `(
+/** Search over the person — the columns every USER-scoped metric shares. */
+const USER_SEARCH_SQL = `(
   CAST(:search AS text) IS NULL
   OR cu.email ILIKE '%' || :search || '%'
   OR cu.mobile ILIKE '%' || :search || '%'
   OR (COALESCE(cu."firstName", '') || ' ' || COALESCE(cu."lastName", '')) ILIKE '%' || :search || '%'
   OR CAST(cu.id AS text) = :search
 )`;
+
+/**
+ * Search for one metric.
+ *
+ * A catalogue metric has no person to search, so it brings its own expression
+ * (a track name, an ISRC). Wrapped in the same NULL guard here rather than in
+ * each registry entry, so a new metric cannot forget it and accidentally
+ * filter everything out when the box is empty.
+ */
+const searchSqlOf = (m: MetricDef): string =>
+  isUserScoped(m)
+    ? USER_SEARCH_SQL
+    : m.searchSql
+      ? `(CAST(:search AS text) IS NULL OR ${m.searchSql})`
+      : `(TRUE)`;
 
 /**
  * The predicates and binds a drill-down shares between its page and its count.
@@ -87,19 +102,26 @@ const scopeOf = (m: MetricDef, f: DetailQuery) => {
   const dim = f.dimension ? m.dimensions?.[f.dimension] : undefined;
   const bucket = dim ? `AND ${dim.sql} = :dimensionValue` : "";
 
+  // A catalogue metric has no `cu` to filter on. The origin and per-person
+  // clauses are dropped entirely rather than being written as always-true
+  // predicates against a table that is not in the FROM.
+  const person = isUserScoped(m)
+    ? `AND ${originWhere("cu.origin")}
+       AND (CAST(:userId AS bigint) IS NULL OR cu.id = :userId)`
+    : "";
+
   const where = `${inRange(m.dateCol)}
       ${defining}
       ${bucket}
-      AND ${originWhere("cu.origin")}
-      AND ${SEARCH_SQL}
-      AND (CAST(:userId AS bigint) IS NULL OR cu.id = :userId)`;
+      ${person}
+      AND ${searchSqlOf(m)}`;
 
-  const binds = {
+  const binds: Record<string, unknown> = {
     ...rangeBinds(f),
     search: f.search?.trim() ? f.search.trim() : null,
-    userId: f.userId ?? null,
     dimensionValue: dim ? (f.value ?? "") : null,
   };
+  if (isUserScoped(m)) binds.userId = f.userId ?? null;
 
   return { where, binds };
 };
@@ -177,12 +199,12 @@ export const getDetailService = async (f: DetailQuery) => {
   const limit = Math.min(MAX_LIMIT, Math.max(1, Math.floor(f.limit ?? DEFAULT_LIMIT)));
   const offset = (page - 1) * limit;
 
-  const usersCte = await creatorUsersCte();
+  const cte = await cteFor(m);
   const { where, binds } = scopeOf(m, f);
 
   const [rows, counted] = await Promise.all([
     q<Record<string, unknown>>(
-      `WITH ${usersCte}
+      `${cte}
        SELECT ${projection(m)}
          FROM ${m.from}
         WHERE ${where}
@@ -191,7 +213,7 @@ export const getDetailService = async (f: DetailQuery) => {
       { ...binds, limit, offset },
     ),
     q<{ n: string; amount: string | null }>(
-      `WITH ${usersCte}
+      `${cte}
        SELECT count(*)::bigint AS n,
               ${m.amountCol ? `COALESCE(sum(${m.amountCol}), 0)` : "NULL::numeric"} AS amount
          FROM ${m.from}
@@ -258,11 +280,11 @@ export const getDetailExportService = async (
     };
   }
 
-  const usersCte = await creatorUsersCte();
+  const cte = await cteFor(m);
   const { where, binds } = scopeOf(m, f);
 
   const rows = await q<Record<string, unknown>>(
-    `WITH ${usersCte}
+    `${cte}
      SELECT ${projection(m)}
        FROM ${m.from}
       WHERE ${where}

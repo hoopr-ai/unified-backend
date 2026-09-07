@@ -28,7 +28,7 @@ import {
   inRange,
   rangeBinds,
   originWhere,
-  creatorUsersCte,
+  cteFor,
   tablesExist,
   captureStart,
   ORIGIN_LABELS,
@@ -43,6 +43,7 @@ import {
   METRICS,
   METRIC_ORDER,
   ALL_METRIC_TABLES,
+  isUserScoped,
   type MetricDef,
 } from "./metrics.registry";
 
@@ -66,6 +67,8 @@ export interface MetricSummary {
   label: string;
   group: MetricDef["group"];
   hint: string;
+  /** False for catalogue rows, which have no owner and so no origin split. */
+  userScoped: boolean;
   available: boolean;
   /** Which table is missing, when `available` is false. */
   missingTable?: string;
@@ -90,13 +93,15 @@ export interface MetricSummary {
  * `where` (which DEFINES it) plus the bound origin filter; nothing from the
  * request is ever interpolated.
  */
-const summarise = async (
-  m: MetricDef,
-  f: CreatorFilters,
-  usersCte: string,
-): Promise<MetricSummary> => {
+const summarise = async (m: MetricDef, f: CreatorFilters): Promise<MetricSummary> => {
   const { prevStartDate, prevEndDate } = comparisonWindow(f);
   const defining = m.where ? `AND (${m.where})` : "";
+  const userScoped = isUserScoped(m);
+  const cte = await cteFor(m);
+
+  // Dropped entirely for a catalogue metric rather than written as an
+  // always-true predicate: `cu` is not in its FROM at all.
+  const originClause = userScoped ? `AND ${originWhere("cu.origin")}` : "";
 
   const curr = `(${inRange(m.dateCol)})`;
   const prev = `(${m.dateCol} >= ((:prevStartDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
@@ -109,7 +114,7 @@ const summarise = async (
 
   const [totals, origins] = await Promise.all([
     q<Record<string, string>>(
-      `WITH ${usersCte}
+      `${cte}
        SELECT count(*) FILTER (WHERE ${curr})::bigint                       AS n,
               count(DISTINCT ${m.userCol}) FILTER (WHERE ${curr})::bigint   AS users,
               ${amount}
@@ -117,19 +122,21 @@ const summarise = async (
          FROM ${m.from}
         WHERE (${curr} OR ${prev})
           ${defining}
-          AND ${originWhere("cu.origin")}`,
+          ${originClause}`,
       { ...rangeBinds(f), prevStartDate, prevEndDate },
     ),
-    q<{ origin: string; n: string }>(
-      `WITH ${usersCte}
-       SELECT cu.origin, count(*)::bigint AS n
-         FROM ${m.from}
-        WHERE ${curr}
-          ${defining}
-          AND ${originWhere("cu.origin")}
-        GROUP BY cu.origin`,
-      rangeBinds(f),
-    ),
+    userScoped
+      ? q<{ origin: string; n: string }>(
+          `${cte}
+           SELECT cu.origin, count(*)::bigint AS n
+             FROM ${m.from}
+            WHERE ${curr}
+              ${defining}
+              ${originClause}
+            GROUP BY cu.origin`,
+          rangeBinds(f),
+        )
+      : Promise.resolve<Array<{ origin: string; n: string }>>([]),
   ]);
 
   const r = totals[0] ?? {};
@@ -145,6 +152,7 @@ const summarise = async (
     label: m.label,
     group: m.group,
     hint: m.hint,
+    userScoped,
     available: true,
     count,
     uniqueUsers: num(r.users),
@@ -176,6 +184,7 @@ const unavailable = (m: MetricDef, missingTable: string): MetricSummary => ({
   label: m.label,
   group: m.group,
   hint: m.hint,
+  userScoped: isUserScoped(m),
   available: false,
   missingTable,
   count: 0,
@@ -201,8 +210,7 @@ const unavailable = (m: MetricDef, missingTable: string): MetricSummary => ({
  * Every tile on the Activity view.
  */
 export const getPlatformService = async (f: CreatorFilters) => {
-  const [usersCte, present, coverage] = await Promise.all([
-    creatorUsersCte(),
+  const [present, coverage] = await Promise.all([
     tablesExist(ALL_METRIC_TABLES),
     captureStart(),
   ]);
@@ -212,7 +220,7 @@ export const getPlatformService = async (f: CreatorFilters) => {
       const m = METRICS[key];
       const missing = m.tables.find((t) => !present[t]);
       if (missing) return unavailable(m, missing);
-      return summarise(m, f, usersCte);
+      return summarise(m, f);
     }),
   );
 
@@ -282,15 +290,16 @@ export const getBreakdownService = async (
     };
   }
 
-  const usersCte = await creatorUsersCte();
+  const cte = await cteFor(m);
   const defining = m.where ? `AND (${m.where})` : "";
+  const originClause = isUserScoped(m) ? `AND ${originWhere("cu.origin")}` : "";
   const amount = m.amountCol
     ? `COALESCE(sum(${m.amountCol}), 0) AS amount`
     : `NULL::numeric AS amount`;
   const limit = Math.min(200, Math.max(1, f.limit ?? 50));
 
   const rows = await q<Record<string, string>>(
-    `WITH ${usersCte}
+    `${cte}
      SELECT ${dim.sql} AS bucket,
             count(*)::bigint AS n,
             count(DISTINCT ${m.userCol})::bigint AS users,
@@ -298,7 +307,7 @@ export const getBreakdownService = async (
        FROM ${m.from}
       WHERE ${inRange(m.dateCol)}
         ${defining}
-        AND ${originWhere("cu.origin")}
+        ${originClause}
       GROUP BY 1
       ORDER BY n DESC
       LIMIT ${limit}`,
@@ -347,6 +356,7 @@ export const getMetaService = async () => {
         hint: m.hint,
         available: !missing,
         missingTable: missing ?? null,
+        userScoped: isUserScoped(m),
         hasAmount: Boolean(m.amountCol),
         amountLabel: m.amountLabel ?? null,
         defaultSort: m.defaultSort,

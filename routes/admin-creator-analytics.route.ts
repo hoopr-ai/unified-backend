@@ -8,6 +8,7 @@ import {
   getCreatorPlatform,
   getCreatorBreakdown,
   getCreatorMeta,
+  getCreatorOverview,
   getCreatorDetail,
   exportCreatorDetail,
 } from "../controllers/admin-creator-analytics.controller";
@@ -38,6 +39,11 @@ const requireDashboard = [
 // metrics this environment can actually answer. The dashboard reads its shape
 // from here rather than carrying a copy of the registry that drifts from it.
 router.get("/meta", ...requireDashboard, getCreatorMeta);
+
+// Point-in-time platform totals — catalogue size, people, lifetime activity and
+// money. Takes no date range at all, which is the one thing that makes it
+// different from every other view here rather than a duplicate of Activity.
+router.get("/overview", ...requireDashboard, getCreatorOverview);
 
 // Anonymous visitor → signup → subscription → first payment, plus renewals and
 // revenue beside it. See funnel.service.ts for why renewals are NOT a rung.

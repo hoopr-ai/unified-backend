@@ -52,11 +52,33 @@ export interface MetricDef {
   key: string;
   label: string;
   /** Which card group the tile sits in. */
-  group: "acquisition" | "engagement" | "money" | "creator";
+  group: "acquisition" | "engagement" | "money" | "creator" | "catalogue";
   /** One line under the tile, and the tooltip on the drill-down. */
   hint: string;
+  /**
+   * Whether the rows belong to a PERSON or to the catalogue.
+   *
+   * 'user' (the default) joins `creator_users cu`, which is what makes the
+   * origin split and the per-person columns possible, and what the free-text
+   * search runs against.
+   *
+   * 'catalogue' rows have no owner — a track is not somebody's — so those
+   * metrics skip the join entirely. That is not a detail: joining them to
+   * `creator_users` would silently drop every track nobody has touched, which
+   * is most of the catalogue. They also ignore the origin filter (there is
+   * nothing to derive it from) and bring their own `searchSql`.
+   */
+  scope?: "user" | "catalogue";
+  /**
+   * Free-text search for a catalogue metric — a name, a code.
+   *
+   * Must reference `:search` as a bind, never interpolate. Ignored for
+   * user-scoped metrics, which all search the person instead.
+   */
+  searchSql?: string;
   from: string;
   dateCol: string;
+  /** The owning creator. Catalogue metrics leave this as the row's own id. */
   userCol: string;
   amountCol?: string;
   /** Rupee sign on the tile's secondary figure. */
@@ -591,6 +613,337 @@ const SESSIONS: MetricDef = {
   },
 };
 
+// ── The catalogue ───────────────────────────────────────────────────────────
+//
+// These have no owner, so they carry `scope: 'catalogue'` and are NOT joined to
+// `creator_users`. Windowing them by `createdAt` answers "what did we ADD in
+// this period", which is a real question; the all-time totals live on the
+// Overview, which ignores the window entirely.
+
+/**
+ * The music catalogue.
+ *
+ * `type` splits music from SFX and `status` splits live from retired. Both are
+ * shown rather than filtered here: "how big is the catalogue" and "how much of
+ * it can anyone actually license" are different questions, and a metric that
+ * silently answered the second while being labelled the first is exactly the
+ * sort of thing that gets quoted wrong.
+ */
+const TRACKS: MetricDef = {
+  key: "tracks",
+  label: "Tracks",
+  group: "catalogue",
+  scope: "catalogue",
+  hint: "Everything in the music catalogue — music and SFX, live and retired.",
+  // `ownerId` points at `owners` — the LABEL that licensed the track (GSharp
+  // Media, Universal Music India, YRF Music), not the artist. It is also a uuid
+  // ARRAY, so the join is `= ANY(...)` rather than `=`. Measured on prod:
+  // 22,723 tracks carry exactly one owner, 64 carry none, and NONE carries more
+  // than one, so this cannot fan a track out into duplicate rows today. If that
+  // ever changes the join starts multiplying and the count stops matching the
+  // catalogue — `labelName` would be the thing to move into a subquery.
+  from: `tracks x LEFT JOIN owners o ON o.id = ANY(x."ownerId")`,
+  dateCol: `x."createdAt"`,
+  userCol: `x.id`,
+  searchSql: `(x.name ILIKE '%' || :search || '%' OR x."trackCode" = :search
+               OR x."ISRC" = :search OR o.username ILIKE '%' || :search || '%')`,
+  columns: [
+    { key: "addedAt", label: "Added", sql: `x."createdAt"`, type: "datetime" },
+    { key: "trackCode", label: "Code", sql: `x."trackCode"`, type: "text" },
+    { key: "name", label: "Track", sql: `x.name`, type: "user" },
+    { key: "type", label: "Type", sql: `x.type`, type: "badge" },
+    { key: "status", label: "Status", sql: `x.status`, type: "badge" },
+    { key: "tier", label: "Tier", sql: `x.tier`, type: "badge" },
+    { key: "labelName", label: "Label", sql: `o.username`, type: "text" },
+    // `bpm` is a VARCHAR on this table, so it is displayed as text. Sorting
+    // casts it, guarded by a numeric-shape test — an unguarded cast throws on
+    // the first non-numeric value someone types in.
+    { key: "bpm", label: "BPM", sql: `x.bpm`, type: "text" },
+    { key: "durationSeconds", label: "Duration (s)", sql: `x.duration`, type: "number" },
+    { key: "hasVocals", label: "Vocals", sql: `x."hasVocals"`, type: "badge" },
+    { key: "releaseDate", label: "Released", sql: `x."releaseDate"`, type: "datetime" },
+    { key: "isrc", label: "ISRC", sql: `x."ISRC"`, type: "text" },
+  ],
+  sorts: {
+    addedAt: `x."createdAt"`,
+    name: `lower(x.name)`,
+    type: `x.type`,
+    status: `x.status`,
+    labelName: `lower(o.username)`,
+    bpm: `CASE WHEN x.bpm ~ '^[0-9]+(\\.[0-9]+)?$' THEN x.bpm::numeric END`,
+    durationSeconds: `x.duration`,
+    releaseDate: `x."releaseDate"`,
+  },
+  defaultSort: "addedAt",
+  tables: ["tracks", "owners"],
+  dimensions: {
+    type: { sql: `COALESCE(x.type, '(none)')`, label: "Type" },
+    status: { sql: `COALESCE(x.status, '(none)')`, label: "Status" },
+    // NULLIF before COALESCE: `tier` carries empty strings as well as NULLs on
+    // prod, and without it the chart shows a nameless bucket of 2,595 next to
+    // a "(none)" bucket that means the same thing.
+    tier: { sql: `COALESCE(NULLIF(x.tier, ''), '(none)')`, label: "Tier" },
+    label: { sql: `COALESCE(o.username, '(unassigned)')`, label: "Label" },
+    vocals: {
+      sql: `CASE WHEN x."hasVocals" THEN 'With vocals' ELSE 'Instrumental' END`,
+      label: "Vocals",
+    },
+  },
+};
+
+/** Stems — the multitrack layers sold alongside a track. */
+const STEMS: MetricDef = {
+  key: "stems",
+  label: "Stems",
+  group: "catalogue",
+  scope: "catalogue",
+  hint: "Multitrack layers (drums, bass, vocals…) attached to a track.",
+  from: `creator_stems x LEFT JOIN tracks t ON t.id = x.track_id`,
+  dateCol: `x.created_at`,
+  userCol: `x.id`,
+  // Soft-deleted stems are excluded: unlike a retired track, a deleted stem is
+  // not offered anywhere, so counting it would overstate what is buyable.
+  where: `x.deleted IS NULL`,
+  searchSql: `(t.name ILIKE '%' || :search || '%' OR x.stem_type ILIKE '%' || :search || '%')`,
+  columns: [
+    { key: "addedAt", label: "Added", sql: `x.created_at`, type: "datetime" },
+    { key: "stemType", label: "Stem", sql: `x.stem_type`, type: "badge" },
+    { key: "trackName", label: "Track", sql: `t.name`, type: "user" },
+    { key: "trackCode", label: "Track code", sql: `t."trackCode"`, type: "text" },
+    { key: "trackType", label: "Track type", sql: `t.type`, type: "badge" },
+  ],
+  sorts: {
+    addedAt: `x.created_at`,
+    stemType: `x.stem_type`,
+    trackName: `lower(t.name)`,
+  },
+  defaultSort: "addedAt",
+  tables: ["creator_stems", "tracks"],
+  dimensions: {
+    stemType: { sql: `COALESCE(x.stem_type, '(none)')`, label: "Stem type" },
+    trackType: { sql: `COALESCE(t.type, '(none)')`, label: "Track type" },
+  },
+};
+
+const ARTISTS: MetricDef = {
+  key: "artists",
+  label: "Artists",
+  group: "catalogue",
+  scope: "catalogue",
+  hint: "Artists in the catalogue, including the ones with a Creator-side page.",
+  from: `artists x`,
+  dateCol: `x."createdAt"`,
+  userCol: `x.id`,
+  searchSql: `(x.name ILIKE '%' || :search || '%' OR x."artistCode" = :search)`,
+  columns: [
+    { key: "addedAt", label: "Added", sql: `x."createdAt"`, type: "datetime" },
+    { key: "name", label: "Artist", sql: `x.name`, type: "user" },
+    { key: "artistCode", label: "Code", sql: `x."artistCode"`, type: "text" },
+    // `artists.type` is a varchar ARRAY (an artist can be singer + composer),
+    // so it is flattened for display and for grouping. Left raw it comes back
+    // as a JS array the table cannot render, and `COALESCE(type, '(none)')`
+    // fails outright with "malformed array literal".
+    { key: "type", label: "Type", sql: `array_to_string(x.type, ', ')`, type: "badge" },
+    { key: "status", label: "Status", sql: `x.status`, type: "badge" },
+    { key: "originRegion", label: "Region", sql: `x."originRegion"`, type: "text" },
+    { key: "nativeArtist", label: "Creator page", sql: `x."nativeArtist"`, type: "badge" },
+    {
+      key: "trackCount",
+      label: "Tracks",
+      sql: `(SELECT count(*) FROM track_artist_mappings m WHERE m."artistId" = x.id)`,
+      type: "number",
+    },
+  ],
+  sorts: {
+    addedAt: `x."createdAt"`,
+    name: `lower(x.name)`,
+    status: `x.status`,
+    type: `array_to_string(x.type, ', ')`,
+  },
+  defaultSort: "addedAt",
+  tables: ["artists", "track_artist_mappings"],
+  dimensions: {
+    status: { sql: `COALESCE(x.status, '(none)')`, label: "Status" },
+    type: {
+      sql: `COALESCE(NULLIF(array_to_string(x.type, ', '), ''), '(none)')`,
+      label: "Type",
+    },
+    originRegion: { sql: `COALESCE(NULLIF(x."originRegion", ''), '(unknown)')`, label: "Region" },
+  },
+};
+
+const ALBUMS: MetricDef = {
+  key: "albums",
+  label: "Albums",
+  group: "catalogue",
+  scope: "catalogue",
+  hint: "Album groupings over the catalogue.",
+  // No join to `tracks`: `albums.trackId` is a uuid ARRAY of every track on the
+  // album, so an equality join is a type error and an `= ANY` join would fan
+  // one album out into a row per track. The count below reads the array
+  // directly instead.
+  from: `albums x LEFT JOIN artists a ON a.id = x."artistId"`,
+  dateCol: `x."createdAt"`,
+  userCol: `x.id`,
+  where: `x.deleted IS NULL`,
+  searchSql: `(x.title ILIKE '%' || :search || '%' OR a.name ILIKE '%' || :search || '%')`,
+  columns: [
+    { key: "addedAt", label: "Added", sql: `x."createdAt"`, type: "datetime" },
+    { key: "title", label: "Album", sql: `x.title`, type: "user" },
+    { key: "type", label: "Type", sql: `x.type`, type: "badge" },
+    { key: "artistName", label: "Artist", sql: `a.name`, type: "text" },
+    {
+      key: "trackCount",
+      label: "Tracks",
+      sql: `COALESCE(array_length(x."trackId", 1), 0)`,
+      type: "number",
+    },
+  ],
+  sorts: { addedAt: `x."createdAt"`, title: `lower(x.title)`, type: `x.type` },
+  defaultSort: "addedAt",
+  tables: ["albums", "artists"],
+  dimensions: {
+    type: { sql: `COALESCE(x.type, '(none)')`, label: "Type" },
+    artist: { sql: `COALESCE(a.name, '(unassigned)')`, label: "Artist" },
+  },
+};
+
+/**
+ * Hoopr's own playlists — the curated/system ones the apps render.
+ *
+ * Deliberately a different metric from `collections`, which is what a CREATOR
+ * makes for themselves. Both get called "playlists" in conversation and they
+ * are three orders of magnitude apart in count, so they are never merged here.
+ */
+const HOOPR_PLAYLISTS: MetricDef = {
+  key: "hooprPlaylists",
+  label: "Hoopr playlists",
+  group: "catalogue",
+  scope: "catalogue",
+  hint: "Curated and system playlists the apps render. Not creators' own collections.",
+  from: `playlists x`,
+  dateCol: `x."createdAt"`,
+  userCol: `x.id`,
+  searchSql: `(x.name ILIKE '%' || :search || '%' OR x."playlistCode" = :search)`,
+  columns: [
+    { key: "addedAt", label: "Created", sql: `x."createdAt"`, type: "datetime" },
+    { key: "name", label: "Playlist", sql: `x.name`, type: "user" },
+    { key: "playlistCode", label: "Code", sql: `x."playlistCode"`, type: "text" },
+    { key: "type", label: "Type", sql: `x.type`, type: "badge" },
+    { key: "playlistType", label: "Kind", sql: `x."playlistType"`, type: "badge" },
+    { key: "status", label: "Status", sql: `x.status`, type: "badge" },
+    { key: "category", label: "Category", sql: `x.category`, type: "text" },
+    {
+      key: "trackCount",
+      label: "Tracks",
+      sql: `(SELECT count(*) FROM track_playlist_mappings m WHERE m."playlistId" = x.id)`,
+      type: "number",
+    },
+  ],
+  sorts: {
+    addedAt: `x."createdAt"`,
+    name: `lower(x.name)`,
+    status: `x.status`,
+    type: `x.type`,
+  },
+  defaultSort: "addedAt",
+  tables: ["playlists", "track_playlist_mappings"],
+  dimensions: {
+    status: { sql: `COALESCE(x.status, '(none)')`, label: "Status" },
+    type: { sql: `COALESCE(x.type, '(none)')`, label: "Type" },
+    playlistType: { sql: `COALESCE(x."playlistType", '(none)')`, label: "Kind" },
+  },
+};
+
+// ── Two more user-scoped metrics the app writes ─────────────────────────────
+
+/** Video projects — the app's editor sessions, one per video a creator opens. */
+const PROJECTS: MetricDef = {
+  key: "projects",
+  label: "Video projects",
+  group: "creator",
+  hint: "Editor sessions in the app — one per video a creator brought in to score.",
+  from: `sound_projects x JOIN creator_users cu ON cu.id = x."userId"
+         LEFT JOIN tracks t ON t."trackCode" = COALESCE(x."committedTrackCode", x."workingTrackCode")`,
+  dateCol: `x."createdAt"`,
+  userCol: `x."userId"`,
+  columns: [
+    { key: "createdAt", label: "Created", sql: `x."createdAt"`, type: "datetime" },
+    ...USER_COLUMNS,
+    { key: "name", label: "Project", sql: `x.name`, type: "text" },
+    { key: "status", label: "Status", sql: `x.status`, type: "badge" },
+    { key: "platform", label: "Platform", sql: `x.platform`, type: "badge" },
+    {
+      key: "trackName",
+      label: "Track",
+      sql: `t.name`,
+      type: "text",
+    },
+    {
+      key: "videoDurationSeconds",
+      label: "Video (s)",
+      sql: `x."videoDuration"`,
+      type: "number",
+    },
+    { key: "lastOpenedAt", label: "Last opened", sql: `x."lastOpenedAt"`, type: "datetime" },
+  ],
+  sorts: {
+    ...USER_SORTS,
+    createdAt: `x."createdAt"`,
+    lastOpenedAt: `x."lastOpenedAt"`,
+    status: `x.status`,
+  },
+  defaultSort: "createdAt",
+  tables: ["sound_projects", "tracks"],
+  dimensions: {
+    status: { sql: `COALESCE(x.status, '(none)')`, label: "Status" },
+    platform: { sql: `COALESCE(x.platform, '(none)')`, label: "Platform" },
+    origin: { sql: `cu.origin`, label: "Origin" },
+  },
+};
+
+/**
+ * Shares — a track, playlist or artist sent out of the app.
+ *
+ * INNER JOIN to `creator_users` like every other user-scoped metric, which
+ * means the ~6% of shares made by an anonymous visitor are not counted here.
+ * That is the right trade for a per-person dashboard, and the Overview reports
+ * the unjoined total beside it so the gap is visible rather than silent.
+ */
+const SHARES: MetricDef = {
+  key: "shares",
+  label: "Shares",
+  group: "creator",
+  hint: "Tracks, playlists and artists shared out of the app by a signed-in creator.",
+  from: `native_shares x JOIN creator_users cu ON cu.id = x."userId"`,
+  dateCol: `x."createdAt"`,
+  userCol: `x."userId"`,
+  columns: [
+    { key: "sharedAt", label: "Shared", sql: `x."createdAt"`, type: "datetime" },
+    ...USER_COLUMNS,
+    { key: "entityType", label: "What", sql: `x."entityType"`, type: "badge" },
+    { key: "entityTitle", label: "Title", sql: `x."entityTitle"`, type: "text" },
+    { key: "channel", label: "Channel", sql: `x.channel`, type: "badge" },
+    { key: "clickCount", label: "Clicks", sql: `x."clickCount"`, type: "number" },
+    { key: "uniqueClickCount", label: "Unique clicks", sql: `x."uniqueClickCount"`, type: "number" },
+    { key: "conversionCount", label: "Conversions", sql: `x."conversionCount"`, type: "number" },
+    { key: "lastClickedAt", label: "Last click", sql: `x."lastClickedAt"`, type: "datetime" },
+  ],
+  sorts: {
+    ...USER_SORTS,
+    sharedAt: `x."createdAt"`,
+    clickCount: `x."clickCount"`,
+    conversionCount: `x."conversionCount"`,
+  },
+  defaultSort: "sharedAt",
+  tables: ["native_shares"],
+  dimensions: {
+    entityType: { sql: `COALESCE(x."entityType", '(none)')`, label: "What" },
+    channel: { sql: `COALESCE(x.channel, '(none)')`, label: "Channel" },
+    origin: { sql: `cu.origin`, label: "Origin" },
+  },
+};
+
 export const METRICS: Record<string, MetricDef> = {
   signups: SIGNUPS,
   sessions: SESSIONS,
@@ -604,6 +957,13 @@ export const METRICS: Record<string, MetricDef> = {
   withdrawals: WITHDRAWALS,
   subscriptions: SUBSCRIPTIONS,
   payments: PAYMENTS,
+  projects: PROJECTS,
+  shares: SHARES,
+  tracks: TRACKS,
+  stems: STEMS,
+  artists: ARTISTS,
+  albums: ALBUMS,
+  hooprPlaylists: HOOPR_PLAYLISTS,
 };
 
 /** The keys the Joi schema validates `?metric=` against. */
@@ -623,7 +983,17 @@ export const METRIC_ORDER: string[] = [
   "claims",
   "referrals",
   "withdrawals",
+  "projects",
+  "shares",
+  "tracks",
+  "stems",
+  "artists",
+  "albums",
+  "hooprPlaylists",
 ];
+
+/** Whether a metric's rows belong to a person. Catalogue rows do not. */
+export const isUserScoped = (m: MetricDef): boolean => (m.scope ?? "user") !== "catalogue";
 
 /** Every table any metric touches, for one probe pass. */
 export const ALL_METRIC_TABLES: string[] = [

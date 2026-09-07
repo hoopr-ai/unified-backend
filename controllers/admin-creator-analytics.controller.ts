@@ -16,6 +16,7 @@ import {
   getFunnelService,
   getFunnelTimeseriesService,
   getPlatformService,
+  getOverviewService,
   getBreakdownService,
   getMetaService,
   getDetailService,
@@ -72,6 +73,17 @@ export const getCreatorBreakdown = catchAsync(async (req: Request, res: Response
   );
   const data = await getBreakdownService(filters);
   return ok(res, data, "Breakdown fetched successfully.");
+});
+
+/**
+ * Point-in-time platform totals. Takes NO date range — see overview.service.ts
+ * for why that is the design and not an omission — so the empty-query schema
+ * rejects one rather than silently ignoring it.
+ */
+export const getCreatorOverview = catchAsync(async (req: Request, res: Response) => {
+  validate(creatorEmptyQuerySchema, req.query);
+  const data = await getOverviewService();
+  return ok(res, data, "Platform overview fetched successfully.");
 });
 
 export const getCreatorMeta = catchAsync(async (req: Request, res: Response) => {

@@ -190,6 +190,19 @@ export const creatorUsersCte = async (): Promise<string> => {
     )`;
 };
 
+/**
+ * The `WITH …` prefix a metric's query needs, or an empty string.
+ *
+ * User-scoped metrics get the `creator_users` CTE; catalogue metrics get
+ * nothing, because there is no owner to join to. Returned as the whole prefix
+ * (keyword included) so callers interpolate one value instead of assembling
+ * `WITH` themselves and having to special-case the empty side.
+ */
+export const cteFor = async (m: {
+  scope?: "user" | "catalogue";
+}): Promise<string> =>
+  (m.scope ?? "user") === "catalogue" ? "" : `WITH ${await creatorUsersCte()}`;
+
 /** A creator's display name, for every drill-down row. */
 export const USER_NAME_SQL = `NULLIF(btrim(
   COALESCE(cu."firstName", '') || ' ' || COALESCE(cu."lastName", '')), '')`;
