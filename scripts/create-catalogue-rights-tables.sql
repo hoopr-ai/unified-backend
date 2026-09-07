@@ -11,9 +11,9 @@
 --                   never what they permit.
 --   owners.usageInfo is per OWNER (183 of 198 owners are "Regional & Indie")
 --                   and is far more granular — "Influencer collab",
---                   "TV, OTT & broadcast". It is a different vocabulary at a
---                   different level; folding these six flags into it would
---                   make 183 rows restate one catalogue-wide fact.
+--                   "TV, OTT & broadcast". It is the same vocabulary a level
+--                   down; folding these ten flags into it would make 183 rows
+--                   restate one catalogue-wide fact.
 --
 -- A catalogue is not an entity anywhere — it is the free-text string on
 -- owners.type, and token_assigned.type carries the identical four values
@@ -36,13 +36,12 @@ BEGIN;
 -- `rights` is a flat jsonb object of boolean flags keyed by the vocabulary in
 -- services/dto-service/catalogue-rights/catalogue-rights.dto.ts:
 --
---   { "unlimitedDownloads": true, "worldwidePerpetuity": false,
---     "channelClearance": true,   "brandedContent": false,
---     "socialOrganic": true,      "audiobooksPodcasts": false }
+--   { "influencerCollab": true, "performanceAdsBoost": true,
+--     "longFormContent": false,  "tvOttBroadcast": false, … }
 --
--- jsonb rather than six boolean columns: the list is a product decision that
--- has already changed once, and adding the seventh right should be one edit to
--- that constant, not a migration on two tables plus a deploy to read it.
+-- jsonb rather than ten boolean columns: the list is a product decision that
+-- has already changed twice, and adding the eleventh right should be one edit
+-- to that constant, not a migration on two tables plus a deploy to read it.
 -- Unknown keys are stripped by Joi on the way in, so the blob cannot drift into
 -- a bag of typos.
 CREATE TABLE IF NOT EXISTS catalogue_rights (
@@ -66,10 +65,10 @@ COMMENT ON TABLE catalogue_rights IS
 -- away from the catalogue default; the read is `{...default, ...override}`.
 --
 -- Storing a full copy instead would look simpler and be a trap: the override
--- would freeze all six flags at the moment it was written, so a later change to
+-- would freeze all ten flags at the moment it was written, so a later change to
 -- the catalogue default would silently skip every brand that had ever
 -- negotiated any single right. Partial rows mean a brand that negotiated
--- branded-content still tracks the catalogue on the other five.
+-- remixing still tracks the catalogue on the other nine.
 CREATE TABLE IF NOT EXISTS brand_catalogue_rights (
   "id"            BIGSERIAL    PRIMARY KEY,
 
@@ -106,29 +105,24 @@ CREATE INDEX IF NOT EXISTS idx_brand_catalogue_rights_brand
 CREATE INDEX IF NOT EXISTS idx_brand_catalogue_rights_catalogue
   ON brand_catalogue_rights ("catalogue");
 
--- ── Seed the four live catalogues ───────────────────────────────────────────
+-- ── Seed ────────────────────────────────────────────────────────────────────
 --
--- Values transcribed from the My Subscription screen as it ships today, so the
--- API returns what users already see rather than an empty object on day one.
+-- Chartbusters only, and on the CURRENT ten-right vocabulary — see
+-- migrate-catalogue-rights-vocabulary.sql for the swap away from the original
+-- six. The other three catalogues are deliberately left unseeded: their terms
+-- were never signed off against this vocabulary, and a row that reads
+-- "nothing included" is at least visibly Not set in the CMS, where a guessed
+-- one would look configured and be wrong.
+--
 -- ON CONFLICT DO NOTHING: re-running must never overwrite what ops has since
 -- edited in the CMS.
 INSERT INTO catalogue_rights ("catalogue", "rights") VALUES
   ('Chartbusters', '{
-     "unlimitedDownloads": true,  "worldwidePerpetuity": false,
-     "channelClearance":   true,  "brandedContent":      false,
-     "socialOrganic":      true,  "audiobooksPodcasts":  false }'::jsonb),
-  ('International', '{
-     "unlimitedDownloads": true,  "worldwidePerpetuity": true,
-     "channelClearance":   true,  "brandedContent":      false,
-     "socialOrganic":      true,  "audiobooksPodcasts":  true }'::jsonb),
-  ('Regional & Indie', '{
-     "unlimitedDownloads": true,  "worldwidePerpetuity": true,
-     "channelClearance":   true,  "brandedContent":      false,
-     "socialOrganic":      true,  "audiobooksPodcasts":  true }'::jsonb),
-  ('Hoopr Originals', '{
-     "unlimitedDownloads": true,  "worldwidePerpetuity": true,
-     "channelClearance":   true,  "brandedContent":      true,
-     "socialOrganic":      true,  "audiobooksPodcasts":  true }'::jsonb)
+     "influencerCollab":      true,  "performanceAdsBoost":   true,
+     "instagramPaidMedia":    true,  "sfxLayering":           true,
+     "cutSegmentUsage":       true,  "longFormContent":       false,
+     "tvOttBroadcast":        false, "remixing":              false,
+     "brandCelebrityCollabs": false, "overlayingTwoTracks":   false }'::jsonb)
 ON CONFLICT ("catalogue") DO NOTHING;
 
 COMMIT;

@@ -2,7 +2,7 @@
 //
 // THE single source of truth for which rights exist and what they are called.
 // The Joi schema, the persistence merge, the CMS and the subscription screen
-// all derive from this list — adding a seventh right is one entry here plus a
+// all derive from this list — adding an eleventh right is one entry here plus a
 // backfill, with no migration (the flags live in a jsonb blob for exactly that
 // reason).
 //
@@ -11,12 +11,16 @@
 // carrying its own ordering.
 
 export const CATALOGUE_RIGHT_DEFS = [
-  { key: "unlimitedDownloads", label: "Unlimited downloads" },
-  { key: "worldwidePerpetuity", label: "Worldwide perpetuity" },
-  { key: "channelClearance", label: "Channel clearance" },
-  { key: "brandedContent", label: "Branded content & Collaborations" },
-  { key: "socialOrganic", label: "Social media & organic content" },
-  { key: "audiobooksPodcasts", label: "Audiobooks & podcasts" },
+  { key: "influencerCollab", label: "Influencer collab" },
+  { key: "performanceAdsBoost", label: "Performance ads & boost" },
+  { key: "instagramPaidMedia", label: "Instagram paid media" },
+  { key: "sfxLayering", label: "SFX layering" },
+  { key: "cutSegmentUsage", label: "Cut/segment usage" },
+  { key: "longFormContent", label: "Long-form content" },
+  { key: "tvOttBroadcast", label: "TV, OTT & broadcast" },
+  { key: "remixing", label: "Remixing" },
+  { key: "brandCelebrityCollabs", label: "Brand/Celebrity Collabs" },
+  { key: "overlayingTwoTracks", label: "Overlaying two tracks" },
 ] as const;
 
 export type CatalogueRightKey = (typeof CATALOGUE_RIGHT_DEFS)[number]["key"];
@@ -36,7 +40,7 @@ export type CatalogueRights = Record<CatalogueRightKey, boolean>;
 
 /**
  * A brand override. PARTIAL on purpose — only the keys this brand negotiated.
- * A full copy would freeze all six at write time, so a later change to the
+ * A full copy would freeze all ten at write time, so a later change to the
  * catalogue default would silently skip every brand carrying an override.
  */
 export type PartialCatalogueRights = Partial<CatalogueRights>;
@@ -218,7 +222,7 @@ export interface AdminCatalogueRightsDetail {
  *
  * Only the rights that are FALSE become entries. `restrictedCategories` answers
  * "what can I not do with this track", so an allowed right has nothing to say
- * there; listing all six would turn a restriction list into a feature list and
+ * there; listing all ten would turn a restriction list into a feature list and
  * every consumer rendering it as warnings would start showing green items as
  * prohibitions.
  *
@@ -240,7 +244,7 @@ export const rightsToRestrictedCategories = (
  *
  * `rightsToRestrictedCategories` above deliberately emits only the FALSE flags,
  * because `restrictedCategories` answers "what can I not do". That leaves the
- * allowed rights with nowhere to go, so a client cannot render the six-flag
+ * allowed rights with nowhere to go, so a client cannot render the ten-flag
  * card the My Subscription screen shows — it receives crosses and no ticks.
  *
  * Shaped as `{ allowed, notAllowed }` string arrays to MATCH `owners.usageInfo`,
@@ -263,7 +267,7 @@ export interface TrackCatalogueRights {
   notAllowed: string[];
 }
 
-/** Split all six flags into the two lists, in CATALOGUE_RIGHT_DEFS order. */
+/** Split all ten flags into the two lists, in CATALOGUE_RIGHT_DEFS order. */
 export const rightsToTrackCatalogueRights = (
   rights: CatalogueRights,
   catalogue: string,

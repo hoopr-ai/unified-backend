@@ -28,7 +28,7 @@ export interface BrandCatalogueRightsDetails {
  * One brand's negotiated deviation from a catalogue's defaults.
  *
  * `rights` holds ONLY the overridden keys — see the merge in
- * catalogue-rights.persistence.service. A full copy would freeze all six flags
+ * catalogue-rights.persistence.service. A full copy would freeze all ten flags
  * at write time, so any later change to the catalogue default would silently
  * skip every brand that had ever negotiated a single right.
  */

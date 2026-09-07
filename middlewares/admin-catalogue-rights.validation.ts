@@ -2,7 +2,7 @@ import Joi from "joi";
 import { CATALOGUE_RIGHT_KEYS } from "../services/dto-service/catalogue-rights/catalogue-rights.dto";
 
 // The rights vocabulary is defined ONCE, in the DTO. Both schemas below are
-// generated from it, so adding a seventh right cannot leave the validator
+// generated from it, so adding an eleventh right cannot leave the validator
 // silently stripping it.
 const rightsShape = Object.fromEntries(
   CATALOGUE_RIGHT_KEYS.map((k) => [k, Joi.boolean()]),
@@ -13,7 +13,7 @@ const rightsShape = Object.fromEntries(
  *
  * Every key REQUIRED. A catalogue default is the floor the merge falls back to,
  * so a missing key would resolve to `false` and read as a decision nobody made.
- * The editor renders all six checkboxes and posts all six.
+ * The editor renders all ten checkboxes and posts all ten.
  */
 export const updateCatalogueRightsSchema = Joi.object({
   rights: Joi.object(
@@ -27,7 +27,7 @@ export const updateCatalogueRightsSchema = Joi.object({
  * PUT /admin/catalogue-rights/:catalogue/brands/:brandId
  *
  * Every key OPTIONAL, and that is the whole point: the row stores only what
- * this brand negotiated. Sending all six would freeze them against future
+ * this brand negotiated. Sending all ten would freeze them against future
  * changes to the catalogue default. `{}` is accepted — it means "no deviation"
  * while keeping the note and the audit trail.
  */
