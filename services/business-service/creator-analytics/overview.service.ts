@@ -1,69 +1,129 @@
 // ─── Platform overview ───────────────────────────────────────────────────────
 //
-// What the platform IS, right now: how much catalogue there is, how many people
-// are on it, what they have made, and what has been collected — all-time,
-// as of this moment.
+// What the platform IS — how much catalogue there is, how many people are on
+// it, what they have made, what has been collected — with an optional window
+// laid over it.
 //
-// ── THIS VIEW IGNORES THE DATE RANGE, DELIBERATELY ──────────────────────────
+// ── TWO NUMBERS PER FACT, AND THE LABEL SAYS WHICH IS WHICH ─────────────────
 //
-// Every other view in this module is windowed. This one is not, and that is the
-// whole point of it existing separately rather than as another row of tiles on
-// Activity. "How many tracks do we have" has no date in it; answering it with
-// "how many did we add in the last 30 days" while labelling it "Tracks" is the
-// single most misleading thing this dashboard could do. Activity already
-// answers the windowed version of each of these — the same metric key, the same
-// drill-down — so nothing is lost by keeping this one absolute.
+// Every fact carries BOTH its all-time total and, when a window is asked for,
+// the figure inside that window. That pairing is the design.
 //
-// The payload says so in `windowed: false`, and the UI hides the range bar.
+// "Tracks" all-time is the size of the catalogue. "Tracks" over 30 days is how
+// many were ADDED. Those are different facts wearing one word, and a view that
+// shows only the second under the first's label is the most misleading thing
+// this dashboard could do. So the windowed figure leads, the all-time total
+// sits under it as "of 22,787 all time", and nobody has to guess.
 //
-// ── ONE STATEMENT PER SECTION, NOT PER FACT ─────────────────────────────────
+// A few facts have no date column to window by — "tracks with stems" is a
+// distinct count over a join, "people who downloaded" is a distinct count of
+// users. Those are marked `allTimeOnly` and render as such rather than
+// silently reporting an all-time number inside a window.
 //
-// Thirty-odd facts as thirty-odd queries would be thirty round trips for a page
-// that is read at a glance. They are grouped into a handful of statements, each
-// a single scan of one table with FILTER clauses for its sub-counts — so
-// "Tracks: 22,787 / 14,129 live music / 6,109 live SFX" costs one pass over
-// `tracks`, not three.
+// ── FACTS ARE DATA, NOT QUERIES ─────────────────────────────────────────────
 //
-// ── EVERY FACT THAT CAN OPEN, OPENS ─────────────────────────────────────────
+// Forty-odd facts hand-written would be forty places to forget the window
+// predicate or the IST boundary. They are declared as specs grouped by SOURCE
+// — one FROM clause — and a runner turns each source into a SINGLE statement
+// whose columns are `count(*) FILTER (...)` per fact per window. So the whole
+// Catalogue section is one pass over `tracks`, one over `creator_stems`, one
+// over `artists`, and so on, rather than one query per number.
 //
-// A fact carries the registry metric and, where it is a sub-count, the
-// dimension bucket that reproduces it — so clicking "Live SFX" lands on the
-// SFX rows and not on the whole catalogue. Facts with no drillable equivalent
-// (a sum of money, a count of a table with no metric) carry none rather than a
-// link that silently shows something else.
+// ── NO ORIGIN FILTER HERE, DELIBERATELY ─────────────────────────────────────
+//
+// Half of these facts are catalogue rows with no owner to derive an origin
+// from. A filter that silently applied to the People half while the Catalogue
+// half ignored it would be invisible state of exactly the kind that gets a
+// wrong number quoted. Activity carries the origin split; this view carries the
+// window.
 
 import {
   q,
   num,
   pct,
-  tableExists,
+  delta,
   tablesExist,
   creatorUsersCte,
   captureStart,
+  previousPeriod,
   TX_SCOPE,
   TX_RENEWAL,
   ORIGIN_LABELS,
   ORIGINS,
   ORIGIN_NOTE,
   REVENUE_NOTE,
+  type CreatorFilters,
 } from "./creator-analytics-shared";
 
 const round2 = (v: unknown): number => Math.round(num(v) * 100) / 100;
 
-/** One number on the overview. */
+/** How a fact is aggregated. `filter` is the full predicate for one window. */
+type Agg = (filter: string) => string;
+
+const COUNT: Agg = (f) => `count(*) FILTER (WHERE ${f})`;
+const countDistinct =
+  (col: string): Agg =>
+  (f) => `count(DISTINCT ${col}) FILTER (WHERE ${f})`;
+const sumOf =
+  (col: string): Agg =>
+  (f) => `COALESCE(sum(${col}) FILTER (WHERE ${f}), 0)`;
+
+interface FactSpec {
+  key: string;
+  label: string;
+  hint?: string;
+  /** Renders larger — the number the section is really about. */
+  primary?: boolean;
+  /** Rupees rather than a count. */
+  money?: boolean;
+  /** Predicate selecting this fact's rows out of the source. */
+  where?: string;
+  agg?: Agg;
+  /** The drill-down this fact opens, and the bucket that reproduces it. */
+  metric?: string;
+  dimension?: string;
+  dimensionValue?: string;
+  /** Key of the fact this is a share of. */
+  shareOf?: string;
+  /**
+   * No date column applies — a distinct count over a join, or a total that
+   * only means anything cumulatively. Reported as all-time even under a window,
+   * and flagged so the UI can say so.
+   */
+  allTimeOnly?: boolean;
+}
+
+interface FactSource {
+  /** Probed before the query runs; a missing one drops these facts. */
+  tables: string[];
+  from: string;
+  /** Null when nothing in this source can be windowed. */
+  dateCol: string | null;
+  /** Prefix, for the sources that need the creator_users CTE. */
+  cte?: string;
+  facts: FactSpec[];
+}
+
+/** One resolved number. */
 export interface OverviewFact {
   key: string;
   label: string;
+  /** The figure for the selected window, or the all-time total when unwindowed. */
   value: number;
-  /** Rendered as rupees rather than a plain count. */
+  /** Always the all-time figure, for context under a windowed value. */
+  total: number;
+  /** Present only when a window is applied and the fact can be windowed. */
+  previousValue?: number;
+  deltaPct?: number | null;
+  /** True when the window does not apply to this fact. */
+  allTimeOnly?: boolean;
   money?: boolean;
+  primary?: boolean;
   hint?: string;
-  /** The registry metric this opens, if any. */
   metric?: string;
-  /** Narrows that drill-down to the bucket this fact counts. */
   dimension?: string;
   dimensionValue?: string;
-  /** Share of the section's headline figure, when it is a sub-count. */
+  /** Share of the fact named by `shareOf`, computed on whichever value shows. */
   sharePct?: number;
 }
 
@@ -75,437 +135,363 @@ export interface OverviewSection {
 }
 
 /**
- * A section whose tables are missing entirely.
+ * Runs one source and resolves its facts.
  *
- * Reported rather than thrown, for the same reason the metric registry does it:
- * staging lacks several of these, and a page that 500s because one optional
- * table is absent is worse than one that says "not recorded here".
+ * Three columns per fact — all-time, in-window, previous-window — from a single
+ * scan. The window columns are omitted entirely when no window was asked for,
+ * so the unwindowed page costs exactly what it did before this feature existed.
  */
-const emptySection = (
-  key: string,
-  title: string,
-  sub: string,
-  missing: string,
-): OverviewSection => ({
-  key,
-  title,
-  sub: `${sub} — not recorded here (missing \`${missing}\`)`,
-  facts: [],
-});
+const runSource = async (
+  src: FactSource,
+  win: { curr: string; prev: string } | null,
+): Promise<Record<string, { all: number; win: number; prev: number }>> => {
+  const cols: string[] = [];
 
-/** The catalogue: tracks, stems, artists, albums, Hoopr playlists. */
-const catalogueSection = async (): Promise<OverviewSection> => {
-  const present = await tablesExist([
-    "tracks",
-    "creator_stems",
-    "artists",
-    "albums",
-    "playlists",
-    "track_playlist_mappings",
-  ]);
-
-  if (!present.tracks) {
-    return emptySection("catalogue", "Catalogue", "What there is to license", "tracks");
+  for (const f of src.facts) {
+    const agg = f.agg ?? COUNT;
+    const base = f.where ?? "TRUE";
+    cols.push(`${agg(base)} AS "${f.key}__all"`);
+    // A fact with no date column of its own repeats its all-time figure rather
+    // than being windowed by a column that does not describe it.
+    if (win && src.dateCol && !f.allTimeOnly) {
+      cols.push(`${agg(`(${base}) AND ${win.curr}`)} AS "${f.key}__win"`);
+      cols.push(`${agg(`(${base}) AND ${win.prev}`)} AS "${f.key}__prev"`);
+    }
   }
 
-  const [tracks, stems, artists, albums, playlists] = await Promise.all([
-    q<Record<string, string>>(
-      `SELECT count(*)::bigint                                                       AS total,
-              count(*) FILTER (WHERE x.status = 'ACTIVE')::bigint                    AS active,
-              count(*) FILTER (WHERE x.status = 'ACTIVE' AND x.type = 'music')::bigint AS active_music,
-              count(*) FILTER (WHERE x.status = 'ACTIVE' AND x.type = 'sfx')::bigint   AS active_sfx,
-              count(*) FILTER (WHERE x.status <> 'ACTIVE')::bigint                   AS retired,
-              count(*) FILTER (WHERE x."hasVocals")::bigint                          AS vocals,
-              count(*) FILTER (WHERE x."hasVocals" IS NOT TRUE)::bigint              AS instrumental
-         FROM tracks x`,
-    ),
-    present.creator_stems
-      ? q<{ total: string; tracks_with_stems: string }>(
-          `SELECT count(*)::bigint AS total,
-                  count(DISTINCT x.track_id)::bigint AS tracks_with_stems
-             FROM creator_stems x WHERE x.deleted IS NULL`,
-        )
-      : Promise.resolve([]),
-    present.artists
-      ? q<{ total: string; active: string; native: string }>(
-          `SELECT count(*)::bigint AS total,
-                  count(*) FILTER (WHERE x.status = 'ACTIVE')::bigint AS active,
-                  count(*) FILTER (WHERE x."nativeArtist")::bigint    AS native
-             FROM artists x`,
-        )
-      : Promise.resolve([]),
-    present.albums
-      ? q<{ total: string }>(
-          `SELECT count(*)::bigint AS total FROM albums x WHERE x.deleted IS NULL`,
-        )
-      : Promise.resolve([]),
-    present.playlists
-      ? q<Record<string, string>>(
-          `SELECT count(*)::bigint                                         AS total,
-                  count(*) FILTER (WHERE x.status = 'ACTIVE')::bigint      AS active,
-                  ${
-                    present.track_playlist_mappings
-                      ? `(SELECT count(*)::bigint FROM track_playlist_mappings)`
-                      : `0::bigint`
-                  }                                                        AS placements
-             FROM playlists x`,
-        )
-      : Promise.resolve([]),
-  ]);
+  const rows = await q<Record<string, string>>(
+    `${src.cte ?? ""}
+     SELECT ${cols.join(",\n            ")}
+       FROM ${src.from}`,
+  );
+  const r = rows[0] ?? {};
 
-  const t = tracks[0] ?? {};
-  const total = num(t.total);
-  const facts: OverviewFact[] = [
-    {
-      key: "tracks",
-      label: "Tracks",
-      value: total,
-      hint: "Everything in the catalogue, live and retired",
-      metric: "tracks",
-    },
-    {
-      key: "activeMusic",
-      label: "Live music",
-      value: num(t.active_music),
-      sharePct: pct(num(t.active_music), total),
-      metric: "tracks",
-      dimension: "type",
-      dimensionValue: "music",
-    },
-    {
-      key: "activeSfx",
-      label: "Live SFX",
-      value: num(t.active_sfx),
-      sharePct: pct(num(t.active_sfx), total),
-      metric: "tracks",
-      dimension: "type",
-      dimensionValue: "sfx",
-    },
-    {
-      key: "retiredTracks",
-      label: "Retired",
-      value: num(t.retired),
-      sharePct: pct(num(t.retired), total),
-      hint: "Not ACTIVE — still in the catalogue, not offered",
-      metric: "tracks",
-    },
-    {
-      key: "vocalTracks",
-      label: "With vocals",
-      value: num(t.vocals),
-      sharePct: pct(num(t.vocals), total),
-      metric: "tracks",
-      dimension: "vocals",
-      dimensionValue: "With vocals",
-    },
-    {
-      key: "instrumentalTracks",
-      label: "Instrumental",
-      value: num(t.instrumental),
-      sharePct: pct(num(t.instrumental), total),
-      metric: "tracks",
-      dimension: "vocals",
-      dimensionValue: "Instrumental",
-    },
-  ];
+  const out: Record<string, { all: number; win: number; prev: number }> = {};
+  for (const f of src.facts) {
+    const all = num(r[`${f.key}__all`]);
+    const hasWindow = win && src.dateCol && !f.allTimeOnly;
+    out[f.key] = {
+      all,
+      win: hasWindow ? num(r[`${f.key}__win`]) : all,
+      prev: hasWindow ? num(r[`${f.key}__prev`]) : all,
+    };
+  }
+  return out;
+};
 
-  if (stems.length) {
-    facts.push(
+/** Turns raw counts into the payload's facts, applying money rounding + shares. */
+const resolve = (
+  specs: FactSpec[],
+  raw: Record<string, { all: number; win: number; prev: number }>,
+  windowed: boolean,
+): OverviewFact[] => {
+  const shaped = specs.map((f) => {
+    const n = raw[f.key] ?? { all: 0, win: 0, prev: 0 };
+    const fix = (v: number) => (f.money ? round2(v) : v);
+    const canWindow = windowed && !f.allTimeOnly;
+    return {
+      spec: f,
+      fact: {
+        key: f.key,
+        label: f.label,
+        value: fix(canWindow ? n.win : n.all),
+        total: fix(n.all),
+        ...(canWindow
+          ? { previousValue: fix(n.prev), deltaPct: delta(fix(n.win), fix(n.prev)) }
+          : {}),
+        ...(windowed && f.allTimeOnly ? { allTimeOnly: true } : {}),
+        ...(f.money ? { money: true } : {}),
+        ...(f.primary ? { primary: true } : {}),
+        ...(f.hint ? { hint: f.hint } : {}),
+        ...(f.metric ? { metric: f.metric } : {}),
+        ...(f.dimension ? { dimension: f.dimension } : {}),
+        ...(f.dimensionValue !== undefined ? { dimensionValue: f.dimensionValue } : {}),
+      } as OverviewFact,
+    };
+  });
+
+  const byKey = new Map(shaped.map((s) => [s.fact.key, s.fact]));
+  for (const { spec, fact } of shaped) {
+    if (!spec.shareOf) continue;
+    const base = byKey.get(spec.shareOf);
+    // The share is computed on the value actually SHOWING, so a windowed
+    // sub-count reads as a share of the windowed total rather than of an
+    // all-time figure that is not on screen.
+    if (base) fact.sharePct = pct(fact.value, base.value);
+  }
+  return shaped.map((s) => s.fact);
+};
+
+// ── The facts ───────────────────────────────────────────────────────────────
+
+const catalogueSources = (): FactSource[] => [
+  {
+    tables: ["tracks", "owners"],
+    from: `tracks x`,
+    dateCol: `x."createdAt"`,
+    facts: [
+      {
+        key: "tracks",
+        label: "Tracks",
+        primary: true,
+        hint: "Everything in the catalogue, live and retired",
+        metric: "tracks",
+      },
+      {
+        key: "activeMusic",
+        label: "Live music",
+        where: `x.status = 'ACTIVE' AND x.type = 'music'`,
+        shareOf: "tracks",
+        metric: "tracks",
+        dimension: "type",
+        dimensionValue: "music",
+      },
+      {
+        key: "activeSfx",
+        label: "Live SFX",
+        where: `x.status = 'ACTIVE' AND x.type = 'sfx'`,
+        shareOf: "tracks",
+        metric: "tracks",
+        dimension: "type",
+        dimensionValue: "sfx",
+      },
+      {
+        key: "retiredTracks",
+        label: "Retired",
+        where: `x.status <> 'ACTIVE'`,
+        shareOf: "tracks",
+        hint: "Not ACTIVE — still in the catalogue, not offered",
+        metric: "tracks",
+      },
+      {
+        key: "vocalTracks",
+        label: "With vocals",
+        where: `x."hasVocals"`,
+        shareOf: "tracks",
+        metric: "tracks",
+        dimension: "vocals",
+        dimensionValue: "With vocals",
+      },
+      {
+        key: "instrumentalTracks",
+        label: "Instrumental",
+        where: `x."hasVocals" IS NOT TRUE`,
+        shareOf: "tracks",
+        metric: "tracks",
+        dimension: "vocals",
+        dimensionValue: "Instrumental",
+      },
+    ],
+  },
+  {
+    tables: ["creator_stems"],
+    from: `creator_stems x`,
+    dateCol: `x.created_at`,
+    facts: [
       {
         key: "stems",
         label: "Stems",
-        value: num(stems[0].total),
+        where: `x.deleted IS NULL`,
         hint: "Multitrack layers, soft-deleted ones excluded",
         metric: "stems",
       },
       {
         key: "tracksWithStems",
         label: "Tracks with stems",
-        value: num(stems[0].tracks_with_stems),
-        sharePct: pct(num(stems[0].tracks_with_stems), total),
+        where: `x.deleted IS NULL`,
+        agg: countDistinct(`x.track_id`),
+        hint: "Distinct tracks carrying at least one stem",
       },
-    );
-  }
-  if (artists.length) {
-    facts.push(
-      { key: "artists", label: "Artists", value: num(artists[0].total), metric: "artists" },
+    ],
+  },
+  {
+    tables: ["artists", "track_artist_mappings"],
+    from: `artists x`,
+    dateCol: `x."createdAt"`,
+    facts: [
+      { key: "artists", label: "Artists", metric: "artists" },
       {
         key: "nativeArtists",
         label: "With a Creator page",
-        value: num(artists[0].native),
-        hint: "Artists surfaced on creator-web, not just credited",
+        where: `x."nativeArtist"`,
+        shareOf: "artists",
+        hint: "Surfaced on creator-web, not just credited",
         metric: "artists",
       },
-    );
-  }
-  if (albums.length) {
-    facts.push({
-      key: "albums",
-      label: "Albums",
-      value: num(albums[0].total),
-      metric: "albums",
-    });
-  }
-  if (playlists.length) {
-    facts.push(
+    ],
+  },
+  {
+    tables: ["albums"],
+    from: `albums x`,
+    dateCol: `x."createdAt"`,
+    facts: [
+      { key: "albums", label: "Albums", where: `x.deleted IS NULL`, metric: "albums" },
+    ],
+  },
+  {
+    tables: ["playlists"],
+    from: `playlists x`,
+    dateCol: `x."createdAt"`,
+    facts: [
       {
         key: "hooprPlaylists",
         label: "Hoopr playlists",
-        value: num(playlists[0].total),
         hint: "Curated and system playlists — not creators' own collections",
         metric: "hooprPlaylists",
       },
       {
         key: "activeHooprPlaylists",
         label: "Live playlists",
-        value: num(playlists[0].active),
+        where: `x.status = 'ACTIVE'`,
+        shareOf: "hooprPlaylists",
         metric: "hooprPlaylists",
         dimension: "status",
         dimensionValue: "ACTIVE",
       },
+    ],
+  },
+  {
+    tables: ["track_playlist_mappings"],
+    from: `track_playlist_mappings x`,
+    // No timestamp on the mapping table, so placements are all-time only.
+    dateCol: null,
+    facts: [
       {
         key: "playlistPlacements",
         label: "Tracks in playlists",
-        value: num(playlists[0].placements),
+        allTimeOnly: true,
         hint: "Placements, not distinct tracks — one track can sit in several",
       },
-    );
-  }
+    ],
+  },
+];
 
-  return {
-    key: "catalogue",
-    title: "Catalogue",
-    sub: "What there is to license",
-    facts,
-  };
-};
-
-/** People: accounts, where they came from, who is subscribed. */
-const peopleSection = async (): Promise<OverviewSection> => {
-  const usersCte = await creatorUsersCte();
-  const [profilesPresent, subsPresent] = await Promise.all([
-    tableExists("soundtracking_user_profiles"),
-    tableExists("user_subscriptions"),
-  ]);
-
-  const [accounts, byOrigin, subs, profiles] = await Promise.all([
-    q<Record<string, string>>(
-      `WITH ${usersCte}
-       SELECT count(*)::bigint                                          AS total,
-              count(*) FILTER (WHERE cu.status = 'ACTIVE')::bigint      AS active,
-              count(*) FILTER (WHERE cu.status = 'DELETED')::bigint     AS deleted,
-              count(*) FILTER (WHERE cu.email IS NOT NULL)::bigint      AS with_email,
-              count(*) FILTER (WHERE cu.mobile IS NOT NULL)::bigint     AS with_mobile
-         FROM creator_users cu`,
-    ),
-    q<{ origin: string; n: string }>(
-      `WITH ${usersCte}
-       SELECT cu.origin, count(*)::bigint AS n FROM creator_users cu GROUP BY 1`,
-    ),
-    subsPresent
-      ? q<Record<string, string>>(
-          `SELECT count(*)::bigint                                                   AS total,
-                  count(*) FILTER (WHERE s.status IN ('active', 'past_due'))::bigint AS live,
-                  count(DISTINCT s."userId")
-                    FILTER (WHERE s.status IN ('active', 'past_due'))::bigint        AS live_people,
-                  count(*) FILTER (
-                    WHERE s.status IN ('active', 'past_due')
-                      AND (s."razorpaySubscriptionId" IS NOT NULL
-                           OR s."appleOriginalTxId" IS NOT NULL)
-                  )::bigint                                                          AS live_paid
-             FROM user_subscriptions s`,
-        )
-      : Promise.resolve([]),
-    profilesPresent
-      ? q<{ total: string }>(
-          `SELECT count(*)::bigint AS total FROM soundtracking_user_profiles`,
-        )
-      : Promise.resolve([]),
-  ]);
-
-  const a = accounts[0] ?? {};
-  const total = num(a.total);
-  const originCounts = new Map(byOrigin.map((r) => [r.origin, num(r.n)]));
-
-  const facts: OverviewFact[] = [
+const peopleSources = async (): Promise<FactSource[]> => {
+  // MATERIALIZED, and it is load-bearing: the accounts query below reads
+  // `cu.origin` in four separate FILTER clauses, and an inlined CTE re-runs the
+  // four-EXISTS origin ladder over all 461k users once per reference. Measured
+  // on prod that did not finish inside the statement timeout; materialised it
+  // is 1.4s. See creatorUsersCte's docstring.
+  const cte = `WITH ${await creatorUsersCte({ materialized: true })}`;
+  return [
     {
-      key: "creators",
-      label: "Creator accounts",
-      value: total,
-      hint: "Every account on the CREATOR platform",
-      metric: "signups",
+      tables: ["users"],
+      from: `creator_users cu`,
+      dateCol: `cu."createdAt"`,
+      cte,
+      facts: [
+        {
+          key: "creators",
+          label: "Creator accounts",
+          primary: true,
+          hint: "Every account on the CREATOR platform",
+          metric: "signups",
+        },
+        {
+          key: "activeCreators",
+          label: "Active",
+          where: `cu.status = 'ACTIVE'`,
+          shareOf: "creators",
+          metric: "signups",
+        },
+        {
+          key: "deactivatedCreators",
+          label: "Deactivated",
+          where: `cu.status = 'DELETED'`,
+          shareOf: "creators",
+          metric: "signups",
+        },
+        ...ORIGINS.map((o) => ({
+          key: `origin${o}`,
+          label: ORIGIN_LABELS[o],
+          where: `cu.origin = '${o}'`,
+          shareOf: "creators",
+          hint:
+            o === "WEB"
+              ? "No app evidence — includes every account the legacy migration bulk-loaded"
+              : undefined,
+          metric: "signups",
+          dimension: "origin",
+          dimensionValue: o,
+        })),
+      ],
     },
     {
-      key: "activeCreators",
-      label: "Active",
-      value: num(a.active),
-      sharePct: pct(num(a.active), total),
-      metric: "signups",
+      tables: ["user_subscriptions"],
+      from: `user_subscriptions s`,
+      dateCol: `s."createdAt"`,
+      facts: [
+        {
+          key: "allSubscriptions",
+          label: "Subscriptions ever",
+          metric: "subscriptions",
+        },
+        {
+          key: "liveSubscriptions",
+          label: "Live subscriptions",
+          // Point-in-time by nature: a subscription is live NOW or it is not.
+          // Windowing it by createdAt would answer "started in this window and
+          // is still live", which is a different and much smaller number.
+          where: `s.status IN ('active', 'past_due')`,
+          allTimeOnly: true,
+          hint: "active + past_due — both still have the product, as of now",
+          metric: "subscriptions",
+        },
+        {
+          key: "liveSubscribers",
+          label: "Subscribers",
+          where: `s.status IN ('active', 'past_due')`,
+          agg: countDistinct(`s."userId"`),
+          allTimeOnly: true,
+          hint: "Distinct people holding a live plan right now",
+        },
+        {
+          key: "livePaidSubscriptions",
+          label: "…with a payment instrument",
+          where: `s.status IN ('active', 'past_due')
+                  AND (s."razorpaySubscriptionId" IS NOT NULL
+                       OR s."appleOriginalTxId" IS NOT NULL)`,
+          shareOf: "liveSubscriptions",
+          allTimeOnly: true,
+          hint: "A Razorpay mandate or an Apple receipt behind the row; the rest are comped",
+        },
+      ],
     },
     {
-      key: "deactivatedCreators",
-      label: "Deactivated",
-      value: num(a.deleted),
-      sharePct: pct(num(a.deleted), total),
-      metric: "signups",
+      tables: ["soundtracking_user_profiles"],
+      from: `soundtracking_user_profiles x`,
+      dateCol: null,
+      facts: [
+        {
+          key: "creatorProfiles",
+          label: "Creator profiles",
+          allTimeOnly: true,
+          hint: "Accounts that have filled in a soundtracking profile",
+        },
+      ],
     },
-    ...ORIGINS.map((o) => ({
-      key: `origin${o}`,
-      label: ORIGIN_LABELS[o],
-      value: originCounts.get(o) ?? 0,
-      sharePct: pct(originCounts.get(o) ?? 0, total),
-      // Read WEB as "no app evidence" — see ORIGIN_NOTE, which the UI prints
-      // under this section rather than hiding in a tooltip.
-      hint:
-        o === "WEB"
-          ? "No app evidence — includes every account the legacy migration bulk-loaded"
-          : undefined,
-      metric: "signups",
-      dimension: "origin",
-      dimensionValue: o,
-    })),
   ];
-
-  if (subs.length) {
-    const s = subs[0];
-    facts.push(
-      {
-        key: "liveSubscriptions",
-        label: "Live subscriptions",
-        value: num(s.live),
-        hint: "active + past_due — both still have the product",
-        metric: "subscriptions",
-      },
-      {
-        key: "liveSubscribers",
-        label: "Subscribers",
-        value: num(s.live_people),
-        sharePct: pct(num(s.live_people), total),
-        hint: "Distinct people holding a live plan",
-      },
-      {
-        key: "livePaidSubscriptions",
-        label: "…with a payment instrument",
-        value: num(s.live_paid),
-        hint: "A Razorpay mandate or an Apple receipt behind the row; the rest are comped",
-      },
-      {
-        key: "allSubscriptions",
-        label: "Subscriptions ever",
-        value: num(s.total),
-        metric: "subscriptions",
-      },
-    );
-  }
-  if (profiles.length) {
-    facts.push({
-      key: "creatorProfiles",
-      label: "Creator profiles",
-      value: num(profiles[0].total),
-      hint: "Accounts that have filled in a soundtracking profile",
-    });
-  }
-
-  return {
-    key: "people",
-    title: "People",
-    sub: "Who is on the platform, and where they came from",
-    facts,
-  };
 };
 
-/** What creators have made and saved, all-time. */
-const activitySection = async (): Promise<OverviewSection> => {
-  const t = await tablesExist([
-    "licenses",
-    "user_liked_tracks",
-    "creator_liked_playlists",
-    "collections",
-    "collection_items",
-    "sound_projects",
-    "video_links",
-    "native_shares",
-    "native_referrals",
-  ]);
-
-  const one = async <T extends Record<string, string>>(
-    table: string,
-    sql: string,
-  ): Promise<T[]> => (t[table] ? q<T>(sql) : Promise.resolve([]));
-
-  const [downloads, likes, playlistLikes, collections, projects, claims, shares, referrals] =
-    await Promise.all([
-      one<Record<string, string>>(
-        "licenses",
-        `SELECT count(*)::bigint AS total,
-                count(DISTINCT x."userId")::bigint AS people,
-                count(*) FILTER (WHERE x.type = 'stem')::bigint AS stems
-           FROM licenses x
-          WHERE lower(COALESCE(x.status, 'active')) <> 'pending'`,
-      ),
-      one<Record<string, string>>(
-        "user_liked_tracks",
-        `SELECT count(*)::bigint AS total, count(DISTINCT x."userId")::bigint AS people
-           FROM user_liked_tracks x`,
-      ),
-      one<Record<string, string>>(
-        "creator_liked_playlists",
-        `SELECT count(*)::bigint AS total, count(DISTINCT x.user_id)::bigint AS people
-           FROM creator_liked_playlists x WHERE x.liked IS TRUE`,
-      ),
-      one<Record<string, string>>(
-        "collections",
-        `SELECT count(*)::bigint AS total,
-                count(DISTINCT x."userId")::bigint AS people,
-                ${
-                  t.collection_items
-                    ? `(SELECT count(*)::bigint FROM collection_items)`
-                    : `0::bigint`
-                } AS items
-           FROM collections x
-          WHERE COALESCE(x.status, 'ACTIVE') <> 'DELETED'`,
-      ),
-      one<Record<string, string>>(
-        "sound_projects",
-        `SELECT count(*)::bigint AS total, count(DISTINCT x."userId")::bigint AS people
-           FROM sound_projects x`,
-      ),
-      one<Record<string, string>>(
-        "video_links",
-        `SELECT count(*)::bigint AS total, count(DISTINCT x."userId")::bigint AS people
-           FROM video_links x`,
-      ),
-      one<Record<string, string>>(
-        "native_shares",
-        `SELECT count(*)::bigint AS total,
-                count(*) FILTER (WHERE x."userId" IS NULL)::bigint AS anonymous,
-                COALESCE(sum(x."clickCount"), 0)::bigint AS clicks
-           FROM native_shares x`,
-      ),
-      one<Record<string, string>>(
-        "native_referrals",
-        `SELECT count(*)::bigint AS total,
-                count(*) FILTER (WHERE x.status = 'COMPLETED')::bigint AS completed
-           FROM native_referrals x`,
-      ),
-    ]);
-
-  const facts: OverviewFact[] = [];
-
-  if (downloads.length) {
-    facts.push(
+const activitySources = (): FactSource[] => [
+  {
+    tables: ["licenses"],
+    from: `licenses x`,
+    dateCol: `x."licensedAt"`,
+    facts: [
       {
         key: "downloads",
         label: "Downloads",
-        value: num(downloads[0].total),
-        hint: "One licence row per export, all-time",
+        primary: true,
+        where: `lower(COALESCE(x.status, 'active')) <> 'pending'`,
+        hint: "One licence row per export",
         metric: "downloads",
       },
       {
         key: "stemDownloads",
         label: "…of stems",
-        value: num(downloads[0].stems),
-        sharePct: pct(num(downloads[0].stems), num(downloads[0].total)),
+        where: `lower(COALESCE(x.status, 'active')) <> 'pending' AND x.type = 'stem'`,
+        shareOf: "downloads",
         metric: "downloads",
         dimension: "assetType",
         dimensionValue: "stem",
@@ -513,214 +499,280 @@ const activitySection = async (): Promise<OverviewSection> => {
       {
         key: "downloaders",
         label: "People who downloaded",
-        value: num(downloads[0].people),
+        where: `lower(COALESCE(x.status, 'active')) <> 'pending'`,
+        agg: countDistinct(`x."userId"`),
       },
-    );
-  }
-  if (likes.length) {
-    facts.push(
+    ],
+  },
+  {
+    tables: ["user_liked_tracks"],
+    from: `user_liked_tracks x`,
+    dateCol: `x."createdAt"`,
+    facts: [
+      { key: "likes", label: "Tracks favourited", metric: "likes" },
       {
-        key: "likes",
-        label: "Tracks favourited",
-        value: num(likes[0].total),
-        metric: "likes",
+        key: "likers",
+        label: "People who favourited",
+        agg: countDistinct(`x."userId"`),
       },
-      { key: "likers", label: "People who favourited", value: num(likes[0].people) },
-    );
-  }
-  if (playlistLikes.length) {
-    facts.push({
-      key: "playlistLikes",
-      label: "Playlists favourited",
-      value: num(playlistLikes[0].total),
-      metric: "playlistLikes",
-    });
-  }
-  if (collections.length) {
-    facts.push(
+    ],
+  },
+  {
+    tables: ["creator_liked_playlists"],
+    from: `creator_liked_playlists x`,
+    dateCol: `x.created_at`,
+    facts: [
+      {
+        key: "playlistLikes",
+        label: "Playlists favourited",
+        where: `x.liked IS TRUE`,
+        metric: "playlistLikes",
+      },
+    ],
+  },
+  {
+    tables: ["collections"],
+    from: `collections x`,
+    dateCol: `x."createdAt"`,
+    facts: [
       {
         key: "collections",
         label: "Creator collections",
-        value: num(collections[0].total),
+        where: `COALESCE(x.status, 'ACTIVE') <> 'DELETED'`,
         hint: "Creators' OWN playlists — not the curated Hoopr ones",
         metric: "collections",
       },
+    ],
+  },
+  {
+    tables: ["collection_items"],
+    from: `collection_items x`,
+    dateCol: `x."createdAt"`,
+    facts: [
       {
         key: "collectionItems",
         label: "Tracks saved into them",
-        value: num(collections[0].items),
         metric: "collectionItems",
       },
-    );
-  }
-  if (projects.length) {
-    facts.push({
-      key: "projects",
-      label: "Video projects",
-      value: num(projects[0].total),
-      hint: "Editor sessions in the app",
-      metric: "projects",
-    });
-  }
-  if (claims.length) {
-    facts.push({
-      key: "claims",
-      label: "Reel claims",
-      value: num(claims[0].total),
-      metric: "claims",
-    });
-  }
-  if (shares.length) {
-    facts.push(
+    ],
+  },
+  {
+    tables: ["sound_projects"],
+    from: `sound_projects x`,
+    dateCol: `x."createdAt"`,
+    facts: [
+      {
+        key: "projects",
+        label: "Video projects",
+        hint: "Editor sessions in the app",
+        metric: "projects",
+      },
+    ],
+  },
+  {
+    tables: ["video_links"],
+    from: `video_links x`,
+    dateCol: `x."createdAt"`,
+    facts: [{ key: "claims", label: "Reel claims", metric: "claims" }],
+  },
+  {
+    tables: ["native_shares"],
+    from: `native_shares x`,
+    dateCol: `x."createdAt"`,
+    facts: [
       {
         key: "shares",
         label: "Shares",
-        value: num(shares[0].total),
         hint: "Includes anonymous shares, which the per-person drill-down cannot show",
         metric: "shares",
       },
       {
         key: "shareClicks",
         label: "Clicks on shares",
-        value: num(shares[0].clicks),
+        agg: sumOf(`x."clickCount"`),
+        hint: "Counted against the day the share was created, not the day it was clicked",
       },
-    );
-  }
-  if (referrals.length) {
-    facts.push(
-      {
-        key: "referrals",
-        label: "Referrals",
-        value: num(referrals[0].total),
-        metric: "referrals",
-      },
+    ],
+  },
+  {
+    tables: ["native_referrals"],
+    from: `native_referrals x`,
+    dateCol: `COALESCE(x."joinedAt", x."createdAt")`,
+    facts: [
+      { key: "referrals", label: "Referrals", metric: "referrals" },
       {
         key: "completedReferrals",
         label: "…completed",
-        value: num(referrals[0].completed),
+        where: `x.status = 'COMPLETED'`,
+        shareOf: "referrals",
         metric: "referrals",
         dimension: "status",
         dimensionValue: "COMPLETED",
       },
-    );
-  }
+    ],
+  },
+];
 
-  return {
-    key: "activity",
-    title: "What creators have done",
-    sub: "All-time, across app and web",
-    facts,
-  };
-};
-
-/** Lifetime money in and money out. */
-const moneySection = async (): Promise<OverviewSection> => {
-  const t = await tablesExist(["transactions", "withdrawals"]);
-  if (!t.transactions && !t.withdrawals) {
-    return emptySection("money", "Money", "Lifetime, all-time", "transactions");
-  }
-
-  const [revenue, payouts] = await Promise.all([
-    t.transactions
-      ? q<Record<string, string>>(
-          `SELECT count(*)::bigint                                            AS payments,
-                  count(DISTINCT t."userId")::bigint                          AS payers,
-                  COALESCE(sum(t."totalAmount"), 0)                           AS gross,
-                  COALESCE(sum(t."totalAmount") FILTER (WHERE ${TX_RENEWAL} IS TRUE), 0) AS renewal_gross,
-                  count(*) FILTER (WHERE ${TX_RENEWAL} IS TRUE)::bigint       AS renewals
-             FROM transactions t
-            WHERE ${TX_SCOPE}`,
-        )
-      : Promise.resolve([]),
-    t.withdrawals
-      ? q<Record<string, string>>(
-          `SELECT count(*)::bigint AS requests,
-                  count(DISTINCT w."userId")::bigint AS people,
-                  COALESCE(sum(w."amountRupees"), 0) AS requested,
-                  COALESCE(sum(w."amountRupees") FILTER (
-                    WHERE lower(COALESCE(w.status, '')) IN ('processed', 'completed', 'paid')
-                  ), 0) AS paid
-             FROM withdrawals w`,
-        )
-      : Promise.resolve([]),
-  ]);
-
-  const facts: OverviewFact[] = [];
-
-  if (revenue.length) {
-    const r = revenue[0];
-    facts.push(
+const moneySources = (): FactSource[] => [
+  {
+    tables: ["transactions"],
+    from: `transactions t`,
+    dateCol: `t."createdAt"`,
+    facts: [
       {
         key: "lifetimeRevenue",
         label: "Subscription revenue",
-        value: round2(r.gross),
+        primary: true,
         money: true,
-        hint: "All-time plan-cycle money that arrived, legacy backfill included",
+        where: TX_SCOPE,
+        agg: sumOf(`t."totalAmount"`),
+        hint: "Plan-cycle money that arrived, legacy backfill included",
         metric: "payments",
       },
       {
         key: "renewalRevenue",
         label: "…from renewals",
-        value: round2(r.renewal_gross),
         money: true,
-        sharePct: pct(round2(r.renewal_gross), round2(r.gross)),
+        where: `${TX_SCOPE} AND ${TX_RENEWAL} IS TRUE`,
+        agg: sumOf(`t."totalAmount"`),
+        shareOf: "lifetimeRevenue",
         metric: "payments",
         dimension: "paymentKind",
         dimensionValue: "renewal",
       },
-      { key: "payments", label: "Payments", value: num(r.payments), metric: "payments" },
-      { key: "payers", label: "People who have paid", value: num(r.payers) },
-    );
-  }
-  if (payouts.length) {
-    const w = payouts[0];
-    facts.push(
+      { key: "payments", label: "Payments", where: TX_SCOPE, metric: "payments" },
       {
-        key: "withdrawalsPaid",
-        label: "Paid out to creators",
-        value: round2(w.paid),
+        key: "payers",
+        label: "People who have paid",
+        where: TX_SCOPE,
+        agg: countDistinct(`t."userId"`),
+      },
+    ],
+  },
+  {
+    tables: ["withdrawals"],
+    from: `withdrawals w`,
+    dateCol: `COALESCE(w."requestedAt", w."createdAt")`,
+    facts: [
+      // Requested leads and Paid is the share OF it, not the other way round:
+      // requested is always the larger of the two (some requests fail or are
+      // still pending), and a "share" above 100% reads as a bug in the tile.
+      {
+        key: "withdrawalsRequested",
+        label: "Payouts requested",
         money: true,
-        hint: "Every production payout is manual",
+        agg: sumOf(`w."amountRupees"`),
         metric: "withdrawals",
       },
       {
-        key: "withdrawalsRequested",
-        label: "Requested",
-        value: round2(w.requested),
+        key: "withdrawalsPaid",
+        label: "…actually paid out",
         money: true,
+        where: `lower(COALESCE(w.status, '')) IN ('processed', 'completed', 'paid')`,
+        agg: sumOf(`w."amountRupees"`),
+        shareOf: "withdrawalsRequested",
+        hint: "Every production payout is manual",
         metric: "withdrawals",
       },
       {
         key: "withdrawalPeople",
         label: "Creators paid",
-        value: num(w.people),
+        where: `lower(COALESCE(w.status, '')) IN ('processed', 'completed', 'paid')`,
+        agg: countDistinct(`w."userId"`),
       },
-    );
-  }
-
-  return { key: "money", title: "Money", sub: "Lifetime, all-time", facts };
-};
+    ],
+  },
+];
 
 /**
  * GET /admin/creator-analytics/overview
  *
- * Point-in-time platform totals. Takes no date range on purpose.
+ * Optionally windowed. With no dates, every figure is all-time; with dates,
+ * each fact reports the window and keeps its all-time total alongside.
  */
-export const getOverviewService = async () => {
+export const getOverviewService = async (f: Partial<CreatorFilters> = {}) => {
+  const windowed = Boolean(f.startDate && f.endDate);
+
+  // Bound as literals rather than named binds because these predicates are
+  // embedded inside FILTER clauses that are themselves built per fact — one
+  // statement can carry forty of them, and Sequelize's named-replacement
+  // scanner rewrites every occurrence, which makes the SQL far harder to read
+  // back when it goes wrong. The values are Joi-validated `YYYY-MM-DD` strings
+  // and nothing else can reach here.
+  let win: { curr: string; prev: string } | null = null;
+  let prevRange: { startDate: string; endDate: string } | null = null;
+
+  if (windowed) {
+    const range = { startDate: f.startDate!, endDate: f.endDate! };
+    prevRange = previousPeriod(range as CreatorFilters);
+    const between = (col: string, a: string, b: string) =>
+      `${col} >= ('${a}'::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
+       AND ${col} < ('${b}'::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'`;
+    // `WINDOW_COL` is substituted per source below.
+    win = {
+      curr: between("WINDOW_COL", range.startDate, range.endDate),
+      prev: between("WINDOW_COL", prevRange.startDate, prevRange.endDate),
+    };
+  }
+
+  /** Substitutes each source's own date column into the shared predicates. */
+  const winFor = (src: FactSource) => {
+    if (!win || !src.dateCol) return null;
+    // `split/join`, not `replaceAll` — this project targets ES2020 — and not
+    // `replace(/…/g, col)` either, because a date column can legitimately
+    // contain `$` sequences that a regex replacement would interpret.
+    const sub = (t: string) => t.split("WINDOW_COL").join(src.dateCol!);
+    return { curr: sub(win.curr), prev: sub(win.prev) };
+  };
+
+  const section = async (
+    key: string,
+    title: string,
+    sub: string,
+    sources: FactSource[],
+  ) => {
+    const present = await tablesExist([...new Set(sources.flatMap((s) => s.tables))]);
+    const usable = sources.filter((s) => s.tables.every((t) => present[t]));
+    const results = await Promise.all(usable.map((s) => runSource(s, winFor(s))));
+    const raw: Record<string, { all: number; win: number; prev: number }> = {};
+    for (const r of results) Object.assign(raw, r);
+    // A source with no date column reports all-time even under a window, and
+    // `allTimeOnly` on its facts is what tells the UI to say so.
+    const specs = usable.flatMap((s) =>
+      s.dateCol ? s.facts : s.facts.map((fa) => ({ ...fa, allTimeOnly: true })),
+    );
+    return { key, title, sub, facts: resolve(specs, raw, windowed) };
+  };
+
   const [catalogue, people, activity, money, coverage] = await Promise.all([
-    catalogueSection(),
-    peopleSection(),
-    activitySection(),
-    moneySection(),
+    section("catalogue", "Catalogue", "What there is to license", catalogueSources()),
+    peopleSources().then((s) =>
+      section("people", "People", "Who is on the platform, and where they came from", s),
+    ),
+    section(
+      "activity",
+      "What creators have done",
+      "Downloads, favourites, collections and the creator programme",
+      activitySources(),
+    ),
+    section("money", "Money", "Subscription revenue in, creator payouts out", moneySources()),
     captureStart(),
   ]);
 
   return {
-    /** The UI hides the range bar on this view; the flag is why. */
-    windowed: false,
-    generatedFor: "all time",
+    windowed,
+    range: windowed ? { startDate: f.startDate!, endDate: f.endDate! } : null,
+    previousRange: prevRange,
     sections: [catalogue, people, activity, money],
     coverage: { sessionsFrom: coverage },
-    notes: { origin: ORIGIN_NOTE, revenue: REVENUE_NOTE },
+    notes: {
+      origin: ORIGIN_NOTE,
+      revenue: REVENUE_NOTE,
+      window:
+        "With a window applied, each figure shows what happened INSIDE it and " +
+        "keeps its all-time total underneath. A few — live subscriptions, " +
+        "playlist placements, creator profiles — have no date to window by and " +
+        "stay all-time; they are labelled as such.",
+    },
   };
 };

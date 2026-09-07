@@ -86,5 +86,24 @@ export const creatorDetailQuerySchema = Joi.object({
 
 export const creatorEmptyQuerySchema = Joi.object({}).unknown(false);
 
+/**
+ * Overview: an OPTIONAL window, with no default.
+ *
+ * Deliberately not `defaultRange` like every other endpoint here. Absent dates
+ * mean all-time, which is what the view is for; defaulting to 30 days would
+ * silently turn "how big is the catalogue" into "how much did we add recently"
+ * for anyone who did not touch the range bar.
+ *
+ * Both ends are required together — a lone `startDate` is a half-typed range,
+ * and answering it with an open-ended window would report a number nobody
+ * asked for.
+ */
+export const creatorOptionalRangeQuerySchema = Joi.object({
+  startDate: dateField,
+  endDate: dateField,
+})
+  .and("startDate", "endDate")
+  .unknown(false);
+
 /** Exported for the controller's 400 message on an unknown metric. */
 export const KNOWN_METRICS = Object.keys(METRICS);

@@ -161,8 +161,29 @@ export const ORIGIN_LABELS: Record<string, string> = {
  *
  * Measured on prod (461,742 CREATOR rows): 0.6s for the whole table, so it is
  * cheap enough to build unfiltered and join to.
+ *
+ * ── `materialized` IS NOT A MICRO-OPTIMISATION ──────────────────────────────
+ *
+ * Postgres INLINES a plain CTE, which means the origin ladder — four
+ * correlated EXISTS per user — is re-evaluated once per REFERENCE to
+ * `cu.origin`, not once per row. One reference is fine and is what every
+ * drill-down and metric query needs, because inlining is also what lets the
+ * planner push a join or a `WHERE cu.id = …` down into an index seek instead
+ * of building all 461k rows.
+ *
+ * A query that references `cu.origin` several times is the opposite case.
+ * Measured on prod: the overview's People query, with four
+ * `count(*) FILTER (WHERE cu.origin = …)` clauses, ran the ladder four times
+ * over the whole table and did not finish inside the statement timeout
+ * (>300s). With `AS MATERIALIZED` it is **1.4s**.
+ *
+ * So: pass `materialized: true` when the query reads `origin` more than once,
+ * and leave it off otherwise. Forcing it everywhere would slow every
+ * drill-down down to a full 461k build.
  */
-export const creatorUsersCte = async (): Promise<string> => {
+export const creatorUsersCte = async (
+  opts: { materialized?: boolean } = {},
+): Promise<string> => {
   const merge = await tableExists("_merge_all_map");
   const appArms = [`u.platform = 'SOUND_TRACKING_APP'`];
   if (merge) {
@@ -171,7 +192,7 @@ export const creatorUsersCte = async (): Promise<string> => {
   appArms.push(`EXISTS (SELECT 1 FROM user_sessions _us WHERE _us."userId" = u.id)`);
 
   return `
-    creator_users AS (
+    creator_users AS ${opts.materialized ? "MATERIALIZED " : ""}(
       SELECT u.id, u."createdAt", u.email, u.mobile, u."countryCode",
              u."firstName", u."lastName", u.status, u.city, u.state, u.country,
              CASE
