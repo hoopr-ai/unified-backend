@@ -48,6 +48,7 @@ import { WebBannerModel } from "./web-banner/modules.export";
 import { LabelPageModel } from "./label-page/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import { FaqModel, FaqSectionModel } from "./faq/modules.export";
+import { ContactUsModel } from "./contact/modules.export";
 import {
   KeywordModel,
   TrackKeywordMappingModel,
@@ -180,6 +181,7 @@ sequelize.addModels([
   CampaignModel,
   FaqSectionModel,
   FaqModel,
+  ContactUsModel,
   RailModel,
   RailItemModel,
   CountryModel,

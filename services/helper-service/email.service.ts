@@ -913,7 +913,15 @@ export const sendContactUsEmail = async (data: {
   message?: string;
 }): Promise<void> => {
   const { userName, userEmail, mobile, brandName, message } = data;
-  const adminEmails: string[] = []; // TODO: Add admin emails
+  // Was `[]` with a TODO, which made the loop below a no-op: the admin HTML was
+  // built in full and then sent to nobody. Comma-separated so ops can add a
+  // second inbox without a deploy.
+  const adminEmails: string[] = (
+    process.env.CONTACT_US_ADMIN_EMAILS ?? "hello@hoopr.in"
+  )
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 
   const html = `
     <!DOCTYPE html>
@@ -1033,13 +1041,20 @@ export const sendContactUsEmail = async (data: {
     </html>
   `;
 
-  // Send to all admin emails
+  // Send to all admin emails. Each is isolated: one bad address must not stop
+  // the others, nor skip the submitter's confirmation below it.
   for (const adminEmail of adminEmails) {
-    await sendEmail({
-      to: adminEmail,
-      subject: `Hoopr Smash - Contact Us Inquiry from ${userName}`,
-      html,
-    });
+    try {
+      await sendEmail({
+        to: adminEmail,
+        subject: `Hoopr Smash - Contact Us Inquiry from ${userName}`,
+        html,
+      });
+    } catch (err) {
+      logger.error(
+        `contact-us admin notification to ${adminEmail} failed: ${(err as Error).message}`
+      );
+    }
   }
 
   // Send confirmation email to user
