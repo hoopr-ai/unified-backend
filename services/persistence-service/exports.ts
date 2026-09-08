@@ -21,3 +21,5 @@ export * from "./cart/modules.export";
 export * from "./order/modules.export";
 export * from "./transaction/modules.export";
 export * from "./webhook/modules.export";
+export * from "./attribution/modules.export";
+

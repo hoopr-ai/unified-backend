@@ -9,6 +9,11 @@ import {
   deleteLabelPageService,
   uploadLabelPageImageService,
 } from "../services/business-service/label-page/modules.export";
+import {
+  recordUtmArrival,
+  parseUtmTags,
+  UtmContext,
+} from "../services/business-service/attribution/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 import type {
   CreateLabelPageRequest,
@@ -21,8 +26,19 @@ interface AuthRequest extends Request {
 }
 
 // GET /label-pages?activeOnly=true
-export const getLabelPages = catchAsync(async (req: Request, res: Response) => {
+export const getLabelPages = catchAsync(async (req: AuthRequest, res: Response) => {
   const activeOnly = req.query.activeOnly === "true";
+
+  // enterprise-fe puts the landing URL's utm_* tags on the query string here
+  // (they go in the body on POST /tracks), so a visit that opens a label page
+  // is attributed even before any catalogue call goes out.
+  recordUtmArrival(
+    UtmContext.LABEL_PAGE_LIST,
+    parseUtmTags(req.query as Record<string, unknown>),
+    req,
+    req.session,
+  );
+
   const pages = await getLabelPagesService(activeOnly);
   sendResponse(res, {
     status: HttpStatusCode.OK,

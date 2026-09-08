@@ -69,6 +69,7 @@ import {
   MonitoredUrlModel,
   MonitorCheckModel,
 } from "./url-monitor/schemas/modules.export";
+import { UtmLinkModel } from "./attribution/modules.export";
 
 config();
 
@@ -198,6 +199,7 @@ sequelize.addModels([
   MonitorCheckModel,
   CreatorStemModel,
   CreatorMixerDownloadModel,
+  UtmLinkModel,
 ]);
 
 // Idempotent SQL: ensures all triggers + functions exist without dropping anything
