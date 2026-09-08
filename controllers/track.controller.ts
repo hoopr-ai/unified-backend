@@ -8,6 +8,9 @@ import {
   GetTracksByFilterQuery,
   getRandomTrackPreviewService,
   getTrackStemsService,
+  recordUtmArrival,
+  parseUtmTags,
+  UtmContext,
 } from "../services/business-service/modules.export";
 import {
   catchAsync,
@@ -74,6 +77,20 @@ export const getAllTracks = catchAsync(
         : undefined,
       trackType: req.body.trackType as string | undefined,
     };
+
+    // The owner/label detail page's only call is this listing, so enterprise-fe
+    // spreads the landing URL's utm_* tags onto it. They never narrow the
+    // listing — they say how the visitor got here. The page fans this endpoint
+    // out several ways for one visit (a single ownerCode, a whole category when
+    // that comes back empty, a subType instead for D00047, a fresh call per page
+    // and per sidebar filter), and each of those writes its own utm_links row;
+    // the filters ride along in the label so the rows can be told apart.
+    recordUtmArrival(UtmContext.TRACK_LISTING, parseUtmTags(req.body), req, req.session, {
+      // Sorted so the row reads the same whatever order the codes arrived in.
+      ownerCode: query.ownerCode?.length ? [...query.ownerCode].sort() : null,
+      subType: query.subType?.length ? [...query.subType].sort() : null,
+    });
+
     const response = await getAllTracksService(
       query,
       userId,

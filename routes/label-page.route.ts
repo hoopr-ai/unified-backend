@@ -7,7 +7,7 @@ import {
   deleteLabelPage,
   uploadLabelPageImage,
 } from "../controllers/label-page.controller";
-import { authenticateWithSession } from "../middlewares/authenticate";
+import { authenticateWithSession, optionalAuthenticate } from "../middlewares/authenticate";
 import { singleImageUpload } from "../middlewares/image-upload";
 import { UserRoles } from "../services/dto-service/modules.export";
 
@@ -25,7 +25,10 @@ router.put("/:id", adminAuth, updateLabelPage);
 router.delete("/:id", adminAuth, deleteLabelPage);
 
 // ─── Read-side (public) ───────────────────────────────────────────────────────
-router.get("/", getLabelPages);
+// optionalAuthenticate only so a tagged visit can be attributed to the visitor
+// who made it; it never rejects, and the listing itself is unchanged for
+// anyone signed out.
+router.get("/", optionalAuthenticate, getLabelPages);
 router.get("/:idOrSlug", getLabelPageBySlugOrId);
 
 export default router;
