@@ -3,7 +3,10 @@ import "newrelic";
 import express from "express";
 import type { Application, Request, Response } from "express";
 import cors from "cors";
-import { getCorsOptions } from "./services/helper-service/cors.config";
+import {
+  getCorsOptions,
+  corsOriginGuard,
+} from "./services/helper-service/cors.config";
 import cookieParser from "cookie-parser";
 import userRoutes from "./routes/user.route";
 import filterRoutes from "./routes/filter.route";
@@ -59,8 +62,11 @@ import { activityLoggerMiddleware } from "./services/helper-service/modules.expo
 
 const app: Application = express();
 
-// CORS must be the very first middleware
+// CORS must be the very first middleware.
+// The guard runs ahead of cors() so a disallowed origin gets a readable 403
+// instead of a header-less 500 the browser hides behind "Network Error".
 const corsOptions = getCorsOptions();
+app.use(corsOriginGuard);
 app.options("/{*splat}", cors(corsOptions));
 app.use(cors(corsOptions));
 
