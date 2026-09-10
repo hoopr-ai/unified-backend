@@ -1,5 +1,6 @@
 import { QueryTypes } from "sequelize";
 import { sequelize } from "../../persistence-service/database";
+import { brandExclusions } from "../enterprise-analytics/analytics-shared";
 
 // ─── Smash IPRS reporting ────────────────────────────────────────────────────
 //
@@ -25,13 +26,21 @@ import { sequelize } from "../../persistence-service/database";
 //
 // `licenses.price` is NULL for almost every Smash row — B2B licensing is paid
 // for with token packs, not per-license money. So a license's gross value is
-// derived from the `token_assigned` pack it was spent against, whose two
-// pricing shapes are documented in token.service.ts / internal-fe types/tokens.ts:
+// derived from the `token_assigned` pack it was spent against:
 //
-//   dealType 'pricePerTrack' → "pricePerPack" is the per-TOKEN price
-//                              → gross = pricePerPack * tokenCost
-//   dealType 'bulk'          → "pricePerPack" is the pack TOTAL
-//                              → gross = pricePerPack / totalAssignedToken * tokenCost
+//   "pricePerPack" is the pack TOTAL for BOTH deal types, so a license is
+//   worth its share of the pack:
+//
+//       gross = pricePerPack / totalAssignedToken * tokenCost
+//
+//   The same reading is used by Studio Dashboard → Payouts, by the Tokens
+//   module (tokenUtils.ts perTokenPrice / PriceCell.tsx) and by Studio's
+//   Pay-Per-Track Deals page. This module previously read "pricePerPack" as a
+//   per-TOKEN price on 'pricePerTrack' deals and multiplied instead of
+//   dividing, which billed one single-track license for the whole pack — a
+//   Rajasthan Royals license off a 20-token/₹1,00,000 deal came out at
+//   ₹1,00,000 instead of ₹5,000, and the per-track share of the Smash book
+//   read ₹1.25 Cr instead of ₹4.49 L.
 //
 // Not every license can be valued, and this module refuses to invent a number
 // for the ones that can't. Each row is tagged with an `attribution` bucket and
@@ -62,6 +71,20 @@ import { sequelize } from "../../persistence-service/database";
 // internal dashboard.
 
 const GST_PCT = 18;
+
+// ─── Internal accounts ───────────────────────────────────────────────────────
+//
+// Hoopr's own brands (applerrr, hoopr, blue stone, giva, Smash …) hold real
+// token packs used for demos and QA, and their licences are indistinguishable
+// from customer ones in `licenses`. They are not revenue and nobody is owed
+// IPRS on them, so every query here drops them — the same exclusion Studio
+// Dashboard and Enterprise Analytics already apply, so all three agree on the
+// customer population. One definition, in enterprise-analytics/analytics-shared:
+// the Hoopr-owned brand ids (helper-service/internal-brands.helper.ts, kept in
+// sync with studio-backend-ts) plus any brand carrying a @gsharp.media user.
+//
+// On prod this removes 251 of 2,253 enterprise licences.
+const NOT_INTERNAL = brandExclusions("b");
 
 // Owner percentages are stored on `owners`; Hoopr takes whatever the owner and
 // IPRS do not. `[1]` picks the first owner — every Smash-licensed track on prod
@@ -95,8 +118,8 @@ const BASE_CTE = `
         WHEN ta.id IS NULL AND COALESCE(l.price, 0) > 0            THEN 'direct_payment'
         WHEN ta.id IS NULL                                         THEN 'no_value'
         WHEN ta."dealType" = 'pricePerTrack' AND ta."isUnlimited"  THEN 'unlimited_per_track'
-        WHEN ta."dealType" = 'pricePerTrack' AND ta."pricePerPack" IS NOT NULL
-                                                                   THEN 'per_track'
+        WHEN ta."dealType" = 'pricePerTrack' AND ta."totalAssignedToken" > 0
+             AND ta."pricePerPack" IS NOT NULL                     THEN 'per_track'
         WHEN ta."dealType" = 'bulk' AND ta."isUnlimited"           THEN 'bulk_unlimited'
         WHEN ta."dealType" = 'bulk' AND ta."totalAssignedToken" > 0
              AND ta."pricePerPack" IS NOT NULL                     THEN 'bulk_prorata'
@@ -105,8 +128,9 @@ const BASE_CTE = `
       CASE
         WHEN ta.id IS NULL                                         THEN COALESCE(l.price, 0)
         WHEN ta."dealType" = 'pricePerTrack' AND ta."isUnlimited"  THEN 0
-        WHEN ta."dealType" = 'pricePerTrack' AND ta."pricePerPack" IS NOT NULL
-                                                                   THEN ta."pricePerPack" * l."tokenCost"
+        WHEN ta."dealType" = 'pricePerTrack' AND ta."totalAssignedToken" > 0
+             AND ta."pricePerPack" IS NOT NULL
+                                                                   THEN ta."pricePerPack" / ta."totalAssignedToken" * l."tokenCost"
         WHEN ta."dealType" = 'bulk' AND ta."isUnlimited"           THEN 0
         WHEN ta."dealType" = 'bulk' AND ta."totalAssignedToken" > 0
              AND ta."pricePerPack" IS NOT NULL
@@ -117,7 +141,7 @@ const BASE_CTE = `
     JOIN users u        ON u.id = l."userId" AND u.platform = 'ENTERPRISE'
     LEFT JOIN tracks t  ON t."trackCode" = l."trackCode"
     LEFT JOIN owners o  ON o.id = t."ownerId"[1]
-    LEFT JOIN brands b  ON b.id = l."brandId"
+    JOIN brands b       ON b.id = l."brandId" AND ${NOT_INTERNAL}
     LEFT JOIN token_assigned ta ON ta.id = l."tokenId"
   )`;
 
@@ -309,16 +333,17 @@ export const getIprsOverviewService = async (filters: IprsFilters) => {
     // how many licenses were spent against them, so it is NOT date-filtered by
     // "licensedAt" — a pack is dated by when it was created.
     q<Record<string, string>>(
-      `SELECT COUNT(*) FILTER (WHERE "iprsShare" IS NOT NULL)      AS "pricedDeals",
-              COUNT(*) FILTER (WHERE COALESCE("iprsShare", 0) > 0) AS "iprsDeals",
-              COALESCE(SUM("iprsShare"), 0)                        AS "contractedIprs",
-              COALESCE(SUM("hooprShare"), 0)                       AS "contractedHoopr",
-              COALESCE(SUM("pricePerPack") FILTER (WHERE "dealType" = 'bulk'), 0)
-                                                                   AS "contractedPack"
-       FROM token_assigned
-       WHERE "dealType" = 'bulk'
-         AND "createdAt" >= ${RANGE_START}
-         AND "createdAt" <  ${RANGE_END}`,
+      `SELECT COUNT(*) FILTER (WHERE ta."iprsShare" IS NOT NULL)      AS "pricedDeals",
+              COUNT(*) FILTER (WHERE COALESCE(ta."iprsShare", 0) > 0) AS "iprsDeals",
+              COALESCE(SUM(ta."iprsShare"), 0)                        AS "contractedIprs",
+              COALESCE(SUM(ta."hooprShare"), 0)                       AS "contractedHoopr",
+              COALESCE(SUM(ta."pricePerPack") FILTER (WHERE ta."dealType" = 'bulk'), 0)
+                                                                      AS "contractedPack"
+       FROM token_assigned ta
+       JOIN brands b ON b.id = ta."brandId" AND ${NOT_INTERNAL}
+       WHERE ta."dealType" = 'bulk'
+         AND ta."createdAt" >= ${RANGE_START}
+         AND ta."createdAt" <  ${RANGE_END}`,
       { startDate: b.startDate, endDate: b.endDate },
     ),
   ]);
@@ -639,7 +664,8 @@ export const listIprsDealsService = async (filters: IprsFilters) => {
   const limit = filters.limit ?? 25;
 
   const where = `
-    ta."createdAt" >= ${RANGE_START}
+    ${NOT_INTERNAL}
+    AND ta."createdAt" >= ${RANGE_START}
     AND ta."createdAt" < ${RANGE_END}
     AND ((:brandId)::bigint IS NULL OR ta."brandId" = (:brandId)::bigint)
     AND ((:dealType)::text IS NULL OR ta."dealType"::text = (:dealType)::text)
@@ -665,7 +691,7 @@ export const listIprsDealsService = async (filters: IprsFilters) => {
               ta."hooprShare", ta."expiryDate", ta."createdAt",
               (SELECT COUNT(*) FROM licenses l WHERE l."tokenId" = ta.id) AS "licensesSpent"
        FROM token_assigned ta
-       LEFT JOIN brands b ON b.id = ta."brandId"
+       JOIN brands b ON b.id = ta."brandId"
        WHERE ${where}
        ORDER BY ta."iprsShare" DESC NULLS LAST, ta.id DESC
        LIMIT :limit OFFSET :offset`,
@@ -673,7 +699,7 @@ export const listIprsDealsService = async (filters: IprsFilters) => {
     ),
     q<{ count: string }>(
       `SELECT COUNT(*) AS count
-       FROM token_assigned ta LEFT JOIN brands b ON b.id = ta."brandId"
+       FROM token_assigned ta JOIN brands b ON b.id = ta."brandId"
        WHERE ${where}`,
       b,
     ),
@@ -682,7 +708,7 @@ export const listIprsDealsService = async (filters: IprsFilters) => {
               COALESCE(SUM(ta."hooprShare"), 0) AS "hooprAmount",
               COALESCE(SUM(ta."pricePerPack") FILTER (WHERE ta."dealType" = 'bulk'), 0)
                                                 AS "packValue"
-       FROM token_assigned ta LEFT JOIN brands b ON b.id = ta."brandId"
+       FROM token_assigned ta JOIN brands b ON b.id = ta."brandId"
        WHERE ${where}`,
       b,
     ),
@@ -745,8 +771,7 @@ export const getIprsFiltersService = async () => {
       `SELECT l."brandId" AS "brandId", b.name AS "brandName", COUNT(*) AS licenses
        FROM licenses l
        JOIN users u ON u.id = l."userId" AND u.platform = 'ENTERPRISE'
-       LEFT JOIN brands b ON b.id = l."brandId"
-       WHERE l."brandId" IS NOT NULL
+       JOIN brands b ON b.id = l."brandId" AND ${NOT_INTERNAL}
        GROUP BY 1, 2
        ORDER BY 3 DESC`,
       {},
@@ -758,6 +783,7 @@ export const getIprsFiltersService = async () => {
               COUNT(*) AS licenses
        FROM licenses l
        JOIN users u ON u.id = l."userId" AND u.platform = 'ENTERPRISE'
+       JOIN brands b ON b.id = l."brandId" AND ${NOT_INTERNAL}
        JOIN tracks t ON t."trackCode" = l."trackCode"
        JOIN owners o ON o.id = t."ownerId"[1]
        GROUP BY 1, 2, 3
