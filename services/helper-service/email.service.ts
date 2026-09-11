@@ -916,8 +916,14 @@ export const sendContactUsEmail = async (data: {
   // Was `[]` with a TODO, which made the loop below a no-op: the admin HTML was
   // built in full and then sent to nobody. Comma-separated so ops can add a
   // second inbox without a deploy.
+  //
+  // The recipient list is deliberately held HERE rather than in the server's
+  // .env: this is the live list, and no environment sets the var. If one ever
+  // does, it REPLACES this list rather than merging with it — so that
+  // environment must spell out every address, this one included.
   const adminEmails: string[] = (
-    process.env.CONTACT_US_ADMIN_EMAILS ?? "hello@hoopr.in"
+    process.env.CONTACT_US_ADMIN_EMAILS ??
+    "hello@hoopr.in,smashsales@gsharp.media"
   )
     .split(",")
     .map((entry) => entry.trim())
