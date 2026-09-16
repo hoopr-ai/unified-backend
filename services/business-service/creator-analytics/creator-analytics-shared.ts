@@ -180,8 +180,14 @@ export const ORIGIN_LABELS: Record<string, string> = {
  *
  * `createdAt` is preferred where present so the existing definition — the row
  * was created — is unchanged for every account that has one; `onboardedAt`
- * only fills the hole. 3,192 rows have neither and remain invisible to any
- * window; they are pre-onboarding shells.
+ * only fills the hole.
+ *
+ * NATIVE-BE itself left `createdAt` NULL on every account it created until
+ * 2026-09-16 (a TypeORM create-date column over a table with no default), so
+ * accounts that never finished onboarding had no date at all. Fixed at the
+ * source that day, and 5,677 rows were backfilled from their own timestamps
+ * (audit table `users_created_at_backfill`). 19 rows with no reliable date
+ * remain undated and invisible to any window.
  */
 const SIGNED_UP_AT = `COALESCE(u."createdAt", u."onboardedAt")`;
 

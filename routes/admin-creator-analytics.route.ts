@@ -14,6 +14,19 @@ import {
   getCreatorDetail,
   exportCreatorDetail,
 } from "../controllers/admin-creator-analytics.controller";
+import {
+  getPlgAudit,
+  getPlgCatalogue,
+  getPlgFunnel,
+  getPlgInsights,
+  getPlgJourney,
+  getPlgPaths,
+  getPlgPeople,
+  getPlgRetention,
+  getPlgStage,
+  getPlgSubFunnel,
+  getPlgTrend,
+} from "../controllers/admin-plg-analytics.controller";
 
 const router = Router();
 
@@ -73,5 +86,24 @@ router.get("/breakdown", ...requireDashboard, getCreatorBreakdown);
 // shared prefix has to come first.
 router.get("/detail/export", ...requireDashboard, exportCreatorDetail);
 router.get("/detail", ...requireDashboard, getCreatorDetail);
+
+// ── Growth (PLG) ────────────────────────────────────────────────────────────
+//
+// The lifecycle funnel — traffic → activation → sign-up → intent → subscription
+// → post-subscription activation — with its cohorts, sub-funnels, journeys,
+// retention and insights. Same population and same grant as everything above;
+// see services/business-service/creator-analytics/plg/plg-catalogue.ts for
+// every definition.
+router.get("/plg/catalogue", ...requireDashboard, getPlgCatalogue);
+router.get("/plg/audit", ...requireDashboard, getPlgAudit);
+router.get("/plg/funnel", ...requireDashboard, getPlgFunnel);
+router.get("/plg/trend", ...requireDashboard, getPlgTrend);
+router.get("/plg/stage", ...requireDashboard, getPlgStage);
+router.get("/plg/subfunnel", ...requireDashboard, getPlgSubFunnel);
+router.get("/plg/people", ...requireDashboard, getPlgPeople);
+router.get("/plg/paths", ...requireDashboard, getPlgPaths);
+router.get("/plg/journey", ...requireDashboard, getPlgJourney);
+router.get("/plg/retention", ...requireDashboard, getPlgRetention);
+router.get("/plg/insights", ...requireDashboard, getPlgInsights);
 
 export default router;
