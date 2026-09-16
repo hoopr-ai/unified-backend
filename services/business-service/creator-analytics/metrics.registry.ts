@@ -352,10 +352,21 @@ const CLAIMS: MetricDef = {
          JOIN creator_users cu ON cu.id = x."userId"
          LEFT JOIN tracks t ON t."trackCode" = x."trackCode"
          LEFT JOIN campaigns c ON c.id = x."campaignId"`,
-  dateCol: `x."createdAt"`,
+  // `createdAt` is NULL on 7,757 of 27,732 rows (28%), so windowing on it alone
+  // drops them — the same silent NULL-false drop that hid the web signups.
+  // `updatedAt` recovers 617 and is safe to fall back to: every one of them
+  // lands in 2023-2026-08, so no legacy claim is injected into a recent window.
+  // The remaining 7,140 have no date at all and cannot be placed in time; they
+  // are reported through `undatedRows` rather than silently omitted.
+  dateCol: `COALESCE(x."createdAt", x."updatedAt")`,
   userCol: `x."userId"`,
   columns: [
-    { key: "submittedAt", label: "Submitted", sql: `x."createdAt"`, type: "datetime" },
+    {
+      key: "submittedAt",
+      label: "Submitted",
+      sql: `COALESCE(x."createdAt", x."updatedAt")`,
+      type: "datetime",
+    },
     ...USER_COLUMNS,
     { key: "url", label: "Reel", sql: `x.url`, type: "link" },
     { key: "status", label: "Status", sql: `x.status`, type: "badge" },
@@ -372,7 +383,9 @@ const CLAIMS: MetricDef = {
   ],
   sorts: {
     ...USER_SORTS,
-    submittedAt: `x."createdAt"`,
+    // Matches the column's own expression, so sorting by "Submitted" orders by
+    // the value on screen rather than by a NULL the reader cannot see.
+    submittedAt: `COALESCE(x."createdAt", x."updatedAt")`,
     status: `x.status`,
     viewCount: `x."viewCount"`,
   },
@@ -440,16 +453,20 @@ const SIGNUPS: MetricDef = {
   group: "acquisition",
   hint: "Accounts created on the Creator platform.",
   from: `creator_users cu`,
-  dateCol: `cu."createdAt"`,
+  // `signedUpAt` (COALESCE of createdAt, onboardedAt), never `createdAt` alone —
+  // that is NULL on 458k of 464k CREATOR rows and takes the web signups with it.
+  dateCol: `cu."signedUpAt"`,
   userCol: `cu.id`,
   columns: [
-    { key: "signedUpAt", label: "Signed up", sql: `cu."createdAt"`, type: "datetime" },
+    { key: "signedUpAt", label: "Signed up", sql: `cu."signedUpAt"`, type: "datetime" },
     ...USER_COLUMNS,
     { key: "city", label: "City", sql: `cu.city`, type: "text" },
     { key: "state", label: "State", sql: `cu.state`, type: "text" },
     { key: "status", label: "Status", sql: `cu.status`, type: "badge" },
   ],
-  sorts: { ...USER_SORTS, signedUpAt: `cu."createdAt"`, city: `lower(cu.city)` },
+  // Sorts on the same expression the column displays, or "sort by signed up"
+  // orders the table by a value it is not showing — NULL for most rows.
+  sorts: { ...USER_SORTS, signedUpAt: `cu."signedUpAt"`, city: `lower(cu.city)` },
   defaultSort: "signedUpAt",
   tables: ["users"],
   dimensions: {
@@ -585,7 +602,13 @@ const SESSIONS: MetricDef = {
   from: `native_sessions x JOIN creator_users cu ON cu.id = x."userId"`,
   dateCol: `x."startedAt"`,
   userCol: `x."userId"`,
-  where: `NOT x."isBot"`,
+  // `os IS NOT NULL` alongside the bot test: 80.6% of native_sessions rows are
+  // minted by a proxy that forwards no User-Agent, so they have no OS, no
+  // browser and a fresh visitorId each time. 88,181 of them even carry a
+  // userId, so this JOIN does not exclude them on its own. See REAL_TRAFFIC in
+  // funnel.service.ts for the full evidence.
+  where: `NOT x."isBot" AND x.os IS NOT NULL
+          AND COALESCE(x.browser, '') NOT ILIKE '%headless%'`,
   columns: [
     { key: "startedAt", label: "Started", sql: `x."startedAt"`, type: "datetime" },
     ...USER_COLUMNS,

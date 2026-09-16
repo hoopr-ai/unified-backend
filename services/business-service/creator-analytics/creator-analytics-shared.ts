@@ -43,6 +43,11 @@ import {
 } from "../native-analytics/native-analytics-shared";
 import { QueryTypes } from "sequelize";
 import { sequelize } from "../../persistence-service/database";
+// The origin ladder itself, CALLED rather than copied. It used to be duplicated
+// here "verbatim, with a pointer back to the original", and the copies drifted
+// the moment the original was corrected — which is exactly the failure the
+// header warns about two paragraphs up. One definition, four consumers.
+import { originExpr } from "../whitelisting/whitelisting-shared";
 
 export { q, num, pct, round1, istDay, previousPeriod, delta, per };
 
@@ -152,12 +157,44 @@ export const ORIGIN_LABELS: Record<string, string> = {
 };
 
 /**
+ * When a creator actually joined — the column every signup figure must window on.
+ *
+ * ── WHY NOT JUST `createdAt` ────────────────────────────────────────────────
+ *
+ * `users."createdAt"` is **NULL on 458,279 of the 464,560 CREATOR rows**
+ * (prod, 2026-09-16). The legacy consumer migration inserted its rows without
+ * one. That is not a cosmetic gap: `createdAt >= :start AND < :end` is NULL-
+ * false, so every one of those rows is silently dropped from EVERY windowed
+ * count — they do not appear, and nothing reports that they were skipped.
+ *
+ * It matters far more than "old rows are missing", because those legacy rows
+ * are exactly where the WEB signups land. A migrated consumer who joins the
+ * creator platform on the web does not get a new row — the existing one is
+ * claimed, `onboardedAt` is stamped, and `createdAt` stays NULL. The app, whose
+ * users are new to Hoopr entirely, inserts fresh rows WITH a `createdAt`.
+ *
+ * So windowing on `createdAt` alone did not merely undercount: it counted the
+ * app's signups and none of the web's. For 14-15 Sep it reported 135 signups
+ * (0 web) where there were 491 (351 web) — it dropped 72% of them, and the
+ * whole of the channel that was being asked about.
+ *
+ * `createdAt` is preferred where present so the existing definition — the row
+ * was created — is unchanged for every account that has one; `onboardedAt`
+ * only fills the hole. 3,192 rows have neither and remain invisible to any
+ * window; they are pre-onboarding shells.
+ */
+const SIGNED_UP_AT = `COALESCE(u."createdAt", u."onboardedAt")`;
+
+/**
  * `WITH creator_users AS (...)` — every CREATOR account plus its derived origin.
  *
- * The ladder is `originExpr()` from whitelisting-shared, unchanged, so this
- * dashboard, the whitelisting CMS and the Subscriptions dashboard give the same
- * answer for the same person. It is materialised once here because inlining it
- * would re-run four correlated EXISTS per aggregate clause.
+ * The ladder is `originExpr()` from whitelisting-shared — IMPORTED, not copied,
+ * so this dashboard, the whitelisting CMS and the Subscriptions dashboard give
+ * the same answer for the same person. It was a verbatim copy until 2026-09-16,
+ * and the copy is what let this view report 0 Web / 0 Android / 0 iOS for four
+ * weeks after the original's assumptions stopped holding. It is materialised
+ * once here because inlining it would re-run the correlated EXISTS per
+ * aggregate clause.
  *
  * Measured on prod (461,742 CREATOR rows): 0.6s for the whole table, so it is
  * cheap enough to build unfiltered and join to.
@@ -183,33 +220,15 @@ export const ORIGIN_LABELS: Record<string, string> = {
  */
 export const creatorUsersCte = async (
   opts: { materialized?: boolean } = {},
-): Promise<string> => {
-  const merge = await tableExists("_merge_all_map");
-  const appArms = [`u.platform = 'SOUND_TRACKING_APP'`];
-  if (merge) {
-    appArms.push(`EXISTS (SELECT 1 FROM _merge_all_map _mm WHERE _mm.cr_id = u.id)`);
-  }
-  appArms.push(`EXISTS (SELECT 1 FROM user_sessions _us WHERE _us."userId" = u.id)`);
-
-  return `
+): Promise<string> => `
     creator_users AS ${opts.materialized ? "MATERIALIZED " : ""}(
       SELECT u.id, u."createdAt", u.email, u.mobile, u."countryCode",
              u."firstName", u."lastName", u.status, u.city, u.state, u.country,
-             CASE
-               WHEN EXISTS (SELECT 1 FROM user_subscriptions _as
-                             WHERE _as."userId" = u.id
-                               AND _as."paymentProvider" = 'apple')          THEN 'IOS'
-               WHEN EXISTS (SELECT 1 FROM user_sessions _os
-                             WHERE _os."userId" = u.id AND _os.os ILIKE 'ios%')     THEN 'IOS'
-               WHEN EXISTS (SELECT 1 FROM user_sessions _os
-                             WHERE _os."userId" = u.id AND _os.os ILIKE 'android%') THEN 'ANDROID'
-               WHEN ${appArms.join(" OR ")}                                  THEN 'APP'
-               ELSE 'WEB'
-             END AS origin
+             ${SIGNED_UP_AT} AS "signedUpAt",
+             ${await originExpr("u")} AS origin
         FROM users u
        WHERE u.platform = 'CREATOR'
     )`;
-};
 
 /**
  * The `WITH …` prefix a metric's query needs, or an empty string.
@@ -326,9 +345,10 @@ export const REVENUE_NOTE =
 export const ORIGIN_NOTE =
   "Origin is DERIVED, not stored — every creator is platform='CREATOR' " +
   "whether they signed up on web, Android or iOS. The ladder is Apple receipt " +
-  "→ an iOS/Android app session → any app session → otherwise " +
-  "web, identical to the Channel Whitelisting and Subscriptions CMSes. " +
-  "Read WEB as “no app evidence” rather than as proof of a web " +
+  "→ an iOS/Android app login, identified by the app's own User-Agent " +
+  "(CFNetwork on iOS, okhttp on Android) → a pre-merge app account → " +
+  "otherwise web, identical to the Channel Whitelisting and Subscriptions " +
+  "CMSes. Read WEB as “no app evidence” rather than as proof of a web " +
   "signup: the 452k consumers bulk-loaded by the legacy migration have no " +
   "session rows of either kind and all land there.";
 
@@ -336,7 +356,13 @@ export const SESSION_NOTE =
   "Visitor and session figures come from `native_sessions`, which NATIVE-BE " +
   "only began writing on 2026-08-17. A window starting before that date has " +
   "signups and revenue but no traffic to compare them against, so the top of " +
-  "the funnel will read as zero rather than as a collapse.";
+  "the funnel will read as zero rather than as a collapse. " +
+  "Sessions with no parsed OS are EXCLUDED: 80.6% of rows arrive through a " +
+  "proxy that forwards no User-Agent and no client IP, so each hit becomes a " +
+  "fresh visitor on a fresh session (1.00 sessions per visitor, from 137 IPs, " +
+  "with no browser, screen or country). Counting them read ~36× high and was " +
+  "why this dashboard disagreed with GA and Mixpanel; excluded, it agrees " +
+  "with both.";
 
 /**
  * The first day traffic capture actually covers.
@@ -347,8 +373,13 @@ export const SESSION_NOTE =
  */
 export const captureStart = async (): Promise<string | null> => {
   const [row] = await q<{ day: string | null }>(
+    // Scoped to the rows the funnel actually counts (a parsed OS = a real
+    // client's User-Agent), so the coverage date this reports is the first day
+    // of countable traffic rather than the first day of proxy noise.
     `SELECT to_char(min("startedAt") AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day
-       FROM native_sessions`,
+       FROM native_sessions
+      WHERE os IS NOT NULL AND NOT "isBot"
+        AND COALESCE(browser, '') NOT ILIKE '%headless%'`,
   );
   return row?.day ?? null;
 };

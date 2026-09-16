@@ -101,13 +101,22 @@ export const LIVE_SUB_STATUSES = ["active", "past_due"] as const;
 //      rows in prod today; kept for staging and for a merge rollback.
 //   2. _merge_all_map.cr_id             — the 3,336 pre-merge app users the
 //      merge renamed into CREATOR. Without this arm ~2,130 of them read as Web.
-//   3. a row in user_sessions           — creator_auth._issue_login_session
-//      writes it on EVERY app login/signup. NATIVE-BE never writes that table,
-//      and the legacy bulk import did not either. Self-maintaining, and it
-//      correctly reclassifies a web user who later installs the app.
+//   3. a row in user_sessions           — REMOVED 2026-09-16, and this is the
+//      correction worth reading. The arm assumed creator_auth wrote that table
+//      for app logins only. It is now written for EVERY creator login,
+//      including web: prod holds 3,611 rows carrying desktop-browser UAs
+//      (Windows/macOS/Linux Chrome, Safari, Firefox) across 192 users. So the
+//      arm had stopped meaning "app" and started meaning "has ever logged in",
+//      which swallowed every active creator into APP and left Web, Android and
+//      iOS reading zero for any recent window. What replaced it is the UA
+//      matching on arms 2/3 below, which is app-specific again.
 //
-// Android vs iOS then needs a second signal, and there are exactly two:
-//   · user_sessions.os — recorded by the app on login. The direct answer.
+// Android vs iOS then needs a second signal, and there are exactly three:
+//   · user_sessions."userAgent" — the apps' own HTTP stacks (CFNetwork on iOS,
+//     okhttp on Android). THE load-bearing one in practice; see IOS_CLIENT.
+//   · user_sessions.os — the direct answer in principle, and useless in
+//     practice: NULL or 'Unknown' on 80% of rows, desktop-browser names on the
+//     rest, and never once 'iOS'. Kept first so it wins once capture is fixed.
 //   · user_subscriptions."paymentProvider" = 'apple' — an IAP subscription can
 //     only have been bought inside the iOS app. Proof of iOS even when no
 //     session row survived.
@@ -142,6 +151,36 @@ const hasMergeMap = async (): Promise<boolean> => {
 export type Origin = "WEB" | "ANDROID" | "IOS" | "APP";
 
 /**
+ * Which client wrote a `user_sessions` row, read from the User-Agent.
+ *
+ * `user_sessions.os` cannot see the apps. creator_auth's
+ * `extract_session_metadata()` stored `deviceType`/`browser`/`os` as None and
+ * kept only the raw UA ("populated later if needed"). What the column actually
+ * holds, all 17,997 rows, measured on prod 2026-09-16:
+ *
+ *     NULL 7,641 · 'Unknown' 6,809 · Windows 2,021 · macOS 1,457 · Android 61 · Linux 8
+ *
+ * So it is NULL-or-'Unknown' on 80% of rows, and every value it does carry is a
+ * DESKTOP browser's — which is the other half of the discovery, because a
+ * desktop OS on a table that was assumed to be app-only is what proved the
+ * assumption dead. **It has never held an iOS value: the `os ILIKE 'ios%'` arm
+ * below has matched ZERO rows in the table's entire history**, and `android%`
+ * matches 61 rows across 17 users, against 6,963 real Android app users. The
+ * UA is the only signal that can see them.
+ *
+ * The two markers are the apps' own HTTP stacks and are unambiguous — no
+ * browser UA contains either:
+ *   · `CFNetwork`      — iOS URLSession. Prod rows read `Hoopr/7 CFNetwork/…
+ *                        Darwin/25.6.0`, i.e. our own build, branded.
+ *   · `okhttp`/`dalvik` — Android. Prod rows read `okhttp/4.12.0`.
+ *
+ * `os` is still checked first so this keeps working for the handful of rows
+ * that do carry it, and so it takes over cleanly once the capture fix lands.
+ */
+const IOS_CLIENT = `(_os.os ILIKE 'ios%' OR _os."userAgent" ~* 'cfnetwork')`;
+const ANDROID_CLIENT = `(_os.os ILIKE 'android%' OR _os."userAgent" ~* 'okhttp|dalvik')`;
+
+/**
  * A SQL scalar expression yielding 'WEB' | 'ANDROID' | 'IOS' | 'APP' for the
  * user aliased as `alias`.
  *
@@ -155,15 +194,14 @@ export type Origin = "WEB" | "ANDROID" | "IOS" | "APP";
  */
 export const originExpr = async (alias = "u"): Promise<string> => {
   const a = `${alias}.`;
+  // A `user_sessions` row on its own is NOT in here any more — see the note on
+  // arm 3 in the header. Only evidence that is still app-specific survives.
   const appArms = [`${a}platform = 'SOUND_TRACKING_APP'`];
   if (await hasMergeMap()) {
     appArms.push(
       `EXISTS (SELECT 1 FROM _merge_all_map _mm WHERE _mm.cr_id = ${a}id)`,
     );
   }
-  appArms.push(
-    `EXISTS (SELECT 1 FROM user_sessions _us WHERE _us."userId" = ${a}id)`,
-  );
 
   return `
     CASE
@@ -172,10 +210,10 @@ export const originExpr = async (alias = "u"): Promise<string> => {
                       AND _as."paymentProvider" = 'apple')
         THEN 'IOS'
       WHEN EXISTS (SELECT 1 FROM user_sessions _os
-                    WHERE _os."userId" = ${a}id AND _os.os ILIKE 'ios%')
+                    WHERE _os."userId" = ${a}id AND ${IOS_CLIENT})
         THEN 'IOS'
       WHEN EXISTS (SELECT 1 FROM user_sessions _os
-                    WHERE _os."userId" = ${a}id AND _os.os ILIKE 'android%')
+                    WHERE _os."userId" = ${a}id AND ${ANDROID_CLIENT})
         THEN 'ANDROID'
       WHEN ${appArms.join(" OR ")}
         THEN 'APP'

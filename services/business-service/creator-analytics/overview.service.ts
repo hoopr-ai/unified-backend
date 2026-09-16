@@ -377,7 +377,9 @@ const peopleSources = async (): Promise<FactSource[]> => {
     {
       tables: ["users"],
       from: `creator_users cu`,
-      dateCol: `cu."createdAt"`,
+      // NOT `cu."createdAt"` — it is NULL on 458k of the 464k CREATOR rows and
+      // windowing on it drops every web signup. See SIGNED_UP_AT.
+      dateCol: `cu."signedUpAt"`,
       cte,
       facts: [
         {
@@ -572,7 +574,9 @@ const activitySources = (): FactSource[] => [
   {
     tables: ["video_links"],
     from: `video_links x`,
-    dateCol: `x."createdAt"`,
+    // 28% of video_links rows have a NULL createdAt — see the note on the
+    // `claims` metric in metrics.registry.ts.
+    dateCol: `COALESCE(x."createdAt", x."updatedAt")`,
     facts: [{ key: "claims", label: "Reel claims", metric: "claims" }],
   },
   {

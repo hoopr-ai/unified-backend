@@ -64,6 +64,46 @@ import {
 } from "./creator-analytics-shared";
 
 /**
+ * A session written by a real client, as opposed to one minted by the proxy.
+ *
+ * ── WHY THIS IS NOT OVER-FILTERING ──────────────────────────────────────────
+ *
+ * 2,013,293 of the 2,499,057 sessions since launch — 80.6% — carry NO client
+ * context whatsoever: `browser` on 44 of them, `screenWidth` on 187,
+ * `countryCode` on ZERO, `referrer` on one. They arrive from 137 IPs (115,115
+ * of one day's 147,674 came from `34.100.226.70` alone, spread evenly
+ * 00:00-23:59) and have exactly **1.00 visitorId per session**, because
+ * nothing persists a visitor id when there is no browser to hold one.
+ *
+ * That is a proxy forwarding neither the client User-Agent nor the client IP,
+ * so every hit through it becomes a brand-new "visitor" on a brand-new
+ * "session". `isBot` cannot catch it — there is no UA to match a bot pattern
+ * against. Counting them made this funnel's traffic rung read ~36x high and is
+ * the entire reason it disagreed with GA and Mixpanel: for 14 Sep it said
+ * 147,674 sessions where GA said 4,100 and Mixpanel 3,600, and the real figure
+ * — distinct visitors whose UA actually parsed — was 4,458.
+ *
+ * Sessions that DID parse an OS look like people: 7.74 sessions per visitor
+ * across 41,980 IPs, `browser` populated on every single one.
+ *
+ * `os IS NOT NULL` is the test because `os` is derived from the UA, so it is
+ * exactly "we received a real client's User-Agent". It is deliberately NOT a
+ * hardcoded IP block — the proxy's address can change, and the next one would
+ * silently re-inflate every figure here.
+ *
+ * ── AND HEADLESS ────────────────────────────────────────────────────────────
+ *
+ * Headless Chrome DOES send a parseable UA, so it survives the test above, but
+ * it is automation: 9,391 sessions across 9,378 visitors (1.001 each) from 316
+ * IPs since launch, with **zero** of them ever authenticated and one referrer
+ * between the lot. `isBot` misses it because the UA is a real Chrome string.
+ * Left in, it inflated unique visitors by 15% over the period (9,378 of
+ * 62,730). Its effect on any single day is small — 29 sessions on 14 Sep — so
+ * it moves period totals far more than daily ones.
+ */
+const REAL_TRAFFIC = `s.os IS NOT NULL AND COALESCE(s.browser, '') NOT ILIKE '%headless%'`;
+
+/**
  * Restricts session-side counting to the creator surface.
  *
  * Keeps `userPlatform IS NULL`, which is the entire point: a visitor is
@@ -74,7 +114,8 @@ import {
  */
 const CREATOR_SCOPE = `
   AND (s."userPlatform" IS NULL
-       OR s."userPlatform" IN ('CREATOR', 'SOUND_TRACKING_APP'))`;
+       OR s."userPlatform" IN ('CREATOR', 'SOUND_TRACKING_APP'))
+  AND ${REAL_TRAFFIC}`;
 
 interface VisitorCounts {
   newVisitors: number;
@@ -194,10 +235,12 @@ const accountCounts = async (
 
   const [signups, subs] = await Promise.all([
     q<{ n: string }>(
+      // `signedUpAt`, not `createdAt`: the latter is NULL on the 458k migrated
+      // rows, which is where web signups land. See SIGNED_UP_AT.
       `WITH ${usersCte}
        SELECT count(*)::bigint AS n
          FROM creator_users cu
-        WHERE ${inRange(`cu."createdAt"`)}
+        WHERE ${inRange(`cu."signedUpAt"`)}
           AND ${originWhere("cu.origin")}`,
       binds,
     ),
@@ -546,9 +589,9 @@ export const getFunnelTimeseriesService = async (f: CreatorFilters) => {
     q<{ day: string; signups: string; subscriptions: string }>(
       `WITH ${usersCte},
        su AS (
-         SELECT ${istDay(`cu."createdAt"`)} AS day, count(*)::bigint AS signups
+         SELECT ${istDay(`cu."signedUpAt"`)} AS day, count(*)::bigint AS signups
            FROM creator_users cu
-          WHERE ${inRange(`cu."createdAt"`)} AND ${originWhere("cu.origin")}
+          WHERE ${inRange(`cu."signedUpAt"`)} AND ${originWhere("cu.origin")}
           GROUP BY 1
        ),
        sb AS (
