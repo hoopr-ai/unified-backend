@@ -17,6 +17,7 @@ import {
   getFunnelService,
   getFunnelTimeseriesService,
   getWebFunnelService,
+  getEventHealthService,
   getPlatformService,
   getOverviewService,
   getBreakdownService,
@@ -65,6 +66,17 @@ export const getCreatorWebFunnel = catchAsync(
   async (req: Request, res: Response) => {
     const data = await getWebFunnelService(filtersOf(req));
     return ok(res, data, "Creator Web funnel fetched successfully.");
+  },
+);
+
+/**
+ * Is the data behind the funnel complete? Answered on the same screen as the
+ * funnel, so "can I trust this chart" stops being a question nobody can check.
+ */
+export const getCreatorEventHealth = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await getEventHealthService(filtersOf(req));
+    return ok(res, data, "Event health fetched successfully.");
   },
 );
 

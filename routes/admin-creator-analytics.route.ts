@@ -6,6 +6,7 @@ import {
   getCreatorFunnel,
   getCreatorFunnelTimeseries,
   getCreatorWebFunnel,
+  getCreatorEventHealth,
   getCreatorPlatform,
   getCreatorBreakdown,
   getCreatorMeta,
@@ -55,6 +56,12 @@ router.get("/funnel", ...requireDashboard, getCreatorFunnel);
 // and counts a different unit: sessions and accounts rather than the same
 // visitor moving through product stages.
 router.get("/web-funnel", ...requireDashboard, getCreatorWebFunnel);
+
+// Whether the pipeline behind that funnel is actually complete — which events
+// are missing, which have gone quiet, and which required properties are only
+// partly populated. Deliberately an endpoint rather than a report: a gap found
+// during an analysis has already cost the analysis.
+router.get("/event-health", ...requireDashboard, getCreatorEventHealth);
 router.get("/funnel/timeseries", ...requireDashboard, getCreatorFunnelTimeseries);
 
 // Every tile on the Activity view, and one metric grouped by one dimension.
