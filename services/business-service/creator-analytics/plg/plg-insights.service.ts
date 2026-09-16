@@ -82,6 +82,11 @@ export const getPlgInsightsService = async (f: PlgFilters) => {
   // A rung whose instrumentation began inside either window moves for reasons
   // that are not behaviour. No change or volume insight is drawn from it.
   const prev = previousWindow(f);
+  const prevLabel = funnel.previousRange.until
+    ? `the same hours of ${funnel.previousRange.startDate}${
+        funnel.previousRange.startDate === funnel.previousRange.endDate ? "" : ` – ${funnel.previousRange.endDate}`
+      }`
+    : `${funnel.previousRange.startDate} – ${funnel.previousRange.endDate}`;
   const measuredBoth = (key: string) => {
     const spec = STAGES.find((x) => x.key === key);
     return !!spec && stageCoverage(spec, f).complete && stageCoverage(spec, prev).complete;
@@ -131,7 +136,7 @@ export const getPlgInsightsService = async (f: PlgFilters) => {
       kind: "change",
       severity: Math.abs(z) >= 3 ? "high" : "medium",
       title: `${above.label} → ${s.label} ${ratioWord} ${r1 > r2 ? "rose" : "fell"} from ${r2}% to ${r1}%`,
-      detail: `${fmt(x1)} of ${fmt(n1)} this period against ${fmt(x2)} of ${fmt(n2)} in the previous ${funnel.previousRange.startDate} – ${funnel.previousRange.endDate}.`,
+      detail: `${fmt(x1)} of ${fmt(n1)} this period against ${fmt(x2)} of ${fmt(n2)} in ${prevLabel}.`,
       evidence: { current: r1, previous: r2, currentNumerator: x1, currentDenominator: n1, previousNumerator: x2, previousDenominator: n2, z: round1(z) },
       confidence: confidence(z),
       drill: { stage: s.key },
@@ -151,7 +156,7 @@ export const getPlgInsightsService = async (f: PlgFilters) => {
       kind: "volume",
       severity: Math.abs(s.deltaPct) >= 50 ? "high" : "medium",
       title: `${s.label} ${c > p ? "up" : "down"} ${Math.abs(s.deltaPct)}% on the previous period`,
-      detail: `${fmt(c)} people against ${fmt(p)} (${funnel.previousRange.startDate} – ${funnel.previousRange.endDate}).`,
+      detail: `${fmt(c)} people against ${fmt(p)} in ${prevLabel}.`,
       evidence: { current: c, previous: p, deltaPct: s.deltaPct, z: round1(z) },
       confidence: confidence(z),
       drill: { stage: s.key },

@@ -46,6 +46,12 @@ export interface PlgFilters {
   /** A segment to filter by, with its value. */
   segment?: string | null;
   segmentValue?: string | null;
+  /**
+   * Cut the window off at this instant (ISO). Set only on the PREVIOUS window
+   * of a window that ends today, so a partial today is compared with the same
+   * hours of the day before rather than with a whole day.
+   */
+  endAt?: string | null;
   [key: string]: unknown;
 }
 
@@ -65,10 +71,35 @@ export const addDays = (day: string, n: number): string =>
 export const daysInclusive = (f: { startDate: string; endDate: string }): number =>
   Math.floor((Date.parse(`${f.endDate}T00:00:00Z`) - Date.parse(`${f.startDate}T00:00:00Z`)) / DAY_MS) + 1;
 
-/** The same-length window immediately before. */
-export const previousWindow = <T extends PlgFilters>(f: T): T => {
+const IST_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/**
+ * The same-length window immediately before.
+ *
+ * In activity mode, when the window ends today it is still filling, so the
+ * previous window is cut at the same elapsed point (now minus the window's
+ * length, rounded down to 5 minutes so the result can be cached). Comparing
+ * 17:00 today with the whole of yesterday would report a collapse every
+ * afternoon.
+ */
+export const previousWindow = <T extends PlgFilters>(f: T, now = new Date()): T => {
   const n = daysInclusive(f);
-  return { ...f, startDate: addDays(f.startDate, -n), endDate: addDays(f.startDate, -1) };
+  const prev: T = {
+    ...f,
+    startDate: addDays(f.startDate, -n),
+    endDate: addDays(f.startDate, -1),
+    endAt: null as string | null,
+  };
+  if (f.mode === "activity" && f.endDate >= IST_DAY.format(now)) {
+    const rounded = Math.floor(now.getTime() / 300_000) * 300_000;
+    prev.endAt = new Date(rounded - n * DAY_MS).toISOString();
+  }
+  return prev;
 };
 
 /**
@@ -78,7 +109,8 @@ export const previousWindow = <T extends PlgFilters>(f: T): T => {
  */
 export const coreBinds = (f: PlgFilters, now = new Date()): Record<string, unknown> => {
   const winStart = istMidnight(f.startDate);
-  const winEnd = istMidnight(addDays(f.endDate, 1));
+  const dayEnd = istMidnight(addDays(f.endDate, 1));
+  const winEnd = f.endAt ? new Date(Math.min(dayEnd.getTime(), Date.parse(f.endAt))) : dayEnd;
   const horizonEnd = new Date(winEnd.getTime() + f.horizonDays * DAY_MS);
   const actTo =
     f.mode === "cohort" ? new Date(Math.min(horizonEnd.getTime(), now.getTime())) : winEnd;

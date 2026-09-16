@@ -197,7 +197,15 @@ const shape = (f: PlgFilters, cur: CountRow, prev: CountRow): PlgStage[] =>
       reachedAny: num(cur[`r_${s.key}`]),
       previousPeople,
       deltaPct: delta(people, previousPeople),
-      fromPrevious: above === null ? null : above > 0 ? pct(people, above) : null,
+      // In activity mode the post-subscription rung counts EVERY subscriber
+      // active in the window, not the few who subscribed in it, so a ratio
+      // to the rung above would read in the thousands of percent.
+      fromPrevious:
+        above === null || (f.mode === "activity" && s.after)
+          ? null
+          : above > 0
+            ? pct(people, above)
+            : null,
       fromTraffic: i === 0 ? null : top > 0 ? pct(people, top) : null,
       dropOff: above === null ? null : f.mode === "cohort" ? Math.max(0, above - people) : null,
       dropOffPct:
@@ -280,7 +288,12 @@ export const getPlgFunnelService = async (f: PlgFilters, compare?: string | null
 
   return {
     range: { startDate: f.startDate, endDate: f.endDate },
-    previousRange: { startDate: prev.startDate, endDate: prev.endDate },
+    previousRange: {
+      startDate: prev.startDate,
+      endDate: prev.endDate,
+      // Set when the previous window was cut to the same point in the day.
+      until: prev.endAt ?? null,
+    },
     mode: f.mode,
     modeNote: MODE_NOTES[f.mode],
     horizonDays: f.mode === "cohort" ? f.horizonDays : null,
