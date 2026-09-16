@@ -16,6 +16,7 @@ import {
 import {
   getFunnelService,
   getFunnelTimeseriesService,
+  getWebFunnelService,
   getPlatformService,
   getOverviewService,
   getBreakdownService,
@@ -54,6 +55,18 @@ export const getCreatorFunnel = catchAsync(async (req: Request, res: Response) =
   const data = await getFunnelService(filtersOf(req));
   return ok(res, data, "Creator funnel fetched successfully.");
 });
+
+/**
+ * The Creator Web product funnel — the view Product reads as the source of
+ * truth. Takes the same range/origin filters as every other endpoint here, so
+ * the whole dashboard moves together when the date bar changes.
+ */
+export const getCreatorWebFunnel = catchAsync(
+  async (req: Request, res: Response) => {
+    const data = await getWebFunnelService(filtersOf(req));
+    return ok(res, data, "Creator Web funnel fetched successfully.");
+  },
+);
 
 export const getCreatorFunnelTimeseries = catchAsync(
   async (req: Request, res: Response) => {

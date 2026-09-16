@@ -5,6 +5,7 @@ import { Platform } from "../services/dto-service/modules.export";
 import {
   getCreatorFunnel,
   getCreatorFunnelTimeseries,
+  getCreatorWebFunnel,
   getCreatorPlatform,
   getCreatorBreakdown,
   getCreatorMeta,
@@ -48,6 +49,12 @@ router.get("/overview", ...requireDashboard, getCreatorOverview);
 // Anonymous visitor → signup → subscription → first payment, plus renewals and
 // revenue beside it. See funnel.service.ts for why renewals are NOT a rung.
 router.get("/funnel", ...requireDashboard, getCreatorFunnel);
+
+// The Creator Web PRODUCT funnel — what people did inside the app and which
+// step lost them. Distinct from /funnel above, which is the acquisition view
+// and counts a different unit: sessions and accounts rather than the same
+// visitor moving through product stages.
+router.get("/web-funnel", ...requireDashboard, getCreatorWebFunnel);
 router.get("/funnel/timeseries", ...requireDashboard, getCreatorFunnelTimeseries);
 
 // Every tile on the Activity view, and one metric grouped by one dimension.
