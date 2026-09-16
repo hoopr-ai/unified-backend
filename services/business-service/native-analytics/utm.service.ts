@@ -68,6 +68,7 @@ import {
   per,
   filterBinds,
   sessionWhere,
+  realSession,
   previousPeriod,
   delta,
   type NativeFilters,
@@ -325,14 +326,14 @@ const attributionCtes = (f: UtmFilters): string => `
            s."landingPath", s."referrerDomain",
            ${CHANNEL_SQL} AS channel
       FROM native_sessions s
-     WHERE NOT s."isBot"
+     WHERE ${realSession("s")}
        ${creatorScope("s")}
      ORDER BY s."visitorId", s."startedAt"
   ),
   visitor_user AS (
     SELECT DISTINCT ON (s."visitorId") s."visitorId", s."userId"
       FROM native_sessions s
-     WHERE s."userId" IS NOT NULL AND NOT s."isBot"
+     WHERE s."userId" IS NOT NULL AND ${realSession("s")}
      ORDER BY s."visitorId", s."startedAt"
   ),
   paid_tx AS (

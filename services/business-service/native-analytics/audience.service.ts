@@ -6,6 +6,7 @@ import {
   filterBinds,
   rollupWhere,
   sessionWhere,
+  realSession,
   eventWhere,
   type NativeFilters,
 } from "./native-analytics-shared";
@@ -335,7 +336,7 @@ export const getRetentionService = async (f: NativeFilters) => {
        SELECT s."visitorId",
               min(date_trunc('week', s."startedAt" AT TIME ZONE 'Asia/Kolkata')) AS cohort_week
          FROM native_sessions s
-        WHERE NOT s."isBot"
+        WHERE ${realSession("s")}
           AND (CAST(:userPlatform AS text) IS NULL OR COALESCE(s."userPlatform",'UNKNOWN') = :userPlatform)
           AND (CAST(:clientType AS text) IS NULL OR COALESCE(s."clientType",'UNKNOWN') = :clientType)
           AND (CAST(:os AS text) IS NULL OR COALESCE(s."os",'UNKNOWN') = :os)
@@ -359,7 +360,7 @@ export const getRetentionService = async (f: NativeFilters) => {
               )::int AS week_offset
          FROM cohorts c
          JOIN native_sessions s ON s."visitorId" = c."visitorId"
-        WHERE NOT s."isBot"
+        WHERE ${realSession("s")}
         GROUP BY 1, 2, 3
      )
      SELECT to_char(cohort_week, 'YYYY-MM-DD') AS cohort,

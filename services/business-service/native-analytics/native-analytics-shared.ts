@@ -92,6 +92,36 @@ export const rollupWhere = (alias = "r"): string => `
   AND (CAST(:os AS text) IS NULL OR ${alias}."os" = :os)`;
 
 /**
+ * A session a real client produced.
+ *
+ * `NOT isBot` alone let through most of the table. Until 2026-09-16 NATIVE-BE's
+ * request interceptor minted a new visitor and session for every API call that
+ * carried no `X-Visitor-Id` — 2,014,066 of 2,499,842 sessions since launch
+ * (80.6%), one event each, with no OS, browser, screen or country, and exactly
+ * one visitorId per session. `isBot` cannot catch them: there is no User-Agent
+ * to match. This dashboard read ~36x high against GA and Mixpanel because of
+ * them.
+ *
+ * `os IS NOT NULL` means exactly "a real client sent its User-Agent", because
+ * `os` is parsed from it. Headless Chrome is excluded too — it sends a real UA
+ * but is automation: 9,391 sessions, 9,378 visitors, none ever signed in.
+ *
+ * Kept even though the interceptor is fixed: it is what keeps every date range
+ * before the fix honest. The same predicate is `REAL_SESSION` in NATIVE-BE's
+ * rollup job and `REAL_TRAFFIC` in creator-analytics — change them together.
+ */
+export const realSession = (alias = "s"): string => `NOT ${alias}."isBot"
+  AND ${alias}."os" IS NOT NULL
+  AND COALESCE(${alias}."browser", '') NOT ILIKE '%headless%'`;
+
+/**
+ * The event-side equivalent. Events carry the session's `os` but not its
+ * browser, so headless cannot be tested here.
+ */
+export const realEvent = (alias = "e"): string =>
+  `NOT ${alias}."isBot" AND ${alias}."os" IS NOT NULL`;
+
+/**
  * WHERE clause for raw native_sessions.
  *
  * COALESCE to 'UNKNOWN' on each dimension, because these columns ARE nullable
@@ -99,12 +129,13 @@ export const rollupWhere = (alias = "r"): string => `
  * most of them). Without it, filtering by 'UNKNOWN' in the UI would match
  * nothing while the rollups happily report a row for it.
  *
- * Bots are excluded to match the rollups. They are still stored in full.
+ * Bots and phantom sessions are excluded to match the rollups (see
+ * `realSession`). Both are still stored in full.
  */
 export const sessionWhere = (alias = "s"): string => `
   ${alias}."startedAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
   AND ${alias}."startedAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'
-  AND NOT ${alias}."isBot"
+  AND ${realSession(alias)}
   AND (CAST(:userPlatform AS text) IS NULL OR COALESCE(${alias}."userPlatform", 'UNKNOWN') = :userPlatform)
   AND (CAST(:clientType AS text) IS NULL OR COALESCE(${alias}."clientType", 'UNKNOWN') = :clientType)
   AND (CAST(:os AS text) IS NULL OR COALESCE(${alias}."os", 'UNKNOWN') = :os)`;
@@ -113,7 +144,7 @@ export const sessionWhere = (alias = "s"): string => `
 export const eventWhere = (alias = "e"): string => `
   ${alias}."occurredAt" >= ((:startDate)::date)::timestamp AT TIME ZONE 'Asia/Kolkata'
   AND ${alias}."occurredAt" < ((:endDate)::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'
-  AND NOT ${alias}."isBot"
+  AND ${realEvent(alias)}
   AND (CAST(:userPlatform AS text) IS NULL OR COALESCE(${alias}."userPlatform", 'UNKNOWN') = :userPlatform)
   AND (CAST(:clientType AS text) IS NULL OR COALESCE(${alias}."clientType", 'UNKNOWN') = :clientType)
   AND (CAST(:os AS text) IS NULL OR COALESCE(${alias}."os", 'UNKNOWN') = :os)`;
