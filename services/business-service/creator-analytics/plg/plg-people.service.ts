@@ -4,7 +4,7 @@
 // person opens into their journey. Aggregates say where the funnel leaks;
 // journeys say what the leak looks like.
 
-import { num, pct } from "../creator-analytics-shared";
+import { TX_RENEWAL, num, pct } from "../creator-analytics-shared";
 import { plgQuery as q } from "./plg-db";
 import { ACTION_BY_KEY, REAL_SESSION, APP_UA, STAGES, SUB_FUNNELS } from "./plg-catalogue";
 import { STAGE, STAGE_TIME, inList, reachedSql, type PlgFilters } from "./plg-sql";
@@ -300,7 +300,7 @@ SELECT * FROM (
     FROM user_subscriptions us WHERE us."userId" = :uid AND us."cancelledAt" IS NOT NULL AND us."currentPeriodStart" IS NOT NULL
   UNION ALL
   SELECT t."createdAt", 'subscription',
-         CASE WHEN COALESCE((t."paymentResponse" #>> '{_hoopr,cycleNumber}')::int, 1) > 1 THEN 'Renewal paid' ELSE 'Payment captured' END,
+         CASE WHEN ${TX_RENEWAL} IS TRUE THEN 'Renewal paid' ELSE 'Payment captured' END,
          concat_ws(' · ', 'Rs ' || round(t."payAmount"::numeric), t.kind, t.status), 'any'
     FROM transactions t WHERE t."userId" = :uid AND lower(coalesce(t.status, '')) IN ('captured', 'paid', 'success')
   UNION ALL

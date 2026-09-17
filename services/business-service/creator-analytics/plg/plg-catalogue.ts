@@ -40,6 +40,8 @@
 //   · The creator APP emits no events at all. App people are known only by
 //     user id, from their logins, searches, projects, downloads and money.
 
+import { TX_RENEWAL, TX_SCOPE } from "../creator-analytics-shared";
+
 export type Surface = "web" | "app" | "any";
 
 export type ActionCategory =
@@ -587,21 +589,20 @@ export const ACTIONS: readonly ActionSpec[] = [
     category: "retention",
     surface: "any",
     definition: "A second-or-later cycle of a subscription was paid.",
-    source: "transactions (subscription money, cycle > 1 per the webhook stamp)",
+    source:
+      "transactions (subscription money; cycle > 1 per the stamped cycle number, Apple by order) — " +
+      "the Subscriptions CMS rule, shared",
     identity: "users.id",
     coverageFrom: "2026-08-17",
     caveat:
-      "The first monthly renewals of the relaunched platform fall due from 2026-09-17; before " +
-      "then this is almost empty by construction, not by churn.",
+      "A payment saved without its cycle number is counted as neither a renewal nor a first payment. " +
+      "Most Razorpay payments since 2026-09-02 lack it until the cycle backfill is re-run (see the audit).",
     sql: `
     SELECT 'u' || t."userId" AS pk, t."userId"::bigint AS uid, t."createdAt" AS at, NULL::text AS d
       FROM transactions t
      WHERE ${IN_WINDOW(`t."createdAt"`)}
-       AND (t."razorpayPaymentId" IS NOT NULL OR t."legacyTransactionId" IS NOT NULL)
-       AND COALESCE(t.kind, 'subscription') = 'subscription'
-       AND lower(coalesce(t.status, '')) IN ('captured', 'paid', 'success')
-       AND COALESCE(jsonb_typeof(t."paymentResponse" #> '{_hoopr,cycleNumber}') = 'number'
-                    AND (t."paymentResponse" #>> '{_hoopr,cycleNumber}')::int > 1, FALSE)`,
+       AND ${TX_SCOPE}
+       AND ${TX_RENEWAL} IS TRUE`,
   },
   {
     key: "cancelled",
@@ -1228,10 +1229,16 @@ export const KNOWN_GAPS: readonly GapSpec[] = [
   },
   {
     area: "Retention",
-    gap: "Renewals of the relaunched platform only begin 2026-09-17.",
-    impact: "Renewal analysis is empty for now; retention uses activity and cancellation instead.",
-    proposal: "None — matures with time.",
-    owner: "—",
+    gap:
+      "Since 2026-09-02 Razorpay payments are saved without their cycle number. Razorpay's webhooks go to " +
+      "content-recommendation, whose handler never recorded it; NATIVE-BE's handler, which does, receives none.",
+    impact:
+      "Renewals read as zero, and those payments show as 'cycle unknown' in the Subscriptions CMS and in " +
+      "the payment split under the Growth funnel. Retention's renewal rate is understated for the same reason.",
+    proposal:
+      "Deploy the content-recommendation webhook fix (records the cycle from subscription.charged), then " +
+      "re-run NATIVE-BE scripts/backfill-payment-cycle.ts over the unstamped payments.",
+    owner: "content-recommendation / NATIVE-BE",
   },
   {
     area: "Value",

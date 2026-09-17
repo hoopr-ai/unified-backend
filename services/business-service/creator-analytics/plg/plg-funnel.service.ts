@@ -4,7 +4,7 @@
 // Post-subscription activation, for a window, in either mode (see plg-sql.ts),
 // against the same-length window before it, optionally split by a segment.
 
-import { num, pct, round1, delta } from "../creator-analytics-shared";
+import { PAYMENT_KIND_EXPR, TX_SCOPE, num, pct, round1, delta } from "../creator-analytics-shared";
 import { plgQuery } from "./plg-db";
 import {
   ACTION_BY_KEY,
@@ -219,7 +219,8 @@ const shape = (f: PlgFilters, cur: CountRow, prev: CountRow): PlgStage[] =>
 export const MODE_NOTES = {
   cohort:
     "Cohort: people whose first-ever appearance falls in the window, followed for the conversion window. " +
-    "Each rung counts people who also reached every rung above it, so the rates are true conversion rates.",
+    "Each rung counts people who also reached every rung above it, so the rates are true conversion rates. " +
+    "Anyone seen before the window is left out even if they subscribed in it — the totals under the funnel count everyone.",
   activity:
     "Activity: everyone active in the window and what they did in it. Rungs are NOT nested — a subscriber " +
     "downloading today did not sign up today — so the percentages between rungs are ratios, not conversion rates.",
@@ -274,13 +275,79 @@ const compareGroups = (rows: CountRow[]): CompareGroup[] => {
   return top;
 };
 
+// ── Everyone in the window ──────────────────────────────────────────────────
+//
+// The journey funnel follows only people FIRST SEEN in the window, so its
+// Subscription rung is a fraction of the subscriptions actually started (a
+// week read 13 on the web against 40 overall, most of the rest being creators
+// who had visited before). These totals put the whole book beside the funnel:
+// every activated subscription started in the window and every subscription
+// payment that arrived — any person, any surface, no segment — with payments
+// split by the Subscriptions CMS's own cycle rule.
+
+const WINDOW_TOTALS_SQL = `
+WITH subs AS (
+  SELECT us."userId", COALESCE(us."paymentProvider", 'unknown') AS provider
+    FROM user_subscriptions us
+    JOIN users u ON u.id = us."userId" AND u.platform = 'CREATOR'
+   WHERE us."currentPeriodStart" IS NOT NULL AND us."legacyPlanId" IS NULL
+     AND us."createdAt" >= :winStart AND us."createdAt" < :winEnd
+),
+pays AS (
+  SELECT t."userId", t."totalAmount", ${PAYMENT_KIND_EXPR} AS kind
+    FROM transactions t
+    JOIN users u ON u.id = t."userId" AND u.platform = 'CREATOR'
+   WHERE ${TX_SCOPE} AND t."createdAt" >= :winStart AND t."createdAt" < :winEnd
+)
+SELECT (SELECT count(DISTINCT "userId") FROM subs) AS sub_people,
+       (SELECT count(*) FROM subs) AS sub_rows,
+       (SELECT json_object_agg(provider, people) FROM (
+          SELECT provider, count(DISTINCT "userId") AS people FROM subs GROUP BY 1
+        ) x) AS sub_by_provider,
+       count(*) AS pay_n,
+       count(DISTINCT "userId") AS pay_people,
+       COALESCE(sum("totalAmount"), 0) AS pay_rupees,
+       count(*) FILTER (WHERE kind = 'first') AS first_n,
+       count(*) FILTER (WHERE kind = 'renewal') AS renewal_n,
+       count(*) FILTER (WHERE kind = 'unclassified') AS unknown_n
+  FROM pays`;
+
+const windowTotals = (f: PlgFilters) => {
+  const { winStart, winEnd } = coreBinds(f);
+  return memo(keyOf("plg.totals", { winStart, winEnd }), ttlFor(f.endDate, todayIst()), async () => {
+    const [r = {}] = await plgQuery<Record<string, unknown>>(WINDOW_TOTALS_SQL, { winStart, winEnd });
+    const byProvider = (r.sub_by_provider ?? {}) as Record<string, unknown>;
+    return {
+      subscriptionsStarted: {
+        people: num(r.sub_people),
+        subscriptions: num(r.sub_rows),
+        byProvider: Object.fromEntries(Object.entries(byProvider).map(([k, v]) => [k, num(v)])),
+      },
+      payments: {
+        count: num(r.pay_n),
+        people: num(r.pay_people),
+        rupees: Math.round(num(r.pay_rupees)),
+        first: num(r.first_n),
+        renewal: num(r.renewal_n),
+        cycleUnknown: num(r.unknown_n),
+      },
+      note:
+        "Everyone, on every surface, whatever the mode, surface or segment above. A subscription counts " +
+        "when its first billing period started (checkouts never paid are excluded), timed at checkout. " +
+        "Payments are subscription money that arrived; 'cycle unknown' means the payment was saved " +
+        "without its cycle number, so it cannot be called a renewal or a first payment.",
+    };
+  });
+};
+
 export const getPlgFunnelService = async (f: PlgFilters, compare?: string | null) => {
   const prev = previousWindow(f);
   const parts: Part[] = [{ key: "funnel", sql: FUNNEL_SELECT(f.mode) }];
   if (compare) parts.push(comparePart(f, compare));
-  const [batch, prevBatch] = await Promise.all([
+  const [batch, prevBatch, totals] = await Promise.all([
     runBatch("plg.funnel", f, parts),
     runBatch("plg.funnel", prev, [{ key: "funnel", sql: FUNNEL_SELECT(prev.mode) }]),
+    windowTotals(f),
   ]);
   const cur = batch.funnel[0] as CountRow | undefined;
   const before = prevBatch.funnel[0] as CountRow | undefined;
@@ -305,6 +372,7 @@ export const getPlgFunnelService = async (f: PlgFilters, compare?: string | null
     compare: groups
       ? { dimension: compare, label: SEGMENT_BY_KEY[compare as string]?.label ?? compare, groups }
       : null,
+    windowTotals: totals,
   };
 };
 

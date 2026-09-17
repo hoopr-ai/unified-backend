@@ -453,7 +453,7 @@ export const getPlgRetentionService = async (f: RetentionFilters) => {
     },
     notes: [
       "Cohort: first activated subscription of each person created in the window (legacy migrations excluded). Surface 'app' means an Apple purchase.",
-      "Churn = ended or scheduled to end. Renewal rate counts only subscribers 30+ days in; the relaunched platform's first renewals fall due from 2026-09-17, so it is thin by construction.",
+      "Churn = ended or scheduled to end. Renewal rate counts only subscribers 30+ days in, and only payments saved with their cycle number — most Razorpay payments since 2026-09-02 lack it until the cycle backfill is re-run, so the rate reads low (see the Metric dictionary's audit).",
       "Day-N retention is rolling: any recorded activity on or after day N. The app reports activity only through logins, so app subscribers read low.",
       "These are correlations. Subscribers who get value early may also be the ones who intended to stay.",
     ],
