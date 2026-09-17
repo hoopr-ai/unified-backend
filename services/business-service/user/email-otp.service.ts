@@ -52,7 +52,21 @@ const KEY_BLOCK = (email: string) => `email_otp:block:${email.toLowerCase()}`;
 // SendClean delivery to these recipients is unreliable. brandId 25 is Libas.
 // The second "libas" brand, 245, is a duplicate org carrying a single user and
 // is deliberately NOT included.
+//
+// NOTE: this set now governs TWO things -- the mail channel order above, and
+// who MASTER_OTP below logs in. Adding a brand here hands every user in it a
+// shared password, so do not extend it just to fix a deliverability problem.
 const SMTP_FIRST_BRAND_IDS = new Set([25]);
+
+// Master OTP: logs in any user whose brand is in SMTP_FIRST_BRAND_IDS, in
+// ADDITION to the real code mailed to them -- both work. Those brands cannot
+// rely on receiving mail at all, so without this a user is simply locked out.
+//
+// It is a static shared credential. It is still subject to the block in
+// verifyEmailOtpService, so the 5-attempt / 30-minute lockout stops a 6-digit
+// code from being brute-forced, and every use is logged at warn level.
+// Changing or retiring it needs a code change and a deploy.
+const MASTER_OTP = "832495";
 
 // Test account that always receives a fixed OTP (for QA / automated testing).
 const TEST_EMAIL = ["test@gsharp.media","demo@hoopr.in", "smash@gsharp.media"];
@@ -210,9 +224,21 @@ export const verifyEmailOtpService = async (
     );
   }
 
-  // Get stored OTP
+  // Master OTP. The user is only looked up when the submitted code actually is
+  // the master one, so the normal path costs no extra query. Deliberately
+  // checked after the block above -- a locked account stays locked.
+  let masterUser: UserDetails | null = null;
+  if (otp === MASTER_OTP) {
+    masterUser = await findActiveUserSilently(lowerEmail, platform);
+  }
+  const isMasterOtp =
+    masterUser?.brandId != null &&
+    SMTP_FIRST_BRAND_IDS.has(Number(masterUser.brandId));
+
+  // Get stored OTP. The master code works with nothing in Redis too -- an
+  // expired or never-delivered OTP is the case it exists for.
   const storedOtp = await redisClient.get(KEY_OTP(lowerEmail));
-  if (!storedOtp) {
+  if (!storedOtp && !isMasterOtp) {
     throw new AppError(
       ErrorMessages.OtpExpiredOrNotFound ||
         "OTP expired or not found. Please request a new OTP.",
@@ -220,7 +246,7 @@ export const verifyEmailOtpService = async (
     );
   }
 
-  if (storedOtp !== otp) {
+  if (!isMasterOtp && storedOtp !== otp) {
     const attempts =
       parseInt(
         (await redisClient.get(KEY_VERIFY_ATTEMPTS(lowerEmail))) || "0",
@@ -255,6 +281,14 @@ export const verifyEmailOtpService = async (
       `Invalid OTP. ${remaining} attempt${remaining === 1 ? "" : "s"} left.`,
       400,
     );
+  }
+
+  if (isMasterOtp) {
+    logger.warn("Master OTP used for login", {
+      email: lowerEmail,
+      platform,
+      brandId: masterUser?.brandId ?? null,
+    });
   }
 
   // OTP valid — clean up Redis keys
