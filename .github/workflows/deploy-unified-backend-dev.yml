@@ -63,7 +63,15 @@ jobs:
 
           echo "================================================="
           echo "📥 Pulling latest code..."
-          git pull origin staging
+          # Match origin exactly rather than merging into whatever the server
+          # is holding. `git pull` fails outright ("Need to specify how to
+          # reconcile divergent branches") when a branch has been force-pushed,
+          # which leaves the deploy wedged until someone SSHes in. This is a
+          # deployment checkout with no local commits to protect, so resetting
+          # is the correct reconciliation. Untracked files -- .env above all --
+          # are not touched by reset --hard.
+          git fetch origin staging
+          git reset --hard origin/staging
 
           echo "================================================="
           echo "📦 Installing dependencies..."
