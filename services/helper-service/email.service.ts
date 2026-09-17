@@ -22,6 +22,10 @@ interface SendEmailOptions {
   subject: string;
   html: string;
   attachments?: EmailAttachment[];
+  // Flip the channel order for this one send: SMTP first, SendClean as the
+  // fallback. For recipients where SendClean delivery has proven unreliable --
+  // OTP resends, and Libas. See sendEmail below.
+  preferSmtp?: boolean;
 }
 
 interface SendCleanConfig {
@@ -112,6 +116,19 @@ const sendViaSendClean = async (
   }
 };
 
+const sendViaSmtp = async (
+  options: SendEmailOptions,
+  recipients: string[]
+): Promise<void> => {
+  await transporter.sendMail({
+    from: `"Hoopr" <${process.env.SMTP_FROM || process.env.SMTP_USER || "infra@gsharp.media"}>`,
+    to: recipients.join(","),
+    subject: options.subject,
+    html: options.html,
+    attachments: options.attachments,
+  });
+};
+
 // Throws only when BOTH channels fail, so callers still see a hard failure as a
 // hard failure.
 export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
@@ -125,37 +142,48 @@ export const sendEmail = async (options: SendEmailOptions): Promise<void> => {
 
   const sc = sendcleanConfig();
   // SendClean's sendMail body has no attachment field, so anything carrying
-  // files (the invoice mail) goes straight to SMTP.
-  if (sc.ownerId && sc.token && !options.attachments?.length) {
+  // files (the invoice mail) can only go over SMTP.
+  const sendCleanUsable = Boolean(
+    sc.ownerId && sc.token && !options.attachments?.length
+  );
+  const log = { to: recipients, subject: options.subject };
+
+  // SMTP-first. The caller has told us SendClean is the weaker channel for this
+  // recipient, so the order flips -- but both are still tried, and the Gmail
+  // daily cap (550-5.4.5) is exactly the kind of failure the fallback catches.
+  if (options.preferSmtp) {
+    try {
+      await sendViaSmtp(options, recipients);
+      logger.info("Mail sent via SMTP (preferred)", log);
+      return;
+    } catch (error) {
+      if (!sendCleanUsable) throw error;
+      logger.warn("SMTP send failed, falling back to SendClean", {
+        ...log,
+        error: (error as Error).message,
+      });
+    }
+
+    await sendViaSendClean(sc, recipients, options.subject, options.html);
+    logger.info("Mail sent via SendClean (fallback)", log);
+    return;
+  }
+
+  if (sendCleanUsable) {
     try {
       await sendViaSendClean(sc, recipients, options.subject, options.html);
-      logger.info("Mail sent via SendClean", {
-        to: recipients,
-        subject: options.subject,
-      });
+      logger.info("Mail sent via SendClean", log);
       return;
     } catch (error) {
       logger.warn("SendClean send failed, falling back to SMTP", {
-        to: recipients,
-        subject: options.subject,
+        ...log,
         error: (error as Error).message,
       });
     }
   }
 
-  const mailOptions = {
-    from: `"Hoopr" <${process.env.SMTP_FROM || process.env.SMTP_USER || "infra@gsharp.media"}>`,
-    to: recipients.join(","),
-    subject: options.subject,
-    html: options.html,
-    attachments: options.attachments,
-  };
-
-  await transporter.sendMail(mailOptions);
-  logger.info("Mail sent via SMTP", {
-    to: recipients,
-    subject: options.subject,
-  });
+  await sendViaSmtp(options, recipients);
+  logger.info("Mail sent via SMTP", log);
 };
 
 export const sendInviteEmail = async (
@@ -1159,6 +1187,7 @@ export const sendContactUsEmail = async (data: {
 export const sendOtpEmail = async (
   email: string,
   otp: string,
+  preferSmtp = false,
 ): Promise<void> => {
   const html = `
     <!DOCTYPE html>
@@ -1269,6 +1298,7 @@ export const sendOtpEmail = async (
       (process.env.NODE_ENV !== "production" ? "DEV: " : "") +
       "Your Hoopr Smash email verification code",
     html,
+    preferSmtp,
   });
 };
 

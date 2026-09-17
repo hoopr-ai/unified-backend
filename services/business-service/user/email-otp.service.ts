@@ -48,6 +48,12 @@ const KEY_VERIFY_ATTEMPTS = (email: string) =>
   `email_otp:verify_attempts:${email.toLowerCase()}`;
 const KEY_BLOCK = (email: string) => `email_otp:block:${email.toLowerCase()}`;
 
+// Brands whose OTP mail goes SMTP-first (SendClean stays as the fallback):
+// SendClean delivery to these recipients is unreliable. brandId 25 is Libas.
+// The second "libas" brand, 245, is a duplicate org carrying a single user and
+// is deliberately NOT included.
+const SMTP_FIRST_BRAND_IDS = new Set([25]);
+
 // Test account that always receives a fixed OTP (for QA / automated testing).
 const TEST_EMAIL = ["test@gsharp.media","demo@hoopr.in", "smash@gsharp.media"];
 const TEST_OTP = "123456";
@@ -87,9 +93,9 @@ interface LoginResponseWithSession extends LoginResponse {
 const findOrCreateUser = async (
   email: string,
   platform: Platform,
-): Promise<void> => {
+): Promise<UserDetails> => {
   const existing = await findActiveUserSilently(email, platform);
-  if (existing) return;
+  if (existing) return existing;
 
   // Auto-create the user with a placeholder password (OTP is the auth mechanism).
   // No brandId assigned at this point — admin can associate later.
@@ -113,6 +119,7 @@ const findOrCreateUser = async (
   await saveUserRole(roleDetails);
 
   logger.info("Auto-created user for email OTP login", { email, platform });
+  return savedUser;
 };
 
 export const sendEmailOtpService = async (
@@ -124,7 +131,7 @@ export const sendEmailOtpService = async (
   validateEmail(lowerEmail);
 
   // Create user if they don't exist yet
-  await findOrCreateUser(lowerEmail, platform);
+  const user = await findOrCreateUser(lowerEmail, platform);
 
   // Check resend rate limit
   const resendAttempts = parseInt(
@@ -153,8 +160,18 @@ export const sendEmailOtpService = async (
     RESEND_WINDOW_SECONDS,
   );
 
+  // Send SMTP-first when either applies:
+  //  - this is a resend, so the channel that carried the first OTP is the one
+  //    that just failed the user; retrying it is not worth a second shot
+  //  - the user belongs to a brand SendClean does not deliver to reliably
+  // brandId is a BIGINT and can arrive as a string, so compare as a number.
+  const isResend = resendAttempts > 0;
+  const isSmtpFirstBrand =
+    user.brandId != null && SMTP_FIRST_BRAND_IDS.has(Number(user.brandId));
+  const preferSmtp = isResend || isSmtpFirstBrand;
+
   try {
-    await sendOtpEmail(lowerEmail, otp);
+    await sendOtpEmail(lowerEmail, otp, preferSmtp);
   } catch (err) {
     logger.error("Failed to send OTP email", {
       email: lowerEmail,
@@ -166,7 +183,13 @@ export const sendEmailOtpService = async (
     );
   }
 
-  logger.info("Email OTP sent", { email: lowerEmail, platform });
+  logger.info("Email OTP sent", {
+    email: lowerEmail,
+    platform,
+    preferSmtp,
+    isResend,
+    brandId: user.brandId ?? null,
+  });
   return {};
 };
 
