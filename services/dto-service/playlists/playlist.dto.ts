@@ -37,6 +37,18 @@ export interface GetAllPlaylistsParams {
   status?: PlaylistStatus;
 }
 
+// Track row on the playlist page. Extends the list DTO with the tag taxonomy
+// as plain display names (matching /filters exactly) so the FE filter bar can
+// filter the (small, unpaginated) playlist client-side. Arrays are always
+// present — `[]` when untagged — and bpm is `null` when unknown.
+export interface PlaylistTrack extends TrackWithArtists {
+  genres: string[];
+  moods: string[];
+  languages: string[];
+  usecases: string[];
+  bpm: number | null;
+}
+
 export interface PlaylistDetail {
   id: string;
   playlistCode: string | null;
@@ -49,7 +61,7 @@ export interface PlaylistDetail {
   // to their defaults on every save.
   type: PlaylistType | null;
   category: PlaylistCategory | null;
-  tracks: TrackWithArtists[];
+  tracks: PlaylistTrack[];
 }
 
 // ─── CMS write-side request shapes ───────────────────────────────────────────

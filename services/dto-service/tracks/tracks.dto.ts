@@ -169,6 +169,8 @@ export interface RawTrackWithMappings {
   stemCount?: number;
   campaign?: { amount: number; amountType: string; currentUsage: number; totalUsage: number; validFrom: Date; validTill: Date };
   hookTimings?: unknown;
+  // Stored as a free-text column; coerced to a number at the DTO boundary.
+  bpm?: string | null;
 }
 
 export interface PaginatedRawTracks {

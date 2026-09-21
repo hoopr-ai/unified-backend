@@ -23,11 +23,38 @@ import {
   PaginatedPlaylists,
   PlaylistDetail,
   PlaylistInfo,
+  PlaylistTrack,
   PlaylistStatus,
   PlaylistType,
   RawTrackWithMappings,
   UpdatePlaylistRequest,
 } from "../../dto-service/modules.export";
+
+// Filter `type` values as stored on the filters table; /filters groups by the
+// same lowercased strings, so names emitted here match that taxonomy 1:1.
+const TAG_TYPES = {
+  GENRE: "genre",
+  MOOD: "mood",
+  LANGUAGE: "language",
+  USECASE: "usecase",
+} as const;
+
+// Display names of a track's filters of one type, in mapping order.
+const tagNamesByType = (
+  track: RawTrackWithMappings,
+  type: string,
+): string[] =>
+  (track.trackFilterMappings ?? [])
+    .filter((m) => m.filter?.type?.toLowerCase() === type && m.filter.name)
+    .map((m) => m.filter!.name);
+
+// `tracks.bpm` is a free-text STRING column. Emit a plain number, or null when
+// empty / non-numeric, so the FE can compare it without parsing.
+const parseBpm = (raw: string | null | undefined): number | null => {
+  if (raw == null) return null;
+  const n = Number(String(raw).trim());
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
 
 const buildPaginationResponse = (
   page: number,
@@ -122,7 +149,22 @@ export const getPlaylistDetailService = async (
     (mapping) => mapping.track!.toJSON() as unknown as RawTrackWithMappings,
   );
 
-  const tracks = await transformRawTracksToDto(rawTracks, likedTrackCodes, ownerAccess);
+  const baseTracks = await transformRawTracksToDto(rawTracks, likedTrackCodes, ownerAccess);
+
+  // transformRawTracksToDto preserves input order, but key by id anyway so
+  // the tag lookup can't drift if that ever changes.
+  const rawById = new Map(rawTracks.map((t) => [t.id, t]));
+  const tracks: PlaylistTrack[] = baseTracks.map((dto) => {
+    const raw = rawById.get(dto.id);
+    return {
+      ...dto,
+      genres: raw ? tagNamesByType(raw, TAG_TYPES.GENRE) : [],
+      moods: raw ? tagNamesByType(raw, TAG_TYPES.MOOD) : [],
+      languages: raw ? tagNamesByType(raw, TAG_TYPES.LANGUAGE) : [],
+      usecases: raw ? tagNamesByType(raw, TAG_TYPES.USECASE) : [],
+      bpm: parseBpm(raw?.bpm),
+    };
+  });
 
   return {
     id: playlist.id,
