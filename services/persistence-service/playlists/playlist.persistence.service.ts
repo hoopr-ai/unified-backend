@@ -9,6 +9,7 @@ import {
   ArtistModel,
 } from "../artists/modules.export";
 import { SkuModel } from "../sku/modules.export";
+import { TrackFilterMappingModel, FilterModel } from "../filter/modules.export";
 import { PlaylistStatus } from "../../dto-service/modules.export";
 import { Op } from "sequelize";
 import { sequelize } from "../database";
@@ -78,6 +79,7 @@ export const findTracksByPlaylistId = async (
           "trending",
           "ownerId",
           "hookTimings",
+          "bpm",
         ],
         include: [
           {
@@ -98,6 +100,21 @@ export const findTracksByPlaylistId = async (
             as: "skus",
             required: false,
             attributes: ["id", "costPrice", "sellingPrice"],
+          },
+          // Tag taxonomy (genre / mood / language / usecase) so the playlist
+          // page can filter client-side without a second round trip.
+          {
+            model: TrackFilterMappingModel,
+            as: "trackFilterMappings",
+            required: false,
+            include: [
+              {
+                model: FilterModel,
+                as: "filter",
+                attributes: ["id", "name", "name_slug", "type"],
+                required: false,
+              },
+            ],
           },
         ],
       },
