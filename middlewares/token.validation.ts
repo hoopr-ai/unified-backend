@@ -114,6 +114,17 @@ export const setTokenAssignedPriceSchema = Joi.object<SetTokenAssignedPriceReque
   keyName: Joi.string().trim().max(255).allow(null, "").optional().messages({
     "string.max": "keyName must be at most 255 characters",
   }),
+  // Plan header + validity window, editable after the fact so an existing
+  // brand's subscription block can be corrected. Same rules as assign; null
+  // (or "") clears the stored value, omitting the key leaves it untouched.
+  title: Joi.string().trim().max(255).optional().allow(null, ""),
+  subTitle: Joi.string().trim().max(500).optional().allow(null, ""),
+  startDate: Joi.date().optional().allow(null).messages({
+    "date.base": "startDate must be a valid date",
+  }),
+  expiryDate: Joi.date().optional().allow(null).messages({
+    "date.base": "expiryDate must be a valid date",
+  }),
 });
 
 export const deductTokensRequestSchema = Joi.object<DeductTokensRequest>({

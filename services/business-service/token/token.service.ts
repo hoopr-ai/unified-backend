@@ -276,7 +276,8 @@ export const setTokenAssignedPriceService = async (
   pricingData: SetTokenAssignedPriceRequest,
   updatedById?: number | null
 ): Promise<AssignTokensResponse> => {
-  const { dealType, pricePerPack, iprsShare, hooprShare, keyName } = pricingData;
+  const { dealType, pricePerPack, iprsShare, hooprShare, keyName, title, subTitle, startDate, expiryDate } =
+    pricingData;
 
   if (!Number.isFinite(pricePerPack) || pricePerPack <= 0) {
     throw new AppError("pricePerPack must be greater than 0", 400);
@@ -310,6 +311,10 @@ export const setTokenAssignedPriceService = async (
       iprsShare: dealType === "bulk" ? iprsShare : null,
       hooprShare: dealType === "bulk" ? hooprShare : null,
       keyName,
+      title,
+      subTitle,
+      startDate,
+      expiryDate,
     },
     updatedById
   );
@@ -411,11 +416,10 @@ export const getTokenTypesService = async (): Promise<string[]> => {
  * behaviour.
  */
 export const getBrandsWithTokensService = async (
-  options: { showInternalBrands?: boolean; type?: string } = {}
+  options: { showInternalBrands?: boolean } = {}
 ): Promise<BrandTokenSummary[]> => {
   return await getBrandsWithTokens({
     excludeInternalBrands: options.showInternalBrands === true ? false : true,
-    type: options.type,
   });
 };
 

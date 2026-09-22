@@ -7,6 +7,12 @@ export interface SetTokenAssignedPriceRequest {
   iprsShare?: number | null;
   hooprShare?: number | null;
   keyName?: string | null;
+  // Plan header + validity window (same fields as assign). undefined leaves the
+  // stored value alone; null / "" clears it.
+  title?: string | null;
+  subTitle?: string | null;
+  startDate?: Date | null;
+  expiryDate?: Date | null;
 }
 
 export interface DeductTokensRequest {

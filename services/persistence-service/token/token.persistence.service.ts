@@ -451,6 +451,10 @@ export interface SetTokenAssignedPriceData {
   iprsShare?: number | null;
   hooprShare?: number | null;
   keyName?: string | null;
+  title?: string | null;
+  subTitle?: string | null;
+  startDate?: Date | null;
+  expiryDate?: Date | null;
 }
 
 /**
@@ -481,6 +485,18 @@ export const setTokenAssignedPrice = async (
         iprsShare: pricingData.iprsShare ?? null,
         hooprShare: pricingData.hooprShare ?? null,
         keyName: pricingData.keyName !== undefined ? pricingData.keyName : token.keyName,
+        // Header fields: absent = untouched, blank = cleared. A blank title is
+        // stored as null (not "") so it can never win the header resolution
+        // on My Subscription the way assign already guards against.
+        title: pricingData.title !== undefined ? pricingData.title || null : token.title,
+        subTitle: pricingData.subTitle !== undefined ? pricingData.subTitle || null : token.subTitle,
+        startDate: pricingData.startDate !== undefined ? pricingData.startDate : token.startDate,
+        // The column is nullable but the model attribute is typed `Date |
+        // undefined`; clearing an expiry means writing NULL, so cast here.
+        expiryDate:
+          pricingData.expiryDate !== undefined
+            ? (pricingData.expiryDate as Date | undefined)
+            : token.expiryDate,
         updatedById: updatedById ?? null,
       },
       { where: { id: tokenAssignedId }, transaction }
@@ -877,7 +893,7 @@ export const getTokenSummaryAggregatedByType = async (
 };
 
 export const getBrandsWithTokens = async (
-  options: { excludeInternalBrands?: boolean; type?: string } = {}
+  options: { excludeInternalBrands?: boolean } = {}
 ): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
   // SUM tokenBalance across finite allocations only (isUnlimited = false). The
   // hasUnlimited flag is a separate aggregate so the FE can render an
@@ -888,14 +904,7 @@ export const getBrandsWithTokens = async (
   // partner brands.
   const excludeInternal = options.excludeInternalBrands ?? true;
 
-  // Optional catalogue filter: only brands holding at least one allocation of
-  // this type. Catalogue rights use it so a brand override can only be added
-  // for a brand that actually subscribes to that catalogue.
-  const where: any = {};
-  if (options.type) where.type = options.type;
-
   const results = await TokenAssignedModel.findAll({
-    where,
     attributes: [
       "brandId",
       [fn("SUM", literal('CASE WHEN "TokenAssignedModel"."isUnlimited" = false THEN "TokenAssignedModel"."tokenBalance" ELSE 0 END')), "totalTokens"],
