@@ -877,7 +877,7 @@ export const getTokenSummaryAggregatedByType = async (
 };
 
 export const getBrandsWithTokens = async (
-  options: { excludeInternalBrands?: boolean } = {}
+  options: { excludeInternalBrands?: boolean; type?: string } = {}
 ): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
   // SUM tokenBalance across finite allocations only (isUnlimited = false). The
   // hasUnlimited flag is a separate aggregate so the FE can render an
@@ -888,7 +888,14 @@ export const getBrandsWithTokens = async (
   // partner brands.
   const excludeInternal = options.excludeInternalBrands ?? true;
 
+  // Optional catalogue filter: only brands holding at least one allocation of
+  // this type. Catalogue rights use it so a brand override can only be added
+  // for a brand that actually subscribes to that catalogue.
+  const where: any = {};
+  if (options.type) where.type = options.type;
+
   const results = await TokenAssignedModel.findAll({
+    where,
     attributes: [
       "brandId",
       [fn("SUM", literal('CASE WHEN "TokenAssignedModel"."isUnlimited" = false THEN "TokenAssignedModel"."tokenBalance" ELSE 0 END')), "totalTokens"],

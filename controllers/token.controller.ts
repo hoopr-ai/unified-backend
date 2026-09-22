@@ -193,16 +193,18 @@ export const getTokenTypes = catchAsync(async (req: Request, res: Response) => {
 
 /**
  * Get all brands with tokens summary (Admin)
- * GET /tokens/brands?showInternalBrands=true
+ * GET /tokens/brands?showInternalBrands=true&type=Chartbusters
  *
  * Internal brands (Hoopr, Nova Media Co.) are excluded by default so the CMS
  * listing matches what partners would expect to see. Pass
  * `showInternalBrands=true` to include them — used by the FE toggle.
+ * `type` narrows the list to brands holding tokens of that catalogue.
  */
 export const getBrandsWithTokens = catchAsync(async (req: Request, res: Response) => {
   const showInternalBrands = req.query.showInternalBrands === "true";
+  const type = typeof req.query.type === "string" && req.query.type.trim() ? req.query.type.trim() : undefined;
 
-  const brands = await getBrandsWithTokensService({ showInternalBrands });
+  const brands = await getBrandsWithTokensService({ showInternalBrands, type });
 
   sendResponse(res, {
     status: HttpStatusCode.OK,

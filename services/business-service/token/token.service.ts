@@ -411,10 +411,11 @@ export const getTokenTypesService = async (): Promise<string[]> => {
  * behaviour.
  */
 export const getBrandsWithTokensService = async (
-  options: { showInternalBrands?: boolean } = {}
+  options: { showInternalBrands?: boolean; type?: string } = {}
 ): Promise<BrandTokenSummary[]> => {
   return await getBrandsWithTokens({
     excludeInternalBrands: options.showInternalBrands === true ? false : true,
+    type: options.type,
   });
 };
 
