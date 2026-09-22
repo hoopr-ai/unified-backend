@@ -885,21 +885,22 @@ const transformTrackToDetailsDto = (
 
   // ── restrictedCategories: catalogue rights first, owner blob second ──────
   //
-  // When the viewer's brand actually holds tokens of this track's catalogue,
-  // what THEIR tokens permit is more specific — and more truthful — than the
-  // label's blanket list, so it wins. Everyone else (anonymous visitors, brands
-  // with no tokens of this type, catalogues with no rights row) keeps the owner
+  // When the viewer's brand is subscribed to this track's catalogue, what
+  // THEIR deal permits is more specific — and more truthful — than the label's
+  // blanket list, so it wins. Everyone else (anonymous visitors, brands with no
+  // allocation of this type, catalogues with no rights row) keeps the owner
   // blob exactly as before.
+  //
+  // "Subscribed" is decided inside findEffectiveRightsForBrand (a non-expired
+  // allocation, balance ignored), NOT by ownerAccess.activeTokenTypes, which
+  // drops a catalogue the moment its balance hits zero. Negotiated terms do not
+  // lapse with the balance, and My Subscription reads by the same rule.
   //
   // Same key, same [{title, description}] shape either way: no client can tell
   // which source answered, which is the point.
   const catalogue = baseDto.ownerType;
   let catalogueRights: TrackCatalogueRights | undefined;
-  if (
-    catalogue &&
-    ownerAccess?.activeTokenTypes?.has(catalogue) &&
-    brandCatalogueRights?.has(catalogue)
-  ) {
+  if (catalogue && brandCatalogueRights?.has(catalogue)) {
     const effective = brandCatalogueRights.get(catalogue)!;
     const derived = rightsToRestrictedCategories(effective, catalogue);
     // An empty list means nothing is restricted for this catalogue. Falling

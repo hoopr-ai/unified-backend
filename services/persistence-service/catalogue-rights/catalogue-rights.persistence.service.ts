@@ -215,12 +215,44 @@ export const mergeRights = (
 export { emptyCatalogueRights };
 
 /**
- * Effective rights for every catalogue, for one brand — defaults merged with
- * that brand's overrides, keyed by catalogue name.
+ * The catalogues a brand is subscribed to: every type it holds a non-expired
+ * allocation of, whatever the remaining balance.
  *
- * Two queries regardless of how many catalogues exist, because the track detail
- * endpoint is hot and must not gain a per-owner round trip. Returns an empty
- * map for an anonymous viewer, which callers read as "fall back".
+ * Deliberately NOT the "active grant" rule the owner-access layer uses
+ * (balance > 0 or unlimited). That rule decides whether the brand can spend a
+ * token; this one decides whether the brand's negotiated terms apply, and a
+ * brand that has spent its last token still licensed those tracks under those
+ * terms. It is also the rule My Subscription reads by, so the two screens
+ * cannot disagree about which rights a brand has.
+ */
+export const findSubscribedCatalogues = async (brandId: number): Promise<Set<string>> => {
+  const rows = await TokenAssignedModel.findAll({
+    attributes: [[fn("DISTINCT", col("type")), "type"]],
+    where: {
+      brandId,
+      [Op.or]: [
+        { expiryDate: { [Op.is]: null } },
+        { expiryDate: { [Op.gt]: new Date() } },
+      ],
+    } as unknown as WhereOptions<TokenAssignedModel>,
+    raw: true,
+  });
+  return new Set(
+    (rows as unknown as { type: string | null }[])
+      .map((r) => r.type)
+      .filter((t): t is string => typeof t === "string" && t.length > 0),
+  );
+};
+
+/**
+ * Effective rights for every catalogue the brand is SUBSCRIBED to — defaults
+ * merged with that brand's overrides, keyed by catalogue name. A catalogue the
+ * brand holds no allocation in is absent, which callers read as "fall back to
+ * the owner blob".
+ *
+ * Three queries regardless of how many catalogues exist, because the track
+ * detail endpoint is hot and must not gain a per-owner round trip. Returns an
+ * empty map for an anonymous viewer.
  */
 export const findEffectiveRightsForBrand = async (
   brandId?: number,
@@ -228,13 +260,15 @@ export const findEffectiveRightsForBrand = async (
   const out = new Map<string, CatalogueRights>();
   if (!brandId) return out;
 
-  const [defaults, overrides] = await Promise.all([
+  const [defaults, overrides, subscribed] = await Promise.all([
     findAllCatalogueRights(),
     findOverridesForBrand(brandId),
+    findSubscribedCatalogues(brandId),
   ]);
   const overrideByName = new Map(overrides.map((o) => [o.catalogue, o.rights]));
 
   for (const row of defaults) {
+    if (!subscribed.has(row.catalogue)) continue;
     out.set(row.catalogue, mergeRights(row.rights, overrideByName.get(row.catalogue)).rights);
   }
   return out;
