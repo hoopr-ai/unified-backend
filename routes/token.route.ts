@@ -13,23 +13,37 @@ import {
   getDeductionsByAllocation,
 } from "../controllers/token.controller";
 import { authenticateWithSession } from "../middlewares/authenticate";
+import { requireFunctionality } from "../middlewares/requireFunctionality";
 import { validateRequest } from "../middlewares/validateRequest";
 import {
   assignTokensRequestSchema,
   deductTokensRequestSchema,
   setTokenAssignedPriceSchema,
 } from "../middlewares/token.validation";
-import { UserRoles } from "../services/dto-service/modules.export";
+import { Platform, UserRoles } from "../services/dto-service/modules.export";
 
 const router = Router();
 
-// Admin-only auth middleware (used on write/mutation endpoints)
-const adminAuth = authenticateWithSession({
-  roles: [UserRoles.ADMIN],
-});
+// Write auth: an INTERNAL-platform session, then the `tokens` grant. Same gate
+// shape as admin-catalogue-rights and admin-owner.
+//
+// These used to be ADMIN-only by role, which meant the ops users who actually
+// run the Tokens CMS could open every screen (internal-fe gates the page on the
+// same `tokens` grant) and then hit a 403 the moment they saved. The grant is
+// the real authorization boundary here — an admin hands it out deliberately —
+// so the role check was gatekeeping without adding safety. Admins still pass by
+// role: requireFunctionality lets them through without a grant.
+//
+// The platform check is deliberate defence-in-depth: these endpoints move
+// commercial credit, so a valid SMASH or ENTERPRISE token must not reach them
+// even if that account somehow carried the grant.
+const tokenWriteAuth = [
+  authenticateWithSession({ platforms: [Platform.INTERNAL] }),
+  requireFunctionality("tokens"),
+];
 
 // Read-only auth: ADMIN and SALES can view token allocations, deductions, and brand-level
-// summaries. Write actions (assign / deduct / price changes) stay ADMIN-only below.
+// summaries.
 // Sales reps need this so they can answer "how many SMASH credits does brand X have left
 // and when do they expire?" without escalating to an admin every time.
 const tokenReadAuth = authenticateWithSession({
@@ -96,7 +110,7 @@ router.get("/brand/:brandId", tokenReadAuth, getTokensByBrand);
  */
 router.post(
   "/assign",
-  adminAuth,
+  ...tokenWriteAuth,
   validateRequest(assignTokensRequestSchema),
   assignTokens
 );
@@ -107,7 +121,7 @@ router.post(
  */
 router.post(
   "/deduct",
-  adminAuth,
+  ...tokenWriteAuth,
   validateRequest(deductTokensRequestSchema),
   deductTokens
 );
@@ -118,7 +132,7 @@ router.post(
  */
 router.patch(
   "/:tokenAssignedId/price",
-  adminAuth,
+  ...tokenWriteAuth,
   validateRequest(setTokenAssignedPriceSchema),
   setTokenAssignedPrice
 );
