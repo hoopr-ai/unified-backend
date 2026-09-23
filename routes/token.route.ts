@@ -43,11 +43,19 @@ const tokenWriteAuth = [
 ];
 
 // Read-only auth: ADMIN and SALES can view token allocations, deductions, and brand-level
-// summaries.
+// summaries. Deduct and price changes stay ADMIN-only below.
 // Sales reps need this so they can answer "how many SMASH credits does brand X have left
 // and when do they expire?" without escalating to an admin every time.
 const tokenReadAuth = authenticateWithSession({
   roles: [UserRoles.ADMIN, UserRoles.SALES],
+});
+
+// Assign: any INTERNAL CMS user, whatever their role, so the client-credentials
+// wizard can fund the brand it just created (same rule as /user/create).
+// Callers on other platforms stay ADMIN-only.
+const tokenAssignAuth = authenticateWithSession({
+  roles: [UserRoles.ADMIN],
+  roleExemptPlatforms: [Platform.INTERNAL],
 });
 
 // ============================================
@@ -110,7 +118,7 @@ router.get("/brand/:brandId", tokenReadAuth, getTokensByBrand);
  */
 router.post(
   "/assign",
-  ...tokenWriteAuth,
+  tokenAssignAuth,
   validateRequest(assignTokensRequestSchema),
   assignTokens
 );
