@@ -10,7 +10,6 @@ import {
   GetTracksByCodesQuery,
   FilterInfo,
   Platform,
-  TOKEN_GATED_TRACK_CODES,
   isSfxTrackType,
 } from "../../dto-service/modules.export";
 import {
@@ -268,9 +267,8 @@ const transformTrackToDto = (
   // must not mark another label's tracks as covered.
   const hasTokenForTrack = viewerHasTokenForOwner(ownerAccess, track.ownerId, ownerType);
   const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack;
-  const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
   // SFX tracks are always free — never show a price for them
-  const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
+  const hidePrice = isSfx || isEnterpriseOnly || hasTokenForTrack;
 
   let sku: SkuInfo | undefined;
   if (track.skus && track.skus.length > 0) {
@@ -944,8 +942,7 @@ const transformTrackToDetailsDto = (
     const isSfx = isSfxTrackType(track.type);
     const isEnterpriseOnly = baseDto.isEnterpriseOnly === true;
     const hasTokenForTrack = viewerHasTokenForOwner(ownerAccess, track.ownerId, baseDto.ownerType);
-    const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
-    const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
+    const hidePrice = isSfx || isEnterpriseOnly || hasTokenForTrack;
     sku = {
       id: skuData.id || "",
       costPrice: hidePrice ? undefined : skuData.costPrice,

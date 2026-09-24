@@ -212,10 +212,3 @@ export const UNAUTHENTICATED_RESTRICTED_OWNER_NAMES: string[] = [
 export const SFX_TRACK_TYPE = "sfx";
 export const isSfxTrackType = (type?: string | null): boolean =>
   (type ?? "").toLowerCase() === SFX_TRACK_TYPE;
-
-// Tracks whose price is hidden by default and only shown to users who hold active tokens for the track's ownerType
-export const TOKEN_GATED_TRACK_CODES: Set<string> = new Set([
-  "20832",
-  "20829",
-  "20830",
-]);

@@ -8,7 +8,6 @@ import {
   RailSeeMoreDescriptor,
   PaginatedRailsResponse,
   RailSeeAllResponse,
-  TOKEN_GATED_TRACK_CODES,
   isSfxTrackType,
   PageName,
   type PageKey,
@@ -258,9 +257,8 @@ const hydrateTracks = async (
     // must not mark another label's tracks as covered.
     const hasTokenForTrack = viewerHasTokenForOwner(access, track.ownerId, ownerType);
     const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack;
-    const isTokenGatedTrack = TOKEN_GATED_TRACK_CODES.has(track.trackCode);
     // SFX tracks are always free — never show a price for them
-    const hidePrice = isSfx || (isTokenGatedTrack ? !hasTokenForTrack : (isEnterpriseOnly || hasTokenForTrack));
+    const hidePrice = isSfx || isEnterpriseOnly || hasTokenForTrack;
     const skuData = skuMap.get(track.trackCode);
     const sku = skuData
       ? {
