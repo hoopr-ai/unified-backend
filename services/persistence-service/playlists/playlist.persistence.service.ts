@@ -80,6 +80,8 @@ export const findTracksByPlaylistId = async (
           "ownerId",
           "hookTimings",
           "bpm",
+          "status",
+          "isHidden",
         ],
         include: [
           {

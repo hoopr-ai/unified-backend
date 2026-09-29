@@ -8,3 +8,4 @@ export * from "./session.persistence.service";
 export * from "./activity.persistence.service";
 export * from "./liked-track.persistence.service";
 export * from "./stream-history.persistence.service";
+export * from "./user-tour.persistence.service";

@@ -15,6 +15,7 @@ import {
   findTrackIdsByTrackCodes,
 } from "../../persistence-service/exports";
 import { resolveViewerOwnerAccess } from "../access/owner-access.service";
+import { isTrackVisible } from "../../persistence-service/track/track-visibility";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { buildTracksResponseFromRawData, transformRawTracksToDto } from "../track/track.service";
 import { uploadPublicImageToGCS } from "../../helper-service/gcs.helper";
@@ -230,7 +231,8 @@ export const getTracksByOccasionService = async (
   const excludeOwnerIds = ownerAccess.excludeOwnerIds;
   const excludeOwnerSet = new Set(excludeOwnerIds ?? []);
 
-  const curatedRaw = mappingsToRawTracks(curatedMappings);
+  // Curated mappings are joined without a status filter; drop anything not servable.
+  const curatedRaw = mappingsToRawTracks(curatedMappings).filter((t) => isTrackVisible(t as any));
 
   let keywordRaw: RawTrackWithMappings[] = [];
   if (keywordIds.length > 0) {

@@ -10,7 +10,8 @@ import type {
   SendEmailOtpRequestData,
   VerifyEmailOtpRequestData,
 } from "../services/dto-service/modules.export";
-import { ProfileRole } from "../services/dto-service/modules.export";
+import { ProfileRole, KNOWN_TOURS } from "../services/dto-service/modules.export";
+import type { TourSeenRequestData } from "../services/dto-service/modules.export";
 import { platformField } from "./platform.validation";
 const profileRoleValues = Object.values(ProfileRole) as string[];
 
@@ -110,3 +111,12 @@ export const verifyEmailOtpRequestSchema =
     otp: Joi.string().length(6).pattern(/^\d+$/).required(),
     platform: platformField.required(),
   }).unknown(false);
+
+// POST /user/tour-seen — `tour` must be a known key, so a typo cannot quietly
+// store a flag no FE ever reads.
+export const tourSeenRequestSchema = Joi.object<TourSeenRequestData>({
+  tour: Joi.string()
+    .valid(...KNOWN_TOURS)
+    .required()
+    .messages({ "any.only": `tour must be one of: ${KNOWN_TOURS.join(", ")}` }),
+});

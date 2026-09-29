@@ -1,3 +1,4 @@
+import { visibleTrackWhere } from "../track/track-visibility";
 import { Op } from "sequelize";
 import { KeywordModel } from "./schemas/keyword.schema";
 import { TrackKeywordMappingModel } from "./schemas/track-keyword-mapping.schema";
@@ -61,7 +62,7 @@ export const findTracksByKeywordIds = async (
         {
           model: TrackModel,
           as: "track",
-          where: trackWhere,
+          where: visibleTrackWhere(trackWhere),
           required: true,
           include: [
             {

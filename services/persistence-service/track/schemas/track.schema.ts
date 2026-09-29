@@ -62,6 +62,7 @@ export interface TrackDetails {
   hookTimings?: unknown;
   artworkLink?: string;
   notVisibleToB2b?: boolean | null;
+  isHidden?: boolean | null;
 }
 
 @Table({
@@ -327,6 +328,16 @@ export class TrackModel extends Model<TrackModel> {
     allowNull: true,
   })
   notVisibleToB2b?: boolean | null;
+
+  /**
+   * Pulled from every catalogue surface (see track-visibility.ts). Same flag
+   * NATIVE-BE and content-recommendation already honour.
+   */
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: true,
+  })
+  isHidden?: boolean | null;
 
   @BelongsTo(() => CampaignModel, "campaignId")
   campaign?: CampaignModel;

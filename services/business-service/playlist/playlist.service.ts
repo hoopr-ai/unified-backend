@@ -11,6 +11,7 @@ import {
   setPlaylistTracks,
 } from "../../persistence-service/exports";
 import { resolveViewerOwnerAccess } from "../access/owner-access.service";
+import { isTrackVisible } from "../../persistence-service/track/track-visibility";
 import { getUserLikedTrackCodes } from "../../persistence-service/user/liked-track.persistence.service";
 import { uploadPublicImageToGCS } from "../../helper-service/gcs.helper";
 import { toCdnUrl } from "../../helper-service/cdn.helper";
@@ -132,6 +133,10 @@ export const getPlaylistDetailService = async (
   const validMappings = mappings.filter((mapping) => {
     if (!mapping.track) {
       console.warn(`Skipped track with ID: ${mapping.trackId} - not found in tracks table`);
+      return false;
+    }
+    // Playlist mappings are joined without a status filter; drop anything not servable.
+    if (!isTrackVisible(mapping.track.toJSON() as any)) {
       return false;
     }
     if (excludeOwnerSet.size > 0) {

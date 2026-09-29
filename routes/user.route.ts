@@ -12,6 +12,7 @@ import {
   getUserActivities,
   getUserSessions,
   getProfile,
+  tourSeen,
   updateProfile,
   getUsers,
   updateUserById,
@@ -33,6 +34,7 @@ import {
   verifyOtpRequestSchema,
   sendEmailOtpRequestSchema,
   verifyEmailOtpRequestSchema,
+  tourSeenRequestSchema,
 } from "../middlewares/user.validation";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { Platform, UserRoles } from "../services/dto-service/modules.export";
@@ -118,6 +120,14 @@ router.get(
 
 // Profile endpoints
 router.get("/profile", authenticateWithSession, getProfile);
+
+// Coachmark tours: GET /profile carries `toursSeen`, this records one finished.
+router.post(
+  "/tour-seen",
+  authenticateWithSession,
+  validateRequest(tourSeenRequestSchema),
+  tourSeen,
+);
 
 router.put(
   "/profile",
