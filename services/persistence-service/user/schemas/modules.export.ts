@@ -16,3 +16,4 @@ export * from "./user-form.schema";
 export * from "./utm-source.schema";
 export * from "./brief.schema";
 export * from "./access-request.schema";
+export * from "./user-tour-seen.schema";

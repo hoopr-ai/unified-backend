@@ -51,6 +51,8 @@ import {
   type UserSessionDetails,
   upsertUserProfile,
   findUserProfile,
+  markTourSeen,
+  listToursSeen,
   updateUserBrandId,
 } from "../../persistence-service/exports";
 import { findBrandById, updateBrand, saveBrand } from "../../persistence-service/brand/modules.export";
@@ -688,10 +690,11 @@ const resolveSocialLinks = (brand: any | null, userProfile: any | null) => ({
 export const getUserProfileService = async (
   userId: number,
 ): Promise<UserProfileResponse> => {
-  const [user, userProfile, role] = await Promise.all([
+  const [user, userProfile, role, toursSeen] = await Promise.all([
     findUserById(userId),
     findUserProfile(userId),
     findUserRole(userId),
+    listToursSeen(userId),
   ]);
   if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
@@ -713,7 +716,18 @@ export const getUserProfileService = async (
     brandId: user.brandId,
     brandName: (brand as any)?.name ?? undefined,
     canEditBrand: canUserEditBrand(brand, role, userId),
+    toursSeen,
   };
+};
+
+// POST /user/tour-seen. Idempotent and permanent; returns the full updated set
+// so the FE can sync without a second /user/profile round-trip.
+export const markTourSeenService = async (
+  userId: number,
+  tour: string,
+): Promise<{ toursSeen: string[] }> => {
+  await markTourSeen(userId, tour);
+  return { toursSeen: await listToursSeen(userId) };
 };
 
 // Drives the complete-profile screen: an invited user gets the brand block

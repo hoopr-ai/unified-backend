@@ -10,6 +10,7 @@ import {
   completeProfileService,
   getCompleteProfileContextService,
   getUserProfileService,
+  markTourSeenService,
   updateUserProfileService,
   getUsersUnderAdminService,
   removeInvitedUserService,
@@ -242,6 +243,22 @@ export const getProfile = catchAsync(
       status: HttpStatusCode.OK,
       data: response,
       message: ResponseMessages.GetProfileSuccess,
+    });
+  },
+);
+
+// POST /user/tour-seen — mark a coachmark tour seen for the caller.
+export const tourSeen = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const response = await markTourSeenService(userId, req.body.tour);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.TourSeenSuccess,
     });
   },
 );

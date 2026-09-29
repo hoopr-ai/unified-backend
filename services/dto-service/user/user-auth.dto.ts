@@ -72,6 +72,20 @@ export interface UserProfileResponse {
   brandId?: number;
   brandName?: string;
   canEditBrand?: boolean;
+  // Coachmark tours this user has finished or skipped. The FE shows a tour only
+  // while its key is absent (e.g. !toursSeen.includes("smashAppTour")).
+  // Only GET /user/profile fills it; the list and update responses omit it.
+  toursSeen?: string[];
+}
+
+// Allow-list of coachmark tours the FE may mark seen — the single source of
+// truth for the Joi schema. Add a key here (and nothing else) when a tour ships.
+// Prefixed `smash` because user_tour_seen is shared with studio's tours.
+export const KNOWN_TOURS = ["smashAppTour", "smashTrackPageTour"] as const;
+export type TourKey = (typeof KNOWN_TOURS)[number];
+
+export interface TourSeenRequestData {
+  tour: TourKey;
 }
 
 export interface LoginUserRequestData {
