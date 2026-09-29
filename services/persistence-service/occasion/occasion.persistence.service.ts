@@ -125,6 +125,8 @@ export const findOccasionTrackMappings = async (
           "trending",
           "ownerId",
           "hookTimings",
+          "status",
+          "isHidden",
         ],
         include: [
           {

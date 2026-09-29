@@ -3,3 +3,4 @@ export * from "./track.persistence.service";
 export * from "./featured-tracks.persistence.service";
 export * from "./stem.persistence.service";
 export * from "./mixer.persistence.service";
+export * from "./track-visibility";

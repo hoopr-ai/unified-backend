@@ -13,6 +13,7 @@ import { TrackFilterMappingModel, FilterModel } from "../exports";
 import { SkuModel } from "../sku/modules.export";
 import { CampaignModel, CampaignStatus } from "../campaign/modules.export";
 import { SoundProjectModel } from "../project/modules.export";
+import { visibleTrackWhere } from "./track-visibility";
 import { Op, Sequelize, fn, col, where } from "sequelize";
 
 // Get the list of distinct non-null tier values across all tracks
@@ -211,7 +212,7 @@ export const findAllTracks = async (
   console.log("findAllTracks releaseDate in finalWhere:", finalWhereClause.releaseDate);
 
   const { count, rows } = await TrackModel.findAndCountAll({
-    where: finalWhereClause,
+    where: visibleTrackWhere(finalWhereClause),
     order: orderClause,
     limit,
     offset,
@@ -291,7 +292,7 @@ export const findTracksByTrackCodes = async (
   }
 
   const { count, rows } = await TrackModel.findAndCountAll({
-    where: whereClause,
+    where: visibleTrackWhere(whereClause),
     order: [["createdAt", "DESC"]],
     limit,
     offset,
@@ -349,7 +350,7 @@ export const findActiveTrackIdsByIds = async (
   }
 
   const rows = await TrackModel.findAll({
-    where: whereClause,
+    where: visibleTrackWhere(whereClause),
     attributes: ["id"],
     raw: true,
   });
@@ -388,7 +389,7 @@ export const findAllTracksByIds = async (
   }
 
   const rows = await TrackModel.findAll({
-    where: whereClause,
+    where: visibleTrackWhere(whereClause),
     order: [["createdAt", "DESC"]],
     include: [...getArtistInclude(), ...getStandardSkuInclude(), ...getActiveCampaignInclude()],
   });
@@ -413,7 +414,7 @@ export const findTracksByIds = async (
   const offset = (page - 1) * limit;
 
   const { count, rows } = await TrackModel.findAndCountAll({
-    where: { id: { [Op.in]: ids }, status: "ACTIVE" },
+    where: visibleTrackWhere({ id: { [Op.in]: ids } }),
     order: [["createdAt", "DESC"]],
     limit,
     offset,
@@ -496,7 +497,7 @@ export const findTrackByTrackCode = async (
   }
 
   const track = await TrackModel.findOne({
-    where: whereClause,
+    where: visibleTrackWhere(whereClause),
     include: [
       ...getArtistInclude(),
       ...getAllSkusInclude(),
@@ -635,7 +636,7 @@ export const findTracksByFilter = async (
       {
         model: TrackModel,
         as: "track",
-        where: trackWhere,
+        where: visibleTrackWhere(trackWhere),
         required: true,
         attributes: ["id", "ownerId", "createdAt"],
       },
@@ -794,7 +795,7 @@ export const searchTracksByName = async (
   const excludeOwners = Array.isArray(excludeOwnerIds) ? excludeOwnerIds : [];
 
   const tracks = await TrackModel.findAll({
-    where: {
+    where: visibleTrackWhere({
       status: "ACTIVE",
       [Op.or]: [
         { name: { [Op.iLike]: `%${escapedTerm}%` } },
@@ -804,7 +805,7 @@ export const searchTracksByName = async (
       ...(excludeOwners.length > 0
         ? { [Op.not]: { ownerId: { [Op.overlap]: excludeOwners } } }
         : {}),
-    },
+    }),
     attributes: ["trackCode", "name", "ownerId", "artworkLink"],
     include: [
       {
@@ -902,7 +903,7 @@ export const findTracksLightweight = async (
 
   // Single query with only artist JOIN (skip SKUs, campaigns)
   const tracks = await TrackModel.findAll({
-    where: whereClause,
+    where: visibleTrackWhere(whereClause),
     attributes: [
       "id", "trackCode", "type", "name", "name_slug",
       "waveformLink", "mp3Link", "sourceLink", "hasVocals", "trending",
@@ -990,10 +991,10 @@ export const findChartTrackCodes = async (
   if (codes.length === 0) return [];
 
   const activeRows = await TrackModel.findAll({
-    where: {
+    where: visibleTrackWhere({
       trackCode: { [Op.in]: codes },
       status: "ACTIVE",
-    } as any,
+    } as any),
     attributes: ["trackCode"],
     raw: true,
   });
@@ -1035,11 +1036,11 @@ export const findRandomTrackByOwnerCode = async (
   // Find a random active track that belongs to these owners
   // Using RANDOM() for PostgreSQL to get a random row
   const track = await TrackModel.findOne({
-    where: {
+    where: visibleTrackWhere({
       status: "ACTIVE",
       ownerId: { [Op.overlap]: ownerIds },
       mp3Link: { [Op.ne]: null as unknown as string }, // Ensure track has an mp3 file
-    },
+    }),
     attributes: ["id", "trackCode", "name", "artworkLink"],
     include: [
       {
@@ -1091,10 +1092,10 @@ export const findTrackIdByCode = async (
   trackCode: string,
 ): Promise<string | null> => {
   const track = await TrackModel.findOne({
-    where: {
+    where: visibleTrackWhere({
       trackCode,
       status: "ACTIVE",
-    },
+    }),
     attributes: ["id"],
   });
 
