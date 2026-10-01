@@ -20,7 +20,7 @@ const businessAddressSchema = Joi.object({
   city: Joi.string().max(100).required(),
   postalCode: Joi.string().max(20).required(),
   pan: Joi.string().max(20).required(),
-  gstin: Joi.string().max(50).required(),
+  gstin: Joi.string().max(50).allow(null, "").optional(),
 }).unknown(false);
 
 const billingAddressSchema = Joi.object({
