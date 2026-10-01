@@ -105,6 +105,8 @@ export interface BrandTokenSummary {
   // totals exclude unlimited rows (you can't sum infinity into a number), so
   // this flag lets the UI render an "Unlimited" badge instead of misreading 0.
   hasUnlimited: boolean;
+  // Latest expiryDate across the brand's allocations; null when none is set.
+  expiryDate: Date | null;
 }
 
 export interface TokenTypeSummary {

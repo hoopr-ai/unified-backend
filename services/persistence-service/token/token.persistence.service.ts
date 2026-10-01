@@ -894,7 +894,7 @@ export const getTokenSummaryAggregatedByType = async (
 
 export const getBrandsWithTokens = async (
   options: { excludeInternalBrands?: boolean } = {}
-): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean }[]> => {
+): Promise<{ brandId: number; brandName: string; totalTokens: number; hasUnlimited: boolean; expiryDate: Date | null }[]> => {
   // SUM tokenBalance across finite allocations only (isUnlimited = false). The
   // hasUnlimited flag is a separate aggregate so the FE can render an
   // "Unlimited" badge next to a brand whose totals would otherwise read 0.
@@ -909,6 +909,9 @@ export const getBrandsWithTokens = async (
       "brandId",
       [fn("SUM", literal('CASE WHEN "TokenAssignedModel"."isUnlimited" = false THEN "TokenAssignedModel"."tokenBalance" ELSE 0 END')), "totalTokens"],
       [fn("BOOL_OR", col("TokenAssignedModel.isUnlimited")), "hasUnlimited"],
+      // Latest expiry across the brand's allocations = when its plan runs out.
+      // MAX ignores NULLs, so null here means no allocation has an expiry set.
+      [fn("MAX", col("TokenAssignedModel.expiryDate")), "expiryDate"],
     ],
     include: [
       {
@@ -931,6 +934,7 @@ export const getBrandsWithTokens = async (
     brandName: r.brand?.name || "Unknown",
     totalTokens: Number(r.totalTokens) || 0,
     hasUnlimited: r.hasUnlimited === true || r.hasUnlimited === "t" || r.hasUnlimited === "true",
+    expiryDate: r.expiryDate ? new Date(r.expiryDate) : null,
   }));
 };
 
