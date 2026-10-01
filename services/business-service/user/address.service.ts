@@ -53,7 +53,7 @@ export const upsertBusinessAddressService = async (
     city: data.city,
     postalCode: data.postalCode,
     pan: data.pan ?? null,
-    gstin: data.gstin ?? null,
+    gstin: data.gstin || null,
     sameAsBusinessAddress: false,
   });
 };
