@@ -24,8 +24,6 @@ import {
   createBrandTrial,
   extendBrandTrial,
   findBrandTrial,
-  findTrialLaunch,
-  recordTrialLaunch,
   findUserOnboarding,
   isEmailDomainInUse,
   listBrandTrials,
@@ -78,31 +76,25 @@ export const assertSignupEligible = async (email: string): Promise<void> => {
 
 // ── Launch time ──────────────────────────────────────────────────────────────
 
-// When the trial went live. The server records it itself the first time it
-// boots with SMASH_TRIAL_ENABLED=true (ensureTrialLaunchRecorded) and it never
-// moves after that — not on restarts, redeploys, new instances, or the flag
-// being switched off and on. Only accounts created at/after it can get a trial,
-// which is what keeps every existing user out. Cached once found.
-let launchedAtCache: Date | null = null;
-
+// When the trial went live: SMASH_TRIAL_LAUNCHED_AT (ISO date, e.g.
+// 2026-10-06T10:00:00+05:30). Set it once at go-live and never move it — only
+// accounts created at/after it can get a trial, which keeps every existing user
+// out. Unset or invalid → nobody gets a trial (fails closed).
 export const getTrialLaunchedAt = async (): Promise<Date | null> => {
-  if (launchedAtCache) return launchedAtCache;
-  // Normally recorded at boot; this covers a boot where the DB call failed.
-  launchedAtCache = isSmashTrialEnabled() ? await recordTrialLaunch() : await findTrialLaunch();
-  return launchedAtCache;
+  const raw = process.env.SMASH_TRIAL_LAUNCHED_AT?.trim();
+  if (!raw) return null;
+  const at = new Date(raw);
+  return Number.isNaN(at.getTime()) ? null : at;
 };
 
-// Called once at startup, before the server accepts requests, so a signup
-// arriving right after go-live is already on the right side of the cutoff.
-export const ensureTrialLaunchRecorded = async (): Promise<void> => {
+// Startup check: the flag without a valid launch date silently starts no trials.
+export const checkTrialLaunchConfig = async (): Promise<void> => {
   if (!isSmashTrialEnabled()) return;
-  try {
-    const at = await getTrialLaunchedAt();
-    logger.info("Smash trial launch time", { launchedAt: at?.toISOString() });
-  } catch (err) {
-    logger.error("Could not record the Smash trial launch time — no trial starts until it is", {
-      error: (err as Error).message,
-    });
+  const at = await getTrialLaunchedAt();
+  if (at) {
+    logger.info("Smash trial launch time", { launchedAt: at.toISOString() });
+  } else {
+    logger.error("SMASH_TRIAL_ENABLED is on but SMASH_TRIAL_LAUNCHED_AT is unset or invalid — no trial starts until it is set");
   }
 };
 
@@ -297,7 +289,8 @@ export const getOnboardingAnswers = async (
   userId: number,
 ): Promise<OnboardingResponse | null> => {
   const row = await findUserOnboarding(userId);
-  if (!row) return null;
+  // user_profiles rows also exist for social links alone — no answers = null.
+  if (!row || (!row.categoryPreferences?.length && !row.discoveryChannel)) return null;
   return {
     categoryPreferences: (row.categoryPreferences ?? []) as CategoryPreference[],
     discoveryChannel: (row.discoveryChannel ?? null) as DiscoveryChannel | null,

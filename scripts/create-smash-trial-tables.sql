@@ -25,17 +25,13 @@ CREATE TABLE IF NOT EXISTS brand_trials (
 
 CREATE INDEX IF NOT EXISTS idx_brand_trials_ends_at ON brand_trials ("endsAt");
 
--- Onboarding answers from complete-profile, queryable per user.
-CREATE TABLE IF NOT EXISTS user_onboarding (
-    "userId"              INTEGER     PRIMARY KEY,
-    "categoryPreferences" VARCHAR(40)[] NOT NULL DEFAULT '{}',
-    "discoveryChannel"    VARCHAR(40),
-    "createdAt"           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    "updatedAt"           TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
+-- Onboarding answers from complete-profile, on the existing user_profiles row
+-- (one per user). Category picks are also the token types the trial covers.
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS "categoryPreferences" VARCHAR(40)[] DEFAULT '{}';
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS "discoveryChannel"    VARCHAR(40);
 
-CREATE INDEX IF NOT EXISTS idx_user_onboarding_categories ON user_onboarding USING GIN ("categoryPreferences");
-CREATE INDEX IF NOT EXISTS idx_user_onboarding_channel    ON user_onboarding ("discoveryChannel");
+CREATE INDEX IF NOT EXISTS idx_user_profiles_categories ON user_profiles USING GIN ("categoryPreferences");
+CREATE INDEX IF NOT EXISTS idx_user_profiles_channel    ON user_profiles ("discoveryChannel");
 
 -- The signup gate asks "does any ENTERPRISE user already have this domain?".
 -- A plain index on email cannot answer a suffix match, so index the domain.
@@ -43,14 +39,24 @@ CREATE INDEX IF NOT EXISTS idx_users_enterprise_email_domain
     ON users (lower(split_part(email, '@', 2)))
     WHERE platform = 'ENTERPRISE';
 
--- When the trial went live, recorded by the server itself the first time it
--- boots with SMASH_TRIAL_ENABLED=true and never changed after. Only accounts
--- created at/after it can get a trial, so existing users never do. One row
--- (id is pinned to 1); the INSERT … ON CONFLICT DO NOTHING keeps the first value.
-CREATE TABLE IF NOT EXISTS smash_trial_launch (
-    id           SMALLINT    PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-    "launchedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
+-- The launch time is the SMASH_TRIAL_LAUNCHED_AT env var, not a table.
+
+-- Cleanup for databases that ran an earlier version of this script, which kept
+-- onboarding answers in user_onboarding and the launch time in
+-- smash_trial_launch. Copies any answers across, then drops both.
+DO $$
+BEGIN
+  IF to_regclass('public.user_onboarding') IS NOT NULL THEN
+    INSERT INTO user_profiles ("userId", "categoryPreferences", "discoveryChannel", "createdAt", "updatedAt")
+    SELECT "userId", "categoryPreferences", "discoveryChannel", "createdAt", "updatedAt"
+      FROM user_onboarding
+    ON CONFLICT ("userId") DO UPDATE
+       SET "categoryPreferences" = EXCLUDED."categoryPreferences",
+           "discoveryChannel"    = EXCLUDED."discoveryChannel";
+    DROP TABLE user_onboarding;
+  END IF;
+END $$;
+DROP TABLE IF EXISTS smash_trial_launch;
 
 -- ── Step 2: conversion journey ──────────────────────────────────────────────
 

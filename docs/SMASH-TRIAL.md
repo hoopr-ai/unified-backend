@@ -8,12 +8,13 @@ stays with the FE; the backend keeps only what the journey decides on.
 ## Deploy
 
 1. Run `scripts/create-smash-trial-tables.sql` once (idempotent).
-2. Set `SMASH_TRIAL_ENABLED=true` when the FE is ready. The first boot with the
-   flag on records the launch time in `smash_trial_launch` by itself; it never
-   changes after (restarts, redeploys and toggling the flag keep it). Only
-   accounts created at/after it can get a trial, so existing users never do. While it is off, signup
+2. Set `SMASH_TRIAL_LAUNCHED_AT` to the go-live moment (ISO, e.g.
+   `2026-10-06T10:00:00+05:30`) and never move it. Only accounts created at/after
+   it can get a trial, so existing users never do. Unset or invalid → no trial
+   starts (logged at boot).
+3. Set `SMASH_TRIAL_ENABLED=true` when the FE is ready. While it is off, signup
    is ungated and no trial starts. Existing trial rows keep working either way.
-3. Add the `smash-trials` grant to internal-fe `src/services/functionalities.ts`.
+4. Add the `smash-trials` grant to internal-fe `src/services/functionalities.ts`.
 
 ## Rules
 
@@ -28,7 +29,7 @@ stays with the FE; the backend keeps only what the journey decides on.
 | Paid tokens always win; a brand with **any** `token_assigned` row is `PAID` | `chargeTrialCredit` |
 | YRF / Zee (restricted labels) are not licensable on the trial | licensing |
 | One trial per email domain, enforced by `UNIQUE(emailDomain)` | DB |
-| **Who gets a trial:** a NEW (created at/after the recorded launch time) ENTERPRISE self-signup on a work domain with no other account on that domain | `isTrialEligibleSignup` |
+| **Who gets a trial:** a NEW (created at/after `SMASH_TRIAL_LAUNCHED_AT`) ENTERPRISE self-signup on a work domain with no other account on that domain | `isTrialEligibleSignup` |
 | **Existing users never get one** — not even when they finish an old, half-done profile now; nor do admin-created or invited users start one | `isTrialEligibleSignup` |
 | **gmail.com & other personal domains** (`PERSONAL_EMAIL_DOMAINS`) sign up and log in normally but never get a trial, never see one (even inside a trial brand: `trial: null`, no nudges, no trial credits) and get no journey mail | `isTrialEmail`, `findBrandTrial` |
 
@@ -47,7 +48,7 @@ or device debounce.
 
 ## Complete profile — `POST /user/complete-profile`
 
-New optional fields (stored in `user_onboarding`):
+New optional fields (stored on `user_profiles`):
 
 ```json
 { "categoryPreferences": ["indie_regional", "hoopr_og", "intl_songs"],
@@ -221,7 +222,7 @@ Unchanged for the FE. `domain_exists` now also emails sales (once per address).
 - **Onboarding re-trigger** — self-signups that never finished complete-profile:
   emails at +1, +2, +3 days (the third says it's the last), each with a magic
   link; then they lapse. Only while `SMASH_TRIAL_ENABLED` is on, never for
-  signups before the recorded launch time, never for personal-email addresses.
+  signups before `SMASH_TRIAL_LAUNCHED_AT`, never for personal-email addresses.
 - **Unsubscribe**: every journey email links to
   `GET /trial-journey/unsubscribe?token=…`, which adds the address to the shared
   suppression list (`manual`, "unsubscribed via trial journey email").

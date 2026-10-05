@@ -31,7 +31,7 @@ export interface CompleteProfileRequestData {
   instagramLink?: string;
   youtubeLink?: string;
   facebookLink?: string;
-  // Smash onboarding answers, stored in user_onboarding. Optional so older FE
+  // Smash onboarding answers, stored on user_profiles. Optional so older FE
   // builds keep working; sent by every user, invited or not.
   categoryPreferences?: CategoryPreference[];
   discoveryChannel?: DiscoveryChannel;

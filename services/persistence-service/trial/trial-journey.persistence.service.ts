@@ -390,8 +390,8 @@ export const listFunnelTrials = async (from: Date, to: Date): Promise<FunnelTria
             EXISTS (SELECT 1 FROM token_assigned ta
                      WHERE ta."brandId" = bt."brandId"
                        AND ta."createdAt" < bt."startedAt" + interval '7 days') AS "paid7d",
-            (SELECT o."discoveryChannel" FROM user_onboarding o
-              WHERE o."userId" = bt."startedByUserId") AS "signupSource"
+            (SELECT p."discoveryChannel" FROM user_profiles p
+              WHERE p."userId" = bt."startedByUserId") AS "signupSource"
        FROM brand_trials bt
       WHERE bt."startedAt" >= :from AND bt."startedAt" < :to
         AND bt."emailDomain" NOT IN (:personal)`,

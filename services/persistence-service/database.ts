@@ -15,7 +15,6 @@ import {
 } from "./user/modules.export";
 import {
   BrandTrialModel,
-  UserOnboardingModel,
   TrialJourneySendModel,
   TrialSignalModel,
 } from "./trial/schemas/modules.export";
@@ -154,7 +153,6 @@ sequelize.addModels([
   AccessRequestModel,
   UserTourSeenModel,
   BrandTrialModel,
-  UserOnboardingModel,
   TrialJourneySendModel,
   TrialSignalModel,
   TrackModel,

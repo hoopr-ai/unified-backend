@@ -3,7 +3,7 @@ import {
   BrandTrialModel,
   type BrandTrialAttributes,
 } from "./schemas/brand-trial.schema";
-import { UserOnboardingModel } from "./schemas/user-onboarding.schema";
+import { UserProfileModel } from "../user/schemas/user-profile.schema";
 import { UserModel } from "../user/schemas/user.schema";
 import { TokenAssignedModel } from "../token/schemas/token-assigned.schema";
 import { Platform } from "../../dto-service/modules.export";
@@ -143,34 +143,24 @@ export const brandIdsWithTokenAllocations = async (
 
 // ── Onboarding answers ───────────────────────────────────────────────────────
 
+// Stored on user_profiles (one row per user). Upsert touches only these two
+// columns, so the social links on an existing row are left alone.
 export const upsertUserOnboarding = async (
   userId: number,
   categoryPreferences: string[],
   discoveryChannel: string | null,
 ): Promise<void> => {
-  await UserOnboardingModel.upsert({ userId, categoryPreferences, discoveryChannel });
+  await UserProfileModel.upsert(
+    { userId, categoryPreferences, discoveryChannel },
+    { conflictFields: ["userId"] },
+  );
 };
 
 export const findUserOnboarding = async (
   userId: number,
-): Promise<UserOnboardingModel | null> => UserOnboardingModel.findByPk(userId);
-
-// ── Launch time ──────────────────────────────────────────────────────────────
-
-// Records "now" as the trial launch unless a launch is already recorded, and
-// returns whichever is stored. Safe to call from every instance at once.
-export const recordTrialLaunch = async (): Promise<Date> => {
-  const db = BrandTrialModel.sequelize!;
-  await db.query(
-    `INSERT INTO smash_trial_launch (id, "launchedAt") VALUES (1, NOW()) ON CONFLICT (id) DO NOTHING`,
-  );
-  return (await findTrialLaunch())!;
-};
-
-export const findTrialLaunch = async (): Promise<Date | null> => {
-  const [row] = await BrandTrialModel.sequelize!.query<{ launchedAt: Date }>(
-    `SELECT "launchedAt" FROM smash_trial_launch WHERE id = 1`,
-    { type: QueryTypes.SELECT },
-  );
-  return row ? new Date(row.launchedAt) : null;
-};
+): Promise<{ categoryPreferences: string[] | null; discoveryChannel: string | null } | null> =>
+  UserProfileModel.findOne({
+    where: { userId },
+    attributes: ["categoryPreferences", "discoveryChannel"],
+    raw: true,
+  }) as any;
