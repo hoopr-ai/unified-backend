@@ -1,5 +1,3 @@
-import { OwnerType } from "../rail/rail.enum";
-
 // Smash 7-day trial — shared constants, enums and response shapes.
 //
 // The trial is a plan of its own, NOT a Business Pro allocation: it lives in
@@ -9,10 +7,12 @@ import { OwnerType } from "../rail/rail.enum";
 
 // Token types the trial covers, each with its own credits: a credit of one type
 // licenses only tracks of that type. Chartbusters is never on the trial.
+// OwnerType values (dto-service/rail/rail.enum), spelled out because this file
+// is copied on its own into @hoopr-ai/db-schemas, which has no rail.enum.
 export const TRIAL_CREDIT_TYPES: readonly string[] = [
-  OwnerType.INTERNATIONAL,
-  OwnerType.REGIONAL_AND_INDIE,
-  OwnerType.HOOPR_ORIGINALS,
+  "International",
+  "Regional & Indie",
+  "Hoopr Originals",
 ];
 // Default trial size per type. The one-time extension adds
 // TRIAL_EXTENSION_CREDITS_PER_TYPE to every type on top and never changes it.
