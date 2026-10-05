@@ -82,7 +82,6 @@ import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.
 import type { TrialStateResponse } from "../../dto-service/trial/trial.dto";
 import {
   chargeTrialCredit,
-  getTrialOwnerTypes,
   getTrialStateForBrand,
   isTrialEmail,
   refundTrialCharge,
@@ -197,6 +196,8 @@ export const licenseTrackService = async (
   let matchingTokenType: string | null = null;
   // Set when the license is paid for from the Smash trial pool.
   let trialState: TrialStateResponse | null = null;
+  // The trial token type the credit came out of, for the refund.
+  let trialType: string | null = null;
   let matchingOwnerId: string | null = null;
 
   if (!skipTokens) {
@@ -222,20 +223,20 @@ export const licenseTrackService = async (
       matchingTokenType = bestMatch.matchedType;
       matchingOwnerId = bestMatch.matchedOwnerId;
     } else {
-      // No paid allocation covers the track: fall back to the Smash trial pool
-      // (flat, any catalogue). The restricted labels stay out of the trial —
+      // No paid allocation covers the track: fall back to the Smash trial
+      // credit of the track's type. The restricted labels stay out of the trial —
       // they are hidden from trial brands in every listing, so a trackCode
       // arriving here for one was not reached through the product.
       const access = await resolveViewerOwnerAccess(brandId, platform);
       const blocked = ownerIds.some((id) => access.blockedOwnerIds.has(id));
-      // The trial covers only the token types picked at onboarding.
-      const trialTypes = new Set(await getTrialOwnerTypes(brandId!));
-      const inTrialTypes = owners.some((o) => !!o.type && trialTypes.has(o.type));
+      const ownerTypes = owners.map((o) => o.type).filter((t): t is string => !!t);
       // Personal-email users (gmail.com & co.) never use the trial, even as a
       // member of a trial brand.
-      trialState = blocked || !inTrialTypes || !isTrialEmail(user.email)
+      const charge = blocked || !isTrialEmail(user.email)
         ? null
-        : await chargeTrialCredit(brandId!);
+        : await chargeTrialCredit(brandId!, ownerTypes);
+      trialState = charge?.state ?? null;
+      trialType = charge?.type ?? null;
       if (!trialState) {
         throw new AppError(
           `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
@@ -271,7 +272,7 @@ export const licenseTrackService = async (
     // Create license record. brandId is null for CREATOR (no brand association).
     createdLicense = await createLicenseRecord(licenseDetails);
   } catch (err) {
-    if (trialState) await refundTrialCharge(brandId!);
+    if (trialState) await refundTrialCharge(brandId!, trialType!);
     throw err;
   }
 
@@ -504,16 +505,15 @@ export const getTokenBalanceService = async (
   // Using NEW token_assigned table
   const tokens = await getAllTokenAssignedBalances(user.brandId);
 
-  // The Smash trial is ONE shared pool, listed once per token type picked at
-  // onboarding with the same balance: spending a credit on any of them lowers
-  // all. Gone once the brand is PAID; null for personal emails.
+  // The Smash trial's per-type credits, one entry per type. Gone once the
+  // brand is PAID; null for personal emails.
   const trial = await getTrialStateForBrand(user.brandId, user.email);
   if (trial?.planType === "TRIAL") {
-    for (const type of await getTrialOwnerTypes(user.brandId)) {
+    for (const credit of trial.creditsByType) {
       tokens.push({
-        type,
-        tokenBalance: trial.licensingBlocked ? 0 : trial.creditsRemaining,
-        totalAssignedToken: trial.creditsTotal,
+        type: credit.type,
+        tokenBalance: trial.licensingBlocked ? 0 : credit.creditsRemaining,
+        totalAssignedToken: credit.creditsTotal,
         expiryDate: trial.trialEnd,
       });
     }

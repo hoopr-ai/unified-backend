@@ -5,9 +5,13 @@ import {
   DAY_MS,
   SignupRejectReason,
   isPersonalEmailDomain,
+  TRIAL_CREDIT_TYPES,
   TRIAL_CREDITS,
+  TRIAL_CREDITS_PER_TYPE,
   TRIAL_DAYS,
   TRIAL_EXTENSION_CREDITS,
+  TRIAL_EXTENSION_CREDITS_PER_TYPE,
+  TYPE_CREDITS_EXHAUSTED,
   TRIAL_GRACE_HOURS,
   TrialBlockReason,
   TrialStatus,
@@ -33,7 +37,6 @@ import {
 } from "../../persistence-service/trial/modules.export";
 import { BrandModel } from "../../persistence-service/brand/modules.export";
 import { Platform } from "../../dto-service/constants/modules.export";
-import { OwnerType } from "../../dto-service/rail/rail.enum";
 
 const GRACE_MS = TRIAL_GRACE_HOURS * 60 * 60 * 1000;
 
@@ -150,6 +153,7 @@ export const startTrialForBrand = async (
       startedByUserId: userId,
       emailDomain: emailDomainOf(email),
       creditsTotal: TRIAL_CREDITS,
+      creditsByType: Object.fromEntries(TRIAL_CREDIT_TYPES.map((t) => [t, TRIAL_CREDITS_PER_TYPE])),
       startedAt,
       endsAt: new Date(startedAt.getTime() + TRIAL_DAYS * DAY_MS),
     });
@@ -203,6 +207,11 @@ export const resolveTrialState = (
     planType: isPaid ? "PAID" : "TRIAL",
     creditsTotal,
     creditsRemaining,
+    creditsByType: TRIAL_CREDIT_TYPES.map((type) => {
+      const total = Number(trial.creditsByType?.[type] ?? 0);
+      const used = Number(trial.creditsUsedByType?.[type] ?? 0);
+      return { type, creditsTotal: total, creditsRemaining: Math.max(0, total - used) };
+    }),
     trialStart: trial.startedAt,
     trialEnd: trial.endsAt,
     daysLeft: Math.max(0, Math.ceil((endsAtMs - now.getTime()) / DAY_MS)),
@@ -237,34 +246,46 @@ const upgradeWallError = (reason: TrialBlockReason): AppError =>
   );
 
 // Called by licensing when the brand has NO paid allocation covering the track.
-//   - brand never on trial, or already converted → null (caller keeps its
-//     usual "not enough credits" error)
+// `types` are the track's owner types; the first one with a credit left pays.
+//   - brand never on trial, already converted, or none of `types` is a trial
+//     type → null (caller keeps its usual "not enough credits" error)
 //   - trial blocked → throws the upgrade wall (403, errorCode = reason)
-//   - otherwise spends one credit and returns the new state
-// The caller MUST call refundTrialCharge if the license is not created after.
+//   - these types used up, others not → 403 TYPE_CREDITS_EXHAUSTED
+//   - otherwise spends one credit and returns the new state and the type paid
+// The caller MUST call refundTrialCharge with that type if the license is not
+// created after.
 export const chargeTrialCredit = async (
   brandId: number,
-): Promise<TrialStateResponse | null> => {
+  types: string[],
+): Promise<{ state: TrialStateResponse; type: string } | null> => {
+  const candidates = [...new Set(types)].filter((t) => TRIAL_CREDIT_TYPES.includes(t));
+  if (!candidates.length) return null;
   const trial = await findBrandTrial(brandId);
   if (!trial) return null;
   const converted = (await brandIdsWithTokenAllocations([brandId])).has(Number(brandId));
   if (converted || trial.status === TrialStatus.CONVERTED) return null;
 
-  const updated = await consumeTrialCredit(brandId, GRACE_MS);
-  if (!updated) {
-    // Lost the race or already blocked — re-read to say why.
-    const state = resolveTrialState((await findBrandTrial(brandId))!, false);
-    throw upgradeWallError(state.blockedReason ?? TrialBlockReason.CREDITS_EXHAUSTED);
+  for (const type of candidates) {
+    const updated = await consumeTrialCredit(brandId, type, GRACE_MS);
+    if (updated) return { state: resolveTrialState(updated, false), type };
   }
-  return resolveTrialState(updated, false);
+  // Lost the race, blocked, or out of these types — re-read to say why.
+  const state = resolveTrialState((await findBrandTrial(brandId))!, false);
+  if (state.blockedReason) throw upgradeWallError(state.blockedReason);
+  throw new AppError(
+    `You've used your trial credit for ${candidates.join(" / ")} tracks. Upgrade to keep licensing them.`,
+    403,
+    TYPE_CREDITS_EXHAUSTED,
+  );
 };
 
-export const refundTrialCharge = async (brandId: number): Promise<void> => {
+export const refundTrialCharge = async (brandId: number, type: string): Promise<void> => {
   try {
-    await refundTrialCredit(brandId);
+    await refundTrialCredit(brandId, type);
   } catch (err) {
     logger.error("Failed to refund Smash trial credit", {
       brandId,
+      type,
       error: (err as Error).message,
     });
   }
@@ -295,25 +316,6 @@ export const getOnboardingAnswers = async (
     categoryPreferences: (row.categoryPreferences ?? []) as CategoryPreference[],
     discoveryChannel: (row.discoveryChannel ?? null) as DiscoveryChannel | null,
   };
-};
-
-// Onboarding category → the token (owner) type it opens on the trial.
-const CATEGORY_OWNER_TYPE: Record<CategoryPreference, OwnerType> = {
-  [CategoryPreference.INDIE_REGIONAL]: OwnerType.REGIONAL_AND_INDIE,
-  [CategoryPreference.HOOPR_OG]: OwnerType.HOOPR_ORIGINALS,
-  [CategoryPreference.INTL_SONGS]: OwnerType.INTERNATIONAL,
-};
-
-// Token types the brand's trial credits work on: the categories the trial
-// starter picked at onboarding. The credits stay ONE shared pool — this only
-// limits which catalogues it covers. No picks → every type.
-export const getTrialOwnerTypes = async (brandId: number): Promise<string[]> => {
-  const trial = await findBrandTrial(brandId);
-  const row = trial ? await findUserOnboarding(trial.startedByUserId) : null;
-  const picked = ((row?.categoryPreferences ?? []) as CategoryPreference[])
-    .map((c) => CATEGORY_OWNER_TYPE[c])
-    .filter(Boolean);
-  return picked.length ? picked : Object.values(OwnerType);
 };
 
 // ── Admin ────────────────────────────────────────────────────────────────────
@@ -360,8 +362,9 @@ export const listTrialsService = async (opts: {
   };
 };
 
-// The discretionary +2: once per brand, never changes TRIAL_CREDITS. It adds
-// credits only — a trial already past day 7 stays expired.
+// The discretionary extension: +1 credit on every type, once per brand, never
+// changes TRIAL_CREDITS. It adds credits only — a trial already past day 7
+// stays expired.
 export const extendTrialService = async (
   brandId: number,
   adminUserId: number,
@@ -369,7 +372,12 @@ export const extendTrialService = async (
   const existing = await findBrandTrial(brandId);
   if (!existing) throw new AppError("This brand is not on a trial", 404);
 
-  const updated = await extendBrandTrial(brandId, TRIAL_EXTENSION_CREDITS, adminUserId);
+  const updated = await extendBrandTrial(
+    brandId,
+    TRIAL_CREDIT_TYPES,
+    TRIAL_EXTENSION_CREDITS_PER_TYPE,
+    adminUserId,
+  );
   if (!updated) throw new AppError("This trial has already been extended", 409);
 
   logger.info("Smash trial extended", { brandId, adminUserId, credits: TRIAL_EXTENSION_CREDITS });

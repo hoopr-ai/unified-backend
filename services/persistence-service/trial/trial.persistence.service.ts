@@ -51,15 +51,26 @@ export const findBrandTrial = async (
     where: { brandId, emailDomain: { [Op.notIn]: [...PERSONAL_EMAIL_DOMAINS] } },
   });
 
-// Spend one credit, atomically. The WHERE is the whole eligibility rule, so two
-// concurrent downloads can never both take the last credit: returns the
-// updated row, or null when the trial is expired, used up, or converted.
+// Per-type credit counters, read as SQL ints (a missing key is 0).
+const typeCount = (column: string, type: string): string =>
+  `COALESCE(("${column}" ->> ${BrandTrialModel.sequelize!.escape(type)})::int, 0)`;
+
+// Spend one credit of `type`, atomically. The WHERE is the whole eligibility
+// rule, so two concurrent downloads can never both take the last credit:
+// returns the updated row, or null when the trial is expired, converted, or
+// has no `type` credit left. creditsUsed moves with it; creditsExhaustedAt is
+// set once every type is used up.
 export const consumeTrialCredit = async (
   brandId: number,
+  type: string,
   graceMs: number,
 ): Promise<BrandTrialModel | null> => {
+  const key = BrandTrialModel.sequelize!.escape(type);
   const [count, rows] = await BrandTrialModel.update(
     {
+      creditsUsedByType: literal(
+        `jsonb_set("creditsUsedByType", ARRAY[${key}], to_jsonb(${typeCount("creditsUsedByType", type)} + 1))`,
+      ),
       creditsUsed: literal(`"creditsUsed" + 1`),
       creditsExhaustedAt: literal(
         `CASE WHEN "creditsUsed" + 1 >= "creditsTotal" THEN NOW() ELSE NULL END`,
@@ -69,8 +80,10 @@ export const consumeTrialCredit = async (
       where: {
         brandId,
         status: "ACTIVE",
-        creditsUsed: { [Op.lt]: col("creditsTotal") },
         endsAt: { [Op.gt]: new Date(Date.now() - graceMs) },
+        [Op.and]: [
+          literal(`${typeCount("creditsUsedByType", type)} < ${typeCount("creditsByType", type)}`),
+        ],
       },
       returning: true,
     },
@@ -79,23 +92,41 @@ export const consumeTrialCredit = async (
 };
 
 // Undo consumeTrialCredit when the license it paid for could not be created.
-export const refundTrialCredit = async (brandId: number): Promise<void> => {
+export const refundTrialCredit = async (brandId: number, type: string): Promise<void> => {
+  const key = BrandTrialModel.sequelize!.escape(type);
   await BrandTrialModel.update(
-    { creditsUsed: literal(`"creditsUsed" - 1`), creditsExhaustedAt: null } as any,
-    { where: { brandId, creditsUsed: { [Op.gt]: 0 } } },
+    {
+      creditsUsedByType: literal(
+        `jsonb_set("creditsUsedByType", ARRAY[${key}], to_jsonb(${typeCount("creditsUsedByType", type)} - 1))`,
+      ),
+      creditsUsed: literal(`"creditsUsed" - 1`),
+      creditsExhaustedAt: null,
+    } as any,
+    {
+      where: {
+        brandId,
+        [Op.and]: [literal(`${typeCount("creditsUsedByType", type)} > 0`)],
+      },
+    },
   );
 };
 
-// One-time +N credits. Returns null if there is no trial or it was already
-// extended — the extension is discretionary, not repeatable.
+// One-time +perType credits on every type. Returns null if there is no trial
+// or it was already extended — the extension is discretionary, not repeatable.
 export const extendBrandTrial = async (
   brandId: number,
-  extraCredits: number,
+  types: readonly string[],
+  perType: number,
   extendedById: number,
 ): Promise<BrandTrialModel | null> => {
+  const n = Number(perType);
+  const added = types
+    .map((t) => `${BrandTrialModel.sequelize!.escape(t)}, ${typeCount("creditsByType", t)} + ${n}`)
+    .join(", ");
   const [count, rows] = await BrandTrialModel.update(
     {
-      creditsTotal: literal(`"creditsTotal" + ${Number(extraCredits)}`),
+      creditsByType: literal(`"creditsByType" || jsonb_build_object(${added})`),
+      creditsTotal: literal(`"creditsTotal" + ${n * types.length}`),
       creditsExhaustedAt: null,
       isExtended: true,
       extendedAt: new Date(),

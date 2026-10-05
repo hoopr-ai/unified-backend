@@ -20,12 +20,12 @@ stays with the FE; the backend keeps only what the journey decides on.
 
 | Rule | Where |
 | --- | --- |
-| 3 credits, one shared pool, usable only on the token types picked at onboarding (all four if none) (`TRIAL_CREDITS`) | `brand_trials`, one row per **brand**; `getTrialOwnerTypes` |
+| 1 credit each of International, Regional & Indie and Hoopr Originals (3 total); a credit licenses only its own type, whatever was picked at onboarding. Chartbusters is never on the trial (`TRIAL_CREDIT_TYPES`, `TRIAL_CREDITS_PER_TYPE`) | `brand_trials` (`creditsByType` / `creditsUsedByType`), one row per **brand** |
 | Clock starts at complete-profile, when the self-signup creates its brand | `startTrialForBrand` |
 | Invited teammates share the brand's trial | brand-scoped |
-| Blocked at day 7 **or** 0 credits, whichever comes first | `resolveTrialState` |
+| Blocked at day 7 **or** 0 credits left on every type, whichever comes first | `resolveTrialState` |
 | Unused credits are forfeited at day 7 (`TRIAL_GRACE_HOURS = 0`) | constant; change it there |
-| +2 extension: once per brand, credits only, never changes `TRIAL_CREDITS` | `POST /admin/smash-trials/:brandId/extend` |
+| Extension: +1 credit on every type (+3), once per brand, credits only, never changes `TRIAL_CREDITS` | `POST /admin/smash-trials/:brandId/extend` |
 | Paid tokens always win; a brand with **any** `token_assigned` row is `PAID` | `chargeTrialCredit` |
 | YRF / Zee (restricted labels) are not licensable on the trial | licensing |
 | One trial per email domain, enforced by `UNIQUE(emailDomain)` | DB |
@@ -63,40 +63,46 @@ never on the trial.
 
 ```json
 { "planType": "TRIAL", "creditsTotal": 3, "creditsRemaining": 2,
+  "creditsByType": [
+    { "type": "International",    "creditsTotal": 1, "creditsRemaining": 0 },
+    { "type": "Regional & Indie", "creditsTotal": 1, "creditsRemaining": 1 },
+    { "type": "Hoopr Originals",  "creditsTotal": 1, "creditsRemaining": 1 }
+  ],
   "trialStart": "…", "trialEnd": "…", "daysLeft": 5, "trialDay": 3,
   "isExtended": false, "licensingBlocked": false, "blockedReason": null }
 ```
 
-`blockedReason` is `trial_expired` or `credits_exhausted`.
+`blockedReason` is `trial_expired` or `credits_exhausted`. `creditsTotal` /
+`creditsRemaining` are the sums of `creditsByType`.
 
 ## Token balance — `GET /licenses/token-balance`
 
 While the brand is on the trial (`planType: "TRIAL"`), `tokens` lists one
-entry per token type the trial starter picked at onboarding
-(`indie_regional` → `Regional & Indie`, `hoopr_og` → `Hoopr Originals`,
-`intl_songs` → `International`; no picks → all four types). They are views of
-the SAME pool of 3, so every entry carries the same balance and licensing on
-any of them lowers all:
+entry per trial type with that type's own balance; licensing a track spends
+the credit of the track's type only:
 
 ```json
 [
-  { "type": "Regional & Indie", "tokenBalance": 2, "totalAssignedToken": 3, "expiryDate": "<trialEnd>" },
-  { "type": "International",    "tokenBalance": 2, "totalAssignedToken": 3, "expiryDate": "<trialEnd>" }
+  { "type": "International",    "tokenBalance": 0, "totalAssignedToken": 1, "expiryDate": "<trialEnd>" },
+  { "type": "Regional & Indie", "tokenBalance": 1, "totalAssignedToken": 1, "expiryDate": "<trialEnd>" },
+  { "type": "Hoopr Originals",  "tokenBalance": 1, "totalAssignedToken": 1, "expiryDate": "<trialEnd>" }
 ]
 ```
 
-Don't sum them for a total — use `trial.creditsRemaining`. `tokenBalance` is 0
-once the trial is blocked (expired or exhausted). The entries are gone once the
-brand is PAID, and never shown to personal-email users.
+`tokenBalance` is 0 once the trial is blocked (expired or exhausted). The
+entries are gone once the brand is PAID, and never shown to personal-email
+users.
 
-Licensing a track whose owner type was not picked (Chartbusters is never
-pickable) does not use the trial: it returns the usual `400` "not enough
-credits" error.
+Licensing a Chartbusters track does not use the trial: it returns the usual
+`400` "not enough credits" error.
 
 ## Licensing — upgrade wall
 
 When the trial is blocked, licensing returns `403` with `error.errorCode` =
-`trial_expired` or `credits_exhausted`. A successful trial license returns the
+`trial_expired` or `credits_exhausted`. When only the track's type is used up
+(other types still have credits), it returns `403` with `errorCode` =
+`type_credits_exhausted`: not the upgrade wall, the trial stays usable for the
+other types. A successful trial license returns the
 updated meter as `trial` in the response, and the license row has `type = 'trial'`.
 
 ## Admin — `smash-trials` grant, INTERNAL platform

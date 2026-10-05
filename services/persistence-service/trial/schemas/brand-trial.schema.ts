@@ -12,10 +12,12 @@ import { TrialStatus } from "../../../dto-service/trial/trial.dto";
 
 // One row per brand on the Smash 7-day trial — see scripts/create-smash-trial-tables.sql.
 //
-// Credits are a flat pool (creditsTotal / creditsUsed), deliberately outside
-// token_assigned, which is keyed by catalogue type. UNIQUE(emailDomain) is the
-// hard "one trial per company domain" guarantee; the signup gate is only the
-// friendly early rejection in front of it.
+// Credits are kept per token type (creditsByType / creditsUsedByType, e.g.
+// {"International": 1}), deliberately outside token_assigned so the trial never
+// reads as a paid allocation. creditsTotal / creditsUsed are their sums, kept
+// in the same UPDATE, for everything that only needs the totals.
+// UNIQUE(emailDomain) is the hard "one trial per company domain" guarantee; the
+// signup gate is only the friendly early rejection in front of it.
 export interface BrandTrialAttributes {
   id?: number;
   brandId: number;
@@ -23,6 +25,8 @@ export interface BrandTrialAttributes {
   emailDomain: string;
   creditsTotal: number;
   creditsUsed?: number;
+  creditsByType: Record<string, number>;
+  creditsUsedByType?: Record<string, number>;
   startedAt: Date;
   endsAt: Date;
   // Set when creditsUsed reaches creditsTotal, cleared by an extension. Lets
@@ -68,6 +72,16 @@ export class BrandTrialModel extends Model<BrandTrialModel, BrandTrialAttributes
   @Default(0)
   @Column({ type: DataType.INTEGER, field: "creditsUsed" })
   creditsUsed!: number;
+
+  @AllowNull(false)
+  @Default({})
+  @Column({ type: DataType.JSONB, field: "creditsByType" })
+  creditsByType!: Record<string, number>;
+
+  @AllowNull(false)
+  @Default({})
+  @Column({ type: DataType.JSONB, field: "creditsUsedByType" })
+  creditsUsedByType!: Record<string, number>;
 
   @AllowNull(false)
   @Column({ type: DataType.DATE, field: "startedAt" })

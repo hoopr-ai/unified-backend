@@ -25,6 +25,16 @@ CREATE TABLE IF NOT EXISTS brand_trials (
 
 CREATE INDEX IF NOT EXISTS idx_brand_trials_ends_at ON brand_trials ("endsAt");
 
+-- Credits per token type ({"International": 1, ...}); a credit licenses only
+-- its own type. creditsTotal / creditsUsed stay as their sums. Rows from before
+-- the split (a single pool) get the default 1 per type, with any credits they
+-- already spent left on creditsUsed only.
+ALTER TABLE brand_trials ADD COLUMN IF NOT EXISTS "creditsByType"     JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE brand_trials ADD COLUMN IF NOT EXISTS "creditsUsedByType" JSONB NOT NULL DEFAULT '{}';
+UPDATE brand_trials
+   SET "creditsByType" = '{"International": 1, "Regional & Indie": 1, "Hoopr Originals": 1}'
+ WHERE "creditsByType" = '{}';
+
 -- Onboarding answers from complete-profile, on the existing user_profiles row
 -- (one per user). Category picks are also the token types the trial covers.
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS "categoryPreferences" VARCHAR(40)[] DEFAULT '{}';

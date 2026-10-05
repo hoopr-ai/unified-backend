@@ -1,14 +1,26 @@
+import { OwnerType } from "../rail/rail.enum";
+
 // Smash 7-day trial — shared constants, enums and response shapes.
 //
 // The trial is a plan of its own, NOT a Business Pro allocation: it lives in
-// brand_trials (one row per brand) as a flat credit pool, where token_assigned
-// splits credits by catalogue type. A brand leaves the trial the moment it gets
-// any token_assigned row; see resolveTrialState for the precedence.
+// brand_trials (one row per brand), outside token_assigned. A brand leaves the
+// trial the moment it gets any token_assigned row; see resolveTrialState for
+// the precedence.
 
-// Default trial size. The +2 extension is added per brand on top of this and
-// must never change it.
-export const TRIAL_CREDITS = 3;
-export const TRIAL_EXTENSION_CREDITS = 2;
+// Token types the trial covers, each with its own credits: a credit of one type
+// licenses only tracks of that type. Chartbusters is never on the trial.
+export const TRIAL_CREDIT_TYPES: readonly string[] = [
+  OwnerType.INTERNATIONAL,
+  OwnerType.REGIONAL_AND_INDIE,
+  OwnerType.HOOPR_ORIGINALS,
+];
+// Default trial size per type. The one-time extension adds
+// TRIAL_EXTENSION_CREDITS_PER_TYPE to every type on top and never changes it.
+export const TRIAL_CREDITS_PER_TYPE = 1;
+export const TRIAL_EXTENSION_CREDITS_PER_TYPE = 1;
+// Totals across the types (creditsTotal on a fresh / extended trial).
+export const TRIAL_CREDITS = TRIAL_CREDITS_PER_TYPE * TRIAL_CREDIT_TYPES.length;
+export const TRIAL_EXTENSION_CREDITS = TRIAL_EXTENSION_CREDITS_PER_TYPE * TRIAL_CREDIT_TYPES.length;
 export const TRIAL_DAYS = 7;
 // Hours after day 7 during which unused credits still work. 0 = forfeited at
 // the stroke of day 7 (open product question; flip this, not the queries).
@@ -34,6 +46,10 @@ export enum TrialBlockReason {
   TRIAL_EXPIRED = "trial_expired",
   CREDITS_EXHAUSTED = "credits_exhausted",
 }
+
+// errorCode of the 403 when the track's type has no trial credit left but
+// other types still do — not an upgrade wall, the trial stays usable.
+export const TYPE_CREDITS_EXHAUSTED = "type_credits_exhausted";
 
 // Returned as `error.errorCode` from POST /user/send-email-otp.
 export enum SignupRejectReason {
@@ -94,8 +110,11 @@ export const isPersonalEmailDomain = (domain: string): boolean =>
 export interface TrialStateResponse {
   // TRIAL while the brand is on the trial, PAID once it has bought anything.
   planType: "TRIAL" | "PAID";
+  // Totals across every type (the sum of creditsByType).
   creditsTotal: number;
   creditsRemaining: number;
+  // One entry per TRIAL_CREDIT_TYPES type; a credit only licenses its type.
+  creditsByType: TrialTypeCredits[];
   trialStart: Date;
   trialEnd: Date;
   daysLeft: number;
@@ -105,6 +124,12 @@ export interface TrialStateResponse {
   // Upgrade wall. Always false for PAID.
   licensingBlocked: boolean;
   blockedReason: TrialBlockReason | null;
+}
+
+export interface TrialTypeCredits {
+  type: string;
+  creditsTotal: number;
+  creditsRemaining: number;
 }
 
 export interface OnboardingResponse {
