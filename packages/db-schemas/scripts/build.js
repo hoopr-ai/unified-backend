@@ -50,6 +50,8 @@ const dtoFiles = [
   'dto-service/faq/faq.dto.ts',
   'dto-service/faq/faq-section.dto.ts',
   'dto-service/user/user-auth.dto.ts',
+  // Smash trial shapes; licenses.dto and user-auth.dto reference them.
+  'dto-service/trial/trial.dto.ts',
   'dto-service/user/user-liked-track.dto.ts',
   'dto-service/user/otp.dto.ts',
   'dto-service/owners/owners.dto.ts',
