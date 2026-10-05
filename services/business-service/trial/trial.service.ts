@@ -13,7 +13,7 @@ import {
   TrialStatus,
   isSmashTrialEnabled,
   type AdminTrialListItem,
-  type CategoryPreference,
+  CategoryPreference,
   type DiscoveryChannel,
   type OnboardingResponse,
   type TrialStateResponse,
@@ -35,6 +35,7 @@ import {
 } from "../../persistence-service/trial/modules.export";
 import { BrandModel } from "../../persistence-service/brand/modules.export";
 import { Platform } from "../../dto-service/constants/modules.export";
+import { OwnerType } from "../../dto-service/rail/rail.enum";
 
 const GRACE_MS = TRIAL_GRACE_HOURS * 60 * 60 * 1000;
 
@@ -301,6 +302,25 @@ export const getOnboardingAnswers = async (
     categoryPreferences: (row.categoryPreferences ?? []) as CategoryPreference[],
     discoveryChannel: (row.discoveryChannel ?? null) as DiscoveryChannel | null,
   };
+};
+
+// Onboarding category → the token (owner) type it opens on the trial.
+const CATEGORY_OWNER_TYPE: Record<CategoryPreference, OwnerType> = {
+  [CategoryPreference.INDIE_REGIONAL]: OwnerType.REGIONAL_AND_INDIE,
+  [CategoryPreference.HOOPR_OG]: OwnerType.HOOPR_ORIGINALS,
+  [CategoryPreference.INTL_SONGS]: OwnerType.INTERNATIONAL,
+};
+
+// Token types the brand's trial credits work on: the categories the trial
+// starter picked at onboarding. The credits stay ONE shared pool — this only
+// limits which catalogues it covers. No picks → every type.
+export const getTrialOwnerTypes = async (brandId: number): Promise<string[]> => {
+  const trial = await findBrandTrial(brandId);
+  const row = trial ? await findUserOnboarding(trial.startedByUserId) : null;
+  const picked = ((row?.categoryPreferences ?? []) as CategoryPreference[])
+    .map((c) => CATEGORY_OWNER_TYPE[c])
+    .filter(Boolean);
+  return picked.length ? picked : Object.values(OwnerType);
 };
 
 // ── Admin ────────────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ stays with the FE; the backend keeps only what the journey decides on.
 
 | Rule | Where |
 | --- | --- |
-| 3 credits, flat pool across catalogues (`TRIAL_CREDITS`) | `brand_trials`, one row per **brand** |
+| 3 credits, one shared pool, usable only on the token types picked at onboarding (all four if none) (`TRIAL_CREDITS`) | `brand_trials`, one row per **brand**; `getTrialOwnerTypes` |
 | Clock starts at complete-profile, when the self-signup creates its brand | `startTrialForBrand` |
 | Invited teammates share the brand's trial | brand-scoped |
 | Blocked at day 7 **or** 0 credits, whichever comes first | `resolveTrialState` |
@@ -67,6 +67,30 @@ never on the trial.
 ```
 
 `blockedReason` is `trial_expired` or `credits_exhausted`.
+
+## Token balance — `GET /licenses/token-balance`
+
+While the brand is on the trial (`planType: "TRIAL"`), `tokens` lists one
+entry per token type the trial starter picked at onboarding
+(`indie_regional` → `Regional & Indie`, `hoopr_og` → `Hoopr Originals`,
+`intl_songs` → `International`; no picks → all four types). They are views of
+the SAME pool of 3, so every entry carries the same balance and licensing on
+any of them lowers all:
+
+```json
+[
+  { "type": "Regional & Indie", "tokenBalance": 2, "totalAssignedToken": 3, "expiryDate": "<trialEnd>" },
+  { "type": "International",    "tokenBalance": 2, "totalAssignedToken": 3, "expiryDate": "<trialEnd>" }
+]
+```
+
+Don't sum them for a total — use `trial.creditsRemaining`. `tokenBalance` is 0
+once the trial is blocked (expired or exhausted). The entries are gone once the
+brand is PAID, and never shown to personal-email users.
+
+Licensing a track whose owner type was not picked (Chartbusters is never
+pickable) does not use the trial: it returns the usual `400` "not enough
+credits" error.
 
 ## Licensing — upgrade wall
 

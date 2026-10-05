@@ -80,7 +80,13 @@ import type {
 } from "../../dto-service/licenses/modules.export";
 import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
 import type { TrialStateResponse } from "../../dto-service/trial/trial.dto";
-import { chargeTrialCredit, isTrialEmail, refundTrialCharge } from "../trial/trial.service";
+import {
+  chargeTrialCredit,
+  getTrialOwnerTypes,
+  getTrialStateForBrand,
+  isTrialEmail,
+  refundTrialCharge,
+} from "../trial/trial.service";
 import { onTrialCreditSpent } from "../trial/trial-journey.service";
 import { resolveViewerOwnerAccess } from "../access/owner-access.service";
 
@@ -222,9 +228,12 @@ export const licenseTrackService = async (
       // arriving here for one was not reached through the product.
       const access = await resolveViewerOwnerAccess(brandId, platform);
       const blocked = ownerIds.some((id) => access.blockedOwnerIds.has(id));
+      // The trial covers only the token types picked at onboarding.
+      const trialTypes = new Set(await getTrialOwnerTypes(brandId!));
+      const inTrialTypes = owners.some((o) => !!o.type && trialTypes.has(o.type));
       // Personal-email users (gmail.com & co.) never use the trial, even as a
       // member of a trial brand.
-      trialState = blocked || !isTrialEmail(user.email)
+      trialState = blocked || !inTrialTypes || !isTrialEmail(user.email)
         ? null
         : await chargeTrialCredit(brandId!);
       if (!trialState) {
@@ -481,7 +490,7 @@ export const getTokenBalanceService = async (
   userId: number,
 ): Promise<TokenBalanceByTypeResponse> => {
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId"],
+    attributes: ["id", "brandId", "email"],
   });
 
   if (!user) {
@@ -494,6 +503,21 @@ export const getTokenBalanceService = async (
 
   // Using NEW token_assigned table
   const tokens = await getAllTokenAssignedBalances(user.brandId);
+
+  // The Smash trial is ONE shared pool, listed once per token type picked at
+  // onboarding with the same balance: spending a credit on any of them lowers
+  // all. Gone once the brand is PAID; null for personal emails.
+  const trial = await getTrialStateForBrand(user.brandId, user.email);
+  if (trial?.planType === "TRIAL") {
+    for (const type of await getTrialOwnerTypes(user.brandId)) {
+      tokens.push({
+        type,
+        tokenBalance: trial.licensingBlocked ? 0 : trial.creditsRemaining,
+        totalAssignedToken: trial.creditsTotal,
+        expiryDate: trial.trialEnd,
+      });
+    }
+  }
 
   return {
     brandId: user.brandId,
