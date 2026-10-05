@@ -11,6 +11,7 @@ import {
   EmailEventType,
   EmailSuppressionReason,
 } from "../../dto-service/email-campaign/modules.export";
+import { recordJourneyEmailEngagement } from "../trial/trial-journey.service";
 
 // Handles the SNS topic that the SES configuration set publishes
 // bounce/complaint notifications to.
@@ -126,6 +127,14 @@ const handleSesNotification = async (notification: SesNotification) => {
         messageId,
       });
     }
+    return;
+  }
+
+  // Open/Click only arrive when the configuration set publishes them; they
+  // feed the trial journey's no-click escalation and are a no-op for any
+  // other mail.
+  if ((kind === "open" || kind === "click") && messageId) {
+    await recordJourneyEmailEngagement(messageId, kind);
     return;
   }
 

@@ -7,6 +7,7 @@ import {
 import type {
   CreateEmailCampaignRequestData,
   UpdateEmailCampaignRequestData,
+  DuplicateEmailCampaignRequestData,
   ListEmailCampaignsQueryData,
   ListRecipientsQueryData,
   TestSendRequestData,
@@ -34,6 +35,12 @@ export const createCampaignRequestSchema = Joi.object<CreateEmailCampaignRequest
   templateId: Joi.string().uuid().optional(),
   ...tuningFields,
 }).or("html", "templateId");
+
+export const duplicateCampaignRequestSchema = Joi.object<DuplicateEmailCampaignRequestData>({
+  name: Joi.string().min(3).max(255).optional(),
+  subject: Joi.string().min(1).max(500).optional(),
+  includeRecipients: Joi.boolean().optional(),
+});
 
 export const updateCampaignRequestSchema = Joi.object<UpdateEmailCampaignRequestData>({
   name: Joi.string().min(3).max(255).optional(),

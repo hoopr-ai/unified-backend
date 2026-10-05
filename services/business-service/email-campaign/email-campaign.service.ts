@@ -22,6 +22,7 @@ import {
   isEmailSuppressed,
   countEventsByType,
   findTemplateById,
+  copyRecipients,
   type EmailCampaignRecipientDetails,
 } from "../../persistence-service/email-campaign/modules.export";
 import {
@@ -29,6 +30,8 @@ import {
   EmailRecipientStatus,
   type CreateEmailCampaignRequestData,
   type UpdateEmailCampaignRequestData,
+  type DuplicateEmailCampaignRequestData,
+  type DuplicateEmailCampaignResult,
   type ListEmailCampaignsQueryData,
   type ListRecipientsQueryData,
   type CsvUploadSummary,
@@ -83,6 +86,63 @@ export const createCampaignService = async (
     ...(payload.batchSize ? { batchSize: payload.batchSize } : {}),
     ...(payload.maxAttempts ? { maxAttempts: payload.maxAttempts } : {}),
     createdBy: createdBy ?? null,
+  });
+};
+
+// A new DRAFT carrying everything the source was set up with: subject, html,
+// template link and send tuning, plus (by default) its recipient list as fresh
+// `pending` rows. Run state — status, progress, timestamps, delivery history —
+// is never copied, so the copy is a clean campaign that has sent nothing.
+// Works from any source status, including completed ones: re-running a past
+// campaign to the same list is the main use.
+export const duplicateCampaignService = async (
+  sourceId: string,
+  payload: DuplicateEmailCampaignRequestData,
+  createdBy?: number
+): Promise<DuplicateEmailCampaignResult> => {
+  const source = await findCampaignById(sourceId);
+  if (!source) throw new AppError("Campaign not found", 404);
+
+  const includeRecipients = payload.includeRecipients ?? true;
+  const sequelize = source.sequelize!;
+
+  return sequelize.transaction(async (transaction) => {
+    const campaign = await createCampaign(
+      {
+        name: payload.name?.trim() || `${source.name} (copy)`.slice(0, 255),
+        subject: payload.subject?.trim() || source.subject,
+        html: source.html,
+        templateId: source.templateId ?? null,
+        status: EmailCampaignStatus.DRAFT,
+        dailyQuota: source.dailyQuota,
+        ratePerSec: source.ratePerSec,
+        batchSize: source.batchSize,
+        maxAttempts: source.maxAttempts,
+        createdBy: createdBy ?? null,
+      },
+      transaction
+    );
+
+    let copied = 0;
+    let suppressed = 0;
+    if (includeRecipients) {
+      ({ copied, suppressed } = await copyRecipients(source.id, campaign.id, transaction));
+      // Same rule as an upload: a draft with recipients is ready to start.
+      await campaign.update(
+        {
+          totalRecipients: copied,
+          ...(copied > 0 ? { status: EmailCampaignStatus.READY } : {}),
+        },
+        { transaction }
+      );
+    }
+
+    return {
+      campaign,
+      sourceCampaignId: source.id,
+      copiedRecipients: copied,
+      suppressedRecipients: suppressed,
+    };
   });
 };
 

@@ -1,4 +1,4 @@
-import { Op, fn, col } from "sequelize";
+import { Op, fn, col, QueryTypes, type Transaction } from "sequelize";
 import {
   EmailCampaignModel,
   EmailCampaignRecipientModel,
@@ -22,8 +22,8 @@ const LOCK_TIMEOUT_MS = 2 * 60 * 1000; // a worker run holds the campaign lock t
 
 // ─── Campaigns ───────────────────────────────────────────────────────────────
 
-export const createCampaign = (details: EmailCampaignDetails) =>
-  EmailCampaignModel.create(details);
+export const createCampaign = (details: EmailCampaignDetails, transaction?: Transaction) =>
+  EmailCampaignModel.create(details, { transaction });
 
 export const findCampaignById = (id: string) => EmailCampaignModel.findByPk(id);
 
@@ -98,6 +98,48 @@ export const findOldestRunningCampaign = () =>
 
 export const bulkInsertRecipients = (rows: EmailCampaignRecipientDetails[]) =>
   EmailCampaignRecipientModel.bulkCreate(rows, { ignoreDuplicates: true });
+
+// Copies a campaign's recipient list onto another campaign as fresh `pending`
+// rows — delivery history (attempts, messageId, error, sentAt) is not carried.
+// Addresses now on the suppression list are left out, exactly as an upload
+// would drop them. One INSERT … SELECT, so the list never passes through Node.
+export const copyRecipients = async (
+  sourceCampaignId: string,
+  targetCampaignId: string,
+  transaction?: Transaction,
+): Promise<{ copied: number; suppressed: number }> => {
+  const sequelize = EmailCampaignRecipientModel.sequelize!;
+  await sequelize.query(
+    `INSERT INTO email_campaign_recipients
+       (id, "campaignId", "sourceUserId", email, name, status, attempts, "createdAt", "updatedAt")
+     SELECT gen_random_uuid(), :target, r."sourceUserId", r.email, r.name, :pending, 0, NOW(), NOW()
+       FROM email_campaign_recipients r
+      WHERE r."campaignId" = :source
+        AND NOT EXISTS (SELECT 1 FROM email_suppressions s WHERE s.email = r.email)
+     ON CONFLICT ("campaignId", email) DO NOTHING`,
+    {
+      replacements: {
+        source: sourceCampaignId,
+        target: targetCampaignId,
+        pending: EmailRecipientStatus.PENDING,
+      },
+      type: QueryTypes.INSERT,
+      transaction,
+    },
+  );
+  const [row] = await sequelize.query<{ n: string }>(
+    `SELECT COUNT(*) AS n
+       FROM email_campaign_recipients r
+      WHERE r."campaignId" = :source
+        AND EXISTS (SELECT 1 FROM email_suppressions s WHERE s.email = r.email)`,
+    { replacements: { source: sourceCampaignId }, type: QueryTypes.SELECT, transaction },
+  );
+  const copied = await EmailCampaignRecipientModel.count({
+    where: { campaignId: targetCampaignId },
+    transaction,
+  });
+  return { copied, suppressed: Number(row?.n ?? 0) };
+};
 
 export const countRecipients = (campaignId: string) =>
   EmailCampaignRecipientModel.count({ where: { campaignId } });

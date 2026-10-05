@@ -20,6 +20,7 @@ import {
   verifyEmailOtpService,
 } from "../services/business-service/modules.export";
 import {
+  AppError,
   catchAsync,
   extractSessionMetadata,
   sendResponse,
@@ -28,6 +29,14 @@ import {
 import { ResponseMessages } from "../services/dto-service/constants/response-messages";
 import { HttpStatusCode, RefreshTokenExpiryInSeconds } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
+import {
+  getTrialWithNudgesService,
+  notifySalesDomainConflict,
+  recordTrialSignalService,
+} from "../services/business-service/trial/trial-journey.service";
+import { redeemMagicLinkService } from "../services/business-service/trial/magic-link.service";
+import { SignupRejectReason } from "../services/dto-service/trial/trial.dto";
+import { findUserById } from "../services/persistence-service/exports";
 
 interface AuthRequest extends Request {
   session?: SessionPayload;
@@ -341,7 +350,13 @@ export const verifyOtp = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const sendEmailOtp = catchAsync(async (req: Request, res: Response) => {
-  const response = await sendEmailOtpService(req.body);
+  const response = await sendEmailOtpService(req.body).catch((err) => {
+    // A company that already has an account is a sales lead, not a dead end.
+    if (err instanceof AppError && err.errorCode === SignupRejectReason.DOMAIN_EXISTS) {
+      void notifySalesDomainConflict(String(req.body?.email ?? ""));
+    }
+    throw err;
+  });
   sendResponse(res, {
     status: HttpStatusCode.OK,
     data: response,
@@ -352,6 +367,71 @@ export const sendEmailOtp = catchAsync(async (req: Request, res: Response) => {
 export const verifyEmailOtp = catchAsync(
   async (req: Request, res: Response) => {
     const response = await verifyEmailOtpService(req.body);
+
+    res.cookie("sessionId", response.sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: response.expiresIn * 1000,
+    });
+
+    res.cookie("refreshToken", response.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: RefreshTokenExpiryInSeconds * 1000,
+    });
+
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: response,
+      message: ResponseMessages.LoginSuccess,
+    });
+  },
+);
+
+// GET /user/trial — the Smash trial meter + upgrade-wall flag for the caller's
+// brand, plus the in-app nudges and the push inbox. `trial` is null when the
+// brand was never on the trial. GET /user/profile carries the same `trial`;
+// this is the poll for the Credits UI and the in-app journey surfaces.
+export const getTrial = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    const user = await findUserById(userId);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: await getTrialWithNudgesService(userId, user?.brandId, user?.email),
+      message: ResponseMessages.GetTrialSuccess,
+    });
+  },
+);
+
+// POST /user/trial/signal — FE-only moments the journey routes on (gated
+// Enterprise track, tutorial skip, push permission, notification open/click,
+// upgrade CTA). Mixpanel still gets these from the FE; this is the backend copy.
+export const recordTrialSignal = catchAsync(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.session?.userId;
+    if (!userId) {
+      return sendError(res, HttpStatusCode.UNAUTHORIZED, "Unauthorized", {});
+    }
+    await recordTrialSignalService(userId, req.body);
+    sendResponse(res, {
+      status: HttpStatusCode.OK,
+      data: { recorded: true },
+      message: ResponseMessages.TrialSignalRecorded,
+    });
+  },
+);
+
+// POST /user/magic-link/verify — one-click login from a trial journey email.
+// Sets the same cookies and returns the same body as verify-email-otp.
+export const verifyMagicLink = catchAsync(
+  async (req: Request, res: Response) => {
+    const response = await redeemMagicLinkService(req.body.token);
 
     res.cookie("sessionId", response.sessionId, {
       httpOnly: true,

@@ -13,6 +13,9 @@ import {
   getUserSessions,
   getProfile,
   tourSeen,
+  getTrial,
+  recordTrialSignal,
+  verifyMagicLink,
   updateProfile,
   getUsers,
   updateUserById,
@@ -35,6 +38,8 @@ import {
   sendEmailOtpRequestSchema,
   verifyEmailOtpRequestSchema,
   tourSeenRequestSchema,
+  trialSignalRequestSchema,
+  magicLinkVerifyRequestSchema,
 } from "../middlewares/user.validation";
 import { authenticateWithSession } from "../middlewares/authenticate";
 import { Platform, UserRoles } from "../services/dto-service/modules.export";
@@ -121,6 +126,20 @@ router.get(
 // Profile endpoints
 router.get("/profile", authenticateWithSession, getProfile);
 
+// Smash trial meter + upgrade wall, in-app nudges and push inbox for the
+// caller's brand.
+router.get(
+  "/trial",
+  authenticateWithSession({ platforms: [Platform.ENTERPRISE] }),
+  getTrial,
+);
+router.post(
+  "/trial/signal",
+  authenticateWithSession({ platforms: [Platform.ENTERPRISE] }),
+  validateRequest(trialSignalRequestSchema),
+  recordTrialSignal,
+);
+
 // Coachmark tours: GET /profile carries `toursSeen`, this records one finished.
 router.post(
   "/tour-seen",
@@ -184,6 +203,12 @@ router.post(
   "/verify-email-otp",
   validateRequest(verifyEmailOtpRequestSchema),
   verifyEmailOtp,
+);
+// One-click login from a trial journey email (public — the token is the proof).
+router.post(
+  "/magic-link/verify",
+  validateRequest(magicLinkVerifyRequestSchema),
+  verifyMagicLink,
 );
 
 export default router;

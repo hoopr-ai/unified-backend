@@ -2,6 +2,7 @@ import { Router, text } from "express";
 import {
   listEmailCampaigns,
   createEmailCampaign,
+  duplicateEmailCampaign,
   getEmailCampaign,
   updateEmailCampaign,
   deleteEmailCampaign,
@@ -28,6 +29,7 @@ import { validateRequest } from "../middlewares/validateRequest";
 import { singleRecipientsFileUpload } from "../middlewares/csv-upload";
 import {
   createCampaignRequestSchema,
+  duplicateCampaignRequestSchema,
   updateCampaignRequestSchema,
   testSendRequestSchema,
   createTemplateRequestSchema,
@@ -53,6 +55,12 @@ emailCampaignRouter.post(
   ...adminAuth,
   validateRequest(createCampaignRequestSchema),
   createEmailCampaign
+);
+emailCampaignRouter.post(
+  "/:id/duplicate",
+  ...adminAuth,
+  validateRequest(duplicateCampaignRequestSchema),
+  duplicateEmailCampaign
 );
 emailCampaignRouter.get("/:id", ...adminAuth, getEmailCampaign);
 emailCampaignRouter.put(

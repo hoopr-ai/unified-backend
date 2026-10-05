@@ -31,6 +31,7 @@ import {
   type UserRoleDetails,
 } from "../../persistence-service/exports";
 import { findBrandById } from "../../persistence-service/brand/modules.export";
+import { assertSignupEligible } from "../trial/trial.service";
 
 // OTP Configuration
 const OTP_LENGTH = 6;
@@ -99,7 +100,7 @@ export interface VerifyEmailOtpData {
   platform: Platform;
 }
 
-interface LoginResponseWithSession extends LoginResponse {
+export interface LoginResponseWithSession extends LoginResponse {
   sessionId: number;
   isExistingUser: boolean;
 }
@@ -110,6 +111,14 @@ const findOrCreateUser = async (
 ): Promise<UserDetails> => {
   const existing = await findActiveUserSilently(email, platform);
   if (existing) return existing;
+
+  // Smash trial eligibility (no-op unless SMASH_TRIAL_ENABLED): only a brand-new
+  // ENTERPRISE signup is gated. Existing and invited users already have a row
+  // and returned above, so a teammate invited into a trial brand is never
+  // rejected for sharing its domain.
+  if (platform === Platform.ENTERPRISE) {
+    await assertSignupEligible(email);
+  }
 
   // Auto-create the user with a placeholder password (OTP is the auth mechanism).
   // No brandId assigned at this point — admin can associate later.
@@ -298,6 +307,22 @@ export const verifyEmailOtpService = async (
 
   // Fetch user and create session
   const user = await findActiveUser(lowerEmail, platform);
+  const response = await issueLoginForUser(user);
+
+  logger.info("Email OTP verified, user logged in", {
+    email: lowerEmail,
+    platform,
+    userId: user.id,
+  });
+  return response;
+};
+
+// Mints the access/refresh pair and the session row for an already-verified
+// user. Shared by OTP verify and the trial journey's magic link, so both log a
+// user in exactly the same way.
+export const issueLoginForUser = async (
+  user: UserDetails,
+): Promise<LoginResponseWithSession> => {
   const role = await findUserRole(user.id!);
 
   const token = createJWTToken(
@@ -324,12 +349,6 @@ export const verifyEmailOtpService = async (
 
   const brand = user.brandId ? await findBrandById(user.brandId) : null;
   const brandName = (brand as any)?.name ?? undefined;
-
-  logger.info("Email OTP verified, user logged in", {
-    email: lowerEmail,
-    platform,
-    userId: user.id,
-  });
 
   return {
     id: user.id!,

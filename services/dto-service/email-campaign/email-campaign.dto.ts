@@ -17,6 +17,24 @@ export interface CreateEmailCampaignRequestData {
   maxAttempts?: number;
 }
 
+// POST /admin/email-campaigns/:id/duplicate. Everything not given is copied
+// from the source campaign.
+export interface DuplicateEmailCampaignRequestData {
+  name?: string;
+  subject?: string;
+  /** Copy the source's recipient list too. Default true. */
+  includeRecipients?: boolean;
+}
+
+export interface DuplicateEmailCampaignResult {
+  campaign: unknown;
+  sourceCampaignId: string;
+  /** Recipients copied, as fresh `pending` rows. */
+  copiedRecipients: number;
+  /** Source recipients left out because they are now on the suppression list. */
+  suppressedRecipients: number;
+}
+
 export interface UpdateEmailCampaignRequestData {
   name?: string;
   subject?: string;

@@ -73,6 +73,13 @@ import {
   Platform,
 } from "../../dto-service/constants/modules.export";
 import { logger } from "../../helper-service/logger";
+import {
+  startTrialForBrand,
+  getTrialStateForBrand,
+  saveOnboardingAnswers,
+  getOnboardingAnswers,
+} from "../trial/trial.service";
+import { sendTrialWelcome } from "../trial/trial-journey.service";
 import { SessionPayload } from "../../../middlewares/authenticate";
 
 interface LoginResponseWithSession extends LoginResponse {
@@ -529,7 +536,7 @@ export const completeProfileService = async (
   data: CompleteProfileRequestData,
   userId: number,
 ): Promise<LoginResponseWithSession> => {
-  const { firstName, lastName, mobile, countryCode, profileRole, brandName, instagramLink, youtubeLink, facebookLink } = data;
+  const { firstName, lastName, mobile, countryCode, profileRole, brandName, instagramLink, youtubeLink, facebookLink, categoryPreferences, discoveryChannel } = data;
 
   const user = await findUserById(userId);
   if (!user) {
@@ -599,7 +606,16 @@ export const completeProfileService = async (
       facebookLink: facebookLink ?? null,
     });
     await updateUserBrandId(userId, (brand as any).id);
+
+    // Onboarding is complete — this is when the 7-day clock starts, for new
+    // work-email self-signups only (isTrialEligibleSignup). Invited members
+    // share the brand's trial.
+    if (await startTrialForBrand((brand as any).id, user)) {
+      sendTrialWelcome(Number((brand as any).id));
+    }
   }
+
+  await saveOnboardingAnswers(userId, categoryPreferences, discoveryChannel);
 
   // Notify existing team members that someone has joined
   if (user.brandId) {
@@ -690,11 +706,12 @@ const resolveSocialLinks = (brand: any | null, userProfile: any | null) => ({
 export const getUserProfileService = async (
   userId: number,
 ): Promise<UserProfileResponse> => {
-  const [user, userProfile, role, toursSeen] = await Promise.all([
+  const [user, userProfile, role, toursSeen, onboarding] = await Promise.all([
     findUserById(userId),
     findUserProfile(userId),
     findUserRole(userId),
     listToursSeen(userId),
+    getOnboardingAnswers(userId),
   ]);
   if (!user) {
     throw new AppError(ErrorMessages.UserNotFound, 404);
@@ -717,6 +734,8 @@ export const getUserProfileService = async (
     brandName: (brand as any)?.name ?? undefined,
     canEditBrand: canUserEditBrand(brand, role, userId),
     toursSeen,
+    trial: await getTrialStateForBrand(user.brandId, user.email),
+    onboarding,
   };
 };
 

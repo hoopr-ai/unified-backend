@@ -79,8 +79,14 @@ import type {
   DownloadTrackResult,
 } from "../../dto-service/licenses/modules.export";
 import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
+import type { TrialStateResponse } from "../../dto-service/trial/trial.dto";
+import { chargeTrialCredit, isTrialEmail, refundTrialCharge } from "../trial/trial.service";
+import { onTrialCreditSpent } from "../trial/trial-journey.service";
+import { resolveViewerOwnerAccess } from "../access/owner-access.service";
 
 const TOKEN_COST_PER_LICENSE = 1;
+// assortmentType shown in the download-notification email for a trial license.
+const TRIAL_ASSORTMENT_LABEL = "Trial";
 
 export const licenseTrackService = async (
   userId: number,
@@ -183,6 +189,8 @@ export const licenseTrackService = async (
     : [];
 
   let matchingTokenType: string | null = null;
+  // Set when the license is paid for from the Smash trial pool.
+  let trialState: TrialStateResponse | null = null;
   let matchingOwnerId: string | null = null;
 
   if (!skipTokens) {
@@ -204,21 +212,35 @@ export const licenseTrackService = async (
       TOKEN_COST_PER_LICENSE,
     );
 
-    if (!bestMatch) {
-      throw new AppError(
-        `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
-        400,
-      );
+    if (bestMatch) {
+      matchingTokenType = bestMatch.matchedType;
+      matchingOwnerId = bestMatch.matchedOwnerId;
+    } else {
+      // No paid allocation covers the track: fall back to the Smash trial pool
+      // (flat, any catalogue). The restricted labels stay out of the trial —
+      // they are hidden from trial brands in every listing, so a trackCode
+      // arriving here for one was not reached through the product.
+      const access = await resolveViewerOwnerAccess(brandId, platform);
+      const blocked = ownerIds.some((id) => access.blockedOwnerIds.has(id));
+      // Personal-email users (gmail.com & co.) never use the trial, even as a
+      // member of a trial brand.
+      trialState = blocked || !isTrialEmail(user.email)
+        ? null
+        : await chargeTrialCredit(brandId!);
+      if (!trialState) {
+        throw new AppError(
+          `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
+          400,
+        );
+      }
+      matchingTokenType = TRIAL_ASSORTMENT_LABEL;
     }
-
-    matchingTokenType = bestMatch.matchedType;
-    matchingOwnerId = bestMatch.matchedOwnerId;
   }
 
-  // Generate GCS signed URL for the track
-  const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
-
-  // Create license record. brandId is null for CREATOR (no brand association).
+  // A trial credit is already spent at this point; give it back if the license
+  // never materialises. (Paid tokens are deducted after the license exists.)
+  let gcsResult: Awaited<ReturnType<typeof generateGCSSignedUrl>>;
+  let createdLicense: Awaited<ReturnType<typeof createLicenseRecord>>;
   const now = new Date();
   const validThrough = new Date(now);
   validThrough.setFullYear(validThrough.getFullYear() + 1);
@@ -232,14 +254,26 @@ export const licenseTrackService = async (
     createdAt: now,
     campaignId: campaignIdToApply ?? null,
     ...(isSfxTrack && { type: "sfx_free", price: 0 }),
+    ...(trialState && { type: "trial" }),
   };
+  try {
+    // Generate GCS signed URL for the track
+    gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
+    // Create license record. brandId is null for CREATOR (no brand association).
+    createdLicense = await createLicenseRecord(licenseDetails);
+  } catch (err) {
+    if (trialState) await refundTrialCharge(brandId!);
+    throw err;
+  }
 
-  const createdLicense = await createLicenseRecord(licenseDetails);
+  // Trial journey: activation, and Push 3 pulled forward on the last credit.
+  if (trialState) onTrialCreditSpent(brandId!, trialState);
 
-  // Token deduction is skipped entirely for CREATOR and SFX tracks.
-  let remainingTokens = 0;
+  // Token deduction is skipped entirely for CREATOR and SFX tracks, and for
+  // trial licenses (charged above against brand_trials instead).
+  let remainingTokens = trialState ? trialState.creditsRemaining : 0;
   let deductionWasUnlimited = false;
-  if (!skipTokens) {
+  if (!skipTokens && !trialState) {
     const deduction = await deductTokenAssignedByType(
       brandId!,
       matchingTokenType!,
@@ -384,8 +418,9 @@ export const licenseTrackService = async (
       });
 
     // Send low credits alert to whole team if remaining tokens drop below 2.
-    // Skip for unlimited allocations — they never run out.
-    if (!deductionWasUnlimited && remainingTokens < 2) {
+    // Skip for unlimited allocations — they never run out — and for the trial,
+    // whose "Buy Credits" moment is the upgrade wall, not this email.
+    if (!deductionWasUnlimited && !trialState && remainingTokens < 2) {
       findAllActiveUsersByBrandId(brandId!)
         .then((teamMembers) => {
           teamMembers.forEach((member) => {
@@ -420,6 +455,9 @@ export const licenseTrackService = async (
     // MAX_SAFE_INTEGER sentinel from the persistence layer.
     remainingTokens: deductionWasUnlimited ? 0 : remainingTokens,
     unlimitedTokens: deductionWasUnlimited || undefined,
+    // Fresh trial meter after this license, so the FE can update the Credits UI
+    // without refetching the profile. Absent for paid and free licenses.
+    ...(trialState && { trial: trialState }),
     trackId: track.id,
     trackName: track.name,
     validThrough: licenseDetails.validThrough!,

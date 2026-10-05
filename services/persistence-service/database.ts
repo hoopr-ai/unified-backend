@@ -14,6 +14,12 @@ import {
   UserTourSeenModel,
 } from "./user/modules.export";
 import {
+  BrandTrialModel,
+  UserOnboardingModel,
+  TrialJourneySendModel,
+  TrialSignalModel,
+} from "./trial/schemas/modules.export";
+import {
   TrackModel,
   FeaturedTracksModel,
   ChartTrackModel,
@@ -147,6 +153,10 @@ sequelize.addModels([
   UserEntityDetailsModel,
   AccessRequestModel,
   UserTourSeenModel,
+  BrandTrialModel,
+  UserOnboardingModel,
+  TrialJourneySendModel,
+  TrialSignalModel,
   TrackModel,
   AlbumModel,
   FilterModel,
