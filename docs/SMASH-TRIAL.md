@@ -178,6 +178,10 @@ counted against the budget):
 | `soft_upsell` | D6+, 2+ credits used, credits left | `{ creditsUsed, creditsTotal }` |
 | `conversion_modal` | credits exhausted, or D6+ with 2+ used | `{ reason: "credits_exhausted" \| "day_7", creditsUsed }` |
 
+Trial welcome (in-app, once per user): show while `trial` is non-null and
+`toursSeen` on `GET /user/profile` lacks `smashTrialWelcome`; on dismiss,
+`POST /user/tour-seen {tour:"smashTrialWelcome"}`.
+
 `inbox`: every push-slot copy sent to the brand, newest first
 (`{ sendId, slot, title, body, url, sentAt }`) — the in-app fallback for push.
 

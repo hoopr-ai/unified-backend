@@ -95,7 +95,7 @@ export interface UserProfileResponse {
 // Allow-list of coachmark tours the FE may mark seen — the single source of
 // truth for the Joi schema. Add a key here (and nothing else) when a tour ships.
 // Prefixed `smash` because user_tour_seen is shared with studio's tours.
-export const KNOWN_TOURS = ["smashAppTour", "smashTrackPageTour"] as const;
+export const KNOWN_TOURS = ["smashAppTour", "smashTrackPageTour", "smashTrialWelcome"] as const;
 export type TourKey = (typeof KNOWN_TOURS)[number];
 
 export interface TourSeenRequestData {
