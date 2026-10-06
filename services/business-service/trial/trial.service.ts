@@ -1,4 +1,4 @@
-import { UniqueConstraintError, Op } from "sequelize";
+import { UniqueConstraintError, Op, type Transaction } from "sequelize";
 import { AppError } from "../../helper-service/AppError";
 import { logger } from "../../helper-service/logger";
 import {
@@ -21,6 +21,7 @@ import {
   type DiscoveryChannel,
   type OnboardingResponse,
   type TrialStateResponse,
+  type TrialTypeCredits,
 } from "../../dto-service/trial/trial.dto";
 import {
   brandIdsWithTokenAllocations,
@@ -28,9 +29,11 @@ import {
   createBrandTrial,
   extendBrandTrial,
   findBrandTrial,
+  findTrialLaunch,
   findUserOnboarding,
   isEmailDomainInUse,
   listBrandTrials,
+  recordTrialLaunch,
   refundTrialCredit,
   upsertUserOnboarding,
   type BrandTrialModel,
@@ -79,25 +82,29 @@ export const assertSignupEligible = async (email: string): Promise<void> => {
 
 // ── Launch time ──────────────────────────────────────────────────────────────
 
-// When the trial went live: SMASH_TRIAL_LAUNCHED_AT (ISO date, e.g.
-// 2026-10-06T10:00:00+05:30). Set it once at go-live and never move it — only
-// accounts created at/after it can get a trial, which keeps every existing user
-// out. Unset or invalid → nobody gets a trial (fails closed).
+// When the trial went live: recorded in smash_trial_launch by the first boot
+// with SMASH_TRIAL_ENABLED=true (ensureTrialLaunchRecorded) and never changed
+// after — nothing to configure. Only accounts created at/after it can get a
+// trial, which keeps every existing user out. null = trial never switched on.
+let launchedAtCache: Date | null = null;
 export const getTrialLaunchedAt = async (): Promise<Date | null> => {
-  const raw = process.env.SMASH_TRIAL_LAUNCHED_AT?.trim();
-  if (!raw) return null;
-  const at = new Date(raw);
-  return Number.isNaN(at.getTime()) ? null : at;
+  if (launchedAtCache) return launchedAtCache;
+  // Normally recorded at boot; this covers a boot where the DB call failed.
+  launchedAtCache = isSmashTrialEnabled() ? await recordTrialLaunch() : await findTrialLaunch();
+  return launchedAtCache;
 };
 
-// Startup check: the flag without a valid launch date silently starts no trials.
-export const checkTrialLaunchConfig = async (): Promise<void> => {
+// Called once at startup, before the server accepts requests, so a signup
+// arriving right after go-live is already on the right side of the cutoff.
+export const ensureTrialLaunchRecorded = async (): Promise<void> => {
   if (!isSmashTrialEnabled()) return;
-  const at = await getTrialLaunchedAt();
-  if (at) {
-    logger.info("Smash trial launch time", { launchedAt: at.toISOString() });
-  } else {
-    logger.error("SMASH_TRIAL_ENABLED is on but SMASH_TRIAL_LAUNCHED_AT is unset or invalid — no trial starts until it is set");
+  try {
+    const at = await getTrialLaunchedAt();
+    logger.info("Smash trial launch time", { launchedAt: at?.toISOString() });
+  } catch (err) {
+    logger.error("Could not record the Smash trial launch time — no trial starts until it is", {
+      error: (err as Error).message,
+    });
   }
 };
 
@@ -125,6 +132,24 @@ export const isTrialEligibleSignup = async (user: {
   if (user.createdBy) return false;
   if (!user.createdAt || new Date(user.createdAt).getTime() < launchedAt.getTime()) return false;
   return !(await isEmailDomainInUse(domain, user.id));
+};
+
+// The credits an eligible signup will get, shown before onboarding is done (no
+// brand yet, so no trial row). Display only: the trial and its 7-day clock
+// still start at complete-profile. null = this user will not get a trial.
+export const getPendingTrialCredits = async (user: {
+  id?: number;
+  email: string;
+  platform?: string | null;
+  createdBy?: number | null;
+  createdAt?: Date | null;
+}): Promise<TrialTypeCredits[] | null> => {
+  if (!isSmashTrialEnabled() || !(await isTrialEligibleSignup(user))) return null;
+  return TRIAL_CREDIT_TYPES.map((type) => ({
+    type,
+    creditsTotal: TRIAL_CREDITS_PER_TYPE,
+    creditsRemaining: TRIAL_CREDITS_PER_TYPE,
+  }));
 };
 
 // Starts the clock at onboarding completion — called from complete-profile
@@ -175,6 +200,37 @@ export const startTrialForBrand = async (
     });
     return false;
   }
+};
+
+// Self-heal for complete-profile: the trial starts after the profile/brand
+// transaction commits, so a failure there leaves an eligible brand owner with a
+// brand but no trial. Called on the owner's profile read; starts the missing
+// trial (idempotent — brandId is unique on brand_trials). Cheap checks first so
+// the common case (old users, existing trials) costs at most one indexed read.
+export const resumeMissedTrialStart = async (
+  user: {
+    id?: number;
+    email: string;
+    brandId?: number | null;
+    platform?: string | null;
+    createdBy?: number | null;
+    createdAt?: Date | null;
+  },
+  brand: { createdBy?: number | null } | null,
+): Promise<boolean> => {
+  if (!isSmashTrialEnabled() || !user.brandId || !brand) return false;
+  if (Number(brand.createdBy) !== Number(user.id) || !isTrialEmail(user.email)) return false;
+  const launchedAt = await getTrialLaunchedAt();
+  if (!launchedAt || !user.createdAt || new Date(user.createdAt) < launchedAt) return false;
+  if (await findBrandTrial(user.brandId)) return false;
+  const started = await startTrialForBrand(user.brandId, user);
+  if (started) {
+    logger.warn("Smash trial started late (missed at complete-profile)", {
+      brandId: user.brandId,
+      userId: user.id,
+    });
+  }
+  return started;
 };
 
 // The single place the trial rules live. Pure — `converted` and `now` come in.
@@ -297,12 +353,14 @@ export const saveOnboardingAnswers = async (
   userId: number,
   categoryPreferences: CategoryPreference[] | undefined,
   discoveryChannel: DiscoveryChannel | undefined,
+  transaction?: Transaction,
 ): Promise<void> => {
   if (!categoryPreferences && !discoveryChannel) return;
   await upsertUserOnboarding(
     userId,
     Array.from(new Set(categoryPreferences ?? [])),
     discoveryChannel ?? null,
+    transaction,
   );
 };
 

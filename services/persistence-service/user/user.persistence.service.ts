@@ -2,7 +2,7 @@ import { ErrorMessages, type Platform } from "../../dto-service/constants/module
 import { UserStatus, type UserRoles, type ProfileRole } from "../../dto-service/modules.export";
 import { AppError } from "../../helper-service/AppError";
 import { UserModel, UserRoleDetails, UserRoleModel, type UserDetails } from "./schemas/modules.export";
-import { Op } from "sequelize";
+import { Op, type Transaction } from "sequelize";
 
 const ACTIVE_OR_INVITED = { [Op.in]: [UserStatus.ACTIVE, UserStatus.INVITED] };
 
@@ -127,11 +127,12 @@ export const updateUserProfile = async (
   lastName: string,
   mobile: string,
   countryCode: string,
-  profileRole: ProfileRole
+  profileRole: ProfileRole,
+  transaction?: Transaction
 ): Promise<void> => {
   await UserModel.update(
     { firstName, lastName, mobile, countryCode, profileRole, status: UserStatus.ACTIVE, isProfileComplete: true },
-    { where: { id: userId, status: ACTIVE_OR_INVITED } }
+    { where: { id: userId, status: ACTIVE_OR_INVITED }, transaction }
   );
 }
 
@@ -185,8 +186,12 @@ export const touchUserLastLogin = async (userId: number): Promise<void> => {
   );
 };
 
-export const updateUserBrandId = async (userId: number, brandId: number): Promise<void> => {
-  await UserModel.update({ brandId }, { where: { id: userId } });
+export const updateUserBrandId = async (
+  userId: number,
+  brandId: number,
+  transaction?: Transaction
+): Promise<void> => {
+  await UserModel.update({ brandId }, { where: { id: userId }, transaction });
 };
 
 export const findUsersByBrandId = async (

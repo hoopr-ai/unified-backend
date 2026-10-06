@@ -49,11 +49,17 @@ CREATE INDEX IF NOT EXISTS idx_users_enterprise_email_domain
     ON users (lower(split_part(email, '@', 2)))
     WHERE platform = 'ENTERPRISE';
 
--- The launch time is the SMASH_TRIAL_LAUNCHED_AT env var, not a table.
+-- Trial launch time: recorded automatically the first time the server boots
+-- with SMASH_TRIAL_ENABLED=true and never changed after. Only accounts created
+-- at/after it can get a trial, so existing users never do. One row (id is
+-- pinned to 1); the INSERT … ON CONFLICT DO NOTHING keeps the first value.
+CREATE TABLE IF NOT EXISTS smash_trial_launch (
+    id           SMALLINT    PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    "launchedAt" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
 
 -- Cleanup for databases that ran an earlier version of this script, which kept
--- onboarding answers in user_onboarding and the launch time in
--- smash_trial_launch. Copies any answers across, then drops both.
+-- onboarding answers in user_onboarding. Copies any answers across, then drops it.
 DO $$
 BEGIN
   IF to_regclass('public.user_onboarding') IS NOT NULL THEN
@@ -66,7 +72,6 @@ BEGIN
     DROP TABLE user_onboarding;
   END IF;
 END $$;
-DROP TABLE IF EXISTS smash_trial_launch;
 
 -- ── Step 2: conversion journey ──────────────────────────────────────────────
 

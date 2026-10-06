@@ -56,6 +56,7 @@ import {
   updateUserBrandId,
 } from "../../persistence-service/exports";
 import { findBrandById, updateBrand, saveBrand } from "../../persistence-service/brand/modules.export";
+import { UserModel } from "../../persistence-service/user/modules.export";
 import { saveOrganization } from "../../persistence-service/exports";
 import { OrganizationStatus, BrandStatus } from "../../dto-service/modules.export";
 import {
@@ -75,6 +76,7 @@ import {
 import { logger } from "../../helper-service/logger";
 import {
   startTrialForBrand,
+  resumeMissedTrialStart,
   getTrialStateForBrand,
   saveOnboardingAnswers,
   getOnboardingAnswers,
@@ -551,19 +553,66 @@ export const completeProfileService = async (
   // into — asking them to retype the brand name and the same Instagram handle
   // only produces divergent copies, so anything they send here is ignored.
   const isBrandOwner = !user.brandId;
+  if (isBrandOwner && !brandName?.trim()) {
+    throw new AppError("Brand name is required", 400);
+  }
   if (isBrandOwner && !instagramLink) {
     throw new AppError("Instagram link is required", 400);
   }
 
+  // All-or-nothing: activating the user (status ACTIVE) and creating their
+  // brand commit together. Before this, a failure after the profile update left
+  // the user "complete" with no brand, and the retry was refused as
+  // ProfileAlreadyComplete.
+  let createdBrandId: number | null = null;
   try {
-    await updateUserProfile(
-      userId,
-      firstName,
-      lastName,
-      mobile,
-      countryCode,
-      profileRole,
-    );
+    await UserModel.sequelize!.transaction(async (transaction) => {
+      await updateUserProfile(
+        userId,
+        firstName,
+        lastName,
+        mobile,
+        countryCode,
+        profileRole,
+        transaction,
+      );
+
+      // A self-signed-up user (no brand yet) gets an organization + brand. The
+      // social handles are stored on the brand so every member invited later
+      // inherits them. Invited users already belong to a brand — leave the
+      // brand and its organization untouched.
+      if (isBrandOwner) {
+        const normalizedName = brandName!.trim();
+        const now = new Date();
+        const org = await saveOrganization(
+          {
+            name: normalizedName,
+            status: OrganizationStatus.ACTIVE,
+            createdBy: userId,
+            createdAt: now,
+          },
+          transaction,
+        );
+
+        const brand = await saveBrand(
+          {
+            name: normalizedName,
+            organizationId: (org as any).id,
+            status: BrandStatus.ACTIVE,
+            createdBy: userId,
+            createdAt: now,
+            instagramLink: instagramLink ?? null,
+            youtubeLink: youtubeLink ?? null,
+            facebookLink: facebookLink ?? null,
+          },
+          transaction,
+        );
+        await updateUserBrandId(userId, (brand as any).id, transaction);
+        createdBrandId = Number((brand as any).id);
+      }
+
+      await saveOnboardingAnswers(userId, categoryPreferences, discoveryChannel, transaction);
+    });
   } catch (error) {
     if (error instanceof UniqueConstraintError) {
       const constraint = (error as any).parent?.constraint ?? "";
@@ -581,41 +630,14 @@ export const completeProfileService = async (
     throw error;
   }
 
-  // If a brand name is provided by a self-signed-up user (no brand yet),
-  // create an organization + brand and link them. The social handles are stored
-  // on the brand so every member invited later inherits them. Invited users
-  // already belong to a brand — leave the brand and its organization untouched.
-  if (brandName && isBrandOwner) {
-    const normalizedName = brandName.trim();
-    const now = new Date();
-    const org = await saveOrganization({
-      name: normalizedName,
-      status: OrganizationStatus.ACTIVE,
-      createdBy: userId,
-      createdAt: now,
-    });
-
-    const brand = await saveBrand({
-      name: normalizedName,
-      organizationId: (org as any).id,
-      status: BrandStatus.ACTIVE,
-      createdBy: userId,
-      createdAt: now,
-      instagramLink: instagramLink ?? null,
-      youtubeLink: youtubeLink ?? null,
-      facebookLink: facebookLink ?? null,
-    });
-    await updateUserBrandId(userId, (brand as any).id);
-
-    // Onboarding is complete — this is when the 7-day clock starts, for new
-    // work-email self-signups only (isTrialEligibleSignup). Invited members
-    // share the brand's trial.
-    if (await startTrialForBrand((brand as any).id, user)) {
-      sendTrialWelcome(Number((brand as any).id));
-    }
+  // Onboarding is complete — this is when the 7-day clock starts, for new
+  // work-email self-signups only (isTrialEligibleSignup). Invited members
+  // share the brand's trial. Outside the transaction on purpose: a trial that
+  // fails to start must not undo the profile, and resumeMissedTrialStart picks
+  // it up on the user's next profile read.
+  if (createdBrandId && (await startTrialForBrand(createdBrandId, user))) {
+    sendTrialWelcome(createdBrandId);
   }
-
-  await saveOnboardingAnswers(userId, categoryPreferences, discoveryChannel);
 
   // Notify existing team members that someone has joined
   if (user.brandId) {
@@ -718,6 +740,9 @@ export const getUserProfileService = async (
   }
 
   const brand = user.brandId ? await findBrandById(user.brandId) : null;
+  if (await resumeMissedTrialStart(user, brand as any)) {
+    sendTrialWelcome(Number(user.brandId));
+  }
 
   return {
     id: user.id!,
@@ -785,6 +810,21 @@ export const updateUserProfileService = async (
   }
 
   const { instagramLink, youtubeLink, facebookLink, brandName, ...userUpdates } = data;
+
+  // Before onboarding (INVITED) the profile fields can only be set by
+  // POST /user/complete-profile, which also activates the user, creates the
+  // brand and starts the trial. updateUserProfilePartial matches ACTIVE users
+  // only, so these used to be dropped while the response said success. Social
+  // links alone are still accepted (kept on the user until a brand exists).
+  const wantsProfileEdit =
+    !!brandName || Object.values(userUpdates).some((v) => v !== undefined);
+  if (user.status !== UserStatus.ACTIVE && wantsProfileEdit) {
+    throw new AppError(
+      "Please complete your profile first.",
+      403,
+      "PROFILE_INCOMPLETE",
+    );
+  }
 
   try {
     await updateUserProfilePartial(userId, userUpdates);

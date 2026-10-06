@@ -1,4 +1,4 @@
-import { Op, QueryTypes, fn, col, literal, where as sqlWhere } from "sequelize";
+import { Op, QueryTypes, fn, col, literal, where as sqlWhere, type Transaction } from "sequelize";
 import {
   BrandTrialModel,
   type BrandTrialAttributes,
@@ -180,10 +180,11 @@ export const upsertUserOnboarding = async (
   userId: number,
   categoryPreferences: string[],
   discoveryChannel: string | null,
+  transaction?: Transaction,
 ): Promise<void> => {
   await UserProfileModel.upsert(
     { userId, categoryPreferences, discoveryChannel },
-    { conflictFields: ["userId"] },
+    { conflictFields: ["userId"], transaction },
   );
 };
 
@@ -195,3 +196,23 @@ export const findUserOnboarding = async (
     attributes: ["categoryPreferences", "discoveryChannel"],
     raw: true,
   }) as any;
+
+// ── Launch time ──────────────────────────────────────────────────────────────
+
+// Records "now" as the trial launch unless a launch is already recorded, and
+// returns whichever is stored. Safe to call from every instance at once.
+export const recordTrialLaunch = async (): Promise<Date> => {
+  const db = BrandTrialModel.sequelize!;
+  await db.query(
+    `INSERT INTO smash_trial_launch (id, "launchedAt") VALUES (1, NOW()) ON CONFLICT (id) DO NOTHING`,
+  );
+  return (await findTrialLaunch())!;
+};
+
+export const findTrialLaunch = async (): Promise<Date | null> => {
+  const [row] = await BrandTrialModel.sequelize!.query<{ launchedAt: Date }>(
+    `SELECT "launchedAt" FROM smash_trial_launch WHERE id = 1`,
+    { type: QueryTypes.SELECT },
+  );
+  return row ? new Date(row.launchedAt) : null;
+};
