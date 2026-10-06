@@ -17,7 +17,8 @@ export const isPushConfigured = (): boolean =>
   Boolean(process.env.ONE_SIGNAL_APP_ID && process.env.ONE_SIGNAL_API_KEY);
 
 export interface SendPushOptions {
-  userId: number;
+  // One notification to all of them (OneSignal takes up to 2,000 aliases).
+  userIds: number[];
   title: string;
   body: string;
   url: string;
@@ -28,8 +29,8 @@ export interface SendPushOptions {
 export interface SendPushResult {
   // OneSignal notification id; empty when nobody was targeted.
   id: string | null;
-  // false when the user has no subscribed device (permission denied, never
-  // granted, unsubscribed). OneSignal still answers 200 in that case.
+  // false when none of the users has a subscribed device (permission denied,
+  // never granted, unsubscribed). OneSignal still answers 200 in that case.
   delivered: boolean;
 }
 
@@ -41,7 +42,7 @@ export const sendPush = async (options: SendPushOptions): Promise<SendPushResult
     {
       app_id: process.env.ONE_SIGNAL_APP_ID,
       target_channel: "push",
-      include_aliases: { external_id: [String(options.userId)] },
+      include_aliases: { external_id: options.userIds.map(String) },
       headings: { en: options.title },
       contents: { en: options.body },
       web_url: options.url,
@@ -64,7 +65,7 @@ export const sendPush = async (options: SendPushOptions): Promise<SendPushResult
   const errors = body.errors;
   const delivered = Boolean(id) && !(errors && (Array.isArray(errors) ? errors.length : Object.keys(errors).length));
   if (!delivered) {
-    logger.info("[Push] No subscribed device for user", { userId: options.userId, errors });
+    logger.info("[Push] No subscribed device for these users", { userIds: options.userIds, errors });
   }
   return { id, delivered };
 };

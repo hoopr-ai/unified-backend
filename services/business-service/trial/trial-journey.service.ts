@@ -149,8 +149,10 @@ export interface JourneyFacts {
   state: TrialStateResponse;
   recipient: Recipient;
   activated: boolean;
-  // null = the FE never reported a decision; we still try, OneSignal knows.
-  pushPermission: boolean | null;
+  // Brand members a push goes to: everyone not deleted, on a work email (the
+  // trial is invisible to personal emails), who has not denied permission.
+  // No FE decision reported = still targeted; OneSignal knows.
+  pushUserIds: number[];
   categories: CategoryPreference[];
   sends: Map<string, TrialJourneySendModel>;
 }
@@ -168,6 +170,12 @@ const detectActivation = async (trial: BrandTrialModel, recipientId: number): Pr
   return active;
 };
 
+const listPushRecipients = async (brandId: number): Promise<number[]> => {
+  const members = (await listBrandMembers(brandId)).filter((m) => isTrialEmail(m.email));
+  const permissions = await Promise.all(members.map((m) => latestPushPermission(Number(m.id))));
+  return members.filter((_, i) => permissions[i] !== false).map((m) => Number(m.id));
+};
+
 const loadFacts = async (trial: BrandTrialModel): Promise<JourneyFacts | null> => {
   const brandId = Number(trial.brandId);
   const converted = (await brandIdsWithTokenAllocations([brandId])).has(brandId);
@@ -179,9 +187,9 @@ const loadFacts = async (trial: BrandTrialModel): Promise<JourneyFacts | null> =
   if (!user || (user as any).status === "DELETED" || Number(user.brandId) !== brandId) return null;
   const recipient: Recipient = { id: user.id!, email: user.email, firstName: user.firstName ?? null };
 
-  const [activated, pushPermission, onboarding, sendRows] = await Promise.all([
+  const [activated, pushUserIds, onboarding, sendRows] = await Promise.all([
     detectActivation(trial, recipient.id),
-    latestPushPermission(recipient.id),
+    listPushRecipients(brandId),
     findUserOnboarding(recipient.id),
     findSendsBySubject(brandKey(brandId)),
   ]);
@@ -190,7 +198,7 @@ const loadFacts = async (trial: BrandTrialModel): Promise<JourneyFacts | null> =
     state,
     recipient,
     activated,
-    pushPermission,
+    pushUserIds,
     categories: (onboarding?.categoryPreferences ?? []) as CategoryPreference[],
     sends: new Map(sendRows.map((s) => [s.slot, s])),
   };
@@ -298,17 +306,17 @@ const deliverEmail = (to: string) =>
     return { status: JourneySendStatus.SENT, providerMessageId: messageId };
   };
 
-const deliverPush = (userId: number, permission: boolean | null) =>
+const deliverPush = (userIds: number[]) =>
   async (msg: JourneyMessage, sendId: number): Promise<Partial<TrialJourneySendAttributes>> => {
     // The copy is stored either way: it is also the in-app inbox item.
-    if (permission === false) {
-      return { status: JourneySendStatus.SKIPPED, error: "push permission denied — in-app only" };
+    if (!userIds.length) {
+      return { status: JourneySendStatus.SKIPPED, error: "no brand member allows push — in-app only" };
     }
     if (!isPushConfigured()) {
       return { status: JourneySendStatus.SKIPPED, error: "OneSignal not configured — in-app only" };
     }
     const res = await sendPush({
-      userId,
+      userIds,
       title: msg.subject,
       body: msg.body,
       url: msg.url,
@@ -392,7 +400,7 @@ const runPlanned = async (f: JourneyFacts, plan: PlannedSend[]) => {
       renderPlanned(f, p),
       p.channel === JourneyChannel.EMAIL
         ? deliverEmail(f.recipient.email)
-        : deliverPush(f.recipient.id, f.pushPermission),
+        : deliverPush(f.pushUserIds),
     );
   }
 };
