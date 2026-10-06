@@ -10,7 +10,6 @@ import {
   UserProfileModel,
   UserAddressModel,
   UserEntityDetailsModel,
-  AccessRequestModel,
   UserTourSeenModel,
 } from "./user/modules.export";
 import {
@@ -145,7 +144,6 @@ sequelize.addModels([
   UserProfileModel,
   UserAddressModel,
   UserEntityDetailsModel,
-  AccessRequestModel,
   UserTourSeenModel,
   TrackModel,
   AlbumModel,
