@@ -6,13 +6,11 @@
 // unlike those, journey mails are marketing and must carry one.
 
 import {
-  CategoryPreference,
   JourneyChannel,
   JourneySlot,
   JourneyVariant,
   type JourneyMessage,
 } from "../../dto-service/modules.export";
-import type { TopTrackRow } from "../../persistence-service/trial/modules.export";
 import { frontendUrl } from "./magic-link.service";
 
 const esc = (v: string): string =>
@@ -60,12 +58,6 @@ const layout = (title: string, inner: string, cta: string, unsubscribeUrl: strin
 </body>
 </html>`;
 
-const CATEGORY_LINKS: Record<CategoryPreference, { label: string; path: string }> = {
-  [CategoryPreference.INDIE_REGIONAL]: { label: "Indie & Regional", path: "/regional-indie" },
-  [CategoryPreference.HOOPR_OG]: { label: "Hoopr OG", path: "/hoopr-originals" },
-  [CategoryPreference.INTL_SONGS]: { label: "International", path: "/international" },
-};
-
 const formatDate = (d: Date): string =>
   new Intl.DateTimeFormat("en-IN", {
     weekday: "short",
@@ -74,21 +66,11 @@ const formatDate = (d: Date): string =>
     timeZone: "Asia/Kolkata",
   }).format(d);
 
-const credits = (n: number) => `${n} free credit${n === 1 ? "" : "s"}`;
-
 export interface TemplateContext {
-  firstName: string | null;
   creditsRemaining: number;
   creditsTotal: number;
-  creditsUsed: number;
   trialEnd: Date;
-  categories: CategoryPreference[];
-  // Present only for the not-activated lane.
-  magicLinkUrl: string | null;
-  unsubscribeUrl: string | null;
 }
-
-const hello = (ctx: TemplateContext) => P(`Hey ${esc(ctx.firstName || "there")},`);
 
 const email = (
   slot: JourneySlot,
@@ -124,190 +106,123 @@ const push = (
   url: `${frontendUrl()}${path}`,
 });
 
-// ── D0 — transactional, outside the budget ───────────────────────────────────
-
-export const welcomeEmail = (ctx: TemplateContext): JourneyMessage =>
-  email(
-    JourneySlot.WELCOME,
-    null,
-    "Your Hoopr Smash trial has started",
-    `${ctx.creditsTotal}/${ctx.creditsTotal} credits available`,
-    hello(ctx) +
-      P(`Your 7-day Hoopr Smash trial is live. You have <strong>${credits(ctx.creditsTotal)}</strong> to license tracks for your content, until <strong>${formatDate(ctx.trialEnd)}</strong>.`) +
-      P("Browse, preview, license — and add the link to the post where you used the track so the license is complete."),
-    `${frontendUrl()}/home`,
-    "Start exploring",
-    null,
-  );
-
-// ── Email 1 (D1) — conditional ───────────────────────────────────────────────
-
-export const email1 = (ctx: TemplateContext, activated: boolean): JourneyMessage => {
-  const picks = ctx.categories.length
-    ? P(
-        "Start with what you told us you like: " +
-          ctx.categories
-            .map((c) => CATEGORY_LINKS[c])
-            .filter(Boolean)
-            .map((c) => `<a href="${frontendUrl()}${c.path}" style="color:#ff2f63; text-decoration:none;">${c.label}</a>`)
-            .join(" · "),
-      )
-    : "";
-  const tips =
-    P("<strong>The best ways to use Hoopr Smash:</strong>") +
-    P("1. <strong>Search by mood, genre or occasion</strong> and preview tracks right on the page.<br/>" +
-      "2. <strong>Favourite the tracks you like</strong> and set your category preferences — <em>Recommended for you</em> gets sharper with every one.<br/>" +
-      "3. <strong>License, download, then add your usage link</strong> once the post is live.") +
-    picks;
-
-  if (activated) {
-    return email(
-      JourneySlot.EMAIL_1,
-      JourneyVariant.ACTIVATED,
-      "3 ways to get more out of Hoopr Smash",
-      "Make Hoopr Smash yours",
-      hello(ctx) + tips + P(`You have <strong>${credits(ctx.creditsRemaining)}</strong> left in your trial.`),
-      `${frontendUrl()}/recommended`,
-      "See what's recommended for you",
-      ctx.unsubscribeUrl,
-    );
-  }
-  return email(
-    JourneySlot.EMAIL_1,
-    JourneyVariant.NOT_ACTIVATED,
-    `Your ${credits(ctx.creditsRemaining)} are waiting`,
-    `Your ${credits(ctx.creditsRemaining)} are waiting`,
-    hello(ctx) +
-      P(`You haven't used your trial yet — <strong>${credits(ctx.creditsRemaining)}</strong> are ready for your next post. One click below logs you straight in.`) +
-      tips,
-    ctx.magicLinkUrl ?? `${frontendUrl()}/login`,
-    "Log in with one click",
-    ctx.unsubscribeUrl,
-  );
-};
-
-// ── Email 2 (D4) — standard, same for everyone ───────────────────────────────
-
-export const email2 = (ctx: TemplateContext, topTracks: TopTrackRow[]): JourneyMessage => {
-  const list = topTracks.length
-    ? `<ol style="margin:0 0 16px 20px; padding:0; font-size:15px; color:#333; line-height:1.9;">${topTracks
-        .map((t) => `<li><a href="${frontendUrl()}/tracks/${encodeURIComponent(t.trackCode)}" style="color:#ff2f63; text-decoration:none;">${esc(t.name)}</a></li>`)
-        .join("")}</ol>`
-    : "";
-  return email(
-    JourneySlot.EMAIL_2,
-    JourneyVariant.STANDARD,
-    "Have you checked out the top 5 most downloaded tracks?",
-    "The 5 most downloaded tracks right now",
-    hello(ctx) + P("These are the tracks creators and brands are licensing most on Hoopr Smash right now:") + list,
-    `${frontendUrl()}/trending`,
-    "See what's trending",
-    ctx.unsubscribeUrl,
-  );
-};
-
-// ── Email 3 (D5) — conditional, 2 days before expiry ─────────────────────────
-
-export const email3 = (ctx: TemplateContext, activated: boolean): JourneyMessage => {
-  const subject = `Your trial expires on ${formatDate(ctx.trialEnd)}`;
-  const status = P(
-    ctx.creditsRemaining > 0
-      ? `You still have <strong>${credits(ctx.creditsRemaining)}</strong>. Unused credits expire with the trial.`
-      : `You've used all ${ctx.creditsTotal} trial credits — upgrade to keep licensing.`,
-  );
-  if (activated) {
-    return email(
-      JourneySlot.EMAIL_3,
-      JourneyVariant.ACTIVATED,
-      subject,
-      subject,
-      hello(ctx) + status + P("Upgrade to Business Pro to keep licensing once the trial ends."),
-      ctx.creditsRemaining > 0 ? `${frontendUrl()}/recommended` : `${frontendUrl()}/my-subscription`,
-      ctx.creditsRemaining > 0 ? "Use my credits" : "See plans",
-      ctx.unsubscribeUrl,
-    );
-  }
-  return email(
-    JourneySlot.EMAIL_3,
-    JourneyVariant.NOT_ACTIVATED,
-    subject,
-    subject,
-    hello(ctx) + status + P("This is the last reminder we'll send. One click below logs you straight in."),
-    ctx.magicLinkUrl ?? `${frontendUrl()}/login`,
-    "Log in with one click",
-    ctx.unsubscribeUrl,
-  );
-};
-
-// ── Trial pushes (Day 1 = the day the trial starts) ──────────────────────────
+// ── Trial days: one copy, sent as a push and as an email ─────────────────────
 // Product copy: "credits", never "tokens" (matches the header chip and
-// popover). Keep titles ≤ ~45 chars and bodies ≤ ~120 — Chrome truncates.
+// popover). Push titles ≤ ~45 chars and bodies ≤ ~120 — Chrome truncates. The
+// email carries the same title and text, plus a greeting and a button.
+
+export interface DayCopy {
+  variant: JourneyVariant;
+  title: string;
+  body: string;
+  path: string;
+  cta: string;
+}
 
 const creditWord = (n: number) => `${n} credit${n === 1 ? "" : "s"}`;
 
 // Day 1
-export const pushWelcome = (ctx: TemplateContext): JourneyMessage =>
-  push(
-    JourneySlot.PUSH_WELCOME,
-    JourneyVariant.STANDARD,
-    "Your trial is live",
-    `${creditWord(ctx.creditsTotal)} are on your account — one each for Hoopr Originals, International and Regional & Indie.`,
-    "/home",
-  );
+export const welcomeCopy = (ctx: TemplateContext): DayCopy => ({
+  variant: JourneyVariant.STANDARD,
+  title: "Your trial is live",
+  body: `${creditWord(ctx.creditsTotal)} are on your account — one each for Hoopr Originals, International and Regional & Indie.`,
+  path: "/home",
+  cta: "Start exploring",
+});
 
 // Day 2
-export const pushCreditsAdded = (): JourneyMessage =>
-  push(
-    JourneySlot.PUSH_CREDITS_ADDED,
-    JourneyVariant.STANDARD,
-    "Pick your first track",
-    "Spend a credit on any track and the licence comes with it, ready to publish.",
-    "/recommended",
-  );
+export const firstTrackCopy = (): DayCopy => ({
+  variant: JourneyVariant.STANDARD,
+  title: "Pick your first track",
+  body: "Spend a credit on any track and the licence comes with it, ready to publish.",
+  path: "/recommended",
+  cta: "Pick a track",
+});
 
 // Day 3
-export const pushExplore = (): JourneyMessage =>
-  push(
-    JourneySlot.PUSH_EXPLORE,
-    JourneyVariant.STANDARD,
-    "New tracks worth a listen",
-    "Browse the catalogue and download anything your credits cover.",
-    "/recommended",
-  );
+export const exploreCopy = (): DayCopy => ({
+  variant: JourneyVariant.STANDARD,
+  title: "New tracks worth a listen",
+  body: "Browse the catalogue and download anything your credits cover.",
+  path: "/recommended",
+  cta: "Browse tracks",
+});
 
 // Day 4 — an unfinished Sound Tracking draft when there is one; otherwise the
 // credits left, and nothing at all once they are 0.
-export const pushResume = (
+export const resumeCopy = (
   ctx: TemplateContext,
   draft: { id: string; name: string } | null,
-): JourneyMessage | null => {
+): DayCopy | null => {
   if (draft) {
-    return push(
-      JourneySlot.PUSH_RESUME,
-      JourneyVariant.SOUND_TRACKING_RESUME,
-      "Your project is still open",
-      `"${draft.name}" is one step from a finished soundtrack.`,
-      `/sound-tracking/editor?projectId=${encodeURIComponent(draft.id)}&source=resume`,
-    );
+    return {
+      variant: JourneyVariant.SOUND_TRACKING_RESUME,
+      title: "Your project is still open",
+      body: `"${draft.name}" is one step from a finished soundtrack.`,
+      path: `/sound-tracking/editor?projectId=${encodeURIComponent(draft.id)}&source=resume`,
+      cta: "Open project",
+    };
   }
   if (ctx.creditsRemaining === 0) return null;
-  return push(
-    JourneySlot.PUSH_RESUME,
-    JourneyVariant.CREDITS_REMAINING,
-    "Pick up where you left off",
-    `You have ${creditWord(ctx.creditsRemaining)} left, and your trial runs until ${formatDate(ctx.trialEnd)}.`,
-    "/recommended",
-  );
+  return {
+    variant: JourneyVariant.CREDITS_REMAINING,
+    title: "Pick up where you left off",
+    body: `You have ${creditWord(ctx.creditsRemaining)} left, and your trial runs until ${formatDate(ctx.trialEnd)}.`,
+    path: "/recommended",
+    cta: "Continue",
+  };
 };
 
 // Day 6 (the slot window is Day 6 only, so "tomorrow" holds)
-export const pushContactSales = (): JourneyMessage =>
-  push(
-    JourneySlot.PUSH_CONTACT_SALES,
-    JourneyVariant.STANDARD,
-    "Your trial ends tomorrow",
-    "Talk to us about keeping access to the catalogue.",
-    "/contact-us?source=trial",
+export const contactSalesCopy = (): DayCopy => ({
+  variant: JourneyVariant.STANDARD,
+  title: "Your trial ends tomorrow",
+  body: "Talk to us about keeping access to the catalogue.",
+  path: "/contact-us?source=trial",
+  cta: "Talk to us",
+});
+
+export const asPush = (slot: JourneySlot, c: DayCopy): JourneyMessage =>
+  push(slot, c.variant, c.title, c.body, c.path);
+
+// Rendered per recipient: the greeting and the unsubscribe link are personal.
+export const asEmail = (
+  slot: JourneySlot,
+  c: DayCopy,
+  to: { firstName: string | null; unsubscribeUrl: string | null },
+): JourneyMessage =>
+  email(
+    slot,
+    c.variant,
+    c.title,
+    c.title,
+    P(`Hey ${esc(to.firstName || "there")},`) + P(esc(c.body)),
+    `${frontendUrl()}${c.path}`,
+    c.cta,
+    to.unsubscribeUrl,
+  );
+
+// ── Paid credits added (any brand, outside the trial journey) ────────────────
+
+export const paidCreditsCopy = (grant: { type: string; tokens: number; isUnlimited: boolean }) => ({
+  title: "Credits added to your account",
+  body: grant.isUnlimited
+    ? `Unlimited ${grant.type} credits are now on your account.`
+    : `${grant.tokens} ${grant.type} credit${grant.tokens === 1 ? " is" : "s are"} ready to use.`,
+  path: "/home",
+  cta: "Start licensing",
+});
+
+// Transactional (the brand just bought credits), so no unsubscribe footer.
+export const paidCreditsEmailHtml = (
+  c: ReturnType<typeof paidCreditsCopy>,
+  firstName: string | null,
+): string =>
+  layout(
+    c.title,
+    P(`Hey ${esc(firstName || "there")},`) + P(esc(c.body)),
+    button(`${frontendUrl()}${c.path}`, c.cta),
+    null,
   );
 
 // ── Pre-trial: onboarding re-trigger (outside the budget) ────────────────────

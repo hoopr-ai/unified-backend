@@ -7,14 +7,12 @@ import { isPushConfigured, sendPush } from "../../helper-service/push.service";
 import {
   BUDGET_EMAIL_SLOTS,
   BUDGET_PUSH_SLOTS,
-  CategoryPreference,
   DAY_MS,
   Day7Segment,
   JourneyChannel,
   JourneySendStatus,
   JourneySlot,
   JourneyVariant,
-  Platform,
   TRIAL_DAYS,
   TrialNudgeKey,
   TrialSignalKind,
@@ -40,7 +38,6 @@ import {
   findBrandInstagram,
   findBrandTrial,
   findSendsBySubject,
-  findUserOnboarding,
   finishJourneySend,
   latestPushPermission,
   listBrandMembers,
@@ -48,7 +45,6 @@ import {
   listIncompleteSignups,
   listPushSendsForBrand,
   listStaleTrialInvites,
-  listTopDownloadedTracks,
   listTrialLicenses,
   listTrialsDueForDay7,
   listTrialsInJourney,
@@ -60,7 +56,6 @@ import {
   userHasSeenTour,
   userHasSessionAfter,
   type BrandTrialModel,
-  type TopTrackRow,
   type TrialJourneySendModel,
   type TrialJourneySendAttributes,
 } from "../../persistence-service/trial/modules.export";
@@ -70,7 +65,6 @@ import {
   upsertSuppression,
 } from "../../persistence-service/email-campaign/modules.export";
 import { EmailSuppressionReason } from "../../dto-service/email-campaign/modules.export";
-import { resolveViewerOwnerAccess } from "../access/owner-access.service";
 import { getTrialLaunchedAt, isTrialEmail, resolveTrialState } from "./trial.service";
 import { createMagicLoginUrl, frontendUrl } from "./magic-link.service";
 import * as T from "./trial-journey.templates";
@@ -84,7 +78,6 @@ import * as T from "./trial-journey.templates";
 //   - sales alerts, invite reminders and onboarding re-triggers ride the same
 //     send log but sit outside the trial user's budget
 
-const HOUR_MS = 60 * 60 * 1000;
 // The onboarding session itself runs into the first minutes; real use after
 // that is what moves a trial from the "not logged in" lane to "activated".
 const ACTIVATION_GRACE_MS = 10 * 60 * 1000;
@@ -117,16 +110,18 @@ export const slotWindow = (
   const end = new Date(trial.endsAt).getTime();
   const at = (days: number) => start + days * DAY_MS;
   switch (slot) {
-    case JourneySlot.EMAIL_1: return [at(1), at(4)];
-    case JourneySlot.EMAIL_2: return [at(4), end - 2 * DAY_MS];
-    case JourneySlot.EMAIL_3: return [end - 2 * DAY_MS, end];
-    // Pushes by trial day; Day 1 = the first 24h after the trial starts.
-    case JourneySlot.PUSH_WELCOME: return [at(0), at(1)];
-    case JourneySlot.PUSH_CREDITS_ADDED: return [at(1), at(2)];
-    case JourneySlot.PUSH_EXPLORE: return [at(2), at(3)];
-    case JourneySlot.PUSH_RESUME: return [at(3), at(4)];
-    // Day 6 only: its copy says "ends tomorrow", so a missed Day 6 is dropped.
-    case JourneySlot.PUSH_CONTACT_SALES: return [at(5), Math.min(at(6), end)];
+    // Push and email by trial day; Day 1 = the first 24h after the trial starts.
+    case JourneySlot.PUSH_WELCOME:
+    case JourneySlot.EMAIL_WELCOME: return [at(0), at(1)];
+    case JourneySlot.PUSH_CREDITS_ADDED:
+    case JourneySlot.EMAIL_CREDITS_ADDED: return [at(1), at(2)];
+    case JourneySlot.PUSH_EXPLORE:
+    case JourneySlot.EMAIL_EXPLORE: return [at(2), at(3)];
+    case JourneySlot.PUSH_RESUME:
+    case JourneySlot.EMAIL_RESUME: return [at(3), at(4)];
+    // Day 6 only: the copy says "ends tomorrow", so a missed Day 6 is dropped.
+    case JourneySlot.PUSH_CONTACT_SALES:
+    case JourneySlot.EMAIL_CONTACT_SALES: return [at(5), Math.min(at(6), end)];
     default: return [Infinity, -Infinity];
   }
 };
@@ -145,16 +140,20 @@ interface Recipient {
   firstName: string | null;
 }
 
+// Every brand member the trial journey reaches: not deleted, on a work email
+// (the trial is invisible to personal emails).
+interface Member extends Recipient {
+  pushAllowed: boolean;
+}
+
 export interface JourneyFacts {
   trial: BrandTrialModel;
   state: TrialStateResponse;
   recipient: Recipient;
   activated: boolean;
-  // Brand members a push goes to: everyone not deleted, on a work email (the
-  // trial is invisible to personal emails), who has not denied permission.
-  // No FE decision reported = still targeted; OneSignal knows.
-  pushUserIds: number[];
-  categories: CategoryPreference[];
+  // Every push and email goes to all of them. Push skips members who denied
+  // permission (no FE decision reported = still targeted; OneSignal knows).
+  members: Member[];
   sends: Map<string, TrialJourneySendModel>;
 }
 
@@ -171,10 +170,15 @@ const detectActivation = async (trial: BrandTrialModel, recipientId: number): Pr
   return active;
 };
 
-const listPushRecipients = async (brandId: number): Promise<number[]> => {
-  const members = (await listBrandMembers(brandId)).filter((m) => isTrialEmail(m.email));
-  const permissions = await Promise.all(members.map((m) => latestPushPermission(Number(m.id))));
-  return members.filter((_, i) => permissions[i] !== false).map((m) => Number(m.id));
+const listJourneyMembers = async (brandId: number): Promise<Member[]> => {
+  const rows = (await listBrandMembers(brandId)).filter((m) => isTrialEmail(m.email));
+  const permissions = await Promise.all(rows.map((m) => latestPushPermission(Number(m.id))));
+  return rows.map((m, i) => ({
+    id: Number(m.id),
+    email: m.email,
+    firstName: m.firstName ?? null,
+    pushAllowed: permissions[i] !== false,
+  }));
 };
 
 const loadFacts = async (trial: BrandTrialModel): Promise<JourneyFacts | null> => {
@@ -188,10 +192,9 @@ const loadFacts = async (trial: BrandTrialModel): Promise<JourneyFacts | null> =
   if (!user || (user as any).status === "DELETED" || Number(user.brandId) !== brandId) return null;
   const recipient: Recipient = { id: user.id!, email: user.email, firstName: user.firstName ?? null };
 
-  const [activated, pushUserIds, onboarding, sendRows] = await Promise.all([
+  const [activated, members, sendRows] = await Promise.all([
     detectActivation(trial, recipient.id),
-    listPushRecipients(brandId),
-    findUserOnboarding(recipient.id),
+    listJourneyMembers(brandId),
     findSendsBySubject(brandKey(brandId)),
   ]);
   return {
@@ -199,8 +202,7 @@ const loadFacts = async (trial: BrandTrialModel): Promise<JourneyFacts | null> =
     state,
     recipient,
     activated,
-    pushUserIds,
-    categories: (onboarding?.categoryPreferences ?? []) as CategoryPreference[],
+    members,
     sends: new Map(sendRows.map((s) => [s.slot, s])),
   };
 };
@@ -216,21 +218,16 @@ export interface PlannedSend {
 // What is due for this trial right now: at most one email and one push. Every
 // trial user (not yet paid) gets each push on its day.
 export const planDueSends = (
-  f: Pick<JourneyFacts, "trial" | "activated" | "sends">,
+  f: Pick<JourneyFacts, "trial" | "sends">,
   now: Date,
 ): PlannedSend[] => {
   if (!isInSendHours(now)) return [];
   const out: PlannedSend[] = [];
   const claimed = (slot: JourneySlot) => f.sends.has(slot);
-  const lane = f.activated ? JourneyVariant.ACTIVATED : JourneyVariant.NOT_ACTIVATED;
 
   for (const slot of BUDGET_EMAIL_SLOTS) {
     if (claimed(slot) || !inWindow(slot, f.trial, now)) continue;
-    out.push({
-      slot,
-      channel: JourneyChannel.EMAIL,
-      variant: slot === JourneySlot.EMAIL_2 ? JourneyVariant.STANDARD : lane,
-    });
+    out.push({ slot, channel: JourneyChannel.EMAIL, variant: JourneyVariant.STANDARD });
     break;
   }
 
@@ -329,66 +326,70 @@ const deliverPush = (userIds: number[]) =>
     };
   };
 
-const templateContext = async (
-  f: JourneyFacts,
-  magicLinkSendId: number | null,
-): Promise<T.TemplateContext> => ({
-  firstName: f.recipient.firstName,
+const templateContext = (f: JourneyFacts): T.TemplateContext => ({
   creditsRemaining: f.state.creditsRemaining,
   creditsTotal: f.state.creditsTotal,
-  creditsUsed: f.state.creditsTotal - f.state.creditsRemaining,
   trialEnd: new Date(f.trial.endsAt),
-  categories: f.categories,
-  magicLinkUrl:
-    magicLinkSendId !== null
-      ? await createMagicLoginUrl(f.recipient.id, f.recipient.email, magicLinkSendId)
-      : null,
-  unsubscribeUrl: unsubscribeUrl(f.recipient.email),
 });
 
-// Computed at most once per tick: Email 2 is the same list for everyone.
-let topTracksMemo: { at: number; rows: TopTrackRow[] } | null = null;
-const topTracks = async (): Promise<TopTrackRow[]> => {
-  if (topTracksMemo && Date.now() - topTracksMemo.at < HOUR_MS) return topTracksMemo.rows;
-  const access = await resolveViewerOwnerAccess(null, Platform.ENTERPRISE);
-  const rows = await listTopDownloadedTracks(30, 5, Array.from(access.blockedOwnerIds));
-  topTracksMemo = { at: Date.now(), rows };
-  return rows;
-};
-
-const renderPlanned = (f: JourneyFacts, p: PlannedSend) => async (sendId: number) => {
-  const notActivated = p.variant === JourneyVariant.NOT_ACTIVATED;
-  switch (p.slot) {
-    case JourneySlot.EMAIL_1:
-      return T.email1(await templateContext(f, notActivated ? sendId : null), !notActivated);
-    case JourneySlot.EMAIL_2: {
-      const rows = await topTracks();
-      return T.email2(await templateContext(f, null), rows);
-    }
-    case JourneySlot.EMAIL_3:
-      return T.email3(await templateContext(f, notActivated ? sendId : null), !notActivated);
+// The copy for a trial day — the push and the email of that day share it.
+// null = nothing to say (Day 4 with no draft and no credits left).
+const dayCopy = async (f: JourneyFacts, slot: JourneySlot): Promise<T.DayCopy | null> => {
+  switch (slot) {
     case JourneySlot.PUSH_WELCOME:
-      return T.pushWelcome(await templateContext(f, null));
+    case JourneySlot.EMAIL_WELCOME:
+      return T.welcomeCopy(templateContext(f));
     case JourneySlot.PUSH_CREDITS_ADDED:
-      return T.pushCreditsAdded();
+    case JourneySlot.EMAIL_CREDITS_ADDED:
+      return T.firstTrackCopy();
     case JourneySlot.PUSH_EXPLORE:
-      return T.pushExplore();
-    case JourneySlot.PUSH_RESUME: {
+    case JourneySlot.EMAIL_EXPLORE:
+      return T.exploreCopy();
+    case JourneySlot.PUSH_RESUME:
+    case JourneySlot.EMAIL_RESUME: {
       const draft = await findAbandonedSoundProject(
-        [f.recipient.id],
+        f.members.map((m) => m.id),
         new Date(Date.now() - DAY_MS),
       );
-      return T.pushResume(await templateContext(f, null), draft);
+      return T.resumeCopy(templateContext(f), draft);
     }
     case JourneySlot.PUSH_CONTACT_SALES:
-      return T.pushContactSales();
+    case JourneySlot.EMAIL_CONTACT_SALES:
+      return T.contactSalesCopy();
     default:
       return null;
   }
 };
 
+// One email per member (the greeting and unsubscribe link are personal);
+// suppressed addresses are skipped. The send row keeps the first message id,
+// which is what SES open/click events are matched on.
+const deliverDayEmail = (members: Member[], slot: JourneySlot, copy: T.DayCopy) =>
+  async (): Promise<Partial<TrialJourneySendAttributes>> => {
+    let sent = 0;
+    let firstId: string | null = null;
+    let lastError: Error | null = null;
+    for (const m of members) {
+      if (await isEmailSuppressed(m.email.toLowerCase())) continue;
+      const msg = T.asEmail(slot, copy, { firstName: m.firstName, unsubscribeUrl: unsubscribeUrl(m.email) });
+      try {
+        const { messageId } = await sendSesEmail({ to: m.email, subject: msg.subject, html: msg.html! });
+        sent += 1;
+        firstId ??= messageId;
+      } catch (err) {
+        lastError = err as Error;
+        logger.error("[TrialJourney] Email to member failed", { slot, userId: m.id, error: lastError.message });
+      }
+    }
+    if (sent) return { status: JourneySendStatus.SENT, providerMessageId: firstId };
+    if (lastError) throw lastError;
+    return { status: JourneySendStatus.SKIPPED, error: "every member address is suppressed (bounce/complaint/unsubscribe)" };
+  };
+
 const runPlanned = async (f: JourneyFacts, plan: PlannedSend[]) => {
   for (const p of plan) {
+    // Settled before the claim so the email can be rendered per member.
+    const copy = await dayCopy(f, p.slot);
     await claimAndSend(
       {
         subjectKey: brandKey(Number(f.trial.brandId)),
@@ -398,10 +399,15 @@ const runPlanned = async (f: JourneyFacts, plan: PlannedSend[]) => {
         channel: p.channel,
         variant: p.variant,
       },
-      renderPlanned(f, p),
-      p.channel === JourneyChannel.EMAIL
-        ? deliverEmail(f.recipient.email)
-        : deliverPush(f.pushUserIds),
+      async () =>
+        !copy
+          ? null
+          : p.channel === JourneyChannel.PUSH
+            ? T.asPush(p.slot, copy)
+            : T.asEmail(p.slot, copy, { firstName: f.recipient.firstName, unsubscribeUrl: null }),
+      p.channel === JourneyChannel.EMAIL && copy
+        ? deliverDayEmail(f.members, p.slot, copy)
+        : deliverPush(f.members.filter((m) => m.pushAllowed).map((m) => m.id)),
     );
   }
 };
@@ -481,30 +487,19 @@ export const notifySalesDomainConflict = async (email: string): Promise<void> =>
 
 // ── D0 welcome (transactional — outside the budget) ──────────────────────────
 
-// Sent the moment the trial starts: confirms the account, shows the full
-// credit meter and links back in. Fire-and-forget from complete-profile.
+// The Day 1 email goes the moment the trial starts (any hour); the Day 1 push
+// waits for the next tick so the FE has time to register the browser.
+// Fire-and-forget from complete-profile.
 export const sendTrialWelcome = (brandId: number): void => {
   (async () => {
     if (!isTrialJourneyEnabled()) return;
     const trial = await findBrandTrial(brandId);
     if (!trial) return;
     const f = await loadFacts(trial);
-    if (!f) return;
-    await claimAndSend(
-      {
-        subjectKey: brandKey(brandId),
-        slot: JourneySlot.WELCOME,
-        brandId,
-        userId: f.recipient.id,
-        channel: JourneyChannel.EMAIL,
-        variant: null,
-      },
-      async () => T.welcomeEmail(await templateContext(f, null)),
-      async (msg) => {
-        await sendEmail({ to: f.recipient.email, subject: msg.subject, html: msg.html! });
-        return { status: JourneySendStatus.SENT };
-      },
-    );
+    if (!f || f.sends.has(JourneySlot.EMAIL_WELCOME)) return;
+    await runPlanned(f, [
+      { slot: JourneySlot.EMAIL_WELCOME, channel: JourneyChannel.EMAIL, variant: JourneyVariant.STANDARD },
+    ]);
   })().catch((err) =>
     logger.error("[TrialJourney] Welcome failed", { brandId, error: (err as Error).message }),
   );
@@ -640,7 +635,6 @@ export const executeTrialJourneyTick = async (now: Date = new Date()): Promise<T
   summary.day7Closed = await closeDay7(now);
   if (!summary.enabled) return summary;
 
-  topTracksMemo = null;
   const trials = await listTrialsInJourney(new Date(now.getTime() - (TRIAL_DAYS + 1) * DAY_MS));
   summary.trials = trials.length;
   for (const trial of trials) {

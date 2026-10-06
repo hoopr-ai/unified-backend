@@ -1,4 +1,4 @@
-// Smash 7-day trial — conversion journey (step 2): the 3 email + 5 push
+// Smash 7-day trial — conversion journey (step 2): the 5 email + 5 push
 // budget, in-app nudges, sales-assist alerts and Day-7 measurement.
 //
 // Mixpanel stays with the FE. The backend keeps only the state the journey
@@ -13,14 +13,16 @@ import type { TrialStateResponse } from "./trial.dto";
 export const isTrialJourneyEnabled = (): boolean =>
   process.env.SMASH_TRIAL_JOURNEY_ENABLED === "true";
 
-// The budget: at most 3 emails and 5 pushes per trial. Everything else is
-// in-app (uncounted), transactional (D0 welcome), pre-trial (onboarding
-// re-trigger) or aimed at someone else (invite reminder, sales alerts).
+// The budget: at most 5 emails and 5 pushes per trial. Everything else is
+// in-app (uncounted), pre-trial (onboarding re-trigger) or aimed at someone
+// else (invite reminder, sales alerts).
 export enum JourneySlot {
-  WELCOME = "welcome", // D0, transactional — outside the budget
-  EMAIL_1 = "email_1", // D1, conditional
-  EMAIL_2 = "email_2", // D4, standard
-  EMAIL_3 = "email_3", // D5, conditional, 2 days before expiry
+  // The 5 trial emails — the same copy as the push of the same day.
+  EMAIL_WELCOME = "email_welcome", // Day 1, sent the moment the trial starts
+  EMAIL_CREDITS_ADDED = "email_credits_added", // Day 2
+  EMAIL_EXPLORE = "email_explore", // Day 3
+  EMAIL_RESUME = "email_resume", // Day 4
+  EMAIL_CONTACT_SALES = "email_contact_sales", // Day 6
   // The 5 trial pushes, by trial day (Day 1 = the day the trial starts).
   PUSH_WELCOME = "push_welcome", // Day 1
   PUSH_CREDITS_ADDED = "push_credits_added", // Day 2
@@ -38,9 +40,11 @@ export enum JourneySlot {
 }
 
 export const BUDGET_EMAIL_SLOTS = [
-  JourneySlot.EMAIL_1,
-  JourneySlot.EMAIL_2,
-  JourneySlot.EMAIL_3,
+  JourneySlot.EMAIL_WELCOME,
+  JourneySlot.EMAIL_CREDITS_ADDED,
+  JourneySlot.EMAIL_EXPLORE,
+  JourneySlot.EMAIL_RESUME,
+  JourneySlot.EMAIL_CONTACT_SALES,
 ] as const;
 export const BUDGET_PUSH_SLOTS = [
   JourneySlot.PUSH_WELCOME,
