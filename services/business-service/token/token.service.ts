@@ -28,6 +28,7 @@ import type {
   TokenListFilters,
   SetTokenAssignedPriceRequest,
 } from "../../dto-service/modules.export";
+import { notifyCreditsAdded } from "./token-notification.service";
 
 /**
  * Get all tokens with filters (for CMS/Admin)
@@ -239,6 +240,8 @@ export const assignTokensAdminService = async (
     unlimited,
     { startDate: startDate ?? null, title: title ?? null, subTitle: subTitle ?? null }
   );
+
+  notifyCreditsAdded(brandId, { type: tokenAssigned.type, tokens: unlimited ? 0 : tokens!, isUnlimited: unlimited });
 
   // Fetch owner details if ownerIds exist
   const ownerDetails = tokenAssigned.ownerIds && tokenAssigned.ownerIds.length > 0

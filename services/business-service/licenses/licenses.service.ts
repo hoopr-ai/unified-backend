@@ -87,6 +87,7 @@ import {
   refundTrialCharge,
 } from "../trial/trial.service";
 import { onTrialCreditSpent } from "../trial/trial-journey.service";
+import { notifyCreditsAdded } from "../token/token-notification.service";
 import { resolveViewerOwnerAccess } from "../access/owner-access.service";
 
 const TOKEN_COST_PER_LICENSE = 1;
@@ -580,6 +581,7 @@ export const assignTokensService = async (
 
   // Using NEW token_assigned table
   const createdToken = await addTokensAssignedByType(brandId, type, tokens, expiryDate, ownerIds);
+  notifyCreditsAdded(brandId, { type: createdToken.type, tokens, isUnlimited: false });
 
   return {
     brandId,

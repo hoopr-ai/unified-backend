@@ -240,72 +240,73 @@ export const email3 = (ctx: TemplateContext, activated: boolean): JourneyMessage
 };
 
 // ── Trial pushes (Day 1 = the day the trial starts) ──────────────────────────
+// Product copy: "credits", never "tokens" (matches the header chip and
+// popover). Keep titles ≤ ~45 chars and bodies ≤ ~120 — Chrome truncates.
 
-const firstCategory = (ctx: TemplateContext) =>
-  ctx.categories.map((c) => CATEGORY_LINKS[c]).find(Boolean);
+const creditWord = (n: number) => `${n} credit${n === 1 ? "" : "s"}`;
 
 // Day 1
 export const pushWelcome = (ctx: TemplateContext): JourneyMessage =>
   push(
     JourneySlot.PUSH_WELCOME,
     JourneyVariant.STANDARD,
-    "Welcome to Hoopr Smash 🎉",
-    `Your 7-day trial is live with ${credits(ctx.creditsRemaining)}. Find the perfect track for your brand.`,
-    "/",
+    "Your trial is live",
+    `${creditWord(ctx.creditsTotal)} are on your account — one each for Hoopr Originals, International and Regional & Indie.`,
+    "/home",
   );
 
 // Day 2
-export const pushCreditsAdded = (ctx: TemplateContext): JourneyMessage =>
+export const pushCreditsAdded = (): JourneyMessage =>
   push(
     JourneySlot.PUSH_CREDITS_ADDED,
     JourneyVariant.STANDARD,
-    "Your trial tokens are added",
-    `You have ${credits(ctx.creditsRemaining)} ready to use. License a track for your next post.`,
-    firstCategory(ctx)?.path ?? "/recommended",
+    "Pick your first track",
+    "Spend a credit on any track and the licence comes with it, ready to publish.",
+    "/recommended",
   );
 
 // Day 3
-export const pushExplore = (ctx: TemplateContext): JourneyMessage => {
-  const cat = firstCategory(ctx);
-  return push(
+export const pushExplore = (): JourneyMessage =>
+  push(
     JourneySlot.PUSH_EXPLORE,
     JourneyVariant.STANDARD,
-    "Explore & download your favourite tracks",
-    cat
-      ? `Browse ${cat.label} and download the tracks you love with your free credits.`
-      : "Browse the catalogue and download the tracks you love with your free credits.",
-    cat?.path ?? "/recommended",
+    "New tracks worth a listen",
+    "Browse the catalogue and download anything your credits cover.",
+    "/recommended",
   );
-};
 
-// Day 4 — an unfinished Sound Tracking draft when there is one.
+// Day 4 — an unfinished Sound Tracking draft when there is one; otherwise the
+// credits left, and nothing at all once they are 0.
 export const pushResume = (
   ctx: TemplateContext,
   draft: { id: string; name: string } | null,
-): JourneyMessage =>
-  draft
-    ? push(
-        JourneySlot.PUSH_RESUME,
-        JourneyVariant.SOUND_TRACKING_RESUME,
-        "Resume where you left off",
-        `Your Sound Tracking project "${draft.name}" is waiting.`,
-        `/sound-tracking/editor?projectId=${encodeURIComponent(draft.id)}&source=resume`,
-      )
-    : push(
-        JourneySlot.PUSH_RESUME,
-        JourneyVariant.CREDITS_REMAINING,
-        "Resume where you left off",
-        `You still have ${credits(ctx.creditsRemaining)}. Pick up where you left off.`,
-        "/recommended",
-      );
+): JourneyMessage | null => {
+  if (draft) {
+    return push(
+      JourneySlot.PUSH_RESUME,
+      JourneyVariant.SOUND_TRACKING_RESUME,
+      "Your project is still open",
+      `"${draft.name}" is one step from a finished soundtrack.`,
+      `/sound-tracking/editor?projectId=${encodeURIComponent(draft.id)}&source=resume`,
+    );
+  }
+  if (ctx.creditsRemaining === 0) return null;
+  return push(
+    JourneySlot.PUSH_RESUME,
+    JourneyVariant.CREDITS_REMAINING,
+    "Pick up where you left off",
+    `You have ${creditWord(ctx.creditsRemaining)} left, and your trial runs until ${formatDate(ctx.trialEnd)}.`,
+    "/recommended",
+  );
+};
 
-// Day 6
+// Day 6 (the slot window is Day 6 only, so "tomorrow" holds)
 export const pushContactSales = (): JourneyMessage =>
   push(
     JourneySlot.PUSH_CONTACT_SALES,
     JourneyVariant.STANDARD,
-    "Want more tokens?",
-    "Talk to our team to keep licensing tracks after your trial.",
+    "Your trial ends tomorrow",
+    "Talk to us about keeping access to the catalogue.",
     "/contact-us?source=trial",
   );
 

@@ -125,7 +125,8 @@ export const slotWindow = (
     case JourneySlot.PUSH_CREDITS_ADDED: return [at(1), at(2)];
     case JourneySlot.PUSH_EXPLORE: return [at(2), at(3)];
     case JourneySlot.PUSH_RESUME: return [at(3), at(4)];
-    case JourneySlot.PUSH_CONTACT_SALES: return [at(5), end];
+    // Day 6 only: its copy says "ends tomorrow", so a missed Day 6 is dropped.
+    case JourneySlot.PUSH_CONTACT_SALES: return [at(5), Math.min(at(6), end)];
     default: return [Infinity, -Infinity];
   }
 };
@@ -369,9 +370,9 @@ const renderPlanned = (f: JourneyFacts, p: PlannedSend) => async (sendId: number
     case JourneySlot.PUSH_WELCOME:
       return T.pushWelcome(await templateContext(f, null));
     case JourneySlot.PUSH_CREDITS_ADDED:
-      return T.pushCreditsAdded(await templateContext(f, null));
+      return T.pushCreditsAdded();
     case JourneySlot.PUSH_EXPLORE:
-      return T.pushExplore(await templateContext(f, null));
+      return T.pushExplore();
     case JourneySlot.PUSH_RESUME: {
       const draft = await findAbandonedSoundProject(
         [f.recipient.id],
