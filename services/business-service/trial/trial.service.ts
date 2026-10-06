@@ -225,6 +225,19 @@ export const resumeMissedTrialStart = async (
   return started;
 };
 
+// Trial types the brand can still license with right now: on an active,
+// unblocked trial and with a credit of that type left. Track listings treat
+// these like a token (show the credit cost, hide the price). [] once the trial
+// is converted, expired, used up, or the brand never had one.
+export const getSpendableTrialTypes = async (brandId: number): Promise<string[]> => {
+  const trial = await findBrandTrial(brandId);
+  if (!trial) return [];
+  const converted = (await brandIdsWithTokenAllocations([brandId])).has(Number(brandId));
+  const state = resolveTrialState(trial, converted);
+  if (state.planType !== "TRIAL" || state.licensingBlocked) return [];
+  return state.creditsByType.filter((c) => c.creditsRemaining > 0).map((c) => c.type);
+};
+
 // The single place the trial rules live. Pure — `converted` and `now` come in.
 export const resolveTrialState = (
   trial: BrandTrialModel,

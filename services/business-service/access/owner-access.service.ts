@@ -5,6 +5,7 @@ import {
   getActiveBrandTokenGrants,
   type ActiveTokenGrant,
 } from "../../persistence-service/exports";
+import { getSpendableTrialTypes } from "../trial/trial.service";
 
 /**
  * Catalogue visibility for one viewer (a brand, or an anonymous visitor).
@@ -30,7 +31,11 @@ export interface ViewerOwnerAccess {
   activeTokenTypes: Set<string>;
   /** Owner ids explicitly named by an active, owner-scoped token allocation. */
   tokenOwnerIds: Set<string>;
-  /** Types held via an allocation with no owner scope (or unlimited) — covers every owner of that type. */
+  /**
+   * Types held via an allocation with no owner scope (or unlimited) — covers
+   * every owner of that type. Also the Smash trial's types that still have a
+   * credit left, so their tracks show the credit cost instead of a price.
+   */
   blanketTokenTypes: Set<string>;
 }
 
@@ -129,6 +134,18 @@ export const resolveViewerOwnerAccess = async (
   for (const ownerId of brandRestrictedOwnerIds) {
     if (tokenOwnerIds.has(ownerId)) continue;
     excluded.add(ownerId);
+  }
+
+  // A brand on the Smash trial (no paid allocation) can license the trial's
+  // types while it has a credit of that type left — the same blanket cover a
+  // paid allocation gives. Added after the restricted-label pass on purpose:
+  // the trial never unlocks YRF / Zee. Chartbusters is not a trial type, so it
+  // stays Enterprise Only.
+  if (grants.length === 0) {
+    for (const type of await getSpendableTrialTypes(brandId)) {
+      activeTokenTypes.add(type);
+      blanketTokenTypes.add(type);
+    }
   }
 
   // Label cards follow the exact same set, so a label whose tracks are all

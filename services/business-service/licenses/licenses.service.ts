@@ -78,7 +78,7 @@ import type {
   DownloadTrackResponse,
   DownloadTrackResult,
 } from "../../dto-service/licenses/modules.export";
-import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
+import { Platform, UserStatus, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
 import type { TrialStateResponse } from "../../dto-service/trial/trial.dto";
 import {
   chargeTrialCredit,
@@ -142,17 +142,19 @@ export const licenseTrackService = async (
   // countryCode + profileRole are needed by the isProfileComplete getter —
   // it's computed from columns, not a column itself.
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile", "countryCode", "profileRole"],
+    attributes: ["id", "brandId", "email", "status", "firstName", "lastName", "mobile", "countryCode", "profileRole"],
   });
 
   if (!user) {
     throw new AppError("User not found", 404);
   }
 
-  // Licensing needs a finished profile (it is what creates the brand and starts
-  // the trial). PROFILE_INCOMPLETE sends the FE to onboarding; invited members
-  // already have a brand but finish their profile first too.
-  if (!isCreator && !user.isProfileComplete) {
+  // Licensing needs onboarding done (complete-profile is what creates the brand,
+  // starts the trial and sets ACTIVE). PROFILE_INCOMPLETE sends the FE to
+  // onboarding; invited members already have a brand but finish it first too.
+  // Keyed on status, not isProfileComplete, so an existing ACTIVE user with an
+  // older, partly-filled profile is never locked out.
+  if (!isCreator && user.status !== UserStatus.ACTIVE) {
     throw new AppError(
       "Please complete your profile to download tracks",
       403,
