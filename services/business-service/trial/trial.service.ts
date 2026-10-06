@@ -21,7 +21,6 @@ import {
   type DiscoveryChannel,
   type OnboardingResponse,
   type TrialStateResponse,
-  type TrialTypeCredits,
 } from "../../dto-service/trial/trial.dto";
 import {
   brandIdsWithTokenAllocations,
@@ -134,23 +133,16 @@ export const isTrialEligibleSignup = async (user: {
   return !(await isEmailDomainInUse(domain, user.id));
 };
 
-// The credits an eligible signup will get, shown before onboarding is done (no
-// brand yet, so no trial row). Display only: the trial and its 7-day clock
-// still start at complete-profile. null = this user will not get a trial.
-export const getPendingTrialCredits = async (user: {
+// Will this user get the trial when they complete their profile? Lets the FE
+// promise the credits only to people who will receive them (gmail, invited and
+// pre-launch accounts never do). Same rule as startTrialForBrand.
+export const isTrialOffered = async (user: {
   id?: number;
   email: string;
   platform?: string | null;
   createdBy?: number | null;
   createdAt?: Date | null;
-}): Promise<TrialTypeCredits[] | null> => {
-  if (!isSmashTrialEnabled() || !(await isTrialEligibleSignup(user))) return null;
-  return TRIAL_CREDIT_TYPES.map((type) => ({
-    type,
-    creditsTotal: TRIAL_CREDITS_PER_TYPE,
-    creditsRemaining: TRIAL_CREDITS_PER_TYPE,
-  }));
-};
+}): Promise<boolean> => isSmashTrialEnabled() && (await isTrialEligibleSignup(user));
 
 // Starts the clock at onboarding completion — called from complete-profile
 // when a self-signed-up user creates their brand. Never throws: a trial that

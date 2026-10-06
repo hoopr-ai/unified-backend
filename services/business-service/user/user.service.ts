@@ -77,6 +77,7 @@ import { logger } from "../../helper-service/logger";
 import {
   startTrialForBrand,
   resumeMissedTrialStart,
+  isTrialOffered,
   getTrialStateForBrand,
   saveOnboardingAnswers,
   getOnboardingAnswers,
@@ -759,6 +760,8 @@ export const getUserProfileService = async (
     brandName: (brand as any)?.name ?? undefined,
     canEditBrand: canUserEditBrand(brand, role, userId),
     toursSeen,
+    trialOffer:
+      !user.brandId && !user.isProfileComplete ? await isTrialOffered(user) : false,
     trial: await getTrialStateForBrand(user.brandId, user.email),
     onboarding,
   };

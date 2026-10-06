@@ -82,7 +82,6 @@ import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.
 import type { TrialStateResponse } from "../../dto-service/trial/trial.dto";
 import {
   chargeTrialCredit,
-  getPendingTrialCredits,
   getTrialStateForBrand,
   isTrialEmail,
   refundTrialCharge,
@@ -148,6 +147,17 @@ export const licenseTrackService = async (
 
   if (!user) {
     throw new AppError("User not found", 404);
+  }
+
+  // Licensing needs a finished profile (it is what creates the brand and starts
+  // the trial). PROFILE_INCOMPLETE sends the FE to onboarding; invited members
+  // already have a brand but finish their profile first too.
+  if (!isCreator && !user.isProfileComplete) {
+    throw new AppError(
+      "Please complete your profile to download tracks",
+      403,
+      "PROFILE_INCOMPLETE",
+    );
   }
 
   if (!isCreator && !user.brandId) {
@@ -479,11 +489,8 @@ export const licenseTrackService = async (
 };
 
 export interface TokenBalanceByTypeResponse {
-  // null while a trial signup has not completed their profile (trialPending).
+  // null for a user with no brand yet (tokens is then empty).
   brandId: number | null;
-  // true = the tokens are the trial credits this user gets once their profile
-  // is complete; licensing needs the profile first.
-  trialPending?: boolean;
   tokens: {
     type: string;
     tokenBalance: number;
@@ -496,33 +503,17 @@ export const getTokenBalanceService = async (
   userId: number,
 ): Promise<TokenBalanceByTypeResponse> => {
   const user = await UserModel.findByPk(userId, {
-    // isProfileComplete is a getter over the profile fields, not a column.
-    attributes: [
-      "id", "brandId", "email", "platform", "createdBy", "createdAt",
-      "firstName", "lastName", "mobile", "countryCode", "profileRole",
-    ],
+    attributes: ["id", "brandId", "email"],
   });
 
   if (!user) {
     throw new AppError("User not found", 404);
   }
 
+  // No brand yet (onboarding not done, or a brandless account) is a normal
+  // state, not a bad request: the header polls this on every page.
   if (!user.brandId) {
-    // A trial signup sees their trial credits before onboarding is done. Not
-    // after: a completed profile with no brand never gets the trial.
-    const pending = user.isProfileComplete ? null : await getPendingTrialCredits(user);
-    if (pending) {
-      return {
-        brandId: null,
-        trialPending: true,
-        tokens: pending.map((c) => ({
-          type: c.type,
-          tokenBalance: c.creditsRemaining,
-          totalAssignedToken: c.creditsTotal,
-        })),
-      };
-    }
-    throw new AppError("User is not associated with any brand", 400);
+    return { brandId: null, tokens: [] };
   }
 
   // Using NEW token_assigned table

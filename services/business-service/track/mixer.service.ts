@@ -236,10 +236,15 @@ export const createMixService = async (
   input: CreateMixInput,
 ): Promise<MixResult> => {
   // ── Who is asking, and may they ──────────────────────────────────────────
+  // Profile fields feed the isProfileComplete getter (not a column).
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId"],
+    attributes: ["id", "brandId", "firstName", "lastName", "mobile", "countryCode", "profileRole"],
   });
   if (!user) throw new AppError("User not found", 404);
+  // Same gate as licensing: PROFILE_INCOMPLETE sends the FE to onboarding.
+  if (!user.isProfileComplete) {
+    throw new AppError("Please complete your profile to download tracks", 403, "PROFILE_INCOMPLETE");
+  }
   if (!user.brandId) {
     throw new AppError("User is not associated with any brand", 400);
   }

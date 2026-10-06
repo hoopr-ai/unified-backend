@@ -86,6 +86,9 @@ export interface UserProfileResponse {
   // while its key is absent (e.g. !toursSeen.includes("smashAppTour")).
   // Only GET /user/profile fills it; the list and update responses omit it.
   toursSeen?: string[];
+  // true = completing the profile starts the Smash trial for this user (only
+  // ever true before onboarding). Only GET /user/profile fills it.
+  trialOffer?: boolean;
   // Smash trial state for the user's brand; null when the brand was never on
   // the trial. Only GET /user/profile fills it.
   trial?: TrialStateResponse | null;
