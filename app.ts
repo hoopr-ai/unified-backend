@@ -31,7 +31,6 @@ import faqSectionRoutes from "./routes/faq-section.route";
 import contactRoutes from "./routes/contact.route";
 import companyLookupRoutes from "./routes/company-lookup.route";
 import railRoutes from "./routes/rail.route";
-import adminInternalUsersRoutes from "./routes/admin-internal-users.route";
 import adminSkuRoutes from "./routes/admin-sku.route";
 import adminOwnerRoutes from "./routes/admin-owner.route";
 import adminCatalogueRightsRoutes from "./routes/admin-catalogue-rights.route";
@@ -42,7 +41,6 @@ import adminIprsRoutes from "./routes/admin-iprs.route";
 import adminEnterpriseAnalyticsRoutes from "./routes/admin-enterprise-analytics.route";
 import adminNativeAnalyticsRoutes from "./routes/admin-native-analytics.route";
 import adminCreatorAnalyticsRoutes from "./routes/admin-creator-analytics.route";
-import internalLoginRoutes from "./routes/internal-login.route";
 import userAddressRoutes from "./routes/user-address.route";
 import geographyRoutes from "./routes/geography.route";
 import cartRoutes from "./routes/cart.route";
@@ -85,10 +83,12 @@ await initializeBusinessService();
 
 app.use(activityLoggerMiddleware());
 
-// Mount the more-specific /user/internal-login BEFORE /user so Express resolves it
-// directly and never falls through userRoutes. Defence-in-depth — userRoutes has no
-// catch-all today, but a future addition there must not silently shadow login OTP.
-app.use("/user/internal-login", internalLoginRoutes);
+// /user/internal-login and /admin/internal-users were served here. Both moved
+// to hoopr-internal-be, the dedicated backend for internal-fe, which now
+// ISSUES the internal session token this service still verifies (same
+// JWT_SECRET_KEY, same claims). The remaining /admin/* routes below are still
+// internal-only and still live — they are reached THROUGH that service, which
+// proxies them here until each one is ported.
 app.use("/user/address", userAddressRoutes);
 app.use("/", geographyRoutes);
 app.use("/user", userRoutes);
@@ -114,7 +114,7 @@ app.use("/faq-sections", faqSectionRoutes);
 app.use("/contact", contactRoutes);
 app.use("/company-lookup", companyLookupRoutes);
 app.use("/rails", railRoutes);
-app.use("/admin/internal-users", adminInternalUsersRoutes);
+// /admin/internal-users moved to hoopr-internal-be.
 app.use("/admin/skus", adminSkuRoutes);
 app.use("/admin/owners", adminOwnerRoutes);
 // Catalogue rights: the CMS surface, and the brand-facing read behind the

@@ -10,8 +10,11 @@ interface AuthRequest extends Request {
 
 /**
  * Gate an INTERNAL route by a granted functionality (the same ids used by the
- * internal-fe home cards + FunctionalityRoute, see
- * admin-internal-users/functionalities.ts).
+ * internal-fe home cards + FunctionalityRoute).
+ *
+ * Still in use: the /admin/* routes this service keeps are internal-only and
+ * reached through hoopr-internal-be, which proxies them here. The grants
+ * themselves are now written by that service — this only reads them.
  *
  * MUST run AFTER authenticateWithSession({ platforms: [INTERNAL] }) — it reads
  * req.session for the caller's userId + role.
