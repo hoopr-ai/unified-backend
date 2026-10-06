@@ -6,6 +6,7 @@ import { sendSesEmail } from "../../helper-service/ses.client";
 import { isPushConfigured, sendPush } from "../../helper-service/push.service";
 import {
   BUDGET_EMAIL_SLOTS,
+  BUDGET_PUSH_SLOTS,
   CategoryPreference,
   DAY_MS,
   Day7Segment,
@@ -89,8 +90,7 @@ const HOUR_MS = 60 * 60 * 1000;
 const ACTIVATION_GRACE_MS = 10 * 60 * 1000;
 const SMASH_APP_TOUR = "smashAppTour";
 
-// Scheduled sends go out between 10:00 and 20:00 IST only. Credit exhaustion
-// is exempt: the user is in the product right now.
+// Scheduled sends go out between 10:00 and 20:00 IST only.
 const SEND_HOURS_IST = { from: 10, to: 20 };
 
 export const isInSendHours = (now: Date): boolean => {
@@ -120,9 +120,12 @@ export const slotWindow = (
     case JourneySlot.EMAIL_1: return [at(1), at(4)];
     case JourneySlot.EMAIL_2: return [at(4), end - 2 * DAY_MS];
     case JourneySlot.EMAIL_3: return [end - 2 * DAY_MS, end];
-    case JourneySlot.PUSH_1: return [at(2), at(5)];
-    case JourneySlot.PUSH_2: return [at(5), at(6)];
-    case JourneySlot.PUSH_3: return [at(6), end];
+    // Pushes by trial day; Day 1 = the first 24h after the trial starts.
+    case JourneySlot.PUSH_WELCOME: return [at(0), at(1)];
+    case JourneySlot.PUSH_CREDITS_ADDED: return [at(1), at(2)];
+    case JourneySlot.PUSH_EXPLORE: return [at(2), at(3)];
+    case JourneySlot.PUSH_RESUME: return [at(3), at(4)];
+    case JourneySlot.PUSH_CONTACT_SALES: return [at(5), end];
     default: return [Infinity, -Infinity];
   }
 };
@@ -201,40 +204,17 @@ export interface PlannedSend {
   variant: JourneyVariant;
 }
 
-// Push 3's branch, by credits used.
-export const push3Variant = (state: TrialStateResponse): JourneyVariant => {
-  const used = state.creditsTotal - state.creditsRemaining;
-  if (state.creditsRemaining === 0) return JourneyVariant.EXHAUSTED;
-  if (used >= 2) return JourneyVariant.CONVERTED;
-  if (used === 1) return JourneyVariant.NEEDS_ASSISTANCE;
-  return JourneyVariant.NOT_CONVERTED;
-};
-
-// What is due for this trial right now: at most one email and one push.
-// `exhausted` = called from the licensing path the moment credits hit 0.
+// What is due for this trial right now: at most one email and one push. Every
+// trial user (not yet paid) gets each push on its day.
 export const planDueSends = (
-  f: Pick<JourneyFacts, "trial" | "state" | "activated" | "sends">,
+  f: Pick<JourneyFacts, "trial" | "activated" | "sends">,
   now: Date,
-  opts: { exhausted?: boolean } = {},
 ): PlannedSend[] => {
+  if (!isInSendHours(now)) return [];
   const out: PlannedSend[] = [];
   const claimed = (slot: JourneySlot) => f.sends.has(slot);
   const lane = f.activated ? JourneyVariant.ACTIVATED : JourneyVariant.NOT_ACTIVATED;
-  const used = f.state.creditsTotal - f.state.creditsRemaining;
-  const expired = now.getTime() >= new Date(f.trial.endsAt).getTime();
 
-  // Credit exhaustion: pull Push 3 forward, any day, any hour. Email 3 stays
-  // a flat date-based reminder.
-  if (opts.exhausted || (f.state.creditsRemaining === 0 && !expired)) {
-    if (!claimed(JourneySlot.PUSH_3)) {
-      out.push({ slot: JourneySlot.PUSH_3, channel: JourneyChannel.PUSH, variant: JourneyVariant.EXHAUSTED });
-    }
-    if (opts.exhausted) return out;
-  }
-
-  if (!isInSendHours(now)) return out;
-
-  // Emails — everyone, one per tick.
   for (const slot of BUDGET_EMAIL_SLOTS) {
     if (claimed(slot) || !inWindow(slot, f.trial, now)) continue;
     out.push({
@@ -245,32 +225,11 @@ export const planDueSends = (
     break;
   }
 
-  // Pushes — skip once a push already went this tick (exhaustion above).
-  if (out.some((p) => p.channel === JourneyChannel.PUSH)) return out;
-
-  if (!claimed(JourneySlot.PUSH_1) && inWindow(JourneySlot.PUSH_1, f.trial, now) && used === 0) {
-    // No-click escalation: Push 1 becomes primary when Email 1 went out a day
-    // ago and was never opened — even for the not-activated lane.
-    const e1 = f.sends.get(JourneySlot.EMAIL_1);
-    const e1Ignored =
-      !!e1?.sentAt && !e1.openedAt && now.getTime() - new Date(e1.sentAt).getTime() >= DAY_MS;
-    if (f.activated || e1Ignored) {
-      out.push({ slot: JourneySlot.PUSH_1, channel: JourneyChannel.PUSH, variant: lane });
-      return out;
-    }
-  }
-  if (
-    !claimed(JourneySlot.PUSH_2) &&
-    inWindow(JourneySlot.PUSH_2, f.trial, now) &&
-    f.activated &&
-    f.state.creditsRemaining > 0
-  ) {
-    // Variant (draft resume vs credits nudge) is settled at render time.
-    out.push({ slot: JourneySlot.PUSH_2, channel: JourneyChannel.PUSH, variant: JourneyVariant.CREDITS_REMAINING });
-    return out;
-  }
-  if (!claimed(JourneySlot.PUSH_3) && inWindow(JourneySlot.PUSH_3, f.trial, now)) {
-    out.push({ slot: JourneySlot.PUSH_3, channel: JourneyChannel.PUSH, variant: push3Variant(f.state) });
+  for (const slot of BUDGET_PUSH_SLOTS) {
+    if (claimed(slot) || !inWindow(slot, f.trial, now)) continue;
+    // Variant (e.g. Day 4 draft vs credits) is settled at render time.
+    out.push({ slot, channel: JourneyChannel.PUSH, variant: JourneyVariant.STANDARD });
+    break;
   }
   return out;
 };
@@ -399,17 +358,21 @@ const renderPlanned = (f: JourneyFacts, p: PlannedSend) => async (sendId: number
     }
     case JourneySlot.EMAIL_3:
       return T.email3(await templateContext(f, notActivated ? sendId : null), !notActivated);
-    case JourneySlot.PUSH_1:
-      return T.push1(await templateContext(f, null));
-    case JourneySlot.PUSH_2: {
+    case JourneySlot.PUSH_WELCOME:
+      return T.pushWelcome(await templateContext(f, null));
+    case JourneySlot.PUSH_CREDITS_ADDED:
+      return T.pushCreditsAdded(await templateContext(f, null));
+    case JourneySlot.PUSH_EXPLORE:
+      return T.pushExplore(await templateContext(f, null));
+    case JourneySlot.PUSH_RESUME: {
       const draft = await findAbandonedSoundProject(
         [f.recipient.id],
         new Date(Date.now() - DAY_MS),
       );
-      return T.push2(await templateContext(f, null), draft);
+      return T.pushResume(await templateContext(f, null), draft);
     }
-    case JourneySlot.PUSH_3:
-      return T.push3(await templateContext(f, null), p.variant);
+    case JourneySlot.PUSH_CONTACT_SALES:
+      return T.pushContactSales();
     default:
       return null;
   }
@@ -437,11 +400,10 @@ const runPlanned = async (f: JourneyFacts, plan: PlannedSend[]) => {
 export const runJourneyForTrial = async (
   trial: BrandTrialModel,
   now: Date,
-  opts: { exhausted?: boolean } = {},
 ): Promise<number> => {
   const f = await loadFacts(trial);
   if (!f) return 0;
-  const plan = planDueSends(f, now, opts);
+  const plan = planDueSends(f, now);
   await runPlanned(f, plan);
   return plan.length;
 };
@@ -539,16 +501,13 @@ export const sendTrialWelcome = (brandId: number): void => {
   );
 };
 
-// ── Credit exhaustion trigger ────────────────────────────────────────────────
+// ── Credit spent ─────────────────────────────────────────────────────────────
 
 // Called by licensing after every trial credit spent. Fire-and-forget: the
-// license response never waits on this.
-export const onTrialCreditSpent = (brandId: number, state: TrialStateResponse): void => {
+// license response never waits on this. Spending a credit is activation.
+export const onTrialCreditSpent = (brandId: number, _state: TrialStateResponse): void => {
   (async () => {
     await markTrialActivated(brandId);
-    if (state.creditsRemaining > 0 || !isTrialJourneyEnabled()) return;
-    const trial = await findBrandTrial(brandId);
-    if (trial) await runJourneyForTrial(trial, new Date(), { exhausted: true });
   })().catch((err) =>
     logger.error("[TrialJourney] Credit-spent trigger failed", { brandId, error: (err as Error).message }),
   );

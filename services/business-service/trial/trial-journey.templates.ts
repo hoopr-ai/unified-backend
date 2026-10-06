@@ -186,19 +186,6 @@ export const email1 = (ctx: TemplateContext, activated: boolean): JourneyMessage
   );
 };
 
-// ── Push 1 (D2) ──────────────────────────────────────────────────────────────
-
-export const push1 = (ctx: TemplateContext): JourneyMessage => {
-  const first = ctx.categories.map((c) => CATEGORY_LINKS[c]).find(Boolean);
-  return push(
-    JourneySlot.PUSH_1,
-    JourneyVariant.ACTIVATED,
-    "Your first track is waiting",
-    `You have ${credits(ctx.creditsRemaining)}. Pick a track for your next post.`,
-    first?.path ?? "/recommended",
-  );
-};
-
 // ── Email 2 (D4) — standard, same for everyone ───────────────────────────────
 
 export const email2 = (ctx: TemplateContext, topTracks: TopTrackRow[]): JourneyMessage => {
@@ -218,28 +205,6 @@ export const email2 = (ctx: TemplateContext, topTracks: TopTrackRow[]): JourneyM
     ctx.unsubscribeUrl,
   );
 };
-
-// ── Push 2 (D5) ──────────────────────────────────────────────────────────────
-
-export const push2 = (
-  ctx: TemplateContext,
-  draft: { id: string; name: string } | null,
-): JourneyMessage =>
-  draft
-    ? push(
-        JourneySlot.PUSH_2,
-        JourneyVariant.SOUND_TRACKING_RESUME,
-        "Your Sound Tracking project is waiting",
-        `Pick up "${draft.name}" where you left off.`,
-        `/sound-tracking/editor?projectId=${encodeURIComponent(draft.id)}&source=resume`,
-      )
-    : push(
-        JourneySlot.PUSH_2,
-        JourneyVariant.CREDITS_REMAINING,
-        `${credits(ctx.creditsRemaining)} left`,
-        "Your trial credits are still unused. Find the track for your next post.",
-        "/recommended",
-      );
 
 // ── Email 3 (D5) — conditional, 2 days before expiry ─────────────────────────
 
@@ -274,44 +239,75 @@ export const email3 = (ctx: TemplateContext, activated: boolean): JourneyMessage
   );
 };
 
-// ── Push 3 (D6–D7, or immediately on credit exhaustion) ──────────────────────
+// ── Trial pushes (Day 1 = the day the trial starts) ──────────────────────────
 
-export const push3 = (ctx: TemplateContext, variant: JourneyVariant): JourneyMessage => {
-  switch (variant) {
-    case JourneyVariant.EXHAUSTED:
-      return push(
-        JourneySlot.PUSH_3,
-        variant,
-        "You've used all your free credits",
-        "Upgrade to Business Pro to keep licensing tracks.",
-        "/my-subscription",
-      );
-    case JourneyVariant.CONVERTED:
-      return push(
-        JourneySlot.PUSH_3,
-        variant,
-        `You've licensed ${ctx.creditsUsed} tracks this week`,
-        "Keep going — upgrade to Business Pro before your trial ends.",
-        "/my-subscription",
-      );
-    case JourneyVariant.NEEDS_ASSISTANCE:
-      return push(
-        JourneySlot.PUSH_3,
-        variant,
-        "Want a hand finding the right track?",
-        "Our team can pull together picks for your brand. Tap to talk to us.",
-        "/contact-us?source=trial",
-      );
-    default:
-      return push(
-        JourneySlot.PUSH_3,
-        JourneyVariant.NOT_CONVERTED,
-        "Your free credits expire soon",
-        `${credits(ctx.creditsRemaining)} still unused. See what's trending this week.`,
-        "/trending",
-      );
-  }
+const firstCategory = (ctx: TemplateContext) =>
+  ctx.categories.map((c) => CATEGORY_LINKS[c]).find(Boolean);
+
+// Day 1
+export const pushWelcome = (ctx: TemplateContext): JourneyMessage =>
+  push(
+    JourneySlot.PUSH_WELCOME,
+    JourneyVariant.STANDARD,
+    "Welcome to Hoopr Smash 🎉",
+    `Your 7-day trial is live with ${credits(ctx.creditsRemaining)}. Find the perfect track for your brand.`,
+    "/",
+  );
+
+// Day 2
+export const pushCreditsAdded = (ctx: TemplateContext): JourneyMessage =>
+  push(
+    JourneySlot.PUSH_CREDITS_ADDED,
+    JourneyVariant.STANDARD,
+    "Your trial tokens are added",
+    `You have ${credits(ctx.creditsRemaining)} ready to use. License a track for your next post.`,
+    firstCategory(ctx)?.path ?? "/recommended",
+  );
+
+// Day 3
+export const pushExplore = (ctx: TemplateContext): JourneyMessage => {
+  const cat = firstCategory(ctx);
+  return push(
+    JourneySlot.PUSH_EXPLORE,
+    JourneyVariant.STANDARD,
+    "Explore & download your favourite tracks",
+    cat
+      ? `Browse ${cat.label} and download the tracks you love with your free credits.`
+      : "Browse the catalogue and download the tracks you love with your free credits.",
+    cat?.path ?? "/recommended",
+  );
 };
+
+// Day 4 — an unfinished Sound Tracking draft when there is one.
+export const pushResume = (
+  ctx: TemplateContext,
+  draft: { id: string; name: string } | null,
+): JourneyMessage =>
+  draft
+    ? push(
+        JourneySlot.PUSH_RESUME,
+        JourneyVariant.SOUND_TRACKING_RESUME,
+        "Resume where you left off",
+        `Your Sound Tracking project "${draft.name}" is waiting.`,
+        `/sound-tracking/editor?projectId=${encodeURIComponent(draft.id)}&source=resume`,
+      )
+    : push(
+        JourneySlot.PUSH_RESUME,
+        JourneyVariant.CREDITS_REMAINING,
+        "Resume where you left off",
+        `You still have ${credits(ctx.creditsRemaining)}. Pick up where you left off.`,
+        "/recommended",
+      );
+
+// Day 6
+export const pushContactSales = (): JourneyMessage =>
+  push(
+    JourneySlot.PUSH_CONTACT_SALES,
+    JourneyVariant.STANDARD,
+    "Want more tokens?",
+    "Talk to our team to keep licensing tracks after your trial.",
+    "/contact-us?source=trial",
+  );
 
 // ── Pre-trial: onboarding re-trigger (outside the budget) ────────────────────
 

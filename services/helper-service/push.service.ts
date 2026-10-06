@@ -6,15 +6,15 @@ import { logger } from "./logger";
 // external_id alias, which the FE must set to our user id after login:
 //   OneSignal.login(String(user.id))
 //
-//   ONESIGNAL_APP_ID        OneSignal app id
-//   ONESIGNAL_REST_API_KEY  REST API key ("Key …" auth)
+//   ONE_SIGNAL_APP_ID   OneSignal app id
+//   ONE_SIGNAL_API_KEY  REST API key ("Key …" auth)
 // Unset → isPushConfigured() is false and the journey records the push slot
 // as skipped; its in-app inbox copy still shows.
 
 const API_URL = "https://api.onesignal.com/notifications";
 
 export const isPushConfigured = (): boolean =>
-  Boolean(process.env.ONESIGNAL_APP_ID && process.env.ONESIGNAL_REST_API_KEY);
+  Boolean(process.env.ONE_SIGNAL_APP_ID && process.env.ONE_SIGNAL_API_KEY);
 
 export interface SendPushOptions {
   userId: number;
@@ -39,7 +39,7 @@ export const sendPush = async (options: SendPushOptions): Promise<SendPushResult
   const res = await axios.post(
     API_URL,
     {
-      app_id: process.env.ONESIGNAL_APP_ID,
+      app_id: process.env.ONE_SIGNAL_APP_ID,
       target_channel: "push",
       include_aliases: { external_id: [String(options.userId)] },
       headings: { en: options.title },
@@ -50,7 +50,7 @@ export const sendPush = async (options: SendPushOptions): Promise<SendPushResult
     },
     {
       headers: {
-        Authorization: `Key ${process.env.ONESIGNAL_REST_API_KEY}`,
+        Authorization: `Key ${process.env.ONE_SIGNAL_API_KEY}`,
         "Content-Type": "application/json",
       },
       timeout: 10_000,

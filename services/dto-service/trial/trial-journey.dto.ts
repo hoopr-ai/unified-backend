@@ -1,4 +1,4 @@
-// Smash 7-day trial — conversion journey (step 2): the 3 email + 3 push
+// Smash 7-day trial — conversion journey (step 2): the 3 email + 5 push
 // budget, in-app nudges, sales-assist alerts and Day-7 measurement.
 //
 // Mixpanel stays with the FE. The backend keeps only the state the journey
@@ -13,17 +13,20 @@ import type { TrialStateResponse } from "./trial.dto";
 export const isTrialJourneyEnabled = (): boolean =>
   process.env.SMASH_TRIAL_JOURNEY_ENABLED === "true";
 
-// The budget: at most 3 emails and 3 pushes per trial. Everything else is
+// The budget: at most 3 emails and 5 pushes per trial. Everything else is
 // in-app (uncounted), transactional (D0 welcome), pre-trial (onboarding
 // re-trigger) or aimed at someone else (invite reminder, sales alerts).
 export enum JourneySlot {
   WELCOME = "welcome", // D0, transactional — outside the budget
   EMAIL_1 = "email_1", // D1, conditional
-  PUSH_1 = "push_1", // D2
   EMAIL_2 = "email_2", // D4, standard
-  PUSH_2 = "push_2", // D5
   EMAIL_3 = "email_3", // D5, conditional, 2 days before expiry
-  PUSH_3 = "push_3", // D6–D7, or pulled forward on credit exhaustion
+  // The 5 trial pushes, by trial day (Day 1 = the day the trial starts).
+  PUSH_WELCOME = "push_welcome", // Day 1
+  PUSH_CREDITS_ADDED = "push_credits_added", // Day 2
+  PUSH_EXPLORE = "push_explore", // Day 3
+  PUSH_RESUME = "push_resume", // Day 4
+  PUSH_CONTACT_SALES = "push_contact_sales", // Day 6
   ONBOARDING_RETRIGGER_1 = "onboarding_retrigger_1",
   ONBOARDING_RETRIGGER_2 = "onboarding_retrigger_2",
   ONBOARDING_RETRIGGER_3 = "onboarding_retrigger_3",
@@ -40,9 +43,11 @@ export const BUDGET_EMAIL_SLOTS = [
   JourneySlot.EMAIL_3,
 ] as const;
 export const BUDGET_PUSH_SLOTS = [
-  JourneySlot.PUSH_1,
-  JourneySlot.PUSH_2,
-  JourneySlot.PUSH_3,
+  JourneySlot.PUSH_WELCOME,
+  JourneySlot.PUSH_CREDITS_ADDED,
+  JourneySlot.PUSH_EXPLORE,
+  JourneySlot.PUSH_RESUME,
+  JourneySlot.PUSH_CONTACT_SALES,
 ] as const;
 
 export enum JourneyChannel {
