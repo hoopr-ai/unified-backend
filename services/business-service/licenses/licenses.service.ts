@@ -1066,6 +1066,8 @@ export interface TokenDetailsItem {
   type: string;
   isUnlimited?: boolean;
   ownerWiseBreakdown?: OwnerWiseTokenBreakdown[];
+  // Set on the Smash trial's types: their credits run out at the trial's end.
+  expiryDate?: Date;
 }
 
 export interface TokenDetailsResponse {
@@ -1077,7 +1079,7 @@ export const getTokenDetailsService = async (
   userId: number,
 ): Promise<TokenDetailsResponse> => {
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId"],
+    attributes: ["id", "brandId", "email"],
   });
 
   if (!user) {
@@ -1226,6 +1228,22 @@ export const getTokenDetailsService = async (
       const rankB = ASSORTMENT_ORDER[b.type.toLowerCase()] ?? 999;
       return rankA - rankB;
     });
+
+  // The Smash trial's per-type credits, on the same rows the paid tokens use.
+  // A trial brand has no token_assigned rows (any row makes it PAID), so these
+  // rows are all zero before this. Gone once PAID; null for personal emails.
+  const trial = await getTrialStateForBrand(user.brandId, user.email);
+  if (trial?.planType === "TRIAL") {
+    for (const credit of trial.creditsByType) {
+      const row = mergedTokens.find((t) => t.type === credit.type);
+      if (!row || row.isUnlimited) continue;
+      const balance = trial.licensingBlocked ? 0 : credit.creditsRemaining;
+      row.totalAssignedToken += credit.creditsTotal;
+      row.tokenBalance += balance;
+      row.tokensUsed = row.totalAssignedToken - row.tokenBalance;
+      (row as TokenDetailsItem).expiryDate = trial.trialEnd;
+    }
+  }
 
   return {
     brandId: user.brandId,
