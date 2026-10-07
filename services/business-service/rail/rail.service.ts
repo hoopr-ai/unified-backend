@@ -359,7 +359,16 @@ const hydratePlaylists = async (
           ]
         : [{ playlistCode: { [Op.in]: itemCodes } }],
     },
-    attributes: ["id", "playlistCode", "name", "name_slug", "description"],
+    // imageLink carries the CMS-uploaded cover; without it a rail card can
+    // only guess the by-convention path, which a replaced cover no longer uses.
+    attributes: [
+      "id",
+      "playlistCode",
+      "name",
+      "name_slug",
+      "description",
+      "imageLink",
+    ],
   });
 
   for (const row of rows) {
