@@ -53,6 +53,9 @@ const validateCreateBody = (body: unknown): CreateOccasionRequest | string => {
   if (typeof b.date !== "string" || !b.date.trim()) return "date is required";
   if (typeof b.className !== "string" || !b.className.trim()) return "className is required";
   if (typeof b.end !== "string" || !b.end.trim()) return "end is required";
+  if (b.description != null && typeof b.description !== "string") {
+    return "description must be a string or null";
+  }
   return b as unknown as CreateOccasionRequest;
 };
 
@@ -84,6 +87,11 @@ const validateUpdateBody = (body: unknown): UpdateOccasionRequest | string => {
   }
   if (b.end !== undefined && (typeof b.end !== "string" || !b.end.trim())) {
     return "end must be a non-empty string";
+  }
+  // An empty string clears the blurb, so unlike the fields above this only
+  // rejects the wrong TYPE — "" and null are both legitimate.
+  if (b.description !== undefined && b.description !== null && typeof b.description !== "string") {
+    return "description must be a string or null";
   }
   return b as unknown as UpdateOccasionRequest;
 };

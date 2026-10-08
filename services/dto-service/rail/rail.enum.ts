@@ -178,10 +178,14 @@ export const RECOMMENDATION_EXCLUDED_PAGES: PageName[] = [
 // Label pages are excluded wholesale: a label page shows one label's catalogue,
 // and PAGE_RECOMMENDATION_FILTERS has no entry to narrow the recommendation to
 // that label, so the rail would arrive full of other labels' tracks.
+// Occasion pages are excluded for the same reason: the page is one occasion's
+// hand-curated programme, and an unnarrowed recommendation rail appended to it
+// would arrive full of tracks that have nothing to do with the occasion.
 export function isRecommendationExcludedPage(
   pageName: string | null | undefined
 ): boolean {
   if (isLabelPageKey(pageName)) return true;
+  if (isOccasionPageKey(pageName)) return true;
   return RECOMMENDATION_EXCLUDED_PAGES.includes(pageName as PageName);
 }
 
@@ -201,9 +205,10 @@ export function isRecommendationExcludedPage(
 export const LABEL_PAGE_KEY_PREFIX = "LABEL_";
 
 /**
- * What the `rails.pageName` column actually holds: a PageName member, or a
- * label page's LABEL_<ownerCode>. The column is a VARCHAR and always was —
- * PageName only ever described the fixed half of the range.
+ * What the `rails.pageName` column actually holds: a PageName member, a label
+ * page's LABEL_<ownerCode>, or an occasion page's OCCASION_<occasionCode>. The
+ * column is a VARCHAR and always was — PageName only ever described the fixed
+ * half of the range.
  */
 export type PageKey = PageName | (string & {});
 
@@ -232,4 +237,46 @@ export function ownerCodeFromLabelPageKey(
 ): string | null {
   if (!isLabelPageKey(pageName)) return null;
   return (pageName as string).slice(LABEL_PAGE_KEY_PREFIX.length);
+}
+
+// ─── Occasion pages ──────────────────────────────────────────────────────────
+//
+// An occasion page is the detail page for one occasion (Diwali, Holi, Navratri
+// …). It is the same shape as a label page above: one per row in `occasions`,
+// open-ended, so it cannot be an enum member either. It therefore reuses the
+// exact same mechanism — a prefixed page key in the ordinary `pageName` column,
+// well-formedness checked here and existence checked against the live table by
+// assertPagesExist in the rail controller.
+//
+// This replaced the occasion's old "attach tracks to an occasion" flow: the
+// music team now authors proper rails on the occasion's own page instead of
+// dumping a flat track list behind a "view more".
+export const OCCASION_PAGE_KEY_PREFIX = "OCCASION_";
+
+// `rails.pageName` is VARCHAR(50), so the prefix leaves 41 characters for the
+// occasionCode. Enforced when an occasion's code is generated — a longer code
+// could not address its own rails.
+export const MAX_OCCASION_PAGE_CODE_LENGTH =
+  50 - OCCASION_PAGE_KEY_PREFIX.length;
+
+/** The pageName every rail on the given occasion's page carries. */
+export function occasionPageKey(occasionCode: string): string {
+  return `${OCCASION_PAGE_KEY_PREFIX}${occasionCode}`;
+}
+
+/** True for an occasion page key — NOT proof the page exists, only that it is one. */
+export function isOccasionPageKey(pageName: string | null | undefined): boolean {
+  return (
+    typeof pageName === "string" &&
+    pageName.startsWith(OCCASION_PAGE_KEY_PREFIX) &&
+    pageName.length > OCCASION_PAGE_KEY_PREFIX.length
+  );
+}
+
+/** The occasionCode inside an occasion page key, or null when it isn't one. */
+export function occasionCodeFromOccasionPageKey(
+  pageName: string | null | undefined
+): string | null {
+  if (!isOccasionPageKey(pageName)) return null;
+  return (pageName as string).slice(OCCASION_PAGE_KEY_PREFIX.length);
 }
