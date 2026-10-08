@@ -34,7 +34,7 @@
 // rather than typed SQL — which is why nothing in this file is ever built from
 // caller input.
 
-import { USER_NAME_SQL, TX_SCOPE, PAYMENT_KIND_EXPR } from "./creator-analytics-shared";
+import { USER_NAME_SQL, TX_SCOPE, PAYMENT_KIND_EXPR, TX_INR, TX_DISCOUNT_INR } from "./creator-analytics-shared";
 
 /** A column in a drill-down table. */
 export interface MetricColumn {
@@ -520,7 +520,11 @@ const SUBSCRIPTIONS: MetricDef = {
     {
       key: "listPriceRupees",
       label: "List price",
-      sql: `COALESCE(p."basePriceRupees", x."legacyPriceExGstRupees")`,
+      // A legacy *_USD plan's price is dollars despite the column name; it
+      // must not be shown as rupees, so it is left blank rather than wrong.
+      sql: `COALESCE(p."basePriceRupees",
+                     CASE WHEN COALESCE(x."legacyCurrency", 'INR') = 'INR'
+                          THEN x."legacyPriceExGstRupees" END)`,
       type: "money",
     },
     { key: "billingCycle", label: "Cycle", sql: `COALESCE(p."billingCycle", x."legacyBillingCycle")`, type: "badge" },
@@ -558,23 +562,33 @@ const PAYMENTS: MetricDef = {
   from: `transactions t JOIN creator_users cu ON cu.id = t."userId"`,
   dateCol: `t."createdAt"`,
   userCol: `t."userId"`,
-  amountCol: `t."totalAmount"`,
+  amountCol: TX_INR,
   amountLabel: "Collected",
   where: TX_SCOPE,
   columns: [
     { key: "paidAt", label: "Paid", sql: `t."createdAt"`, type: "datetime" },
     ...USER_COLUMNS,
-    { key: "amountRupees", label: "Amount", sql: `t."totalAmount"`, type: "money" },
+    { key: "amountRupees", label: "Amount (INR)", sql: TX_INR, type: "money" },
+    // What the customer was actually charged — "USD 3.99" — beside its INR value.
+    {
+      key: "charged",
+      label: "Charged",
+      sql: `t.currency || ' ' || to_char(t."totalAmount", 'FM999999990.00')`,
+      type: "text",
+    },
+    { key: "currency", label: "Currency", sql: `t.currency`, type: "badge" },
     { key: "paymentKind", label: "Cycle", sql: PAYMENT_KIND_EXPR, type: "badge" },
     { key: "paymentMethod", label: "Method", sql: `t."paymentMethod"`, type: "badge" },
     { key: "razorpayPaymentId", label: "Payment ID", sql: `t."razorpayPaymentId"`, type: "text" },
     { key: "source", label: "Source", sql: `t.source`, type: "badge" },
-    { key: "discountRupees", label: "Discount", sql: `t."totalDiscount"`, type: "money" },
+    { key: "discountRupees", label: "Discount (INR)", sql: TX_DISCOUNT_INR, type: "money" },
+    { key: "offerName", label: "Offer", sql: `t."offerName"`, type: "text" },
+    { key: "campaignCode", label: "Campaign", sql: `t."campaignCode"`, type: "badge" },
   ],
   sorts: {
     ...USER_SORTS,
     paidAt: `t."createdAt"`,
-    amountRupees: `t."totalAmount"`,
+    amountRupees: TX_INR,
     paymentKind: PAYMENT_KIND_EXPR,
   },
   defaultSort: "paidAt",
@@ -582,6 +596,8 @@ const PAYMENTS: MetricDef = {
   dimensions: {
     paymentKind: { sql: PAYMENT_KIND_EXPR, label: "Cycle" },
     paymentMethod: { sql: `COALESCE(t."paymentMethod", '(none)')`, label: "Method" },
+    currency: { sql: `t.currency`, label: "Currency" },
+    campaign: { sql: `COALESCE(t."campaignCode", '(none)')`, label: "Campaign" },
     origin: { sql: `cu.origin`, label: "Origin" },
   },
 };

@@ -266,7 +266,25 @@ export const USER_NAME_SQL = `NULLIF(btrim(
  * the legacy-hoopr backfill stamped — without that arm, Rs 1.75Cr of migrated
  * money disappears from every total.
  */
-export const TX_REAL = `(t."razorpayPaymentId" IS NOT NULL OR t."legacyTransactionId" IS NOT NULL)`;
+export const TX_REAL =
+  `((t."razorpayPaymentId" IS NOT NULL OR t."legacyTransactionId" IS NOT NULL)` +
+  ` AND lower(coalesce(t.status, '')) <> 'sandbox')`;
+
+/**
+ * A payment's value IN RUPEES — the only thing revenue may be summed from.
+ * `totalAmount` is what the provider charged, in `t.currency` (Apple bills in
+ * the buyer's storefront currency; the legacy *_USD plans in dollars), so
+ * summing it read USD 3.99 as Rs 3.99. `amountInr` is GENERATED from
+ * totalAmount × fxRate (Razorpay's own conversion, else the reference rate for
+ * the payment date) — see NATIVE-BE scripts/migration-transactions-currency-
+ * and-discounts.sql. NULL while no rate is known: such a payment drops out of
+ * a sum rather than being counted at face value. Same rule as NATIVE-BE's
+ * TX_INR — CHANGE ONE, CHANGE BOTH.
+ */
+export const TX_INR = `t."amountInr"`;
+
+/** The discount on a payment, in rupees (list − paid). */
+export const TX_DISCOUNT_INR = `COALESCE(t."discountInr", 0)`;
 
 /** A plan cycle rather than a one-off licence sale. */
 export const TX_SUBSCRIPTION_KIND = `COALESCE(t.kind, 'subscription') = 'subscription'`;
@@ -343,7 +361,11 @@ export const RENEWAL_NOTE =
 
 export const REVENUE_NOTE =
   "Revenue is subscription money only — `transactions` rows for a plan " +
-  "cycle that a payment id (Razorpay or the legacy backfill) proves arrived. " +
+  "cycle that a payment id (Razorpay, Apple or the legacy backfill) proves arrived, " +
+  "in rupees whatever the payment was charged in (gateway conversion when " +
+  "Razorpay gave one, else the reference rate for the payment date). Apple " +
+  "counts at the customer price, before Apple's commission; Apple sandbox " +
+  "test purchases are excluded. " +
   "Licence purchases and wallet payouts are not in it. Failed and abandoned " +
   "payments are not recorded in this table at all, so a conversion rate here " +
   "cannot see checkout drop-off.";

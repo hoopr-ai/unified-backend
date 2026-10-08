@@ -301,7 +301,11 @@ SELECT * FROM (
   UNION ALL
   SELECT t."createdAt", 'subscription',
          CASE WHEN ${TX_RENEWAL} IS TRUE THEN 'Renewal paid' ELSE 'Payment captured' END,
-         concat_ws(' · ', 'Rs ' || round(t."payAmount"::numeric), t.kind, t.status), 'any'
+         concat_ws(' · ',
+           CASE WHEN t.currency = 'INR' THEN 'Rs ' || round(t."totalAmount"::numeric)
+                ELSE t.currency || ' ' || to_char(t."totalAmount", 'FM999999990.00')
+                     || COALESCE(' (≈ Rs ' || round(t."amountInr") || ')', '')
+           END, t.kind, t.status), 'any'
     FROM transactions t WHERE t."userId" = :uid AND lower(coalesce(t.status, '')) IN ('captured', 'paid', 'success')
   UNION ALL
   SELECT l."createdAt", 'activation', 'Liked a track', l."trackCode", 'any'

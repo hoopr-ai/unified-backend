@@ -4,7 +4,7 @@
 // Post-subscription activation, for a window, in either mode (see plg-sql.ts),
 // against the same-length window before it, optionally split by a segment.
 
-import { PAYMENT_KIND_EXPR, TX_SCOPE, num, pct, round1, delta } from "../creator-analytics-shared";
+import { PAYMENT_KIND_EXPR, TX_SCOPE, num, pct, round1, delta, TX_INR } from "../creator-analytics-shared";
 import { plgQuery } from "./plg-db";
 import {
   ACTION_BY_KEY,
@@ -294,7 +294,7 @@ WITH subs AS (
      AND us."createdAt" >= :winStart AND us."createdAt" < :winEnd
 ),
 pays AS (
-  SELECT t."userId", t."totalAmount", ${PAYMENT_KIND_EXPR} AS kind
+  SELECT t."userId", ${TX_INR} AS rupees, ${PAYMENT_KIND_EXPR} AS kind
     FROM transactions t
     JOIN users u ON u.id = t."userId" AND u.platform = 'CREATOR'
    WHERE ${TX_SCOPE} AND t."createdAt" >= :winStart AND t."createdAt" < :winEnd
@@ -306,7 +306,7 @@ SELECT (SELECT count(DISTINCT "userId") FROM subs) AS sub_people,
         ) x) AS sub_by_provider,
        count(*) AS pay_n,
        count(DISTINCT "userId") AS pay_people,
-       COALESCE(sum("totalAmount"), 0) AS pay_rupees,
+       COALESCE(sum(rupees), 0) AS pay_rupees,
        count(*) FILTER (WHERE kind = 'first') AS first_n,
        count(*) FILTER (WHERE kind = 'renewal') AS renewal_n,
        count(*) FILTER (WHERE kind = 'unclassified') AS unknown_n

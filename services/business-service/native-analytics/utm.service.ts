@@ -93,11 +93,12 @@ const MRR_EXPR = `
 /**
  * Which transactions are money that actually arrived.
  *
- * NOTE, and it matters for how these numbers are read: `razorpayPaymentId IS
- * NOT NULL` scopes this to Razorpay collections, so Apple IAP revenue is NOT in
- * `revenueRupees`. That is the same scope NATIVE-BE's revenue dashboard uses,
- * so the two agree — but for a campaign that drove iOS installs, MRR is the
- * column to read, not revenue. The dashboard says so on the card.
+ * NOTE, and it matters for how these numbers are read: Apple IAP purchases
+ * DO carry an id in `razorpayPaymentId` (the Apple transaction id), so they are
+ * in `revenueRupees` at the customer price, before Apple's commission. Every
+ * amount is the payment's rupee value (`amountInr`), whatever it was charged
+ * in; Apple sandbox purchases carry status 'sandbox' and fall outside the
+ * status test.
  */
 const TX_PAID = `t."razorpayPaymentId" IS NOT NULL
                  AND lower(coalesce(t.status, '')) IN ('captured', 'paid', 'success')`;
@@ -338,7 +339,7 @@ const attributionCtes = (f: UtmFilters): string => `
   ),
   paid_tx AS (
     SELECT t."userId"::bigint AS uid,
-           SUM(t."totalAmount") AS collected,
+           SUM(t."amountInr")   AS collected,  -- rupees; totalAmount is in t.currency
            COUNT(*)             AS payments
       FROM transactions t
      WHERE ${TX_PAID}

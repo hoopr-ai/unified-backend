@@ -61,6 +61,7 @@ import {
   ORIGIN_NOTE,
   SESSION_NOTE,
   type CreatorFilters,
+  TX_INR,
 } from "./creator-analytics-shared";
 
 /**
@@ -295,14 +296,14 @@ const moneyCounts = async (
      SELECT
        count(*) FILTER (WHERE ${TX_FIRST_PAYMENT})::bigint            AS first_n,
        count(DISTINCT t."userId") FILTER (WHERE ${TX_FIRST_PAYMENT})::bigint AS first_users,
-       COALESCE(sum(t."totalAmount") FILTER (WHERE ${TX_FIRST_PAYMENT}), 0)  AS first_rupees,
+       COALESCE(sum(${TX_INR}) FILTER (WHERE ${TX_FIRST_PAYMENT}), 0)  AS first_rupees,
        count(*) FILTER (WHERE ${TX_RENEWAL} IS TRUE)::bigint          AS renewal_n,
        count(DISTINCT t."userId") FILTER (WHERE ${TX_RENEWAL} IS TRUE)::bigint AS renewal_users,
-       COALESCE(sum(t."totalAmount") FILTER (WHERE ${TX_RENEWAL} IS TRUE), 0) AS renewal_rupees,
+       COALESCE(sum(${TX_INR}) FILTER (WHERE ${TX_RENEWAL} IS TRUE), 0) AS renewal_rupees,
        count(*) FILTER (WHERE ${TX_UNCLASSIFIED})::bigint             AS unclassified_n,
-       COALESCE(sum(t."totalAmount") FILTER (WHERE ${TX_UNCLASSIFIED}), 0)   AS unclassified_rupees,
+       COALESCE(sum(${TX_INR}) FILTER (WHERE ${TX_UNCLASSIFIED}), 0)   AS unclassified_rupees,
        count(*)::bigint                                               AS total_n,
-       COALESCE(sum(t."totalAmount"), 0)                              AS total_rupees
+       COALESCE(sum(${TX_INR}), 0)                              AS total_rupees
        FROM transactions t
        JOIN creator_users cu ON cu.id = t."userId"
       WHERE ${TX_SCOPE}
@@ -616,10 +617,10 @@ export const getFunnelTimeseriesService = async (f: CreatorFilters) => {
        tx AS (
          SELECT ${istDay(`t."createdAt"`)} AS day,
                 count(*) FILTER (WHERE ${TX_FIRST_PAYMENT})::bigint             AS first_n,
-                COALESCE(sum(t."totalAmount") FILTER (WHERE ${TX_FIRST_PAYMENT}), 0)   AS first_rupees,
+                COALESCE(sum(${TX_INR}) FILTER (WHERE ${TX_FIRST_PAYMENT}), 0)   AS first_rupees,
                 count(*) FILTER (WHERE ${TX_RENEWAL} IS TRUE)::bigint           AS renewal_n,
-                COALESCE(sum(t."totalAmount") FILTER (WHERE ${TX_RENEWAL} IS TRUE), 0) AS renewal_rupees,
-                COALESCE(sum(t."totalAmount"), 0)                               AS total_rupees
+                COALESCE(sum(${TX_INR}) FILTER (WHERE ${TX_RENEWAL} IS TRUE), 0) AS renewal_rupees,
+                COALESCE(sum(${TX_INR}), 0)                               AS total_rupees
            FROM transactions t
            JOIN creator_users cu ON cu.id = t."userId"
           WHERE ${TX_SCOPE} AND ${inRange(`t."createdAt"`)} AND ${originWhere("cu.origin")}

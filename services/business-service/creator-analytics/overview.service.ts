@@ -53,6 +53,7 @@ import {
   ORIGIN_NOTE,
   REVENUE_NOTE,
   type CreatorFilters,
+  TX_INR,
 } from "./creator-analytics-shared";
 
 const round2 = (v: unknown): number => Math.round(num(v) * 100) / 100;
@@ -629,7 +630,7 @@ const moneySources = (): FactSource[] => [
         primary: true,
         money: true,
         where: TX_SCOPE,
-        agg: sumOf(`t."totalAmount"`),
+        agg: sumOf(TX_INR),
         hint: "Plan-cycle money that arrived, legacy backfill included",
         metric: "payments",
       },
@@ -638,7 +639,7 @@ const moneySources = (): FactSource[] => [
         label: "…from renewals",
         money: true,
         where: `${TX_SCOPE} AND ${TX_RENEWAL} IS TRUE`,
-        agg: sumOf(`t."totalAmount"`),
+        agg: sumOf(TX_INR),
         shareOf: "lifetimeRevenue",
         metric: "payments",
         dimension: "paymentKind",
