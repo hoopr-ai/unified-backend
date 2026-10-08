@@ -31,6 +31,7 @@ import { toCdnUrl } from "../../helper-service/cdn.helper";
 import {
   resolveViewerOwnerAccess,
   viewerHasTokenForOwner,
+  isPriceOnlyTrack,
   type ViewerOwnerAccess,
 } from "../access/owner-access.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
@@ -265,8 +266,10 @@ const transformTrackToDto = (
   const isSfx = isSfxTrackType(track.type);
   // Token cover is per owner, not per type: an allocation scoped to one label
   // must not mark another label's tracks as covered.
-  const hasTokenForTrack = viewerHasTokenForOwner(ownerAccess, track.ownerId, ownerType);
-  const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack;
+  // Price-only tracks ignore token cover: price shown, no token, to everyone.
+  const priceOnly = isPriceOnlyTrack(track.trackCode);
+  const hasTokenForTrack = !priceOnly && viewerHasTokenForOwner(ownerAccess, track.ownerId, ownerType);
+  const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack && !priceOnly;
   // SFX tracks are always free — never show a price for them
   const hidePrice = isSfx || isEnterpriseOnly || hasTokenForTrack;
 
@@ -941,7 +944,9 @@ const transformTrackToDetailsDto = (
     const skuData = track.skus[0];
     const isSfx = isSfxTrackType(track.type);
     const isEnterpriseOnly = baseDto.isEnterpriseOnly === true;
-    const hasTokenForTrack = viewerHasTokenForOwner(ownerAccess, track.ownerId, baseDto.ownerType);
+    const hasTokenForTrack =
+      !isPriceOnlyTrack(track.trackCode) &&
+      viewerHasTokenForOwner(ownerAccess, track.ownerId, baseDto.ownerType);
     const hidePrice = isSfx || isEnterpriseOnly || hasTokenForTrack;
     sku = {
       id: skuData.id || "",

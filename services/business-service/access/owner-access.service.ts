@@ -167,6 +167,19 @@ export const viewerHasTokenForOwner = (
   return false;
 };
 
+/**
+ * Tracks sold for their SKU price only, never against a token. Every viewer,
+ * token holder or not, sees the price and no token, and the token-license
+ * endpoint refuses them. Each needs a SKU row or it has no price to show. To
+ * add one, append its trackCode.
+ */
+export const PRICE_ONLY_TRACK_CODES: readonly string[] = [
+  "19714", // Sarfira — Parv Music, SickLot (Songfest)
+];
+
+export const isPriceOnlyTrack = (trackCode: string | null | undefined): boolean =>
+  !!trackCode && PRICE_ONLY_TRACK_CODES.includes(String(trackCode));
+
 /** Is this label hidden from the viewer entirely (no token for it)? */
 export const isOwnerBlockedForViewer = (
   access: Pick<ViewerOwnerAccess, "blockedOwnerIds" | "blockedOwnerCodes">,

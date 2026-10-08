@@ -79,6 +79,7 @@ import type {
   DownloadTrackResult,
 } from "../../dto-service/licenses/modules.export";
 import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
+import { isPriceOnlyTrack } from "../access/owner-access.service";
 
 const TOKEN_COST_PER_LICENSE = 1;
 
@@ -167,6 +168,14 @@ export const licenseTrackService = async (
       "Please complete your profile to download SFX tracks",
       403,
       "PROFILE_INCOMPLETE",
+    );
+  }
+
+  // Price-only tracks are bought through the cart, never licensed with a token.
+  if (!isCreator && isPriceOnlyTrack(track.trackCode)) {
+    throw new AppError(
+      "This track can't be licensed with credits. Please purchase it instead.",
+      400,
     );
   }
 

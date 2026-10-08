@@ -58,6 +58,7 @@ import {
   resolveViewerOwnerAccess,
   viewerHasTokenForOwner,
   isOwnerBlockedForViewer,
+  isPriceOnlyTrack,
   type ViewerOwnerAccess,
 } from "../access/owner-access.service";
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
@@ -255,8 +256,10 @@ const hydrateTracks = async (
     const isSfx = isSfxTrackType(track.type);
     // Token cover is per owner, not per type: an allocation scoped to one label
     // must not mark another label's tracks as covered.
-    const hasTokenForTrack = viewerHasTokenForOwner(access, track.ownerId, ownerType);
-    const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack;
+    // Price-only tracks ignore token cover: price shown, no token, to everyone.
+    const priceOnly = isPriceOnlyTrack(track.trackCode);
+    const hasTokenForTrack = !priceOnly && viewerHasTokenForOwner(access, track.ownerId, ownerType);
+    const isEnterpriseOnly = ownerType === "Chartbusters" && !hasTokenForTrack && !priceOnly;
     // SFX tracks are always free — never show a price for them
     const hidePrice = isSfx || isEnterpriseOnly || hasTokenForTrack;
     const skuData = skuMap.get(track.trackCode);
