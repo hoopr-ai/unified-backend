@@ -24,6 +24,10 @@ import type {
   CreateOccasionRequest,
   UpdateOccasionRequest,
 } from "../../dto-service/occasion/modules.export";
+import {
+  occasionPageKey,
+  MAX_OCCASION_PAGE_CODE_LENGTH,
+} from "../../dto-service/rail/modules.export";
 import type {
   PaginatedTracksResponseData,
   RawTrackWithMappings,
@@ -39,6 +43,7 @@ const toOccasionResponse = (o: {
   end: string;
   occasionCode?: string;
   imageLink?: string;
+  description?: string | null;
   createdAt?: Date;
 }): OccasionResponseData => ({
   id: o.id!,
@@ -49,6 +54,10 @@ const toOccasionResponse = (o: {
   end: o.end,
   occasionCode: o.occasionCode || null,
   imageLink: o.imageLink || null,
+  description: o.description || null,
+  // Derived, never stored: the page key is a pure function of occasionCode, so
+  // keeping a column for it would be a second source of truth to drift.
+  pageKey: o.occasionCode ? occasionPageKey(o.occasionCode) : null,
   createdAt: o.createdAt!,
 });
 
@@ -66,6 +75,20 @@ export const getOccasionByIdOrCodeService = async (
   return toOccasionResponse(occasion);
 };
 
+/**
+ * The set of occasion page keys the rails write-path will accept, by
+ * occasionCode. Mirrors isKnownLabelPageOwnerCode: it is what stops a typo'd
+ * `OCCASION_xyz` from inventing a page nothing can ever reach.
+ *
+ * Unlike label pages there is no draft/published split on an occasion — every
+ * row is live on the calendar — so existence is the whole check.
+ */
+export const isKnownOccasionCode = async (
+  occasionCode: string,
+): Promise<boolean> => {
+  return await occasionCodeExists(occasionCode);
+};
+
 // ─── CMS write-side (create / edit / delete / image upload) ────────────────
 
 // Lowercase, strip non-alphanumerics to dashes, collapse repeats, trim edges.
@@ -79,12 +102,26 @@ const slugify = (input: string): string =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 200);
 
-const randomSuffix = (): string => Math.random().toString(36).slice(2, 8);
+const RANDOM_SUFFIX_LENGTH = 6;
+
+const randomSuffix = (): string =>
+  Math.random().toString(36).slice(2, 2 + RANDOM_SUFFIX_LENGTH);
+
+// How long the title-derived part of a code may be. The occasionCode column is
+// STRING(255), but the code also has to fit inside this occasion's page key
+// (OCCASION_<occasionCode>) in rails.pageName, which is VARCHAR(50) — and the
+// de-collision path below can append a dash plus two suffixes. Reserving that
+// worst case here means a long title can never produce an occasion whose rails
+// are unaddressable.
+const MAX_OCCASION_CODE_ROOT_LENGTH =
+  MAX_OCCASION_PAGE_CODE_LENGTH - (1 + RANDOM_SUFFIX_LENGTH * 2);
 
 const generateUniqueOccasionCode = async (
   baseSlug: string,
 ): Promise<string> => {
-  const root = baseSlug || `occasion-${randomSuffix()}`;
+  const root =
+    baseSlug.slice(0, MAX_OCCASION_CODE_ROOT_LENGTH).replace(/-+$/, "") ||
+    `occasion-${randomSuffix()}`;
   let candidate = root;
   for (let attempt = 0; attempt < 10; attempt++) {
     if (!(await occasionCodeExists(candidate))) {
@@ -108,6 +145,7 @@ export const createOccasionService = async (
     className: input.className,
     end: input.end,
     occasionCode,
+    description: input.description?.trim() || null,
   });
 
   return toOccasionResponse(created);
@@ -135,6 +173,14 @@ export const updateOccasionService = async (
   }
   if (typeof patch.end === "string" && patch.end.trim()) {
     update.end = patch.end.trim();
+  }
+  // Unlike the fields above, an empty description is a meaningful value — it is
+  // how the CMS clears a blurb — so this is keyed on `undefined`, not on truth.
+  if (patch.description !== undefined) {
+    update.description =
+      typeof patch.description === "string"
+        ? patch.description.trim() || null
+        : null;
   }
 
   const updated = (await updateOccasionById(id, update)) ?? existing;
