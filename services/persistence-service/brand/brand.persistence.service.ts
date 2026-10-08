@@ -1,5 +1,5 @@
 import { BrandModel, type BrandDetails } from "./schemas/modules.export";
-import { Op } from "sequelize";
+import { Op, type Transaction } from "sequelize";
 
 export interface BrandSearchResult {
   id: number;
@@ -50,9 +50,10 @@ export const searchBrands = async (
 };
 
 export const saveBrand = async (
-  brandDetails: BrandDetails
+  brandDetails: BrandDetails,
+  transaction?: Transaction
 ): Promise<BrandDetails> => {
-  const brand = await BrandModel.create(brandDetails);
+  const brand = await BrandModel.create(brandDetails, { transaction });
   return brand;
 };
 

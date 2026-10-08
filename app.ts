@@ -48,6 +48,8 @@ import transactionRoutes from "./routes/transaction.route";
 import journeyRoutes from "./routes/journey.route";
 import urlMonitorRoutes from "./routes/url-monitor.route";
 import adminWhitelistingRoutes from "./routes/admin-whitelisting.route";
+import adminSmashTrialsRoutes from "./routes/admin-smash-trials.route";
+import trialJourneyRoutes from "./routes/trial-journey.route";
 import {
   emailCampaignRouter,
   emailTemplateRouter,
@@ -141,6 +143,8 @@ app.use("/admin/url-monitor", urlMonitorRoutes);
 // same shared DB, so no service hop; this service already owns the internal
 // sessions and functionality grants the routes are gated by.
 app.use("/admin/whitelisting", adminWhitelistingRoutes);
+app.use("/admin/smash-trials", adminSmashTrialsRoutes);
+app.use("/trial-journey", trialJourneyRoutes);
 app.use("/cart", cartRoutes);
 app.use("/transaction", transactionRoutes);
 app.use("/journey", journeyRoutes);

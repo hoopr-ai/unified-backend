@@ -1,5 +1,11 @@
 import type { Platform } from "../constants/modules.export";
 import type { ProfileRole, UserRoles, UserStatus } from "./user.enum";
+import type {
+  CategoryPreference,
+  DiscoveryChannel,
+  OnboardingResponse,
+  TrialStateResponse,
+} from "../trial/trial.dto";
 
 export interface CreateAuthRequestData {
   email: string;
@@ -25,6 +31,10 @@ export interface CompleteProfileRequestData {
   instagramLink?: string;
   youtubeLink?: string;
   facebookLink?: string;
+  // Smash onboarding answers, stored on user_profiles. Optional so older FE
+  // builds keep working; sent by every user, invited or not.
+  categoryPreferences?: CategoryPreference[];
+  discoveryChannel?: DiscoveryChannel;
 }
 
 // Everything the FE needs to render the complete-profile form: whether the
@@ -76,12 +86,19 @@ export interface UserProfileResponse {
   // while its key is absent (e.g. !toursSeen.includes("smashAppTour")).
   // Only GET /user/profile fills it; the list and update responses omit it.
   toursSeen?: string[];
+  // true = completing the profile starts the Smash trial for this user (only
+  // ever true before onboarding). Only GET /user/profile fills it.
+  trialOffer?: boolean;
+  // Smash trial state for the user's brand; null when the brand was never on
+  // the trial. Only GET /user/profile fills it.
+  trial?: TrialStateResponse | null;
+  onboarding?: OnboardingResponse | null;
 }
 
 // Allow-list of coachmark tours the FE may mark seen — the single source of
 // truth for the Joi schema. Add a key here (and nothing else) when a tour ships.
 // Prefixed `smash` because user_tour_seen is shared with studio's tours.
-export const KNOWN_TOURS = ["smashAppTour", "smashTrackPageTour"] as const;
+export const KNOWN_TOURS = ["smashAppTour", "smashTrackPageTour", "smashTrialWelcome"] as const;
 export type TourKey = (typeof KNOWN_TOURS)[number];
 
 export interface TourSeenRequestData {

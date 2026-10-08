@@ -86,6 +86,7 @@ export interface LicenseResponse {
   campaignId?: number | null;
   isSfx?: boolean; // True when the licensed track is an SFX track
   freeDownload?: boolean; // True when no tokens/payment were required for this license
+  trial?: import("../trial/trial.dto").TrialStateResponse; // Set when paid from the Smash trial pool
 }
 
 export interface TokenBalanceItem {

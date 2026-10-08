@@ -19,6 +19,9 @@ export interface UserProfileAttributes {
   instagramLink?: string | null;
   youtubeLink?: string | null;
   facebookLink?: string | null;
+  // Smash onboarding answers from complete-profile (see trial.dto).
+  categoryPreferences?: string[] | null;
+  discoveryChannel?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -46,6 +49,14 @@ export class UserProfileModel extends Model<UserProfileModel, UserProfileAttribu
 
   @Column({ type: DataType.STRING(500), allowNull: true })
   facebookLink?: string | null;
+
+  // Smash onboarding answers from complete-profile. Multi-select category picks
+  // (also the token types the trial covers) and how the brand found Smash.
+  @Column({ type: DataType.ARRAY(DataType.STRING(40)), allowNull: true, defaultValue: [] })
+  categoryPreferences?: string[] | null;
+
+  @Column({ type: DataType.STRING(40), allowNull: true })
+  discoveryChannel?: string | null;
 
   @CreatedAt
   @Column({ type: DataType.DATE })

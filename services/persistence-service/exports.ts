@@ -23,3 +23,4 @@ export * from "./transaction/modules.export";
 export * from "./webhook/modules.export";
 export * from "./attribution/modules.export";
 
+export * from "./trial/modules.export";

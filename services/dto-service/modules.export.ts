@@ -15,3 +15,4 @@ export * from './label-page/modules.export';
 export * from './faq/modules.export';
 export * from './rail/modules.export';
 export * from './token/modules.export';
+export * from "./trial/modules.export";

@@ -1,10 +1,11 @@
 import { OrganizationModel, type OrganizationDetails } from "./schemas/modules.export";
-import { Op } from "sequelize";
+import { Op, type Transaction } from "sequelize";
 
 export const saveOrganization = async (
-  organizationDetails: OrganizationDetails
+  organizationDetails: OrganizationDetails,
+  transaction?: Transaction
 ): Promise<OrganizationDetails> => {
-  const organization = await OrganizationModel.create(organizationDetails);
+  const organization = await OrganizationModel.create(organizationDetails, { transaction });
   return organization;
 };
 

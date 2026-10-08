@@ -10,7 +10,13 @@ import type {
   SendEmailOtpRequestData,
   VerifyEmailOtpRequestData,
 } from "../services/dto-service/modules.export";
-import { ProfileRole, KNOWN_TOURS } from "../services/dto-service/modules.export";
+import {
+  ProfileRole,
+  KNOWN_TOURS,
+  CategoryPreference,
+  DiscoveryChannel,
+  TrialSignalKind,
+} from "../services/dto-service/modules.export";
 import type { TourSeenRequestData } from "../services/dto-service/modules.export";
 import { platformField } from "./platform.validation";
 const profileRoleValues = Object.values(ProfileRole) as string[];
@@ -43,6 +49,13 @@ export const completeProfileRequestSchema =
     instagramLink: Joi.string().max(500).optional(),
     youtubeLink: Joi.string().max(500).optional(),
     facebookLink: Joi.string().max(500).optional(),
+    categoryPreferences: Joi.array()
+      .items(Joi.string().valid(...Object.values(CategoryPreference)))
+      .unique()
+      .optional(),
+    discoveryChannel: Joi.string()
+      .valid(...Object.values(DiscoveryChannel))
+      .optional(),
   });
 
 export const loginRequestSchema = Joi.object<LoginUserRequestData>({
@@ -120,3 +133,27 @@ export const tourSeenRequestSchema = Joi.object<TourSeenRequestData>({
     .required()
     .messages({ "any.only": `tour must be one of: ${KNOWN_TOURS.join(", ")}` }),
 });
+
+// POST /user/trial/signal — trackCode is required for a gated view, granted
+// for a push-permission decision, sendId for a notification open/click.
+export const trialSignalRequestSchema = Joi.object({
+  kind: Joi.string()
+    .valid(...Object.values(TrialSignalKind))
+    .required(),
+  trackCode: Joi.string().max(100).when("kind", {
+    is: TrialSignalKind.ENTERPRISE_TRACK_GATED_VIEWED,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  granted: Joi.boolean().when("kind", {
+    is: TrialSignalKind.PUSH_PERMISSION,
+    then: Joi.required(),
+    otherwise: Joi.optional(),
+  }),
+  sendId: Joi.number().integer().positive().optional(),
+}).unknown(false);
+
+// POST /user/magic-link/verify — the token from a trial journey email.
+export const magicLinkVerifyRequestSchema = Joi.object({
+  token: Joi.string().max(200).required(),
+}).unknown(false);

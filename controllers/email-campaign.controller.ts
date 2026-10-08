@@ -8,6 +8,7 @@ import { HttpStatusCode } from "../services/dto-service/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 import {
   createCampaignService,
+  duplicateCampaignService,
   listCampaignsService,
   getCampaignService,
   updateCampaignService,
@@ -76,6 +77,19 @@ export const createEmailCampaign = catchAsync(async (req: AuthRequest, res: Resp
     status: HttpStatusCode.CREATED,
     data: response,
     message: "Campaign created successfully",
+  });
+});
+
+export const duplicateEmailCampaign = catchAsync(async (req: AuthRequest, res: Response) => {
+  const response = await duplicateCampaignService(
+    req.params.id as string,
+    req.body,
+    req.session?.userId
+  );
+  sendResponse(res, {
+    status: HttpStatusCode.CREATED,
+    data: response,
+    message: "Campaign duplicated successfully",
   });
 });
 

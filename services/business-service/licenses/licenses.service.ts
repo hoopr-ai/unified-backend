@@ -78,10 +78,22 @@ import type {
   DownloadTrackResponse,
   DownloadTrackResult,
 } from "../../dto-service/licenses/modules.export";
-import { Platform, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
+import { Platform, UserStatus, isPlatform, isSfxTrackType } from "../../dto-service/modules.export";
+import type { TrialStateResponse } from "../../dto-service/trial/trial.dto";
+import {
+  chargeTrialCredit,
+  getTrialStateForBrand,
+  isTrialEmail,
+  refundTrialCharge,
+} from "../trial/trial.service";
+import { onTrialCreditSpent } from "../trial/trial-journey.service";
+import { notifyCreditsAdded } from "../token/token-notification.service";
+import { resolveViewerOwnerAccess } from "../access/owner-access.service";
 import { isPriceOnlyTrack } from "../access/owner-access.service";
 
 const TOKEN_COST_PER_LICENSE = 1;
+// assortmentType shown in the download-notification email for a trial license.
+const TRIAL_ASSORTMENT_LABEL = "Trial";
 
 export const licenseTrackService = async (
   userId: number,
@@ -132,11 +144,24 @@ export const licenseTrackService = async (
   // countryCode + profileRole are needed by the isProfileComplete getter —
   // it's computed from columns, not a column itself.
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId", "email", "firstName", "lastName", "mobile", "countryCode", "profileRole"],
+    attributes: ["id", "brandId", "email", "status", "firstName", "lastName", "mobile", "countryCode", "profileRole"],
   });
 
   if (!user) {
     throw new AppError("User not found", 404);
+  }
+
+  // Licensing needs onboarding done (complete-profile is what creates the brand,
+  // starts the trial and sets ACTIVE). PROFILE_INCOMPLETE sends the FE to
+  // onboarding; invited members already have a brand but finish it first too.
+  // Keyed on status, not isProfileComplete, so an existing ACTIVE user with an
+  // older, partly-filled profile is never locked out.
+  if (!isCreator && user.status !== UserStatus.ACTIVE) {
+    throw new AppError(
+      "Please complete your profile to download tracks",
+      403,
+      "PROFILE_INCOMPLETE",
+    );
   }
 
   if (!isCreator && !user.brandId) {
@@ -192,6 +217,10 @@ export const licenseTrackService = async (
     : [];
 
   let matchingTokenType: string | null = null;
+  // Set when the license is paid for from the Smash trial pool.
+  let trialState: TrialStateResponse | null = null;
+  // The trial token type the credit came out of, for the refund.
+  let trialType: string | null = null;
   let matchingOwnerId: string | null = null;
 
   if (!skipTokens) {
@@ -213,21 +242,38 @@ export const licenseTrackService = async (
       TOKEN_COST_PER_LICENSE,
     );
 
-    if (!bestMatch) {
-      throw new AppError(
-        `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
-        400,
-      );
+    if (bestMatch) {
+      matchingTokenType = bestMatch.matchedType;
+      matchingOwnerId = bestMatch.matchedOwnerId;
+    } else {
+      // No paid allocation covers the track: fall back to the Smash trial
+      // credit of the track's type. The restricted labels stay out of the trial —
+      // they are hidden from trial brands in every listing, so a trackCode
+      // arriving here for one was not reached through the product.
+      const access = await resolveViewerOwnerAccess(brandId, platform);
+      const blocked = ownerIds.some((id) => access.blockedOwnerIds.has(id));
+      const ownerTypes = owners.map((o) => o.type).filter((t): t is string => !!t);
+      // Personal-email users (gmail.com & co.) never use the trial, even as a
+      // member of a trial brand.
+      const charge = blocked || !isTrialEmail(user.email)
+        ? null
+        : await chargeTrialCredit(brandId!, ownerTypes);
+      trialState = charge?.state ?? null;
+      trialType = charge?.type ?? null;
+      if (!trialState) {
+        throw new AppError(
+          `You don't have enough credits to license this track. Please contact your administrator to top up your credits.`,
+          400,
+        );
+      }
+      matchingTokenType = TRIAL_ASSORTMENT_LABEL;
     }
-
-    matchingTokenType = bestMatch.matchedType;
-    matchingOwnerId = bestMatch.matchedOwnerId;
   }
 
-  // Generate GCS signed URL for the track
-  const gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
-
-  // Create license record. brandId is null for CREATOR (no brand association).
+  // A trial credit is already spent at this point; give it back if the license
+  // never materialises. (Paid tokens are deducted after the license exists.)
+  let gcsResult: Awaited<ReturnType<typeof generateGCSSignedUrl>>;
+  let createdLicense: Awaited<ReturnType<typeof createLicenseRecord>>;
   const now = new Date();
   const validThrough = new Date(now);
   validThrough.setFullYear(validThrough.getFullYear() + 1);
@@ -241,14 +287,26 @@ export const licenseTrackService = async (
     createdAt: now,
     campaignId: campaignIdToApply ?? null,
     ...(isSfxTrack && { type: "sfx_free", price: 0 }),
+    ...(trialState && { type: "trial" }),
   };
+  try {
+    // Generate GCS signed URL for the track
+    gcsResult = await generateGCSSignedUrl({ trackId: track.id, isSfx: isSfxTrack });
+    // Create license record. brandId is null for CREATOR (no brand association).
+    createdLicense = await createLicenseRecord(licenseDetails);
+  } catch (err) {
+    if (trialState) await refundTrialCharge(brandId!, trialType!);
+    throw err;
+  }
 
-  const createdLicense = await createLicenseRecord(licenseDetails);
+  // Trial journey: activation, and Push 3 pulled forward on the last credit.
+  if (trialState) onTrialCreditSpent(brandId!, trialState);
 
-  // Token deduction is skipped entirely for CREATOR and SFX tracks.
-  let remainingTokens = 0;
+  // Token deduction is skipped entirely for CREATOR and SFX tracks, and for
+  // trial licenses (charged above against brand_trials instead).
+  let remainingTokens = trialState ? trialState.creditsRemaining : 0;
   let deductionWasUnlimited = false;
-  if (!skipTokens) {
+  if (!skipTokens && !trialState) {
     const deduction = await deductTokenAssignedByType(
       brandId!,
       matchingTokenType!,
@@ -393,8 +451,9 @@ export const licenseTrackService = async (
       });
 
     // Send low credits alert to whole team if remaining tokens drop below 2.
-    // Skip for unlimited allocations — they never run out.
-    if (!deductionWasUnlimited && remainingTokens < 2) {
+    // Skip for unlimited allocations — they never run out — and for the trial,
+    // whose "Buy Credits" moment is the upgrade wall, not this email.
+    if (!deductionWasUnlimited && !trialState && remainingTokens < 2) {
       findAllActiveUsersByBrandId(brandId!)
         .then((teamMembers) => {
           teamMembers.forEach((member) => {
@@ -429,6 +488,9 @@ export const licenseTrackService = async (
     // MAX_SAFE_INTEGER sentinel from the persistence layer.
     remainingTokens: deductionWasUnlimited ? 0 : remainingTokens,
     unlimitedTokens: deductionWasUnlimited || undefined,
+    // Fresh trial meter after this license, so the FE can update the Credits UI
+    // without refetching the profile. Absent for paid and free licenses.
+    ...(trialState && { trial: trialState }),
     trackId: track.id,
     trackName: track.name,
     validThrough: licenseDetails.validThrough!,
@@ -439,7 +501,8 @@ export const licenseTrackService = async (
 };
 
 export interface TokenBalanceByTypeResponse {
-  brandId: number;
+  // null for a user with no brand yet (tokens is then empty).
+  brandId: number | null;
   tokens: {
     type: string;
     tokenBalance: number;
@@ -452,19 +515,35 @@ export const getTokenBalanceService = async (
   userId: number,
 ): Promise<TokenBalanceByTypeResponse> => {
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId"],
+    attributes: ["id", "brandId", "email"],
   });
 
   if (!user) {
     throw new AppError("User not found", 404);
   }
 
+  // No brand yet (onboarding not done, or a brandless account) is a normal
+  // state, not a bad request: the header polls this on every page.
   if (!user.brandId) {
-    throw new AppError("User is not associated with any brand", 400);
+    return { brandId: null, tokens: [] };
   }
 
   // Using NEW token_assigned table
   const tokens = await getAllTokenAssignedBalances(user.brandId);
+
+  // The Smash trial's per-type credits, one entry per type. Gone once the
+  // brand is PAID; null for personal emails.
+  const trial = await getTrialStateForBrand(user.brandId, user.email);
+  if (trial?.planType === "TRIAL") {
+    for (const credit of trial.creditsByType) {
+      tokens.push({
+        type: credit.type,
+        tokenBalance: trial.licensingBlocked ? 0 : credit.creditsRemaining,
+        totalAssignedToken: credit.creditsTotal,
+        expiryDate: trial.trialEnd,
+      });
+    }
+  }
 
   return {
     brandId: user.brandId,
@@ -511,6 +590,7 @@ export const assignTokensService = async (
 
   // Using NEW token_assigned table
   const createdToken = await addTokensAssignedByType(brandId, type, tokens, expiryDate, ownerIds);
+  notifyCreditsAdded(brandId, { type: createdToken.type, tokens, isUnlimited: false });
 
   return {
     brandId,
@@ -999,6 +1079,8 @@ export interface TokenDetailsItem {
   type: string;
   isUnlimited?: boolean;
   ownerWiseBreakdown?: OwnerWiseTokenBreakdown[];
+  // Set on the Smash trial's types: their credits run out at the trial's end.
+  expiryDate?: Date;
 }
 
 export interface TokenDetailsResponse {
@@ -1010,7 +1092,7 @@ export const getTokenDetailsService = async (
   userId: number,
 ): Promise<TokenDetailsResponse> => {
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId"],
+    attributes: ["id", "brandId", "email"],
   });
 
   if (!user) {
@@ -1159,6 +1241,22 @@ export const getTokenDetailsService = async (
       const rankB = ASSORTMENT_ORDER[b.type.toLowerCase()] ?? 999;
       return rankA - rankB;
     });
+
+  // The Smash trial's per-type credits, on the same rows the paid tokens use.
+  // A trial brand has no token_assigned rows (any row makes it PAID), so these
+  // rows are all zero before this. Gone once PAID; null for personal emails.
+  const trial = await getTrialStateForBrand(user.brandId, user.email);
+  if (trial?.planType === "TRIAL") {
+    for (const credit of trial.creditsByType) {
+      const row = mergedTokens.find((t) => t.type === credit.type);
+      if (!row || row.isUnlimited) continue;
+      const balance = trial.licensingBlocked ? 0 : credit.creditsRemaining;
+      row.totalAssignedToken += credit.creditsTotal;
+      row.tokenBalance += balance;
+      row.tokensUsed = row.totalAssignedToken - row.tokenBalance;
+      (row as TokenDetailsItem).expiryDate = trial.trialEnd;
+    }
+  }
 
   return {
     brandId: user.brandId,

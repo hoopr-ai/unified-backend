@@ -22,11 +22,17 @@ import {
   scheduleNativeArtistRecompute,
   triggerNativeArtistRecompute,
 } from "./queues/native-artist.queue";
+import {
+  trialJourneyQueue,
+  scheduleTrialJourney,
+  triggerTrialJourneyTick,
+} from "./queues/trial-journey.queue";
 import { railRefreshWorker } from "./workers/rail-refresh.worker";
 import { brandRecommendWorker } from "./workers/brand-recommend.worker";
 import { emailCampaignWorker } from "./workers/email-campaign.worker";
 import { urlMonitorWorker } from "./workers/url-monitor.worker";
 import { nativeArtistWorker } from "./workers/native-artist.worker";
+import { trialJourneyWorker } from "./workers/trial-journey.worker";
 import {
   closeStemBundleQueue,
   getStemBundleQueue,
@@ -57,6 +63,9 @@ export async function initializeScheduler(): Promise<void> {
       "[Scheduler] Native artist flag recompute scheduled (daily 03:00 IST, promote-only)",
     );
 
+    await scheduleTrialJourney();
+    logger.info("[Scheduler] Smash trial journey tick scheduled (every 10 minutes)");
+
     const repeatableJobs = await railRefreshQueue.getRepeatableJobs();
     logger.info(`[Scheduler] Active repeatable jobs: ${repeatableJobs.length}`);
 
@@ -67,12 +76,14 @@ export async function initializeScheduler(): Promise<void> {
       await emailCampaignWorker.close();
       await urlMonitorWorker.close();
       await nativeArtistWorker.close();
+      await trialJourneyWorker.close();
       await stemBundleWorker.close();
       await railRefreshQueue.close();
       await brandRecommendQueue.close();
       await emailCampaignQueue.close();
       await urlMonitorQueue.close();
       await nativeArtistQueue.close();
+      await trialJourneyQueue.close();
       await closeStemBundleQueue();
       logger.info("[Scheduler] Shutdown complete");
     };
@@ -90,6 +101,7 @@ export { emailCampaignQueue, emailCampaignWorker, triggerEmailCampaignTick };
 export { brandRecommendQueue, brandRecommendWorker, triggerBrandRecommend };
 export { urlMonitorQueue, urlMonitorWorker, triggerUrlCheck };
 export { nativeArtistQueue, nativeArtistWorker, triggerNativeArtistRecompute };
+export { trialJourneyQueue, trialJourneyWorker, triggerTrialJourneyTick };
 // No schedule() call: stem bundles are queued on demand by the download
 // endpoint, not on a timer. Importing the worker here is what starts it.
 export { getStemBundleQueue, stemBundleWorker };

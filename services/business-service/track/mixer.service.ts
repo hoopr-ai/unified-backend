@@ -40,7 +40,7 @@ import { LicenseModel } from "../../persistence-service/licenses/schemas/modules
 import { OwnerModel } from "../../persistence-service/owner/modules.export";
 import { UserModel } from "../../persistence-service/user/schemas/modules.export";
 import { TokenDeductionReason } from "../../persistence-service/token/schemas/modules.export";
-import { isSfxTrackType } from "../../dto-service/modules.export";
+import { UserStatus, isSfxTrackType } from "../../dto-service/modules.export";
 
 /**
  * The enterprise multitrack mixer.
@@ -237,9 +237,14 @@ export const createMixService = async (
 ): Promise<MixResult> => {
   // ── Who is asking, and may they ──────────────────────────────────────────
   const user = await UserModel.findByPk(userId, {
-    attributes: ["id", "brandId"],
+    attributes: ["id", "brandId", "status"],
   });
   if (!user) throw new AppError("User not found", 404);
+  // Same gate as licensing (onboarding done = ACTIVE): PROFILE_INCOMPLETE
+  // sends the FE to onboarding.
+  if (user.status !== UserStatus.ACTIVE) {
+    throw new AppError("Please complete your profile to download tracks", 403, "PROFILE_INCOMPLETE");
+  }
   if (!user.brandId) {
     throw new AppError("User is not associated with any brand", 400);
   }
