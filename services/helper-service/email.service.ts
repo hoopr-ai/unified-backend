@@ -1600,3 +1600,135 @@ export const sendInvoiceEmail = async (params: {
     attachments: [{ filename: invoiceFilename, content: pdfBuffer, contentType: "application/pdf" }],
   });
 };
+
+// ─── Smash Plus brief (public /smash-plus landing page) ──────────────────────
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+/**
+ * Alerts the Sales & Enterprise desk to a new Smash Plus brief. The page
+ * promises "a real person reads every one", so this is the part that makes
+ * that true; the row in smash_plus_briefs is the durable copy.
+ *
+ * Every value comes from an anonymous public form, so all of it is escaped.
+ * Recipients: SMASH_PLUS_BRIEF_EMAILS (comma-separated) REPLACES the default
+ * list when set — the default is the Contact Us desk.
+ */
+export const sendSmashPlusBriefEmail = async (brief: {
+  briefId: string;
+  mode: string;
+  name: string;
+  company: string;
+  email: string;
+  placements: string[];
+  question?: string | null;
+  song?: string | null;
+  exclusivity?: string | null;
+  budget?: string | null;
+  moods?: string[] | null;
+  reference?: string | null;
+  term?: string | null;
+  territory?: string | null;
+  goLiveDate?: string | null;
+  userId?: number | null;
+  brandId?: number | null;
+}): Promise<void> => {
+  const recipients = (
+    process.env.SMASH_PLUS_BRIEF_EMAILS ?? "hello@hoopr.in,smashsales@gsharp.media"
+  )
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  const MODE_LABEL: Record<string, string> = {
+    explore: "Explore — has a question",
+    brief: "Brief — has a song in mind",
+    reco: "Reco — wants recommendations",
+  };
+
+  const rows: [string, string | null | undefined][] = [
+    ["Brief ID", brief.briefId],
+    ["Type", MODE_LABEL[brief.mode] ?? brief.mode],
+    ["Name", brief.name],
+    ["Company", brief.company],
+    ["Email", brief.email],
+    ["Placements", brief.placements.length ? brief.placements.join(", ") : null],
+    ["Question", brief.question],
+    ["Song", brief.song],
+    ["Exclusivity", brief.exclusivity],
+    ["Budget", brief.budget],
+    ["Moods", brief.moods?.length ? brief.moods.join(", ") : null],
+    ["Reference", brief.reference],
+    ["Term", brief.term],
+    ["Territory", brief.territory],
+    ["Go-live date", brief.goLiveDate],
+    [
+      "Account",
+      brief.userId
+        ? `Signed in — user ${brief.userId}${brief.brandId ? `, brand ${brief.brandId}` : ""}`
+        : "Not signed in",
+    ],
+  ];
+
+  const tableRows = rows
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(
+      ([label, value]) => `
+        <tr>
+          <td style="padding:8px 12px; border-bottom:1px solid #eee; color:#666; width:140px; vertical-align:top;">${label}</td>
+          <td style="padding:8px 12px; border-bottom:1px solid #eee; color:#111; white-space:pre-wrap;">${escapeHtml(String(value))}</td>
+        </tr>`
+    )
+    .join("");
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="UTF-8" /><title>New Smash Plus brief</title></head>
+    <body style="margin:0; padding:30px 0; background-color:#f4f4f4; font-family: Arial, Helvetica, sans-serif;">
+      <table width="600" align="center" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden;">
+        <tr>
+          <td align="center" style="padding:30px 20px 10px 20px;">
+            <img src="https://storage.googleapis.com/cdn-hooprsmash-com-prod/enterprise/web/logos/HooprSmash.png" alt="Hoopr" style="max-width:150px; height:auto; display:block;" />
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px 30px 0 30px;">
+            <h2 style="margin:0 0 6px 0; color:#111;">New Smash Plus brief</h2>
+            <p style="margin:0 0 16px 0; color:#555;">Submitted on the Smash Plus page. Reply to the sender at
+              <a href="mailto:${escapeHtml(brief.email)}">${escapeHtml(brief.email)}</a>.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 30px 30px 30px;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">${tableRows}</table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  // Header injection guard: subject is built from user input.
+  const subjectName = `${brief.name} (${brief.company})`.replace(/[\r\n]+/g, " ").slice(0, 120);
+
+  for (const to of recipients) {
+    try {
+      await sendEmail({
+        to,
+        subject: `Smash Plus brief ${brief.briefId} — ${subjectName}`,
+        html,
+      });
+    } catch (err) {
+      logger.error(
+        `smash-plus brief ${brief.briefId} notification to ${to} failed: ${(err as Error).message}`
+      );
+    }
+  }
+};

@@ -55,6 +55,7 @@ import { LabelPageModel } from "./label-page/modules.export";
 import { CampaignModel } from "./campaign/modules.export";
 import { FaqModel, FaqSectionModel } from "./faq/modules.export";
 import { ContactUsModel } from "./contact/modules.export";
+import { SmashPlusBriefModel } from "./smash-plus/modules.export";
 import {
   KeywordModel,
   TrackKeywordMappingModel,
@@ -192,6 +193,7 @@ sequelize.addModels([
   FaqSectionModel,
   FaqModel,
   ContactUsModel,
+  SmashPlusBriefModel,
   RailModel,
   RailItemModel,
   CountryModel,
