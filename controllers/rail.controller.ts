@@ -32,8 +32,12 @@ import {
   isLabelPageKey,
   ownerCodeFromLabelPageKey,
   LABEL_PAGE_KEY_PREFIX,
+  isOccasionPageKey,
+  occasionCodeFromOccasionPageKey,
+  OCCASION_PAGE_KEY_PREFIX,
 } from "../services/dto-service/modules.export";
 import { isKnownLabelPageOwnerCode } from "../services/business-service/label-page/modules.export";
+import { isKnownOccasionCode } from "../services/business-service/occasion/modules.export";
 import type { SessionPayload } from "../middlewares/authenticate";
 import { findUserById } from "../services/persistence-service/exports";
 
@@ -183,10 +187,12 @@ const VALID_RAIL_TYPES = new Set<string>(Object.values(RailType));
 const VALID_SOURCE_TYPES = new Set<string>(Object.values(RailSourceType));
 const VALID_PAGE_NAMES = new Set<string>(Object.values(PageName));
 
-// A page key is either a PageName member or a label page key (LABEL_<ownerCode>,
-// one per row in `label_pages`). Label pages are open-ended — there is one per
-// label an admin publishes — so they cannot live in the enum, and validating
-// them is two separate questions:
+// A page key is one of three things: a PageName member, a label page key
+// (LABEL_<ownerCode>, one per row in `label_pages`), or an occasion page key
+// (OCCASION_<occasionCode>, one per row in `occasions`). The latter two are
+// open-ended — there is one per label an admin publishes and one per occasion
+// on the calendar — so they cannot live in the enum, and validating them is two
+// separate questions:
 //
 //   · is it WELL-FORMED?  — synchronous, answered here, so the existing pure
 //                            body validators stay pure.
@@ -197,30 +203,51 @@ const VALID_PAGE_NAMES = new Set<string>(Object.values(PageName));
 // row would otherwise persist rails onto a page no surface can ever render.
 const isValidPageKey = (value: unknown): value is string =>
   typeof value === "string" &&
-  (VALID_PAGE_NAMES.has(value) || isLabelPageKey(value));
+  (VALID_PAGE_NAMES.has(value) ||
+    isLabelPageKey(value) ||
+    isOccasionPageKey(value));
 
 const pageKeyError = (field: string): string =>
-  `${field} must contain a page name (${Array.from(VALID_PAGE_NAMES).join(", ")}) or a label page key (${LABEL_PAGE_KEY_PREFIX}<ownerCode>)`;
+  `${field} must contain a page name (${Array.from(VALID_PAGE_NAMES).join(", ")}), a label page key (${LABEL_PAGE_KEY_PREFIX}<ownerCode>) or an occasion page key (${OCCASION_PAGE_KEY_PREFIX}<occasionCode>)`;
 
 /**
- * Resolve every label page key in the list against `label_pages`. Returns an
- * error message naming the keys that don't resolve to an ACTIVE page, or null
- * when they all do (and when there were none to check, the common case — no
- * query is issued for a body that only mentions enum pages).
+ * Resolve every table-backed page key in the list against its own table —
+ * LABEL_ keys against `label_pages`, OCCASION_ keys against `occasions`.
+ * Returns an error message naming the keys that don't resolve, or null when
+ * they all do (and when there were none to check, the common case — no query
+ * is issued for a body that only mentions enum pages).
  */
 const assertPagesExist = async (pageKeys: string[]): Promise<string | null> => {
-  const labelKeys = Array.from(new Set(pageKeys.filter(isLabelPageKey)));
-  if (labelKeys.length === 0) return null;
+  const distinct = Array.from(new Set(pageKeys));
+  const labelKeys = distinct.filter(isLabelPageKey);
+  const occasionKeys = distinct.filter(isOccasionPageKey);
+  if (labelKeys.length === 0 && occasionKeys.length === 0) return null;
 
-  const unknown: string[] = [];
+  const errors: string[] = [];
+
+  const unknownLabels: string[] = [];
   for (const key of labelKeys) {
     const ownerCode = ownerCodeFromLabelPageKey(key);
     if (!ownerCode || !(await isKnownLabelPageOwnerCode(ownerCode))) {
-      unknown.push(key);
+      unknownLabels.push(key);
     }
   }
-  if (unknown.length === 0) return null;
-  return `No active label page for: ${unknown.join(", ")}`;
+  if (unknownLabels.length > 0) {
+    errors.push(`No active label page for: ${unknownLabels.join(", ")}`);
+  }
+
+  const unknownOccasions: string[] = [];
+  for (const key of occasionKeys) {
+    const occasionCode = occasionCodeFromOccasionPageKey(key);
+    if (!occasionCode || !(await isKnownOccasionCode(occasionCode))) {
+      unknownOccasions.push(key);
+    }
+  }
+  if (unknownOccasions.length > 0) {
+    errors.push(`No occasion for: ${unknownOccasions.join(", ")}`);
+  }
+
+  return errors.length > 0 ? errors.join("; ") : null;
 };
 
 const validateUpsertBody = (body: unknown): UpsertRailRequest | string => {

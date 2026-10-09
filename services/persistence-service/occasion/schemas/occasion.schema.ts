@@ -18,6 +18,7 @@ export interface OccasionDetails {
   end: string;
   occasionCode?: string;
   imageLink?: string;
+  description?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -52,6 +53,13 @@ export class OccasionModel extends Model<OccasionModel, OccasionDetails> {
   // Uploaded cover image URL. Mirrors playlists.imageLink.
   @Column({ type: DataType.STRING(1024), allowNull: true })
   imageLink?: string;
+
+  // Editorial blurb shown under the occasion's hero on the storefront. TEXT
+  // rather than a capped STRING because it is prose the music team writes, and
+  // nothing downstream truncates it. See
+  // scripts/migration-add-occasion-description.sql.
+  @Column({ type: DataType.TEXT, allowNull: true })
+  description?: string | null;
 
   @CreatedAt
   @Column({ type: DataType.DATE })
