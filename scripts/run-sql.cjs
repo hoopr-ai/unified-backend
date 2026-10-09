@@ -1,20 +1,37 @@
-// Runs a .sql file against the database named in .env. Stands in for psql,
-// which isn't installed locally.
+// Runs a .sql file against a database. Stands in for psql, which isn't
+// installed locally.
 //
 //   node scripts/run-sql.cjs scripts/migration-add-occasion-description.sql
+//   node scripts/run-sql.cjs --env=.env.migration scripts/migration-....sql
+//
+// Credentials come from .env by default. `--env=<file>` points at a different
+// one — required for anything touching production, so prod credentials never
+// become the default this script reaches for.
 //
 // The whole file is sent as one multi-statement query, so a script's own
 // BEGIN/COMMIT controls its transaction. Any SELECTs print as tables.
 const fs = require('fs')
 const path = require('path')
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 const { Client } = require('pg')
 
-const file = process.argv[2]
+const argv = process.argv.slice(2)
+const envArg = argv.find((a) => a.startsWith('--env='))
+const envFile = envArg ? envArg.slice('--env='.length) : '.env'
+const file = argv.find((a) => !a.startsWith('--'))
+
 if (!file) {
-  console.error('usage: node scripts/run-sql.cjs <file.sql>')
+  console.error('usage: node scripts/run-sql.cjs [--env=<file>] <file.sql>')
   process.exit(1)
 }
+
+const envPath = path.isAbsolute(envFile)
+  ? envFile
+  : path.join(__dirname, '..', envFile)
+if (!fs.existsSync(envPath)) {
+  console.error(`env file not found: ${envPath}`)
+  process.exit(1)
+}
+require('dotenv').config({ path: envPath, override: true })
 
 const sql = fs.readFileSync(file, 'utf8')
 
@@ -29,7 +46,9 @@ const client = new Client({
 
 ;(async () => {
   await client.connect()
-  console.log(`running ${path.basename(file)} against ${process.env.DB_NAME}@${process.env.DB_HOST}\n`)
+  console.log(
+    `running ${path.basename(file)} against ${process.env.DB_NAME}@${process.env.DB_HOST} (env: ${envFile})\n`
+  )
 
   const results = await client.query(sql)
   for (const r of Array.isArray(results) ? results : [results]) {
